@@ -11,7 +11,8 @@
         "test:unit": "vitest",
         "type-check": "vue-tsc --build",
         "lint": "oxlint . --fix",
-        "format": "oxfmt"
+        "format": "oxfmt",
+        "prepare": "husky"
     },
     "dependencies": {
         "@lucide/vue": "^1.34.0",
@@ -37,6 +38,7 @@
         "@vue/tsconfig": "^0.9.1",
         "electron": "^44.0.0",
         "electron-builder": "^26.15.3",
+        "husky": "^9.1.7",
         "jiti": "^2.7.0",
         "jsdom": "^30.0.1",
         "npm-run-all2": "^9.0.3",
