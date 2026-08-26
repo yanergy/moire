@@ -8,3 +8,6 @@ npx oxfmt --check
 
 echo "→ vue-tsc"
 npm run --silent type-check
+
+echo "→ vitest"
+npx vitest run
