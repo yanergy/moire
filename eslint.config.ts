@@ -4,7 +4,7 @@ import pluginVue from 'eslint-plugin-vue';
 import pluginVitest from '@vitest/eslint-plugin';
 import pluginOxlint from 'eslint-plugin-oxlint';
 import skipFormatting from 'eslint-config-prettier/flat';
-import globals from 'globals'
+import globals from 'globals';
 
 // To allow more languages other than `ts` in `.vue` files, uncomment the following lines:
 // import { configureVueProject } from '@vue/eslint-config-typescript'
@@ -55,6 +55,26 @@ export default defineConfigWithVueTs(
                 {
                     registeredComponentsOnly: false,
                     ignores: [],
+                },
+            ],
+            'vue/html-self-closing': [
+                'error',
+                {
+                    html: {
+                        void: 'always', // <img/>, <br/> etc.
+                        normal: 'always', // regular HTML elements like <div/> when empty
+                        component: 'always', // <diff-viewer-page/>
+                    },
+                    svg: 'always',
+                    math: 'always',
+                },
+            ],
+            'vue/html-closing-bracket-spacing': [
+                'error',
+                {
+                    startTag: 'never', // <div> not < div>
+                    endTag: 'never', // </div> not </div >
+                    selfClosingTag: 'always', // <diff-viewer-page /> not <diff-viewer-page/>
                 },
             ],
         },

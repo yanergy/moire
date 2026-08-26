@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import DiffViewer from '@/components/DiffViewer.vue';
 </script>
 
 <template>
-    <h1>Hello World</h1>
+    <diff-viewer :language="'typescript'" />
 </template>
 
 <style scoped></style>

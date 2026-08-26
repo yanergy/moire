@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import DiffViewerPageLayout from '@/components/DiffViewerPageLayout.vue';
 import DiffViewerPage from '@/components/DiffViewerPage.vue';
 </script>
 
 <template>
-    <diff-viewer-page-layout>
-        <diff-viewer-page></diff-viewer-page>
-    </diff-viewer-page-layout>
+    <header>
+        <h1>Diff viewer!</h1>
+    </header>
+
+    <main>
+        <diff-viewer-page />
+    </main>
 </template>
 
 <style scoped></style>
