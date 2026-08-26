@@ -57,6 +57,16 @@ npx shadcn-vue@latest init
 npm i simple-git monaco-editor electron-store chokidar
 ```
 
+> 
+> simple-git - git helper tool
+> 
+> monaco-editor - file viewer
+> 
+> electron-store - electron settings storage
+> 
+> chokidar - file watching
+> 
+
 ### To install later
 
 ```bash
