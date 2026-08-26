@@ -12,7 +12,7 @@ A desktop application for viewing the differences between two branches of a loca
 ### Goals
 
 - Open any local Git repository and compare two refs (branches, tags, or commits).
-- Compare a branch against the working tree (uncommitted changes), since the app is used *alongside* active development.
+- Compare a branch against the working tree (uncommitted changes), since the app is used _alongside_ active development.
 - Render diffs with syntax highlighting, side-by-side and unified views, and intra-line change highlighting — comparable to PhpStorm/VS Code quality.
 - Show a changed-file tree with status badges and line counts, GitHub-style.
 - Stay live: refresh automatically when branches move or files change on disk.
@@ -33,15 +33,15 @@ The project is scaffolded with create-vue: Vue 3.5, Vite 8, TypeScript, Pinia, V
 
 ### Already covered
 
-| Need | Covered by |
-|---|---|
-| Renderer framework & build | `vue`, `vite`, `@vitejs/plugin-vue` |
-| State management | `pinia` |
-| Unit tests (git parsers) | `vitest` |
-| Component tests | `jsdom`, `@vue/test-utils` |
-| Lint / format | `eslint`, `oxlint`, `prettier` |
-| Electron runtime | `electron@^44` |
-| `@` → `src` path alias | create-vue default (also required by shadcn-vue) |
+| Need                       | Covered by                                       |
+| -------------------------- | ------------------------------------------------ |
+| Renderer framework & build | `vue`, `vite`, `@vitejs/plugin-vue`              |
+| State management           | `pinia`                                          |
+| Unit tests (git parsers)   | `vitest`                                         |
+| Component tests            | `jsdom`, `@vue/test-utils`                       |
+| Lint / format              | `eslint`, `oxlint`, `prettier`                   |
+| Electron runtime           | `electron@^44`                                   |
+| `@` → `src` path alias     | create-vue default (also required by shadcn-vue) |
 
 ### To install now
 
@@ -57,15 +57,13 @@ npx shadcn-vue@latest init
 npm i simple-git monaco-editor electron-store chokidar
 ```
 
-> 
 > simple-git - git helper tool
-> 
+>
 > monaco-editor - file viewer
-> 
+>
 > electron-store - electron settings storage
-> 
+>
 > chokidar - file watching
-> 
 
 ### To install later
 
@@ -76,7 +74,7 @@ npm i -D electron-builder         # Phase 5: packaging
 
 ### Why vite-plugin-electron (not electron-vite)
 
-electron-vite's latest release (5.0.0) pins its Vite peer range to ^5–^7, so it conflicts with this project's `vite@^8`. vite-plugin-electron v1 explicitly supports Vite 7 and 8 (it adapts to `rolldownOptions` on Vite 8+) and, crucially, layers onto an **existing** Vite project instead of replacing the build tool — the current `vite.config.ts`, plugin-vue, and devtools setup stay as-is. `vite-plugin-electron-renderer` is *not* needed: the renderer never uses Node APIs by design.
+electron-vite's latest release (5.0.0) pins its Vite peer range to ^5–^7, so it conflicts with this project's `vite@^8`. vite-plugin-electron v1 explicitly supports Vite 7 and 8 (it adapts to `rolldownOptions` on Vite 8+) and, crucially, layers onto an **existing** Vite project instead of replacing the build tool — the current `vite.config.ts`, plugin-vue, and devtools setup stay as-is. `vite-plugin-electron-renderer` is _not_ needed: the renderer never uses Node APIs by design.
 
 ---
 
@@ -112,35 +110,39 @@ All Git and filesystem work lives in the main process. The renderer never touche
 
 ```ts
 // vite.config.ts
-import tailwindcss from '@tailwindcss/vite'
-import vue from '@vitejs/plugin-vue'
-import electron from 'vite-plugin-electron/simple'
+import tailwindcss from '@tailwindcss/vite';
+import vue from '@vitejs/plugin-vue';
+import electron from 'vite-plugin-electron/simple';
 
 export default defineConfig({
-  plugins: [
-    vue(),
-    tailwindcss(),
-    electron({
-      main:    { entry: 'electron/main.ts' },
-      preload: { input: 'electron/preload.ts' },
-      // no `renderer` key — Node stays out of the renderer
-    }),
-  ],
-  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-})
+    plugins: [
+        vue(),
+        tailwindcss(),
+        electron({
+            main: { entry: 'electron/main.ts' },
+            preload: { input: 'electron/preload.ts' },
+            // no `renderer` key — Node stays out of the renderer
+        }),
+    ],
+    resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+});
 ```
 
 ### Preload API surface (initial)
 
 ```ts
 interface DiffViewerApi {
-  openRepoDialog(): Promise<string | null>
-  openRepo(path: string): Promise<RepoInfo>
-  getRecentRepos(): Promise<string[]>
-  getBranches(): Promise<BranchInfo[]>
-  getChangedFiles(base: string, head: string | 'WORKING_TREE', mode: 'merge-base' | 'direct'): Promise<ChangedFile[]>
-  getFilePair(base: string, head: string | 'WORKING_TREE', path: string): Promise<FilePair>
-  onRepoChanged(cb: (event: RepoChangeEvent) => void): () => void
+    openRepoDialog(): Promise<string | null>;
+    openRepo(path: string): Promise<RepoInfo>;
+    getRecentRepos(): Promise<string[]>;
+    getBranches(): Promise<BranchInfo[]>;
+    getChangedFiles(
+        base: string,
+        head: string | 'WORKING_TREE',
+        mode: 'merge-base' | 'direct'
+    ): Promise<ChangedFile[]>;
+    getFilePair(base: string, head: string | 'WORKING_TREE', path: string): Promise<FilePair>;
+    onRepoChanged(cb: (event: RepoChangeEvent) => void): () => void;
 }
 ```
 
@@ -148,21 +150,21 @@ interface DiffViewerApi {
 
 ```ts
 interface ChangedFile {
-  path: string
-  oldPath?: string            // set for renames
-  status: 'A' | 'M' | 'D' | 'R'
-  additions: number
-  deletions: number
-  binary: boolean
+    path: string;
+    oldPath?: string; // set for renames
+    status: 'A' | 'M' | 'D' | 'R';
+    additions: number;
+    deletions: number;
+    binary: boolean;
 }
 
 interface FilePair {
-  path: string
-  oldContent: string | null   // null for added files
-  newContent: string | null   // null for deleted files
-  language: string            // inferred from extension, for Monaco
-  binary: boolean
-  tooLarge: boolean           // above render threshold
+    path: string;
+    oldContent: string | null; // null for added files
+    newContent: string | null; // null for deleted files
+    language: string; // inferred from extension, for Monaco
+    binary: boolean;
+    tooLarge: boolean; // above render threshold
 }
 ```
 
@@ -170,17 +172,17 @@ Defining these shapes early keeps the renderer decoupled from Git specifics.
 
 ### Key library choices
 
-| Concern | Choice | Rationale |
-|---|---|---|
-| Electron ↔ Vite | `vite-plugin-electron` (simple mode) | Vite 8 compatible; adds onto the existing create-vue config |
-| Git access | `simple-git` | Thin wrapper over the system git binary; users are developers, git is guaranteed present |
-| Diff rendering | `monaco-editor` (DiffEditor) | Side-by-side + inline views, syntax highlighting, intra-line diffs, unchanged-region folding — the PhpStorm look for free |
-| UI components | `shadcn-vue` (Reka UI + Tailwind) | Copy-in components: Combobox, Tabs, Dialog, Tooltip, ScrollArea, Checkbox, Badge — everything the chrome needs, fully ownable/themeable |
-| Styling | Tailwind CSS v4 via `@tailwindcss/vite` | CSS-first config, no `tailwind.config.js` needed; shadcn-vue's theming layer sits on top |
-| File watching | `chokidar` | Watch `.git/HEAD`, `.git/refs/`, and the working tree |
-| State | `pinia` | Already installed |
-| Persistence | `electron-store` | Recent repos, theme, view preferences |
-| File list virtualization | `vue-virtual-scroller` | Keeps huge change sets scrollable |
+| Concern                  | Choice                                  | Rationale                                                                                                                               |
+| ------------------------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Electron ↔ Vite          | `vite-plugin-electron` (simple mode)    | Vite 8 compatible; adds onto the existing create-vue config                                                                             |
+| Git access               | `simple-git`                            | Thin wrapper over the system git binary; users are developers, git is guaranteed present                                                |
+| Diff rendering           | `monaco-editor` (DiffEditor)            | Side-by-side + inline views, syntax highlighting, intra-line diffs, unchanged-region folding — the PhpStorm look for free               |
+| UI components            | `shadcn-vue` (Reka UI + Tailwind)       | Copy-in components: Combobox, Tabs, Dialog, Tooltip, ScrollArea, Checkbox, Badge — everything the chrome needs, fully ownable/themeable |
+| Styling                  | Tailwind CSS v4 via `@tailwindcss/vite` | CSS-first config, no `tailwind.config.js` needed; shadcn-vue's theming layer sits on top                                                |
+| File watching            | `chokidar`                              | Watch `.git/HEAD`, `.git/refs/`, and the working tree                                                                                   |
+| State                    | `pinia`                                 | Already installed                                                                                                                       |
+| Persistence              | `electron-store`                        | Recent repos, theme, view preferences                                                                                                   |
+| File list virtualization | `vue-virtual-scroller`                  | Keeps huge change sets scrollable                                                                                                       |
 
 **Deliberately avoided:** `electron-vite` (Vite peer range ≤7 conflicts with Vite 8), `vite-plugin-electron-renderer` (no Node in renderer), `isomorphic-git`/libgit2 bindings (heavy, unnecessary when git is installed), `jsdiff`/`diff2html` (Monaco covers rendering better).
 
@@ -190,9 +192,9 @@ Defining these shapes early keeps the renderer decoupled from Git specifics.
 
 - **Changed-file list:** `git diff --name-status -M --numstat <range>` — `-M` enables rename detection; numstat provides +/− counts.
 - **Comparison modes:**
-  - **Merge-base (default):** `base...head` (three-dot) — matches what a GitHub PR shows.
-  - **Direct:** `base..head` (two-dot) — exposed as a toggle for users who want the literal difference.
-  - **Working tree:** `git diff <base>` with no second ref; the "new" side of each file is read straight from disk.
+    - **Merge-base (default):** `base...head` (three-dot) — matches what a GitHub PR shows.
+    - **Direct:** `base..head` (two-dot) — exposed as a toggle for users who want the literal difference.
+    - **Working tree:** `git diff <base>` with no second ref; the "new" side of each file is read straight from disk.
 - **File contents at a ref:** `git show <ref>:<path>`. For the working tree, read from the filesystem.
 - **Binary detection:** numstat reports `-` for binary files; flag them and skip text rendering.
 - **Startup check:** verify `git --version` succeeds on launch; show a friendly error dialog if not.
@@ -222,17 +224,17 @@ Defining these shapes early keeps the renderer decoupled from Git specifics.
 
 ### Components (mapped to shadcn-vue)
 
-| App component | Built from |
-|---|---|
-| BranchSelector (searchable dropdown; local branches first, then remotes; "Working tree" entry on the head side) | `Combobox` / `Command` + `Popover` |
-| Comparison-mode & view toggles | `Tabs` or `ToggleGroup` |
-| FileTree (directory-grouped, collapsible, virtualized; filter box; viewed checkboxes) | `ScrollArea`, `Collapsible`, `Checkbox`, `Input`, `Badge` + `vue-virtual-scroller` |
-| Status badges (green A, blue M, red D, purple R) with +/− counts | `Badge` variants |
-| Toolbar buttons, refresh, prev/next change | `Button`, `Tooltip` |
-| Error dialogs (git missing, not a repo) | `AlertDialog` |
-| EmptyStates (no repo, no diff, file too large) | `Card`, `Button` |
-| BinaryPreview (side-by-side images or "binary file changed" notice) | custom, styled with Tailwind |
-| DiffPane | Monaco DiffEditor (custom wrapper component) |
+| App component                                                                                                   | Built from                                                                         |
+| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| BranchSelector (searchable dropdown; local branches first, then remotes; "Working tree" entry on the head side) | `Combobox` / `Command` + `Popover`                                                 |
+| Comparison-mode & view toggles                                                                                  | `Tabs` or `ToggleGroup`                                                            |
+| FileTree (directory-grouped, collapsible, virtualized; filter box; viewed checkboxes)                           | `ScrollArea`, `Collapsible`, `Checkbox`, `Input`, `Badge` + `vue-virtual-scroller` |
+| Status badges (green A, blue M, red D, purple R) with +/− counts                                                | `Badge` variants                                                                   |
+| Toolbar buttons, refresh, prev/next change                                                                      | `Button`, `Tooltip`                                                                |
+| Error dialogs (git missing, not a repo)                                                                         | `AlertDialog`                                                                      |
+| EmptyStates (no repo, no diff, file too large)                                                                  | `Card`, `Button`                                                                   |
+| BinaryPreview (side-by-side images or "binary file changed" notice)                                             | custom, styled with Tailwind                                                       |
+| DiffPane                                                                                                        | Monaco DiffEditor (custom wrapper component)                                       |
 
 ### Theming
 
@@ -298,16 +300,16 @@ Defining these shapes early keeps the renderer decoupled from Git specifics.
 
 ## 7. Risks and Mitigations
 
-| Risk | Impact | Mitigation |
-|---|---|---|
-| Monaco worker loading under Vite 8 + Electron | Blocks all diff rendering | Spike it first thing in Phase 3 |
-| ESM main/preload output quirks (`"type": "module"` project) | App fails to launch | Verify in Phase 1 on first run; plugin marks main/preload as node platform by default |
-| shadcn-vue expects the `@` alias | CLI/init friction | Already satisfied — create-vue sets `@` → `src` |
-| Very large files/diffs freeze the renderer | Poor UX on real repos | Size gate, lazy loading, virtualized lists |
-| Git output parsing edge cases (renames, spaces in paths, submodules) | Wrong file lists | Use `-z` (NUL-separated) output; parser unit tests |
-| Watcher event storms during rebases/checkouts | UI thrash | Debounce + coalesce events in main before pushing to renderer |
-| Non-UTF-8 file encodings | Garbled diff text | Detect and fall back to a "binary-ish" notice or best-effort decode |
-| Tailwind preflight vs Monaco styles | Editor rendering glitches | Scope-test early in the Phase 3 spike; exclude Monaco container from conflicting resets if needed |
+| Risk                                                                 | Impact                    | Mitigation                                                                                        |
+| -------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------- |
+| Monaco worker loading under Vite 8 + Electron                        | Blocks all diff rendering | Spike it first thing in Phase 3                                                                   |
+| ESM main/preload output quirks (`"type": "module"` project)          | App fails to launch       | Verify in Phase 1 on first run; plugin marks main/preload as node platform by default             |
+| shadcn-vue expects the `@` alias                                     | CLI/init friction         | Already satisfied — create-vue sets `@` → `src`                                                   |
+| Very large files/diffs freeze the renderer                           | Poor UX on real repos     | Size gate, lazy loading, virtualized lists                                                        |
+| Git output parsing edge cases (renames, spaces in paths, submodules) | Wrong file lists          | Use `-z` (NUL-separated) output; parser unit tests                                                |
+| Watcher event storms during rebases/checkouts                        | UI thrash                 | Debounce + coalesce events in main before pushing to renderer                                     |
+| Non-UTF-8 file encodings                                             | Garbled diff text         | Detect and fall back to a "binary-ish" notice or best-effort decode                               |
+| Tailwind preflight vs Monaco styles                                  | Editor rendering glitches | Scope-test early in the Phase 3 spike; exclude Monaco container from conflicting resets if needed |
 
 ---
 
