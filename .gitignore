@@ -92,3 +92,4 @@ dist-electron
 .pnp.*
 docs/_book
 test/
+release/
