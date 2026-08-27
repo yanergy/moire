@@ -6,7 +6,7 @@ import DiffPane from '@/components/diff/DiffPane.vue';
 
 <template>
     <div
-        class="flex h-screen min-h-[640px] flex-col overflow-hidden bg-dv-app text-[13px] text-dv-fg"
+        class="flex h-screen min-h-[640px] flex-col overflow-hidden bg-moire-app text-[13px] text-moire-fg"
     >
         <toolbar-header />
         <div class="flex min-h-0 flex-1">

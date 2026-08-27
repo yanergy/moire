@@ -26,11 +26,11 @@ const viewOptions: { value: ViewMode; label: string }[] = [
 <template>
     <TooltipProvider :delay-duration="300">
         <div
-            class="flex h-13 flex-none items-center gap-2 border-b border-dv-border bg-dv-app px-3"
+            class="flex h-13 flex-none items-center gap-2 border-b border-moire-border bg-moire-app px-3"
         >
             <repo-picker />
 
-            <div class="mx-1 h-5 w-px bg-dv-border" />
+            <div class="mx-1 h-5 w-px bg-moire-border" />
 
             <div class="flex items-center gap-1.5">
                 <ref-selector side="base" />
@@ -39,7 +39,7 @@ const viewOptions: { value: ViewMode; label: string }[] = [
                         <Button
                             variant="ghost"
                             size="icon-sm"
-                            class="size-7 text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                            class="size-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                             @click="comparison.swap()"
                         >
                             <ArrowRightLeft :size="16" />
@@ -69,7 +69,7 @@ const viewOptions: { value: ViewMode; label: string }[] = [
                     <Button
                         variant="outline"
                         size="icon-sm"
-                        class="border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                        class="border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                     >
                         <RefreshCw :size="16" />
                     </Button>

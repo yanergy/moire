@@ -7,7 +7,7 @@ with an Electron main process. See `README.md` for the status and the roadmap of
 
 Read `documentation/code-conventions.md`. It is the source of truth for this project: code
 style, the strict Electron process separation and preload bridge rules, the shadcn-vue
-component standard, the `--dv-*` design tokens, testing rules, and component naming. Follow it
+component standard, the `--moire-*` design tokens, testing rules, and component naming. Follow it
 for every change.
 
 ## Keeping the checklist current

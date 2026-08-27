@@ -72,42 +72,48 @@ function pick(name: string) {
         <PopoverTrigger as-child>
             <Button
                 variant="ghost"
-                class="h-8 min-w-[196px] justify-start gap-2.5 rounded-md border border-dv-border bg-transparent px-3 font-normal text-dv-fg hover:bg-dv-hover hover:text-dv-fg dark:hover:bg-dv-hover"
-                :class="open ? 'border-dv-ring hover:bg-transparent dark:hover:bg-transparent' : ''"
-                :style="open ? { boxShadow: 'var(--dv-ring-glow)' } : undefined"
+                class="h-8 min-w-[196px] justify-start gap-2.5 rounded-md border border-moire-border bg-transparent px-3 font-normal text-moire-fg hover:bg-moire-hover hover:text-moire-fg dark:hover:bg-moire-hover"
+                :class="
+                    open ? 'border-moire-ring hover:bg-transparent dark:hover:bg-transparent' : ''
+                "
+                :style="open ? { boxShadow: 'var(--moire-ring-glow)' } : undefined"
             >
-                <span class="text-[10px] tracking-wider text-dv-faint uppercase">{{ side }}</span>
-                <span class="flex-1 truncate text-left font-mono text-xs text-dv-fg">
+                <span class="text-[10px] tracking-wider text-moire-faint uppercase">{{
+                    side
+                }}</span>
+                <span class="flex-1 truncate text-left font-mono text-xs text-moire-fg">
                     {{ current }}
                 </span>
-                <ChevronDown class="size-3 shrink-0 text-dv-faint" />
+                <ChevronDown class="size-3 shrink-0 text-moire-faint" />
             </Button>
         </PopoverTrigger>
 
         <PopoverContent
             align="start"
             :side-offset="6"
-            class="w-[306px] overflow-hidden border-dv-border bg-dv-pop p-0"
-            :style="{ boxShadow: 'var(--dv-pop-shadow)' }"
+            class="w-[306px] overflow-hidden border-moire-border bg-moire-pop p-0"
+            :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
         >
             <Command class="bg-transparent">
-                <CommandInput placeholder="Search refs…" class="font-mono text-dv-fg" />
+                <CommandInput placeholder="Search refs…" class="font-mono text-moire-fg" />
                 <CommandList class="max-h-[322px]">
-                    <CommandEmpty class="text-dv-faint">No refs found.</CommandEmpty>
+                    <CommandEmpty class="text-moire-faint">No refs found.</CommandEmpty>
                     <CommandGroup v-for="group in groups" :key="group.label" :heading="group.label">
                         <CommandItem
                             v-for="item in group.items"
                             :key="item.name"
                             :value="item.name"
-                            class="gap-2 font-mono text-xs text-dv-file-fg data-[highlighted]:bg-dv-hover data-[highlighted]:text-dv-fg"
+                            class="gap-2 font-mono text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
                             @select="pick(item.name)"
                         >
                             <Check
                                 :size="14"
-                                :class="item.name === current ? 'text-dv-fg' : 'text-transparent'"
+                                :class="
+                                    item.name === current ? 'text-moire-fg' : 'text-transparent'
+                                "
                             />
                             <span class="flex-1 truncate">{{ item.name }}</span>
-                            <span class="text-[11px] whitespace-nowrap text-dv-faint">
+                            <span class="text-[11px] whitespace-nowrap text-moire-faint">
                                 {{ item.meta }}
                             </span>
                         </CommandItem>

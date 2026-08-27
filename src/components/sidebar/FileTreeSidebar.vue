@@ -12,13 +12,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 const comparison = useComparisonStore();
 
-// The --dv-status-* tokens carry separate light/dark values tuned for contrast
+// The --moire-status-* tokens carry separate light/dark values tuned for contrast
 // on each background, so full strength stays legible in both themes.
 const STATUS_CLASS: Record<FileStatus, string> = {
-    A: 'text-dv-status-a',
-    M: 'text-dv-status-m',
-    D: 'text-dv-status-d',
-    R: 'text-dv-status-r',
+    A: 'text-moire-status-a',
+    M: 'text-moire-status-m',
+    D: 'text-moire-status-d',
+    R: 'text-moire-status-r',
 };
 
 function indent(depth: number): string {
@@ -30,17 +30,17 @@ function indent(depth: number): string {
 function rowClasses(node: FileNode): string {
     if (node.viewed) {
         return node.selected
-            ? 'bg-dv-viewed-sel hover:bg-dv-viewed-hover'
-            : 'bg-dv-viewed hover:bg-dv-viewed-hover';
+            ? 'bg-moire-viewed-sel hover:bg-moire-viewed-hover'
+            : 'bg-moire-viewed hover:bg-moire-viewed-hover';
     }
 
-    return node.selected ? 'bg-dv-sel-row hover:bg-dv-hover' : 'hover:bg-dv-hover';
+    return node.selected ? 'bg-moire-sel-row hover:bg-moire-hover' : 'hover:bg-moire-hover';
 }
 
 function rowStyle(node: FileNode): Record<string, string> {
     const style: Record<string, string> = { paddingLeft: indent(node.depth) };
     if (node.selected) {
-        const color = node.viewed ? 'var(--dv-viewed-edge)' : 'var(--dv-accent)';
+        const color = node.viewed ? 'var(--moire-viewed-edge)' : 'var(--moire-accent)';
         style.boxShadow = `inset 2px 0 0 0 ${color}`;
     }
 
@@ -50,31 +50,31 @@ function rowStyle(node: FileNode): Record<string, string> {
 function nameClass(node: FileNode): string {
     // Reviewed files stay green; otherwise the filename takes the status color
     // (green added, red deleted, blue modified, purple renamed).
-    return node.viewed ? 'text-dv-viewed-fg' : STATUS_CLASS[node.status];
+    return node.viewed ? 'text-moire-viewed-fg' : STATUS_CLASS[node.status];
 }
 
 function checkboxClass(node: FileNode): string {
     const checked =
-        'data-[state=checked]:border-dv-viewed-edge data-[state=checked]:bg-dv-viewed-edge data-[state=checked]:text-dv-check-fg';
+        'data-[state=checked]:border-moire-viewed-edge data-[state=checked]:bg-moire-viewed-edge data-[state=checked]:text-moire-check-fg';
 
-    // On a selected row the background matches --dv-border, so lift the empty
-    // checkbox to --dv-ring to keep it visible (hover does the same).
+    // On a selected row the background matches --moire-border, so lift the empty
+    // checkbox to --moire-ring to keep it visible (hover does the same).
     if (node.selected) {
-        return `border-dv-ring ${checked}`;
+        return `border-moire-ring ${checked}`;
     }
 
-    return `border-dv-border group-hover:border-dv-ring ${checked}`;
+    return `border-moire-border group-hover:border-moire-ring ${checked}`;
 }
 </script>
 
 <template>
     <TooltipProvider :delay-duration="300">
-        <div class="flex w-[312px] flex-none flex-col border-r border-dv-border bg-dv-chrome">
+        <div class="flex w-[312px] flex-none flex-col border-r border-moire-border bg-moire-chrome">
             <div class="flex items-center gap-2 px-3 pt-3 pb-2">
-                <span class="text-xs font-semibold text-dv-fg">Changed files</span>
+                <span class="text-xs font-semibold text-moire-fg">Changed files</span>
                 <Badge
                     variant="outline"
-                    class="border-dv-border px-[7px] text-[11px] font-medium text-dv-muted"
+                    class="border-moire-border px-[7px] text-[11px] font-medium text-moire-muted"
                 >
                     {{ comparison.fileCount }}
                 </Badge>
@@ -85,7 +85,7 @@ function checkboxClass(node: FileNode): string {
                             variant="ghost"
                             size="icon-xs"
                             :aria-label="comparison.allCollapsed ? 'Expand all' : 'Collapse all'"
-                            class="text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                            class="text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                             @click="comparison.toggleAll()"
                         >
                             <ChevronsUpDown v-if="comparison.allCollapsed" :size="16" />
@@ -96,8 +96,8 @@ function checkboxClass(node: FileNode): string {
                         {{ comparison.allCollapsed ? 'Expand all' : 'Collapse all' }}
                     </TooltipContent>
                 </Tooltip>
-                <span class="flex items-center gap-1.5 text-[11px] text-dv-muted">
-                    <span class="size-2 rounded-sm bg-dv-viewed-edge" />
+                <span class="flex items-center gap-1.5 text-[11px] text-moire-muted">
+                    <span class="size-2 rounded-sm bg-moire-viewed-edge" />
                     {{ comparison.viewedCount }} viewed
                 </span>
             </div>
@@ -106,7 +106,7 @@ function checkboxClass(node: FileNode): string {
                 <Input
                     v-model="comparison.treeFilter"
                     placeholder="Filter files…"
-                    class="h-8 border-dv-border bg-transparent font-mono text-xs text-dv-fg focus-visible:border-dv-ring focus-visible:ring-0"
+                    class="h-8 border-moire-border bg-transparent font-mono text-xs text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
                 />
             </div>
 
@@ -116,18 +116,23 @@ function checkboxClass(node: FileNode): string {
                         <Button
                             v-if="node.kind === 'dir'"
                             variant="ghost"
-                            class="h-auto w-full justify-start gap-1.5 rounded-md py-[5px] pr-2 font-normal text-dv-muted hover:bg-dv-hover hover:text-dv-muted dark:hover:bg-dv-hover"
+                            class="h-auto w-full justify-start gap-1.5 rounded-md py-[5px] pr-2 font-normal text-moire-muted hover:bg-moire-hover hover:text-moire-muted dark:hover:bg-moire-hover"
                             :style="{ paddingLeft: indent(node.depth) }"
                             @click="comparison.toggleDir(node.path)"
                         >
-                            <ChevronDown v-if="node.open" class="size-4 shrink-0 text-dv-faint" />
-                            <ChevronRight v-else class="size-4 shrink-0 text-dv-faint" />
-                            <span class="flex-1 truncate text-left font-mono text-xs text-dv-muted">
+                            <ChevronDown
+                                v-if="node.open"
+                                class="size-4 shrink-0 text-moire-faint"
+                            />
+                            <ChevronRight v-else class="size-4 shrink-0 text-moire-faint" />
+                            <span
+                                class="flex-1 truncate text-left font-mono text-xs text-moire-muted"
+                            >
                                 {{ node.name }}
                             </span>
                             <span
                                 class="font-mono text-[10px]"
-                                :class="node.allSeen ? 'text-dv-viewed-fg' : 'text-dv-faint'"
+                                :class="node.allSeen ? 'text-moire-viewed-fg' : 'text-moire-faint'"
                             >
                                 {{ node.seen }}/{{ node.total }}
                             </span>
@@ -157,10 +162,10 @@ function checkboxClass(node: FileNode): string {
                             >
                                 {{ node.name }}
                             </span>
-                            <span class="font-mono text-[11px] text-dv-add-fg">
+                            <span class="font-mono text-[11px] text-moire-add-fg">
                                 {{ node.additions ? '+' + node.additions : '' }}
                             </span>
-                            <span class="font-mono text-[11px] text-dv-del-fg">
+                            <span class="font-mono text-[11px] text-moire-del-fg">
                                 {{ node.deletions ? '−' + node.deletions : '' }}
                             </span>
                             <span @click.stop>

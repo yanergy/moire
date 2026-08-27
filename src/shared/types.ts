@@ -47,7 +47,7 @@ export interface RepoChangeEvent {
 }
 
 // Preload API surface, exposed on window.api once the git backend lands.
-export interface DiffViewerApi {
+export interface MoireApi {
     openRepoDialog(): Promise<string | null>;
     openRepo(path: string): Promise<RepoInfo | null>; // null when the folder is not a Git repo
     getRecentRepos(): Promise<string[]>;

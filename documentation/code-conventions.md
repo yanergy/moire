@@ -11,14 +11,14 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
     - `src/` = renderer (Vue). NEVER import `electron` or `node:*` modules in `src/` — a custom
       oxlint rule enforces this. The renderer talks to main only through the preload bridge
       (`window.api`).
-    - Types shared across the IPC boundary (`ChangedFile`, `FilePair`, `DiffViewerApi`, ...) go in
+    - Types shared across the IPC boundary (`ChangedFile`, `FilePair`, `MoireApi`, ...) go in
       `shared/types.ts`. Never duplicate these definitions on either side.
 - `electron/main.cjs` is CommonJS (`require`). Renderer code is TypeScript ESM. Do not "fix"
   the main process to ESM or convert its `require` calls to `import`.
 - Adding a new IPC channel means three changes, always together:
     1. handler in `electron/ipc/`
     2. exposure in the preload `contextBridge`
-    3. extension of the `DiffViewerApi` type in `shared/types.ts`
+    3. extension of the `MoireApi` type in `shared/types.ts`
 - Window security settings (`contextIsolation: true`, no `nodeIntegration`) are non-negotiable.
   Never weaken them to make something "work".
 
@@ -82,7 +82,7 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
   a primitive is missing, add it through the CLI rather than rolling your own. App-level
   components live in `src/components/`, never inside `ui/`.
 - App-level components are grouped by role under `src/components/`, never left flat:
-    - `pages/` = full-screen views composed from the pieces below (`DiffViewerPage`).
+    - `pages/` = full-screen views composed from the pieces below (`MoirePage`).
       `App.vue` stays a thin root that runs one-time setup and renders the page.
     - `headers/` = the top toolbar (`ToolbarHeader`).
     - `sidebar/` = the left panel (`FileTreeSidebar`).
@@ -96,7 +96,7 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
     and give it a suffix naming its kind where one fits (`*Page`, `*Header`). A new component
     goes in the folder matching its role; add a folder only when a genuinely new role appears.
 
-- Style the shadcn primitives with this project's `--dv-*` design tokens (pass them through
+- Style the shadcn primitives with this project's `--moire-*` design tokens (pass them through
   the `class` prop, which shadcn-vue merges via `cn`) so they match the custom look. Never
   hardcode hex values, and never revert a control to plain HTML to avoid the primitive.
 - shadcn-vue UI primitives are referenced in PascalCase in templates (`<Button>`, `<Input>`,

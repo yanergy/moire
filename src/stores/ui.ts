@@ -20,7 +20,7 @@ export const useUiStore = defineStore('ui', () => {
     }
 
     // The `.dark` class on <html> drives both the Tailwind dark variant and the
-    // --dv-* token overrides.
+    // --moire-* token overrides.
     watch(
         isDark,
         (dark) => {

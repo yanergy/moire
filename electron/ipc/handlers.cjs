@@ -1,6 +1,6 @@
 // IPC handlers bridging window.api to main-process work. Each channel here has a
 // matching method in the preload contextBridge (electron/preload.cjs) and an
-// entry in DiffViewerApi (src/shared/types.ts). Keep the three in sync.
+// entry in MoireApi (src/shared/types.ts). Keep the three in sync.
 
 const path = require('node:path');
 const { ipcMain, dialog } = require('electron');

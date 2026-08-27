@@ -7,7 +7,7 @@ import * as monaco from 'monaco-editor';
 //
 // Monaco color values must be hex (#RRGGBB or #RRGGBBAA); the design's rgba
 // diff colors are converted to hex8 here. This module is the editor's palette
-// source, mirroring the --dv-* tokens in base.css.
+// source, mirroring the --moire-* tokens in base.css.
 
 const DARK: monaco.editor.IStandaloneThemeData = {
     base: 'vs-dark',
@@ -69,10 +69,10 @@ export function defineMonacoThemes() {
     }
 
     defined = true;
-    monaco.editor.defineTheme('dv-dark', DARK);
-    monaco.editor.defineTheme('dv-light', LIGHT);
+    monaco.editor.defineTheme('moire-dark', DARK);
+    monaco.editor.defineTheme('moire-light', LIGHT);
 }
 
 export function monacoThemeFor(isDark: boolean): string {
-    return isDark ? 'dv-dark' : 'dv-light';
+    return isDark ? 'moire-dark' : 'moire-light';
 }

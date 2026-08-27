@@ -5,7 +5,7 @@ import { defineMonacoThemes } from '@/lib/monaco-theme';
 import { windowTitle } from '@/lib/window-title';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import DiffViewerPage from '@/components/pages/DiffViewerPage.vue';
+import MoirePage from '@/components/pages/MoirePage.vue';
 
 setupMonacoEnv();
 defineMonacoThemes();
@@ -34,5 +34,5 @@ onUnmounted(() => stopThemeMenu?.());
 </script>
 
 <template>
-    <diff-viewer-page />
+    <moire-page />
 </template>

@@ -131,7 +131,7 @@ export default defineConfig({
 ### Preload API surface (initial)
 
 ```ts
-interface DiffViewerApi {
+interface MoireApi {
     openRepoDialog(): Promise<string | null>;
     openRepo(path: string): Promise<RepoInfo>;
     getRecentRepos(): Promise<string[]>;

@@ -19,10 +19,10 @@ const emit = defineEmits<{
 }>();
 
 const STATUS_BADGE: Record<FileStatus, string> = {
-    A: 'border-dv-status-a text-dv-status-a',
-    M: 'border-dv-status-m text-dv-status-m',
-    D: 'border-dv-status-d text-dv-status-d',
-    R: 'border-dv-status-r text-dv-status-r',
+    A: 'border-moire-status-a text-moire-status-a',
+    M: 'border-moire-status-m text-moire-status-m',
+    D: 'border-moire-status-d text-moire-status-d',
+    R: 'border-moire-status-r text-moire-status-r',
 };
 
 const dir = computed(() => {
@@ -39,11 +39,11 @@ const name = computed(() => {
 <template>
     <TooltipProvider :delay-duration="200">
         <div
-            class="flex h-11 flex-none items-center gap-2.5 border-b border-dv-border px-3.5"
-            :class="viewed ? 'bg-dv-viewed' : 'bg-dv-app'"
+            class="flex h-11 flex-none items-center gap-2.5 border-b border-moire-border px-3.5"
+            :class="viewed ? 'bg-moire-viewed' : 'bg-moire-app'"
         >
-            <span class="truncate font-mono text-xs text-dv-muted">
-                {{ dir }}<span class="font-medium text-dv-fg">{{ name }}</span>
+            <span class="truncate font-mono text-xs text-moire-muted">
+                {{ dir }}<span class="font-medium text-moire-fg">{{ name }}</span>
             </span>
             <Badge
                 variant="outline"
@@ -51,16 +51,16 @@ const name = computed(() => {
             >
                 {{ file.status }}
             </Badge>
-            <span class="font-mono text-[11px] text-dv-add-fg">
+            <span class="font-mono text-[11px] text-moire-add-fg">
                 {{ file.additions ? '+' + file.additions : '' }}
             </span>
-            <span class="font-mono text-[11px] text-dv-del-fg">
+            <span class="font-mono text-[11px] text-moire-del-fg">
                 {{ file.deletions ? '−' + file.deletions : '' }}
             </span>
 
             <div class="flex-1" />
 
-            <span class="text-[11px] whitespace-nowrap text-dv-faint">
+            <span class="text-[11px] whitespace-nowrap text-moire-faint">
                 {{ changeCount }} changes
             </span>
 
@@ -70,7 +70,7 @@ const name = computed(() => {
                         <Button
                             variant="outline"
                             size="icon-sm"
-                            class="size-7 border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                            class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                             @click="emit('prev')"
                         >
                             <ArrowUp :size="16" />
@@ -83,7 +83,7 @@ const name = computed(() => {
                         <Button
                             variant="outline"
                             size="icon-sm"
-                            class="size-7 border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                            class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                             @click="emit('next')"
                         >
                             <ArrowDown :size="16" />
@@ -99,8 +99,8 @@ const name = computed(() => {
                 class="h-7 min-w-[116px] gap-1.5"
                 :class="
                     viewed
-                        ? 'border-dv-viewed-edge bg-dv-viewed text-dv-viewed-fg hover:bg-dv-viewed-hover hover:text-dv-viewed-fg'
-                        : 'border-dv-border text-dv-muted hover:bg-dv-hover'
+                        ? 'border-moire-viewed-edge bg-moire-viewed text-moire-viewed-fg hover:bg-moire-viewed-hover hover:text-moire-viewed-fg'
+                        : 'border-moire-border text-moire-muted hover:bg-moire-hover'
                 "
                 @click="emit('toggleViewed')"
             >

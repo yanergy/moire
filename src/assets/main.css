@@ -1,7 +1,7 @@
 @import './base.css';
 
-/* The diff viewer is a full-window desktop app: no page centering or max-width.
-   The root layout (App.vue) owns its own background via the --dv-* tokens. */
+/* Moiré is a full-window desktop app: no page centering or max-width.
+   The root layout (App.vue) owns its own background via the --moire-* tokens. */
 html,
 body,
 #app {

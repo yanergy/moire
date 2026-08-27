@@ -44,7 +44,7 @@ npm run format        # oxfmt
 All interactive UI is built on shadcn-vue primitives (Reka UI under the hood), which live in
 `src/components/ui/`. Add new primitives with `npx shadcn-vue@latest add <name>`. Do not
 hand-write bespoke replacements for something shadcn-vue provides. The primitives are styled
-with the project's `--dv-*` design tokens so they match the custom look. See
+with the project's `--moire-*` design tokens so they match the custom look. See
 `documentation/code-conventions.md` for the full rules.
 
 ## Checklist
@@ -67,13 +67,13 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 
 - [x] Tailwind v4 via `@tailwindcss/vite`.
 - [x] ESM output concern sidestepped by using `electron/main.cjs`.
-- [x] shadcn-vue init and components migrated onto the primitives, styled with `--dv-*` tokens,
+- [x] shadcn-vue init and components migrated onto the primitives, styled with `--moire-*` tokens,
       verified in both themes.
 - [x] Harden the Electron entry. `electron/main.cjs` sets `contextIsolation: true`,
   `nodeIntegration: false`, and `sandbox: true` on the window. The preload path is wired in with
   the bridge below.
 - [x] Context isolated preload bridge (`electron/preload.cjs`) exposing `window.api`. Implements
-  the repo-opening surface of `DiffViewerApi` (`openRepoDialog`, `openRepo`, `getRecentRepos`)
+  the repo-opening surface of `MoireApi` (`openRepoDialog`, `openRepo`, `getRecentRepos`)
   over `ipcMain.handle` channels in `electron/ipc/`; the git-backend methods land with Phase 2.
 - [x] Native folder picker wired to `openRepo`. The toolbar repo-picker menu's "Open folder…"
   item opens it, and `openRepo` validates the folder is a Git repo (`simple-git` `checkIsRepo`)

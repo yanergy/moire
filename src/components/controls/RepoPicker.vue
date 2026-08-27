@@ -46,23 +46,23 @@ async function openRecent(path: string) {
             <Button
                 variant="outline"
                 size="sm"
-                class="gap-2 border-dv-border text-[13px] font-medium text-dv-fg hover:bg-dv-hover"
+                class="gap-2 border-moire-border text-[13px] font-medium text-moire-fg hover:bg-moire-hover"
             >
                 <FolderGit2
                     :size="14"
-                    :class="comparison.repoName ? 'text-dv-accent' : 'text-dv-faint'"
+                    :class="comparison.repoName ? 'text-moire-accent' : 'text-moire-faint'"
                 />
                 <span v-if="comparison.repoName" class="truncate">{{ comparison.repoName }}</span>
-                <span v-else class="font-normal text-dv-faint">Select a repository…</span>
-                <ChevronDown :size="12" class="text-dv-faint" />
+                <span v-else class="font-normal text-moire-faint">Select a repository…</span>
+                <ChevronDown :size="12" class="text-moire-faint" />
             </Button>
         </PopoverTrigger>
 
         <PopoverContent
             align="start"
             :side-offset="6"
-            class="w-[306px] overflow-hidden border-dv-border bg-dv-pop p-0"
-            :style="{ boxShadow: 'var(--dv-pop-shadow)' }"
+            class="w-[306px] overflow-hidden border-moire-border bg-moire-pop p-0"
+            :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
         >
             <Command class="bg-transparent">
                 <CommandList class="max-h-[322px]">
@@ -72,15 +72,15 @@ async function openRecent(path: string) {
                             :key="path"
                             :value="path"
                             :title="path"
-                            class="group gap-2 text-xs text-dv-file-fg data-[highlighted]:bg-dv-hover data-[highlighted]:text-dv-fg"
+                            class="group gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
                             @select="openRecent(path)"
                         >
-                            <FolderGit2 :size="14" class="shrink-0 text-dv-faint" />
+                            <FolderGit2 :size="14" class="shrink-0 text-moire-faint" />
                             <span class="flex-1 truncate">{{ baseName(path) }}</span>
                             <button
                                 type="button"
                                 aria-label="Remove from recents"
-                                class="shrink-0 rounded-sm p-0.5 text-dv-faint opacity-0 group-hover:opacity-100 group-data-[highlighted]:opacity-100 hover:bg-dv-border hover:text-dv-fg"
+                                class="shrink-0 rounded-sm p-0.5 text-moire-faint opacity-0 group-hover:opacity-100 group-data-[highlighted]:opacity-100 hover:bg-moire-border hover:text-moire-fg"
                                 @click.stop="comparison.removeRecent(path)"
                                 @pointerdown.stop
                             >
@@ -94,10 +94,10 @@ async function openRecent(path: string) {
                     <CommandGroup>
                         <CommandItem
                             value="Open folder"
-                            class="gap-2 text-xs text-dv-file-fg data-[highlighted]:bg-dv-hover data-[highlighted]:text-dv-fg"
+                            class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
                             @select="pickFolder()"
                         >
-                            <FolderOpen :size="14" class="shrink-0 text-dv-faint" />
+                            <FolderOpen :size="14" class="shrink-0 text-moire-faint" />
                             <span class="flex-1">Open folder…</span>
                         </CommandItem>
                     </CommandGroup>

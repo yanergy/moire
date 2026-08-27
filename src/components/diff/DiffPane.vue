@@ -14,7 +14,7 @@ const changeCount = ref(0);
 </script>
 
 <template>
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-dv-app">
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
         <selection-banner
             :file="comparison.selectedFile"
             :viewed="comparison.isViewed(comparison.selectedFile.path)"
@@ -25,13 +25,13 @@ const changeCount = ref(0);
         />
 
         <div
-            class="flex h-7 flex-none items-stretch border-b border-dv-border bg-dv-chrome font-mono text-[11px] text-dv-muted"
+            class="flex h-7 flex-none items-stretch border-b border-moire-border bg-moire-chrome font-mono text-[11px] text-moire-muted"
         >
             <template v-if="ui.viewMode === 'split'">
                 <div class="flex flex-1 items-center overflow-hidden px-3 whitespace-nowrap">
                     {{ comparison.base }}
                 </div>
-                <div class="w-px bg-dv-border" />
+                <div class="w-px bg-moire-border" />
                 <div class="flex flex-1 items-center overflow-hidden px-3 whitespace-nowrap">
                     {{ comparison.head }}
                 </div>
