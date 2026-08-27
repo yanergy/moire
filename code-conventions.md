@@ -82,6 +82,21 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
   equivalent genuinely doesn't exist; if you add one, say why in a comment.
 - Theme values (colors, diff status colors) come from the CSS variable tokens — never
   hardcode hex values in components.
+- Prefer Lucide icons (`@lucide/vue`) over unicode glyphs for buttons. SVG icons center
+  reliably in a flex button and size via `:size`. Use a consistent 16px icon
+  (`:size="16"`) for every icon button. An icon that sits inside a small fixed container
+  (for example the 15px viewed checkbox) sizes down only as far as needed to fit. Keep
+  new icon buttons at 16px.
+
+## Testing
+
+- Every new frontend file under `src/` (component, store, composable, or lib module)
+  ships with a matching test in a sibling `__tests__/` directory, added in the same
+  change rather than afterwards. Components get a mounted `@vue/test-utils` test; stores
+  and lib modules get unit tests.
+- Test files live under `src/**/__tests__/` and run via Vitest. After touching frontend
+  code run `npm run test:unit` (or `npx vitest run`); the pre-commit hook also runs the
+  full suite.
 
 ## Git & diff domain rules
 
