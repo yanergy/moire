@@ -58,6 +58,7 @@ function baseName(path: string): string {
 
 export const useComparisonStore = defineStore('comparison', () => {
     const repoName = ref(MOCK_REPO_NAME);
+    const repoPath = ref('');
     const branches = ref(MOCK_BRANCHES);
     const files = ref(MOCK_FILES);
 
@@ -251,8 +252,33 @@ export const useComparisonStore = defineStore('comparison', () => {
         head.value = previousBase;
     }
 
+    // Native folder picker -> git-repo validation, both in the main process. The
+    // branches and file set stay on mock data until the git backend (Phase 2)
+    // replaces them; for now this proves the preload round-trip and names the repo.
+    async function openRepository() {
+        const api = window.api;
+        if (!api) {
+            return;
+        }
+
+        const picked = await api.openRepoDialog();
+        if (!picked) {
+            return;
+        }
+
+        // Main shows its own error box and returns null for an invalid folder.
+        const info = await api.openRepo(picked);
+        if (!info) {
+            return;
+        }
+
+        repoName.value = info.name;
+        repoPath.value = info.path;
+    }
+
     return {
         repoName,
+        repoPath,
         branches,
         files,
         base,
@@ -285,6 +311,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         setHead,
         setCompareMode,
         swap,
+        openRepository,
     };
 });
 

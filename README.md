@@ -72,10 +72,14 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] Harden the Electron entry. `electron/main.cjs` sets `contextIsolation: true`,
   `nodeIntegration: false`, and `sandbox: true` on the window. The preload path is wired in with
   the bridge below.
-- [ ] Context isolated preload bridge implementing `DiffViewerApi` and exposing `window.api`.
-- [ ] Native folder picker wired to `openRepo`.
+- [x] Context isolated preload bridge (`electron/preload.cjs`) exposing `window.api`. Implements
+  the repo-opening surface of `DiffViewerApi` (`openRepoDialog`, `openRepo`, `getRecentRepos`)
+  over `ipcMain.handle` channels in `electron/ipc/`; the git-backend methods land with Phase 2.
+- [x] Native folder picker wired to `openRepo`. The toolbar repo button opens it, and `openRepo`
+  validates the folder is a Git repo (`simple-git` `checkIsRepo`) in the main process.
 - [ ] `git --version` startup check with an error dialog.
-- [ ] Recent repos persistence via `electron-store`.
+- [x] Recent repos persistence via `electron-store` (`electron/settings.cjs`), recorded on each
+  successful open. Not yet surfaced in the UI.
 
 ### Phase 2, git integration
 

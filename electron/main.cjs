@@ -1,5 +1,6 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('node:path');
+const { registerIpcHandlers } = require('./ipc/handlers.cjs');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -7,7 +8,8 @@ function createWindow() {
         height: 800,
         webPreferences: {
             // Non-negotiable process separation: the renderer never touches Node.
-            // The preload bridge (window.api) is wired in here once it exists.
+            // It reaches main only through this preload bridge (window.api).
+            preload: path.join(app.getAppPath(), 'dist-electron', 'preload.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true,
@@ -22,7 +24,10 @@ function createWindow() {
     }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    registerIpcHandlers();
+    createWindow();
+});
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();

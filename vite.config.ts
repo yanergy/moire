@@ -15,6 +15,18 @@ export default defineConfig({
         tailwindcss(),
         electron({
             main: { entry: 'electron/main.cjs' },
+            // A sandboxed preload must be CommonJS, so emit it as preload.cjs even
+            // though the project is "type": "module".
+            preload: {
+                input: 'electron/preload.cjs',
+                vite: {
+                    build: {
+                        rollupOptions: {
+                            output: { format: 'cjs', entryFileNames: '[name].cjs' },
+                        },
+                    },
+                },
+            },
         }),
     ],
     resolve: {

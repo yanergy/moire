@@ -49,7 +49,7 @@ export interface RepoChangeEvent {
 // Preload API surface, exposed on window.api once the git backend lands.
 export interface DiffViewerApi {
     openRepoDialog(): Promise<string | null>;
-    openRepo(path: string): Promise<RepoInfo>;
+    openRepo(path: string): Promise<RepoInfo | null>; // null when the folder is not a Git repo
     getRecentRepos(): Promise<string[]>;
     getBranches(): Promise<BranchInfo[]>;
     getChangedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]>;
