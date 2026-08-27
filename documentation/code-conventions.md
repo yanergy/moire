@@ -84,7 +84,7 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - App-level components are grouped by role under `src/components/`, never left flat:
     - `pages/` = full-screen views composed from the pieces below (`DiffViewerPage`).
       `App.vue` stays a thin root that runs one-time setup and renders the page.
-    - `headers/` = the top chrome bars (`TitleBarHeader`, `ToolbarHeader`).
+    - `headers/` = the top toolbar (`ToolbarHeader`).
     - `sidebar/` = the left panel (`FileTreeSidebar`).
     - `diff/` = the diff pane and its parts (`DiffPane`, `DiffViewer`, `SelectionBanner`,
       `StatusBar`).

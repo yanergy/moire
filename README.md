@@ -103,6 +103,7 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 
 - [x] Dark and light theme toggle with matching Monaco themes.
 - [x] Filter box and viewed checkboxes.
+- [x] Open repo name shown in the native window title.
 - [ ] `RepoWatcher` (chokidar) with auto refresh on change.
 - [ ] Virtualized file tree using the installed `vue-virtual-scroller`.
 - [ ] Size threshold and a "Load diff" gate for large files.

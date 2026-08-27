@@ -118,11 +118,6 @@
     --dv-seg-active: #ffffff;
     --dv-seg-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
     --dv-ring-glow: 0 0 0 2px rgba(24, 24, 27, 0.1);
-
-    /* Traffic-light dots are fixed decorative colors, shared across themes. */
-    --dv-tl-red: #ec6a5e;
-    --dv-tl-yellow: #f4bf4f;
-    --dv-tl-green: #61c554;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -248,9 +243,6 @@ body {
     --color-dv-accent: var(--dv-accent);
     --color-dv-check-fg: var(--dv-check-fg);
     --color-dv-seg-active: var(--dv-seg-active);
-    --color-dv-tl-red: var(--dv-tl-red);
-    --color-dv-tl-yellow: var(--dv-tl-yellow);
-    --color-dv-tl-green: var(--dv-tl-green);
 }
 
 .dark {
