@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ArrowRightLeft, RefreshCw } from '@lucide/vue';
+import { ArrowRightLeft, ChevronDown, RefreshCw } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
 import RefSelector from '@/components/RefSelector.vue';
 import SegmentedToggle from '@/components/SegmentedToggle.vue';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
 const ui = useUiStore();
@@ -21,51 +23,66 @@ const viewOptions: { value: ViewMode; label: string }[] = [
 </script>
 
 <template>
-    <div class="flex h-13 flex-none items-center gap-2 border-b border-dv-border bg-dv-app px-3">
-        <button
-            type="button"
-            class="flex h-8 items-center gap-2 rounded-md border border-dv-border px-3 text-[13px] font-medium whitespace-nowrap text-dv-fg hover:bg-dv-hover"
+    <TooltipProvider :delay-duration="300">
+        <div
+            class="flex h-13 flex-none items-center gap-2 border-b border-dv-border bg-dv-app px-3"
         >
-            <span class="size-1.5 rounded-sm bg-dv-accent" />
-            {{ comparison.repoName }}
-            <span class="text-[9px] text-dv-faint">▾</span>
-        </button>
-
-        <div class="mx-1 h-5 w-px bg-dv-border" />
-
-        <div class="flex items-center gap-1.5">
-            <ref-selector side="base" />
-            <button
-                type="button"
-                title="Swap base and head"
-                class="flex size-7 items-center justify-center rounded-md text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
-                @click="comparison.swap()"
+            <Button
+                variant="outline"
+                size="sm"
+                class="gap-2 border-dv-border text-[13px] font-medium text-dv-fg hover:bg-dv-hover"
             >
-                <arrow-right-left :size="16" />
-            </button>
-            <ref-selector side="head" />
+                <span class="size-1.5 rounded-sm bg-dv-accent" />
+                {{ comparison.repoName }}
+                <ChevronDown :size="12" class="text-dv-faint" />
+            </Button>
+
+            <div class="mx-1 h-5 w-px bg-dv-border" />
+
+            <div class="flex items-center gap-1.5">
+                <ref-selector side="base" />
+                <Tooltip>
+                    <TooltipTrigger as-child>
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            class="size-7 text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                            @click="comparison.swap()"
+                        >
+                            <ArrowRightLeft :size="16" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Swap base and head</TooltipContent>
+                </Tooltip>
+                <ref-selector side="head" />
+            </div>
+
+            <div class="flex-1" />
+
+            <segmented-toggle
+                :options="compareOptions"
+                :model-value="comparison.compareMode"
+                @update:model-value="comparison.setCompareMode"
+            />
+
+            <segmented-toggle
+                :options="viewOptions"
+                :model-value="ui.viewMode"
+                @update:model-value="ui.setViewMode"
+            />
+
+            <Tooltip>
+                <TooltipTrigger as-child>
+                    <Button
+                        variant="outline"
+                        size="icon-sm"
+                        class="border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                    >
+                        <RefreshCw :size="16" />
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent>Refresh</TooltipContent>
+            </Tooltip>
         </div>
-
-        <div class="flex-1" />
-
-        <segmented-toggle
-            :options="compareOptions"
-            :model-value="comparison.compareMode"
-            @update:model-value="comparison.setCompareMode"
-        />
-
-        <segmented-toggle
-            :options="viewOptions"
-            :model-value="ui.viewMode"
-            @update:model-value="ui.setViewMode"
-        />
-
-        <button
-            type="button"
-            title="Refresh"
-            class="flex size-8 items-center justify-center rounded-md border border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
-        >
-            <refresh-cw :size="16" />
-        </button>
-    </div>
+    </TooltipProvider>
 </template>

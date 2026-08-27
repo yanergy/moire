@@ -75,9 +75,19 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - `<script setup lang="ts">` with the Composition API for all components. No Options API.
 - State lives in Pinia stores (`src/stores/`); components stay thin and presentational
   where possible.
-- UI primitives come from shadcn-vue and live in `src/components/ui/`. Add new ones via
-  `npx shadcn-vue@latest add <name>` — don't hand-write lookalikes. App-level components
-  live in `src/components/`, never inside `ui/`.
+- UI primitives come from shadcn-vue and live in `src/components/ui/`. Every interactive
+  control (button, toggle group, combobox or dropdown, input, checkbox, tooltip, badge,
+  dialog, scroll area, and so on) must be built on the matching shadcn-vue primitive. Add
+  new ones via `npx shadcn-vue@latest add <name>`. Do not hand-write bespoke lookalikes; if
+  a primitive is missing, add it through the CLI rather than rolling your own. App-level
+  components live in `src/components/`, never inside `ui/`.
+- Style the shadcn primitives with this project's `--dv-*` design tokens (pass them through
+  the `class` prop, which shadcn-vue merges via `cn`) so they match the custom look. Never
+  hardcode hex values, and never revert a control to plain HTML to avoid the primitive.
+- shadcn-vue UI primitives are referenced in PascalCase in templates (`<Button>`, `<Input>`,
+  `<TooltipTrigger>`) rather than kebab-case, because names like `button` and `input` collide
+  with native HTML elements. This is the one exception to the kebab-case component rule below;
+  app-level components (`<file-tree-sidebar />`, `<diff-pane />`) stay kebab-case.
 - Styling is Tailwind utility classes. No `<style scoped>` blocks unless a Tailwind
   equivalent genuinely doesn't exist; if you add one, say why in a comment.
 - Theme values (colors, diff status colors) come from the CSS variable tokens — never
@@ -94,6 +104,10 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
   ships with a matching test in a sibling `__tests__/` directory, added in the same
   change rather than afterwards. Components get a mounted `@vue/test-utils` test; stores
   and lib modules get unit tests.
+- Exception: vendored shadcn-vue primitives under `src/components/ui/` are copy-in
+  third-party code and are not individually unit-tested. They are exercised through the
+  app-level components that use them (which do carry tests). Test-support files (for
+  example the vitest setup) are not test targets either.
 - Test files live under `src/**/__tests__/` and run via Vitest. After touching frontend
   code run `npm run test:unit` (or `npx vitest run`); the pre-commit hook also runs the
   full suite.
@@ -113,4 +127,6 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - Prefer the smallest change that solves the problem. Don't refactor adjacent code,
   reorganize files, or add dependencies unless asked.
 - If a task seems to require a new dependency or a change to build/tooling config,
-  stop and ask first.
+  stop and ask first. Exception: shadcn-vue components and the `reka-ui` packages they pull
+  in are pre-approved. Adding a shadcn-vue primitive via `npx shadcn-vue@latest add <name>`
+  (which installs `reka-ui` and its related deps) does not require asking.

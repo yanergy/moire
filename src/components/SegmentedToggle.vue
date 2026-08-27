@@ -1,4 +1,6 @@
 <script setup lang="ts" generic="T extends string">
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+
 interface Option {
     value: T;
     label: string;
@@ -12,24 +14,34 @@ defineProps<{
 const emit = defineEmits<{
     'update:modelValue': [value: T];
 }>();
+
+// A single-select toggle group emits an empty string when the active item is
+// clicked again. The segmented control must always keep one option active, so
+// swallow the empty (deselect) update and forward only real changes.
+function onChange(value: unknown) {
+    if (typeof value !== 'string' || !value) {
+        return;
+    }
+
+    emit('update:modelValue', value as T);
+}
 </script>
 
 <template>
-    <div class="flex gap-0.5 rounded-md bg-dv-chrome p-[3px]">
-        <button
+    <ToggleGroup
+        type="single"
+        :spacing="1"
+        :model-value="modelValue"
+        class="gap-0.5 rounded-md bg-dv-chrome p-[3px]"
+        @update:model-value="onChange"
+    >
+        <ToggleGroupItem
             v-for="option in options"
             :key="option.value"
-            type="button"
-            class="rounded px-2.5 py-1 text-xs font-medium whitespace-nowrap"
-            :class="
-                option.value === modelValue
-                    ? 'bg-dv-seg-active text-dv-fg'
-                    : 'text-dv-muted hover:text-dv-fg'
-            "
-            :style="option.value === modelValue ? { boxShadow: 'var(--dv-seg-shadow)' } : undefined"
-            @click="emit('update:modelValue', option.value)"
+            :value="option.value"
+            class="h-auto min-w-0 rounded px-2.5 py-1 text-xs font-medium text-dv-muted hover:bg-transparent hover:text-dv-fg data-[state=on]:bg-dv-seg-active data-[state=on]:text-dv-fg data-[state=on]:shadow-[var(--dv-seg-shadow)]"
         >
             {{ option.label }}
-        </button>
-    </div>
+        </ToggleGroupItem>
+    </ToggleGroup>
 </template>

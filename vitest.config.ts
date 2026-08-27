@@ -15,6 +15,8 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         exclude: [...configDefaults.exclude, 'e2e/**'],
+        // Polyfills for the browser APIs reka-ui touches under jsdom.
+        setupFiles: ['./src/components/__tests__/vitest.setup.ts'],
         root: fileURLToPath(new URL('./', import.meta.url)),
     },
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import SegmentedToggle from '@/components/SegmentedToggle.vue';
 
 const options = [
@@ -8,13 +9,14 @@ const options = [
 ];
 
 describe('SegmentedToggle', () => {
-    it('renders every option and marks the active one', () => {
+    it('renders every option and marks the active one', async () => {
         const wrapper = mount(SegmentedToggle, { props: { options, modelValue: 'split' } });
+        await nextTick();
         const buttons = wrapper.findAll('button');
 
         expect(buttons).toHaveLength(2);
-        expect(buttons[0]!.classes()).toContain('bg-dv-seg-active');
-        expect(buttons[1]!.classes()).not.toContain('bg-dv-seg-active');
+        expect(buttons[0]!.attributes('data-state')).toBe('on');
+        expect(buttons[1]!.attributes('data-state')).toBe('off');
     });
 
     it('emits update:modelValue with the clicked option value', async () => {

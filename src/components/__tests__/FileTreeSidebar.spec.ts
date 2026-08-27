@@ -55,12 +55,12 @@ describe('FileTreeSidebar', () => {
     it('toggles all folders from the single header control', async () => {
         const wrapper = mountTree();
 
-        // Starts expanded, so the control collapses and its title flips.
-        await wrapper.find('button[title="Collapse all"]').trigger('click');
+        // Starts expanded, so the control collapses and its label flips.
+        await wrapper.find('[aria-label="Collapse all"]').trigger('click');
         expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(false);
 
         // Now fully collapsed, so the same control expands.
-        await wrapper.find('button[title="Expand all"]').trigger('click');
+        await wrapper.find('[aria-label="Expand all"]').trigger('click');
         expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(true);
     });
 });

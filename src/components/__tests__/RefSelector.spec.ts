@@ -1,8 +1,18 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
-import { beforeEach, describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { beforeEach, afterEach, describe, it, expect } from 'vitest';
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import RefSelector from '@/components/RefSelector.vue';
 import { useComparisonStore } from '@/stores/comparison';
+
+// The ref picker is a shadcn-vue Popover + Command. Its list is teleported to
+// document.body, so assertions query the document rather than the wrapper.
+async function open(wrapper: VueWrapper) {
+    await wrapper.find('button').trigger('click');
+    await flushPromises();
+}
+
+const commandInput = () => document.querySelector('[data-slot="command-input"]');
+const listText = () => document.body.textContent ?? '';
 
 describe('RefSelector', () => {
     let pinia: Pinia;
@@ -12,50 +22,68 @@ describe('RefSelector', () => {
         setActivePinia(pinia);
     });
 
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
     function mountSide(side: 'base' | 'head') {
-        return mount(RefSelector, { props: { side }, global: { plugins: [pinia] } });
+        return mount(RefSelector, {
+            props: { side },
+            attachTo: document.body,
+            global: { plugins: [pinia] },
+        });
     }
 
     it('shows the current ref and opens the popover on click', async () => {
         const wrapper = mountSide('base');
         expect(wrapper.text()).toContain('main');
-        expect(wrapper.find('input').exists()).toBe(false);
+        expect(commandInput()).toBeNull();
 
-        await wrapper.find('button').trigger('click');
-        expect(wrapper.find('input').exists()).toBe(true);
-        expect(wrapper.text()).toContain('Local branches');
-        expect(wrapper.text()).toContain('Remotes');
+        await open(wrapper);
+        expect(commandInput()).not.toBeNull();
+        expect(listText()).toContain('Local branches');
+        expect(listText()).toContain('Remotes');
     });
 
     it('offers the working tree entry only on the head side', async () => {
         const head = mountSide('head');
-        await head.find('button').trigger('click');
-        expect(head.text()).toContain('Uncommitted');
-        expect(head.text()).toContain('WORKING TREE');
+        await open(head);
+        expect(listText()).toContain('Uncommitted');
+        expect(listText()).toContain('WORKING TREE');
+        head.unmount();
+        document.body.innerHTML = '';
 
         const base = mountSide('base');
-        await base.find('button').trigger('click');
-        expect(base.text()).not.toContain('Uncommitted');
+        await open(base);
+        expect(listText()).not.toContain('Uncommitted');
     });
 
     it('filters the ref list by the search query', async () => {
         const wrapper = mountSide('base');
-        await wrapper.find('button').trigger('click');
-        await wrapper.find('input').setValue('feat');
+        await open(wrapper);
 
-        expect(wrapper.text()).toContain('feat/monaco-spike');
-        expect(wrapper.text()).not.toContain('develop');
+        const input = commandInput() as HTMLInputElement;
+        input.value = 'feat';
+        input.dispatchEvent(new Event('input'));
+        await flushPromises();
+
+        expect(listText()).toContain('feat/monaco-spike');
+        expect(listText()).not.toContain('develop');
     });
 
     it('picks a ref, updates the store, and closes the popover', async () => {
         const wrapper = mountSide('base');
         const store = useComparisonStore();
-        await wrapper.find('button').trigger('click');
+        await open(wrapper);
 
-        const option = wrapper.findAll('button').find((b) => b.text().includes('develop'));
-        await option!.trigger('click');
+        const items = [...document.querySelectorAll('[data-slot="command-item"]')] as HTMLElement[];
+        const develop = items.find(
+            (el) => el.textContent?.includes('develop') && !el.textContent.includes('origin')
+        );
+        develop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushPromises();
 
         expect(store.base).toBe('develop');
-        expect(wrapper.find('input').exists()).toBe(false);
+        expect(commandInput()).toBeNull();
     });
 });

@@ -3,6 +3,12 @@ import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from
 import { useComparisonStore } from '@/stores/comparison';
 import type { FileNode } from '@/stores/comparison';
 import type { FileStatus } from '@/shared/types';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
 
@@ -48,110 +54,130 @@ function nameClass(node: FileNode): string {
 }
 
 function checkboxClass(node: FileNode): string {
-    if (node.viewed) {
-        return 'border-dv-viewed-edge bg-dv-viewed-edge text-dv-check-fg';
-    }
+    const checked =
+        'data-[state=checked]:border-dv-viewed-edge data-[state=checked]:bg-dv-viewed-edge data-[state=checked]:text-dv-check-fg';
 
     // On a selected row the background matches --dv-border, so lift the empty
     // checkbox to --dv-ring to keep it visible (hover does the same).
     if (node.selected) {
-        return 'border-dv-ring text-transparent';
+        return `border-dv-ring ${checked}`;
     }
 
-    return 'border-dv-border text-transparent group-hover:border-dv-ring';
+    return `border-dv-border group-hover:border-dv-ring ${checked}`;
 }
 </script>
 
 <template>
-    <div class="flex w-[312px] flex-none flex-col border-r border-dv-border bg-dv-chrome">
-        <div class="flex items-center gap-2 px-3 pt-3 pb-2">
-            <span class="text-xs font-semibold text-dv-fg">Changed files</span>
-            <span
-                class="rounded-full border border-dv-border px-[7px] text-[11px] font-medium text-dv-muted"
-            >
-                {{ comparison.fileCount }}
-            </span>
-            <div class="flex-1" />
-            <button
-                type="button"
-                :title="comparison.allCollapsed ? 'Expand all' : 'Collapse all'"
-                class="flex size-6 items-center justify-center rounded-md text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
-                @click="comparison.toggleAll()"
-            >
-                <chevrons-up-down v-if="comparison.allCollapsed" :size="16" />
-                <chevrons-down-up v-else :size="16" />
-            </button>
-            <span class="flex items-center gap-1.5 text-[11px] text-dv-muted">
-                <span class="size-2 rounded-sm bg-dv-viewed-edge" />
-                {{ comparison.viewedCount }} viewed
-            </span>
-        </div>
-
-        <div class="px-3 pb-2.5">
-            <input
-                v-model="comparison.treeFilter"
-                placeholder="Filter files…"
-                class="h-8 w-full rounded-md border border-dv-border bg-transparent px-2.5 font-mono text-xs text-dv-fg outline-none focus:border-dv-ring"
-            />
-        </div>
-
-        <div class="flex-1 overflow-y-auto px-2 pb-3">
-            <template v-for="node in comparison.treeNodes" :key="node.key">
-                <button
-                    v-if="node.kind === 'dir'"
-                    type="button"
-                    class="flex w-full items-center gap-1.5 rounded-md py-[5px] pr-2 hover:bg-dv-hover"
-                    :style="{ paddingLeft: indent(node.depth) }"
-                    @click="comparison.toggleDir(node.path)"
+    <TooltipProvider :delay-duration="300">
+        <div class="flex w-[312px] flex-none flex-col border-r border-dv-border bg-dv-chrome">
+            <div class="flex items-center gap-2 px-3 pt-3 pb-2">
+                <span class="text-xs font-semibold text-dv-fg">Changed files</span>
+                <Badge
+                    variant="outline"
+                    class="border-dv-border px-[7px] text-[11px] font-medium text-dv-muted"
                 >
-                    <chevron-down v-if="node.open" :size="16" class="shrink-0 text-dv-faint" />
-                    <chevron-right v-else :size="16" class="shrink-0 text-dv-faint" />
-                    <span class="flex-1 truncate text-left font-mono text-xs text-dv-muted">
-                        {{ node.name }}
-                    </span>
-                    <span
-                        class="font-mono text-[10px]"
-                        :class="node.allSeen ? 'text-dv-viewed-fg' : 'text-dv-faint'"
-                    >
-                        {{ node.seen }}/{{ node.total }}
-                    </span>
-                </button>
+                    {{ comparison.fileCount }}
+                </Badge>
+                <div class="flex-1" />
+                <Tooltip>
+                    <TooltipTrigger as-child>
+                        <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            :aria-label="comparison.allCollapsed ? 'Expand all' : 'Collapse all'"
+                            class="text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                            @click="comparison.toggleAll()"
+                        >
+                            <ChevronsUpDown v-if="comparison.allCollapsed" :size="16" />
+                            <ChevronsDownUp v-else :size="16" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        {{ comparison.allCollapsed ? 'Expand all' : 'Collapse all' }}
+                    </TooltipContent>
+                </Tooltip>
+                <span class="flex items-center gap-1.5 text-[11px] text-dv-muted">
+                    <span class="size-2 rounded-sm bg-dv-viewed-edge" />
+                    {{ comparison.viewedCount }} viewed
+                </span>
+            </div>
 
-                <div
-                    v-else
-                    class="group flex w-full cursor-pointer items-center gap-2 rounded-md py-[5px] pr-2"
-                    :class="rowClasses(node)"
-                    :style="rowStyle(node)"
-                    :title="node.path"
-                    @click="comparison.selectFile(node.path)"
-                    @dblclick="comparison.toggleViewed(node.path)"
-                >
-                    <span
-                        class="w-[13px] shrink-0 text-center font-mono text-[11px] font-bold"
-                        :class="STATUS_CLASS[node.status]"
-                    >
-                        {{ node.status }}
-                    </span>
-                    <span class="flex-1 truncate font-mono text-xs" :class="nameClass(node)">
-                        {{ node.name }}
-                    </span>
-                    <span class="font-mono text-[11px] text-dv-add-fg">
-                        {{ node.additions ? '+' + node.additions : '' }}
-                    </span>
-                    <span class="font-mono text-[11px] text-dv-del-fg">
-                        {{ node.deletions ? '−' + node.deletions : '' }}
-                    </span>
-                    <button
-                        type="button"
-                        :title="node.viewed ? 'Marked viewed — click to unmark' : 'Mark as viewed'"
-                        class="flex size-[15px] shrink-0 items-center justify-center rounded-sm border text-[9px] leading-none"
-                        :class="checkboxClass(node)"
-                        @click.stop="comparison.toggleViewed(node.path)"
-                    >
-                        <check v-if="node.viewed" :size="11" />
-                    </button>
+            <div class="px-3 pb-2.5">
+                <Input
+                    v-model="comparison.treeFilter"
+                    placeholder="Filter files…"
+                    class="h-8 border-dv-border bg-transparent font-mono text-xs text-dv-fg focus-visible:border-dv-ring focus-visible:ring-0"
+                />
+            </div>
+
+            <ScrollArea class="min-h-0 flex-1">
+                <div class="px-2 pb-3">
+                    <template v-for="node in comparison.treeNodes" :key="node.key">
+                        <Button
+                            v-if="node.kind === 'dir'"
+                            variant="ghost"
+                            class="h-auto w-full justify-start gap-1.5 rounded-md py-[5px] pr-2 font-normal text-dv-muted hover:bg-dv-hover hover:text-dv-muted dark:hover:bg-dv-hover"
+                            :style="{ paddingLeft: indent(node.depth) }"
+                            @click="comparison.toggleDir(node.path)"
+                        >
+                            <ChevronDown v-if="node.open" class="size-4 shrink-0 text-dv-faint" />
+                            <ChevronRight v-else class="size-4 shrink-0 text-dv-faint" />
+                            <span class="flex-1 truncate text-left font-mono text-xs text-dv-muted">
+                                {{ node.name }}
+                            </span>
+                            <span
+                                class="font-mono text-[10px]"
+                                :class="node.allSeen ? 'text-dv-viewed-fg' : 'text-dv-faint'"
+                            >
+                                {{ node.seen }}/{{ node.total }}
+                            </span>
+                        </Button>
+
+                        <!-- A file row stays a div, not a Button: it holds an interactive
+                             Checkbox (a button-in-button is invalid), and shadcn has no
+                             list-row primitive. Click selects; double-click marks viewed. -->
+                        <div
+                            v-else
+                            class="group flex w-full cursor-pointer items-center gap-2 rounded-md py-[5px] pr-2"
+                            :class="rowClasses(node)"
+                            :style="rowStyle(node)"
+                            :title="node.path"
+                            @click="comparison.selectFile(node.path)"
+                            @dblclick="comparison.toggleViewed(node.path)"
+                        >
+                            <span
+                                class="w-[13px] shrink-0 text-center font-mono text-[11px] font-bold"
+                                :class="STATUS_CLASS[node.status]"
+                            >
+                                {{ node.status }}
+                            </span>
+                            <span
+                                class="flex-1 truncate font-mono text-xs"
+                                :class="nameClass(node)"
+                            >
+                                {{ node.name }}
+                            </span>
+                            <span class="font-mono text-[11px] text-dv-add-fg">
+                                {{ node.additions ? '+' + node.additions : '' }}
+                            </span>
+                            <span class="font-mono text-[11px] text-dv-del-fg">
+                                {{ node.deletions ? '−' + node.deletions : '' }}
+                            </span>
+                            <span @click.stop>
+                                <Checkbox
+                                    :model-value="node.viewed"
+                                    :aria-label="node.viewed ? 'Marked viewed' : 'Mark as viewed'"
+                                    class="size-[15px] rounded-sm shadow-none"
+                                    :class="checkboxClass(node)"
+                                    @update:model-value="comparison.toggleViewed(node.path)"
+                                >
+                                    <Check :size="11" />
+                                </Checkbox>
+                            </span>
+                        </div>
+                    </template>
                 </div>
-            </template>
+            </ScrollArea>
         </div>
-    </div>
+    </TooltipProvider>
 </template>

@@ -2,6 +2,9 @@
 import { computed } from 'vue';
 import { ArrowDown, ArrowUp, Check, Circle } from '@lucide/vue';
 import type { ChangedFile, FileStatus } from '@/shared/types';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const props = defineProps<{
     file: ChangedFile;
@@ -34,62 +37,77 @@ const name = computed(() => {
 </script>
 
 <template>
-    <div
-        class="flex h-11 flex-none items-center gap-2.5 border-b border-dv-border px-3.5"
-        :class="viewed ? 'bg-dv-viewed' : 'bg-dv-app'"
-    >
-        <span class="truncate font-mono text-xs text-dv-muted">
-            {{ dir }}<span class="font-medium text-dv-fg">{{ name }}</span>
-        </span>
-        <span
-            class="rounded-full border px-[7px] font-mono text-[10px] font-bold whitespace-nowrap"
-            :class="STATUS_BADGE[file.status]"
+    <TooltipProvider :delay-duration="200">
+        <div
+            class="flex h-11 flex-none items-center gap-2.5 border-b border-dv-border px-3.5"
+            :class="viewed ? 'bg-dv-viewed' : 'bg-dv-app'"
         >
-            {{ file.status }}
-        </span>
-        <span class="font-mono text-[11px] text-dv-add-fg">
-            {{ file.additions ? '+' + file.additions : '' }}
-        </span>
-        <span class="font-mono text-[11px] text-dv-del-fg">
-            {{ file.deletions ? '−' + file.deletions : '' }}
-        </span>
-
-        <div class="flex-1" />
-
-        <span class="text-[11px] whitespace-nowrap text-dv-faint">{{ changeCount }} changes</span>
-
-        <div class="flex gap-1">
-            <button
-                type="button"
-                title="Previous change"
-                class="flex size-7 items-center justify-center rounded-md border border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
-                @click="emit('prev')"
+            <span class="truncate font-mono text-xs text-dv-muted">
+                {{ dir }}<span class="font-medium text-dv-fg">{{ name }}</span>
+            </span>
+            <Badge
+                variant="outline"
+                :class="['px-[7px] font-mono text-[10px] font-bold', STATUS_BADGE[file.status]]"
             >
-                <arrow-up :size="16" />
-            </button>
-            <button
-                type="button"
-                title="Next change"
-                class="flex size-7 items-center justify-center rounded-md border border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
-                @click="emit('next')"
+                {{ file.status }}
+            </Badge>
+            <span class="font-mono text-[11px] text-dv-add-fg">
+                {{ file.additions ? '+' + file.additions : '' }}
+            </span>
+            <span class="font-mono text-[11px] text-dv-del-fg">
+                {{ file.deletions ? '−' + file.deletions : '' }}
+            </span>
+
+            <div class="flex-1" />
+
+            <span class="text-[11px] whitespace-nowrap text-dv-faint">
+                {{ changeCount }} changes
+            </span>
+
+            <div class="flex gap-1">
+                <Tooltip>
+                    <TooltipTrigger as-child>
+                        <Button
+                            variant="outline"
+                            size="icon-sm"
+                            class="size-7 border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                            @click="emit('prev')"
+                        >
+                            <ArrowUp :size="16" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Previous change</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                    <TooltipTrigger as-child>
+                        <Button
+                            variant="outline"
+                            size="icon-sm"
+                            class="size-7 border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                            @click="emit('next')"
+                        >
+                            <ArrowDown :size="16" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Next change</TooltipContent>
+                </Tooltip>
+            </div>
+
+            <Button
+                variant="outline"
+                size="sm"
+                class="h-7 min-w-[116px] gap-1.5"
+                :class="
+                    viewed
+                        ? 'border-dv-viewed-edge bg-dv-viewed text-dv-viewed-fg hover:bg-dv-viewed-hover hover:text-dv-viewed-fg'
+                        : 'border-dv-border text-dv-muted hover:bg-dv-hover'
+                "
+                @click="emit('toggleViewed')"
             >
-                <arrow-down :size="16" />
-            </button>
+                <Check v-if="viewed" :size="16" />
+                <Circle v-else :size="16" />
+                {{ viewed ? 'Viewed' : 'Mark viewed' }}
+            </Button>
         </div>
-
-        <button
-            type="button"
-            class="flex h-7 min-w-[116px] items-center justify-center gap-1.5 rounded-md border px-2.5 text-xs font-medium whitespace-nowrap"
-            :class="
-                viewed
-                    ? 'border-dv-viewed-edge bg-dv-viewed text-dv-viewed-fg hover:bg-dv-viewed-hover'
-                    : 'border-dv-border text-dv-muted hover:bg-dv-hover'
-            "
-            @click="emit('toggleViewed')"
-        >
-            <check v-if="viewed" :size="16" />
-            <circle v-else :size="16" />
-            {{ viewed ? 'Viewed' : 'Mark viewed' }}
-        </button>
-    </div>
+    </TooltipProvider>
 </template>
