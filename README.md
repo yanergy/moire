@@ -117,7 +117,11 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 
 - [~] Full `electron-builder` config with per platform targets. Only a minimal `build` block
   exists today.
-- [ ] App icon and window state persistence.
+- [x] App icon. `build/icon.svg` is the packaging master (macOS-margined squircle around
+  the `src/assets/moire-icon.svg` artwork); `build/icon.icns`, `icon.ico`, and `icon.png` are
+  generated from it and auto-detected by electron-builder. The dev dock icon is set from the
+  PNG in `electron/main.cjs`.
+- [ ] Window state persistence.
 - [ ] Error reporting and a log file in userData.
 
 ## Documentation

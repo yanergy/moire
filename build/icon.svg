@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Moiré">
+  <!-- Packaging master. The rounded body sits inside the standard macOS ~10%
+       margin so the icon aligns with native Dock icons; the OS does not round
+       app-icon corners for us, so the shape is baked in here. The bar artwork is
+       the same as src/assets/moire-icon.svg, scaled to fill most of the body. -->
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="#14181C"></rect>
+  <g transform="translate(89.34 89.34) scale(1.65)">
+    <g fill="#F4F3F0">
+      <rect x="108" y="64" width="56" height="336" rx="28"></rect>
+      <rect x="204" y="128" width="56" height="272" rx="28"></rect>
+      <rect x="300" y="64" width="56" height="336" rx="28"></rect>
+    </g>
+    <g fill="#F4F3F0" opacity="0.45">
+      <rect x="156" y="112" width="56" height="336" rx="28"></rect>
+      <rect x="252" y="176" width="56" height="272" rx="28"></rect>
+      <rect x="348" y="112" width="56" height="336" rx="28"></rect>
+    </g>
+  </g>
+</svg>

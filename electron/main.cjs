@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, nativeImage } = require('electron');
 const path = require('node:path');
 const { registerIpcHandlers, isGitAvailable } = require('./ipc/handlers.cjs');
 
@@ -25,6 +25,14 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+    // A packaged build gets its icon from the app bundle (build/icon.icns, picked
+    // up by electron-builder). In dev there is no bundle, so the dock would show
+    // the generic Electron icon; set it explicitly from the same source PNG.
+    if (!app.isPackaged && process.platform === 'darwin') {
+        const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'build', 'icon.png'));
+        if (!icon.isEmpty()) app.dock?.setIcon(icon);
+    }
+
     // Git is a hard dependency: without it there is nothing to diff. Gate launch
     // on it, show a native error box (the renderer is not up yet), and quit.
     if (!(await isGitAvailable())) {
