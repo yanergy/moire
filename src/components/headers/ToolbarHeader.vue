@@ -3,8 +3,8 @@ import { ArrowRightLeft, ChevronDown, RefreshCw } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
-import RefSelector from '@/components/RefSelector.vue';
-import SegmentedToggle from '@/components/SegmentedToggle.vue';
+import RefSelector from '@/components/controls/RefSelector.vue';
+import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 

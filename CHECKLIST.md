@@ -24,7 +24,7 @@ Legend: `[x]` done, `[~]` partial, `[ ]` not started.
 - [~] `vite-plugin-electron` simple mode. Wired, but the entry is `electron/main.cjs` (plain JS), with no `preload.ts` and no `contextIsolation` or `nodeIntegration` config on the window.
 - [x] ESM output concern, sidestepped by using `.cjs`
 - [x] Tailwind v4 via `@tailwindcss/vite` and `@import "tailwindcss"`
-- [x] shadcn-vue init and components. The toolbar, ref pickers, view toggles, file tree, and selection banner were migrated onto shadcn-vue primitives (styled with the `--dv-*` tokens).
+- [x] shadcn-vue init and components. The toolbar, ref pickers (Popover + Command), view toggles (ToggleGroup), file tree (Badge, Button, Input, Checkbox, ScrollArea), and selection banner (Badge, Button, Tooltip) were migrated onto shadcn-vue primitives, styled with the `--dv-*` tokens, and conform to `code-conventions.md`. Verified running in both light and dark themes; type-check, lint, and all 43 tests pass.
 - [ ] Context-isolated preload bridge with one typed round-trip. Not done. The `DiffViewerApi` type is defined in `src/shared/types.ts` but nothing implements it, and there is no `window.api`.
 - [ ] Native folder picker to `openRepo`. Not done.
 - [ ] `git --version` startup check with error dialog. Not done.
@@ -38,12 +38,12 @@ Legend: `[x]` done, `[~]` partial, `[ ]` not started.
 
 ## Phase 3 — Core UI
 
-- [x] Monaco DiffEditor spike (`MonacoDiff.vue`, env and theme setup in `App.vue`)
-- [x] Toolbar with ref selectors and mode toggles (`AppToolbar`, `RefSelector`, `SegmentedToggle`)
+- [x] Monaco DiffEditor spike (`diff/DiffViewer.vue`, env and theme setup in `App.vue`)
+- [x] Toolbar with ref selectors and mode toggles (`headers/ToolbarHeader`, `controls/RefSelector`, `controls/SegmentedToggle`)
 - [~] File tree wired to changed files. Wired to `MOCK_FILES` via the store, not `getChangedFiles`.
 - [~] File selection to file pair to Monaco. Wired to `mockFilePair`, not `getFilePair`.
-- [x] Split and unified toggle, plus prev/next change navigation (`DiffPane` to `SelectionBanner` to `MonacoDiff.goTo`)
-- [x] Status bar totals (`StatusBar`)
+- [x] Split and unified toggle, plus prev/next change navigation (`diff/DiffPane` to `diff/SelectionBanner` to `diff/DiffViewer.goTo`)
+- [x] Status bar totals (`diff/StatusBar`)
 
 ## Phase 4 — Live updates and polish
 

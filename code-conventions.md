@@ -81,6 +81,21 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
   new ones via `npx shadcn-vue@latest add <name>`. Do not hand-write bespoke lookalikes; if
   a primitive is missing, add it through the CLI rather than rolling your own. App-level
   components live in `src/components/`, never inside `ui/`.
+- App-level components are grouped by role under `src/components/`, never left flat:
+    - `pages/` = full-screen views composed from the pieces below (`DiffViewerPage`).
+      `App.vue` stays a thin root that runs one-time setup and renders the page.
+    - `headers/` = the top chrome bars (`TitleBarHeader`, `ToolbarHeader`).
+    - `sidebar/` = the left panel (`FileTreeSidebar`).
+    - `diff/` = the diff pane and its parts (`DiffPane`, `DiffViewer`, `SelectionBanner`,
+      `StatusBar`).
+    - `controls/` = small reusable controls used across the folders above (`RefSelector`,
+      `SegmentedToggle`).
+    - `ui/` = vendored shadcn-vue primitives (see above); never place app components here.
+
+    Name a component after its role, not its implementation (`DiffViewer`, not `MonacoDiff`),
+    and give it a suffix naming its kind where one fits (`*Page`, `*Header`). A new component
+    goes in the folder matching its role; add a folder only when a genuinely new role appears.
+
 - Style the shadcn primitives with this project's `--dv-*` design tokens (pass them through
   the `class` prop, which shadcn-vue merges via `cn`) so they match the custom look. Never
   hardcode hex values, and never revert a control to plain HTML to avoid the primitive.

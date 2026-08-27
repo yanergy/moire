@@ -2,14 +2,14 @@
 import { ref } from 'vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import MonacoDiff from '@/components/MonacoDiff.vue';
-import SelectionBanner from '@/components/SelectionBanner.vue';
-import StatusBar from '@/components/StatusBar.vue';
+import DiffViewer from '@/components/diff/DiffViewer.vue';
+import SelectionBanner from '@/components/diff/SelectionBanner.vue';
+import StatusBar from '@/components/diff/StatusBar.vue';
 
 const comparison = useComparisonStore();
 const ui = useUiStore();
 
-const diffRef = ref<InstanceType<typeof MonacoDiff> | null>(null);
+const diffRef = ref<InstanceType<typeof DiffViewer> | null>(null);
 const changeCount = ref(0);
 </script>
 
@@ -41,7 +41,7 @@ const changeCount = ref(0);
             </div>
         </div>
 
-        <monaco-diff
+        <diff-viewer
             ref="diffRef"
             class="min-h-0 flex-1"
             :original="comparison.selectedPair.oldContent"

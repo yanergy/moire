@@ -1,7 +1,7 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import FileTreeSidebar from '@/components/FileTreeSidebar.vue';
+import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import { useComparisonStore } from '@/stores/comparison';
 
 describe('FileTreeSidebar', () => {

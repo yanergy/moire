@@ -2,10 +2,10 @@ import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { Moon, Sun } from '@lucide/vue';
-import WindowChrome from '@/components/WindowChrome.vue';
+import TitleBarHeader from '@/components/headers/TitleBarHeader.vue';
 import { useUiStore } from '@/stores/ui';
 
-describe('WindowChrome', () => {
+describe('TitleBarHeader', () => {
     let pinia: Pinia;
 
     beforeEach(() => {
@@ -15,14 +15,14 @@ describe('WindowChrome', () => {
     });
 
     it('shows the repo name and the sun icon while dark', () => {
-        const wrapper = mount(WindowChrome, { global: { plugins: [pinia] } });
+        const wrapper = mount(TitleBarHeader, { global: { plugins: [pinia] } });
         expect(wrapper.text()).toContain('diff-viewer');
         expect(wrapper.findComponent(Sun).exists()).toBe(true);
         expect(wrapper.findComponent(Moon).exists()).toBe(false);
     });
 
     it('toggles the theme when the button is clicked', async () => {
-        const wrapper = mount(WindowChrome, { global: { plugins: [pinia] } });
+        const wrapper = mount(TitleBarHeader, { global: { plugins: [pinia] } });
         const ui = useUiStore();
 
         await wrapper.find('button').trigger('click');

@@ -1,7 +1,7 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
-import RefSelector from '@/components/RefSelector.vue';
+import RefSelector from '@/components/controls/RefSelector.vue';
 import { useComparisonStore } from '@/stores/comparison';
 
 // The ref picker is a shadcn-vue Popover + Command. Its list is teleported to

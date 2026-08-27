@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import SelectionBanner from '@/components/SelectionBanner.vue';
+import SelectionBanner from '@/components/diff/SelectionBanner.vue';
 import type { ChangedFile } from '@/shared/types';
 
 const file: ChangedFile = {

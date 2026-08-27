@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import SegmentedToggle from '@/components/SegmentedToggle.vue';
+import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 
 const options = [
     { value: 'split', label: 'split' },
