@@ -93,3 +93,4 @@ dist-electron
 docs/_book
 test/
 release/
+.DS_Store
