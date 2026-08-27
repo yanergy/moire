@@ -1,5 +1,5 @@
 import { computed, ref, watch } from 'vue';
-import { defineStore } from 'pinia';
+import { acceptHMRUpdate, defineStore } from 'pinia';
 import type { ThemeName, ViewMode } from '@/shared/types';
 
 // View-level preferences: theme (dark default, matching the design) and the
@@ -31,3 +31,7 @@ export const useUiStore = defineStore('ui', () => {
 
     return { theme, viewMode, isDark, toggleTheme, setViewMode };
 });
+
+if (import.meta.hot) {
+    import.meta.hot.accept(acceptHMRUpdate(useUiStore, import.meta.hot));
+}

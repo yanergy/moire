@@ -111,6 +111,28 @@ describe('comparison store', () => {
         expect(store.treeNodes.some((n) => n.kind === 'file')).toBe(true);
     });
 
+    it('toggleAll opens everything only when fully collapsed', () => {
+        const store = useComparisonStore();
+        expect(store.allCollapsed).toBe(false); // default is fully expanded
+
+        store.toggleAll(); // expanded → collapse
+        expect(store.allCollapsed).toBe(true);
+        expect(store.treeNodes.every((n) => n.kind === 'dir' && n.depth === 0)).toBe(true);
+
+        store.toggleAll(); // fully collapsed → expand
+        expect(store.allCollapsed).toBe(false);
+        expect(store.treeNodes.some((n) => n.kind === 'file')).toBe(true);
+    });
+
+    it('toggleAll collapses from a mixed open/closed state', () => {
+        const store = useComparisonStore();
+        store.toggleDir('electron'); // close a single folder → mixed
+        expect(store.allCollapsed).toBe(false);
+
+        store.toggleAll();
+        expect(store.allCollapsed).toBe(true);
+    });
+
     it('filters the tree and force-opens matching folders even when collapsed', () => {
         const store = useComparisonStore();
         store.collapseAll();

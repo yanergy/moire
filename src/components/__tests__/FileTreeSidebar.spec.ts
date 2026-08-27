@@ -52,12 +52,14 @@ describe('FileTreeSidebar', () => {
         expect(store.selectedPath).toBe('electron/git/parsers.ts');
     });
 
-    it('collapses and expands all folders from the header controls', async () => {
+    it('toggles all folders from the single header control', async () => {
         const wrapper = mountTree();
 
+        // Starts expanded, so the control collapses and its title flips.
         await wrapper.find('button[title="Collapse all"]').trigger('click');
         expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(false);
 
+        // Now fully collapsed, so the same control expands.
         await wrapper.find('button[title="Expand all"]').trigger('click');
         expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(true);
     });

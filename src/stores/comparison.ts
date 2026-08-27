@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue';
-import { defineStore } from 'pinia';
+import { acceptHMRUpdate, defineStore } from 'pinia';
 import type { ChangedFile, CompareMode, FilePair, FileStatus } from '@/shared/types';
 import {
     DEFAULT_BASE,
@@ -184,23 +184,49 @@ export const useComparisonStore = defineStore('comparison', () => {
         collapsed.value = { ...collapsed.value, [path]: !collapsed.value[path] };
     }
 
-    function expandAll() {
-        collapsed.value = {};
-    }
-
-    function collapseAll() {
-        const next: Record<string, boolean> = {};
+    const directoryPaths = computed<string[]>(() => {
+        const paths = new Set<string>();
         for (const file of files.value) {
             const parts = file.path.split('/');
             parts.pop(); // drop the file name
             let prefix = '';
             for (const part of parts) {
                 prefix = prefix ? prefix + '/' + part : part;
-                next[prefix] = true;
+                paths.add(prefix);
             }
         }
 
+        return [...paths];
+    });
+
+    const allCollapsed = computed(
+        () =>
+            directoryPaths.value.length > 0 &&
+            directoryPaths.value.every((path) => collapsed.value[path] === true)
+    );
+
+    function expandAll() {
+        collapsed.value = {};
+    }
+
+    function collapseAll() {
+        const next: Record<string, boolean> = {};
+        for (const path of directoryPaths.value) {
+            next[path] = true;
+        }
+
         collapsed.value = next;
+    }
+
+    // Single-button toggle: open everything only when it is already all closed;
+    // from a fully- or partially-open tree, close everything.
+    function toggleAll() {
+        if (allCollapsed.value) {
+            expandAll();
+            return;
+        }
+
+        collapseAll();
     }
 
     function setTreeFilter(value: string) {
@@ -247,11 +273,13 @@ export const useComparisonStore = defineStore('comparison', () => {
         selectedFile,
         selectedPair,
         treeNodes,
+        allCollapsed,
         selectFile,
         toggleViewed,
         toggleDir,
         expandAll,
         collapseAll,
+        toggleAll,
         setTreeFilter,
         setBase,
         setHead,
@@ -259,3 +287,9 @@ export const useComparisonStore = defineStore('comparison', () => {
         swap,
     };
 });
+
+// Without this, adding an action to the store mid-session leaves the live store
+// instance stale (the new action is missing) until a full reload.
+if (import.meta.hot) {
+    import.meta.hot.accept(acceptHMRUpdate(useComparisonStore, import.meta.hot));
+}

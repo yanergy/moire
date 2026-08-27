@@ -72,24 +72,15 @@ function checkboxClass(node: FileNode): string {
                 {{ comparison.fileCount }}
             </span>
             <div class="flex-1" />
-            <div class="flex items-center gap-0.5">
-                <button
-                    type="button"
-                    title="Collapse all"
-                    class="flex size-6 items-center justify-center rounded-md text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
-                    @click="comparison.collapseAll()"
-                >
-                    <chevrons-down-up :size="14" />
-                </button>
-                <button
-                    type="button"
-                    title="Expand all"
-                    class="flex size-6 items-center justify-center rounded-md text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
-                    @click="comparison.expandAll()"
-                >
-                    <chevrons-up-down :size="14" />
-                </button>
-            </div>
+            <button
+                type="button"
+                :title="comparison.allCollapsed ? 'Expand all' : 'Collapse all'"
+                class="flex size-6 items-center justify-center rounded-md text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                @click="comparison.toggleAll()"
+            >
+                <chevrons-up-down v-if="comparison.allCollapsed" :size="14" />
+                <chevrons-down-up v-else :size="14" />
+            </button>
             <span class="flex items-center gap-1.5 text-[11px] text-dv-muted">
                 <span class="size-2 rounded-sm bg-dv-viewed-edge" />
                 {{ comparison.viewedCount }} viewed
