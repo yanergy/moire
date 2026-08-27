@@ -1,8 +1,43 @@
-# diff-viewer
+# Moiré
 
-A desktop app for viewing the diff between two branches of a local Git repository.
+A desktop app for viewing the diff between two branches of a local Git repository, with a look
+and feel modeled on GitHub's pull request diff view and PhpStorm's diff tool.
 
-Stack: Vue 3, Vite 8, Electron 44, TypeScript, Tailwind CSS v4, Pinia, and Monaco for the diff view.
+The name comes from the moiré pattern: overlay two nearly identical grids and the mismatches
+surface as a shimmer you cannot miss. That is what a diff does, difference made visible by
+superimposition.
+
+## Status
+
+Moiré is an early work in progress. The renderer is a complete, tested UI shell, but every
+value it shows is placeholder data from `src/lib/mock.ts`. The Electron and git backend does
+not exist yet, so nothing crosses the IPC boundary. The stores are shaped so that swapping the
+mocks for a real backend is a store level change rather than a component rewrite. See the
+Checklist below for the full breakdown of what is done and what remains.
+
+## Stack
+
+Vue 3, Vite 8, Electron 44, TypeScript, Tailwind CSS v4, shadcn-vue (Reka UI), Pinia, and
+Monaco for the diff view.
+
+## Getting started
+
+Requires Node `^22.18.0 || >=24.12.0`.
+
+```bash
+npm install     # install dependencies
+npm run dev     # start Vite and the Electron window with hot reload
+```
+
+### Other commands
+
+```bash
+npm run pack          # build the renderer and package a desktop app into release/
+npm run test:unit     # run the Vitest suite
+npm run type-check    # vue-tsc project type check
+npm run lint          # oxlint with autofix
+npm run format        # oxfmt
+```
 
 ## UI components
 
@@ -10,4 +45,73 @@ All interactive UI is built on shadcn-vue primitives (Reka UI under the hood), w
 `src/components/ui/`. Add new primitives with `npx shadcn-vue@latest add <name>`. Do not
 hand-write bespoke replacements for something shadcn-vue provides. The primitives are styled
 with the project's `--dv-*` design tokens so they match the custom look. See
-`code-conventions.md` for the full rules.
+`documentation/code-conventions.md` for the full rules.
+
+## Checklist
+
+The complete status, grouped by the phases in `documentation/moire-plan.md`. Mark items off
+here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
+
+### Setup and dependencies
+
+- [x] `vite-plugin-electron` installed and wired in `vite.config.ts`.
+- [x] `tailwindcss` and `@tailwindcss/vite`.
+- [x] `simple-git`, `monaco-editor`, `electron-store`, and `chokidar` installed (only Monaco is
+      used so far).
+- [x] `vue-virtual-scroller` installed.
+- [x] `electron-builder` installed, with a minimal `build` block in `package.json`.
+- [x] shadcn-vue in use, primitives under `src/components/ui/`, with `reka-ui` and
+      `@vueuse/core`.
+
+### Phase 1, scaffold and plumbing
+
+- [x] Tailwind v4 via `@tailwindcss/vite`.
+- [x] ESM output concern sidestepped by using `electron/main.cjs`.
+- [x] shadcn-vue init and components migrated onto the primitives, styled with `--dv-*` tokens,
+      verified in both themes.
+- [~] Harden the Electron entry. It is currently plain `electron/main.cjs` with no preload and
+  no `contextIsolation` or `nodeIntegration` config on the window.
+- [ ] Context isolated preload bridge implementing `DiffViewerApi` and exposing `window.api`.
+- [ ] Native folder picker wired to `openRepo`.
+- [ ] `git --version` startup check with an error dialog.
+- [ ] Recent repos persistence via `electron-store`.
+
+### Phase 2, git integration
+
+- [ ] `GitService` for branches, changed files, and file pairs.
+- [ ] Rename and binary detection.
+- [ ] Vitest parser tests for numstat, name status, and `-z` output.
+
+### Phase 3, core UI
+
+- [x] Monaco DiffEditor spike.
+- [x] Toolbar with ref selectors and mode toggles.
+- [x] Split and unified toggle, plus prev and next change navigation.
+- [x] Status bar totals.
+- [~] File tree wired to changed files. Reads `MOCK_FILES` via the store, not
+  `getChangedFiles`.
+- [~] File selection to file pair to Monaco. Reads `mockFilePair`, not `getFilePair`.
+
+### Phase 4, live updates and polish
+
+- [x] Dark and light theme toggle with matching Monaco themes.
+- [x] Filter box and viewed checkboxes.
+- [ ] `RepoWatcher` (chokidar) with auto refresh on change.
+- [ ] Virtualized file tree using the installed `vue-virtual-scroller`.
+- [ ] Size threshold and a "Load diff" gate for large files.
+- [ ] Binary and image preview.
+- [ ] Rename display, showing the old path moving to the new path, in the UI.
+- [ ] Theme persistence via `electron-store` and `nativeTheme`.
+
+### Phase 5, packaging and release
+
+- [~] Full `electron-builder` config with per platform targets. Only a minimal `build` block
+  exists today.
+- [ ] App icon and window state persistence.
+- [ ] Error reporting and a log file in userData.
+
+## Documentation
+
+- `documentation/code-conventions.md`: code conventions and project rules. Read this before
+  making changes.
+- `documentation/moire-plan.md`: the full project plan.

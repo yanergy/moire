@@ -21,7 +21,7 @@ const comparison = useComparisonStore();
             </div>
 
             <div class="flex-1 truncate text-center text-xs text-dv-muted">
-                diff-viewer — <span class="font-medium text-dv-fg">{{ comparison.repoName }}</span>
+                Moiré — <span class="font-medium text-dv-fg">{{ comparison.repoName }}</span>
             </div>
 
             <Tooltip>

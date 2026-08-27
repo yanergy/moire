@@ -6,7 +6,7 @@ import { inferLanguage } from '@/lib/language';
 // The real values come from the git backend later; the shapes match so wiring
 // it up is a store-level swap, not a component rewrite.
 
-export const MOCK_REPO_NAME = 'diff-viewer';
+export const MOCK_REPO_NAME = 'moire';
 export const DEFAULT_BASE = 'main';
 export const DEFAULT_HEAD = WORKING_TREE;
 export const DEFAULT_SELECTED = 'electron/git/parsers.ts';

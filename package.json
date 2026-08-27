@@ -1,5 +1,5 @@
 {
-    "name": "diff-viewer",
+    "name": "moire",
     "version": "0.0.0",
     "private": true,
     "type": "module",
@@ -63,7 +63,8 @@
         "electron-winstaller@5.4.0": true
     },
     "build": {
-        "appId": "com.yannieck.diff-viewer",
+        "appId": "com.yannieck.moire",
+        "productName": "Moiré",
         "directories": {
             "output": "release"
         },

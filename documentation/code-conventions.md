@@ -1,6 +1,6 @@
-# Diff Viewer — Code Conventions & Project Rules
+# Moiré Code Conventions & Project Rules
 
-Desktop diff-viewer app comparing two branches of a local Git repository.
+Moiré, a desktop app comparing two branches of a local Git repository.
 Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn-vue · Pinia.
 
 ## Architecture rules

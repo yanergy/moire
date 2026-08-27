@@ -1,4 +1,4 @@
-# Diff Viewer — Project Plan
+# Moiré Project Plan
 
 A desktop application for viewing the differences between two branches of a local Git repository, with a look and feel modeled on GitHub's pull-request diff view and PhpStorm's diff tool.
 
@@ -316,7 +316,7 @@ Defining these shapes early keeps the renderer decoupled from Git specifics.
 ## 8. Suggested Repository Layout
 
 ```
-diff-viewer/
+moire/
 ├─ vite.config.ts               # vue + tailwindcss + electron plugins
 ├─ components.json              # shadcn-vue config
 ├─ electron/

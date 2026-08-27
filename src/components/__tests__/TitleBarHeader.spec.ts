@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils';
 import { Moon, Sun } from '@lucide/vue';
 import TitleBarHeader from '@/components/headers/TitleBarHeader.vue';
 import { useUiStore } from '@/stores/ui';
+import { MOCK_REPO_NAME } from '@/lib/mock';
 
 describe('TitleBarHeader', () => {
     let pinia: Pinia;
@@ -16,7 +17,7 @@ describe('TitleBarHeader', () => {
 
     it('shows the repo name and the sun icon while dark', () => {
         const wrapper = mount(TitleBarHeader, { global: { plugins: [pinia] } });
-        expect(wrapper.text()).toContain('diff-viewer');
+        expect(wrapper.text()).toContain(MOCK_REPO_NAME);
         expect(wrapper.findComponent(Sun).exists()).toBe(true);
         expect(wrapper.findComponent(Moon).exists()).toBe(false);
     });
