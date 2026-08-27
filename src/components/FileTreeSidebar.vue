@@ -6,6 +6,8 @@ import type { FileStatus } from '@/shared/types';
 
 const comparison = useComparisonStore();
 
+// The --dv-status-* tokens carry separate light/dark values tuned for contrast
+// on each background, so full strength stays legible in both themes.
 const STATUS_CLASS: Record<FileStatus, string> = {
     A: 'text-dv-status-a',
     M: 'text-dv-status-m',
@@ -17,16 +19,16 @@ function indent(depth: number): string {
     return `${8 + depth * 15}px`;
 }
 
-function rowBackground(node: FileNode): string {
+// Reviewed files keep the green "viewed" treatment; selection gets a neutral
+// highlight. What changed is conveyed by the status-colored filename instead.
+function rowClasses(node: FileNode): string {
     if (node.viewed) {
-        return node.selected ? 'bg-dv-viewed-sel' : 'bg-dv-viewed';
+        return node.selected
+            ? 'bg-dv-viewed-sel hover:bg-dv-viewed-hover'
+            : 'bg-dv-viewed hover:bg-dv-viewed-hover';
     }
 
-    return node.selected ? 'bg-dv-sel-row' : '';
-}
-
-function rowHover(node: FileNode): string {
-    return node.viewed ? 'hover:bg-dv-viewed-hover' : 'hover:bg-dv-hover';
+    return node.selected ? 'bg-dv-sel-row hover:bg-dv-hover' : 'hover:bg-dv-hover';
 }
 
 function rowStyle(node: FileNode): Record<string, string> {
@@ -40,11 +42,9 @@ function rowStyle(node: FileNode): Record<string, string> {
 }
 
 function nameClass(node: FileNode): string {
-    if (node.selected) {
-        return 'text-dv-sel-fg';
-    }
-
-    return node.viewed ? 'text-dv-viewed-fg' : 'text-dv-file-fg';
+    // Reviewed files stay green; otherwise the filename takes the status color
+    // (green added, red deleted, blue modified, purple renamed).
+    return node.viewed ? 'text-dv-viewed-fg' : STATUS_CLASS[node.status];
 }
 
 function checkboxClass(node: FileNode): string {
@@ -120,7 +120,7 @@ function checkboxClass(node: FileNode): string {
                 <div
                     v-else
                     class="group flex w-full cursor-pointer items-center gap-2 rounded-md py-[5px] pr-2"
-                    :class="[rowBackground(node), rowHover(node)]"
+                    :class="rowClasses(node)"
                     :style="rowStyle(node)"
                     :title="node.path"
                     @click="comparison.selectFile(node.path)"
