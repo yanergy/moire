@@ -103,7 +103,8 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 
 ### Phase 4, live updates and polish
 
-- [x] Dark and light theme toggle with matching Monaco themes.
+- [x] Dark and light theme toggle with matching Monaco themes. Lives in the native application
+  menu (View, Toggle Theme, Cmd+Shift+L), wired to the renderer over the preload bridge.
 - [x] Filter box and viewed checkboxes.
 - [x] Open repo name shown in the native window title.
 - [ ] `RepoWatcher` (chokidar) with auto refresh on change.

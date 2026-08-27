@@ -1,6 +1,7 @@
 const { app, BrowserWindow, dialog, nativeImage } = require('electron');
 const path = require('node:path');
 const { registerIpcHandlers, isGitAvailable } = require('./ipc/handlers.cjs');
+const { installAppMenu } = require('./menu.cjs');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -45,6 +46,7 @@ app.whenReady().then(async () => {
     }
 
     registerIpcHandlers();
+    installAppMenu();
     createWindow();
 });
 

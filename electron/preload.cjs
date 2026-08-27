@@ -11,4 +11,11 @@ contextBridge.exposeInMainWorld('api', {
     openRepo: (repoPath) => ipcRenderer.invoke('repo:open', repoPath),
     getRecentRepos: () => ipcRenderer.invoke('repo:recent'),
     removeRecentRepo: (repoPath) => ipcRenderer.invoke('repo:remove-recent', repoPath),
+    // Main-process menu event (View → Toggle Theme), pushed to the renderer.
+    // Returns an unsubscribe function so the caller can drop the listener.
+    onToggleTheme: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on('theme:toggle', listener);
+        return () => ipcRenderer.removeListener('theme:toggle', listener);
+    },
 });

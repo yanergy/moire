@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRightLeft, Moon, RefreshCw, Sun } from '@lucide/vue';
+import { ArrowRightLeft, RefreshCw } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
@@ -75,22 +75,6 @@ const viewOptions: { value: ViewMode; label: string }[] = [
                     </Button>
                 </TooltipTrigger>
                 <TooltipContent>Refresh</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-                <TooltipTrigger as-child>
-                    <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Toggle theme"
-                        class="size-7 text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
-                        @click="ui.toggleTheme()"
-                    >
-                        <Sun v-if="ui.isDark" :size="16" />
-                        <Moon v-else :size="16" />
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent>Toggle theme</TooltipContent>
             </Tooltip>
         </div>
     </TooltipProvider>

@@ -56,4 +56,7 @@ export interface DiffViewerApi {
     getChangedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]>;
     getFilePair(base: string, head: string, path: string): Promise<FilePair>;
     onRepoChanged(cb: (event: RepoChangeEvent) => void): () => void;
+    // Fires when the native "View → Toggle Theme" menu command runs in the main
+    // process. Returns an unsubscribe function.
+    onToggleTheme(cb: () => void): () => void;
 }
