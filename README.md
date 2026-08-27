@@ -52,7 +52,7 @@ with the project's `--dv-*` design tokens so they match the custom look. See
 The complete status, grouped by the phases in `documentation/moire-plan.md`. Mark items off
 here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 
-### Setup and dependencies
+### Setup and dependencies ✅
 
 - [x] `vite-plugin-electron` installed and wired in `vite.config.ts`.
 - [x] `tailwindcss` and `@tailwindcss/vite`.
@@ -63,7 +63,7 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] shadcn-vue in use, primitives under `src/components/ui/`, with `reka-ui` and
       `@vueuse/core`.
 
-### Phase 1, scaffold and plumbing
+### Phase 1, scaffold and plumbing ✅
 
 - [x] Tailwind v4 via `@tailwindcss/vite`.
 - [x] ESM output concern sidestepped by using `electron/main.cjs`.
