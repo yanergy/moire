@@ -69,8 +69,9 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] ESM output concern sidestepped by using `electron/main.cjs`.
 - [x] shadcn-vue init and components migrated onto the primitives, styled with `--dv-*` tokens,
       verified in both themes.
-- [~] Harden the Electron entry. It is currently plain `electron/main.cjs` with no preload and
-  no `contextIsolation` or `nodeIntegration` config on the window.
+- [x] Harden the Electron entry. `electron/main.cjs` sets `contextIsolation: true`,
+  `nodeIntegration: false`, and `sandbox: true` on the window. The preload path is wired in with
+  the bridge below.
 - [ ] Context isolated preload bridge implementing `DiffViewerApi` and exposing `window.api`.
 - [ ] Native folder picker wired to `openRepo`.
 - [ ] `git --version` startup check with an error dialog.

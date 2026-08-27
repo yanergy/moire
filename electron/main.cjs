@@ -5,6 +5,13 @@ function createWindow() {
     const win = new BrowserWindow({
         width: 1280,
         height: 800,
+        webPreferences: {
+            // Non-negotiable process separation: the renderer never touches Node.
+            // The preload bridge (window.api) is wired in here once it exists.
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+        },
     });
 
     if (process.env.VITE_DEV_SERVER_URL) {
