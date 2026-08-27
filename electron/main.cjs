@@ -1,6 +1,6 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const path = require('node:path');
-const { registerIpcHandlers } = require('./ipc/handlers.cjs');
+const { registerIpcHandlers, isGitAvailable } = require('./ipc/handlers.cjs');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -24,7 +24,18 @@ function createWindow() {
     }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    // Git is a hard dependency: without it there is nothing to diff. Gate launch
+    // on it, show a native error box (the renderer is not up yet), and quit.
+    if (!(await isGitAvailable())) {
+        dialog.showErrorBox(
+            'Git is required',
+            'Moiré could not find Git on your system.\n\nInstall Git, then relaunch the app.'
+        );
+        app.quit();
+        return;
+    }
+
     registerIpcHandlers();
     createWindow();
 });

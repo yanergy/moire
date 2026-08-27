@@ -17,6 +17,17 @@ async function isGitRepo(repoPath) {
     }
 }
 
+// Confirms a git binary is on PATH by running `git --version` (which needs no
+// repo). The app can do nothing without git, so main runs this as a launch gate.
+async function isGitAvailable() {
+    try {
+        await simpleGit().raw(['--version']);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 function registerIpcHandlers() {
     ipcMain.handle('dialog:open-repo', async () => {
         const result = await dialog.showOpenDialog({
@@ -48,4 +59,4 @@ function registerIpcHandlers() {
     ipcMain.handle('repo:remove-recent', (_event, repoPath) => removeRecentRepo(repoPath));
 }
 
-module.exports = { registerIpcHandlers };
+module.exports = { registerIpcHandlers, isGitAvailable };

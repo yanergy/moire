@@ -78,7 +78,9 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] Native folder picker wired to `openRepo`. The toolbar repo-picker menu's "Open folder…"
   item opens it, and `openRepo` validates the folder is a Git repo (`simple-git` `checkIsRepo`)
   in the main process.
-- [ ] `git --version` startup check with an error dialog.
+- [x] `git --version` startup check with an error dialog. `electron/main.cjs` gates launch on
+  `isGitAvailable()` (runs `git --version` via `simple-git`); if git is missing it shows a native
+  error box and quits, since the renderer is not up yet and nothing works without git.
 - [x] Recent repos persistence via `electron-store` (`electron/settings.cjs`), recorded on each
   successful open, restored on launch, and listed in the toolbar repo-picker menu
   (`RepoPicker.vue`) where each entry can be removed.
