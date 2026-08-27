@@ -5,7 +5,7 @@
 const path = require('node:path');
 const { ipcMain, dialog } = require('electron');
 const { simpleGit } = require('simple-git');
-const { getRecentRepos, addRecentRepo } = require('../settings.cjs');
+const { getRecentRepos, addRecentRepo, removeRecentRepo } = require('../settings.cjs');
 
 async function isGitRepo(repoPath) {
     try {
@@ -44,6 +44,8 @@ function registerIpcHandlers() {
     });
 
     ipcMain.handle('repo:recent', () => getRecentRepos());
+
+    ipcMain.handle('repo:remove-recent', (_event, repoPath) => removeRecentRepo(repoPath));
 }
 
 module.exports = { registerIpcHandlers };

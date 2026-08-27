@@ -33,4 +33,12 @@ async function addRecentRepo(repoPath) {
     return next;
 }
 
-module.exports = { getRecentRepos, addRecentRepo };
+// Drop one entry. Returns the new list.
+async function removeRecentRepo(repoPath) {
+    const store = await getStore();
+    const next = store.get('recentRepos', []).filter((entry) => entry !== repoPath);
+    store.set('recentRepos', next);
+    return next;
+}
+
+module.exports = { getRecentRepos, addRecentRepo, removeRecentRepo };

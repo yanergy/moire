@@ -21,7 +21,10 @@ const comparison = useComparisonStore();
             </div>
 
             <div class="flex-1 truncate text-center text-xs text-dv-muted">
-                Moiré — <span class="font-medium text-dv-fg">{{ comparison.repoName }}</span>
+                <template v-if="comparison.repoName">
+                    Moiré — <span class="font-medium text-dv-fg">{{ comparison.repoName }}</span>
+                </template>
+                <template v-else>Moiré</template>
             </div>
 
             <Tooltip>

@@ -51,6 +51,7 @@ export interface DiffViewerApi {
     openRepoDialog(): Promise<string | null>;
     openRepo(path: string): Promise<RepoInfo | null>; // null when the folder is not a Git repo
     getRecentRepos(): Promise<string[]>;
+    removeRecentRepo(path: string): Promise<string[]>; // returns the updated list
     getBranches(): Promise<BranchInfo[]>;
     getChangedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]>;
     getFilePair(base: string, head: string, path: string): Promise<FilePair>;

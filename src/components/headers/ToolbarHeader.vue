@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ArrowRightLeft, ChevronDown, RefreshCw } from '@lucide/vue';
+import { ArrowRightLeft, RefreshCw } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
 import RefSelector from '@/components/controls/RefSelector.vue';
+import RepoPicker from '@/components/controls/RepoPicker.vue';
 import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -27,21 +28,7 @@ const viewOptions: { value: ViewMode; label: string }[] = [
         <div
             class="flex h-13 flex-none items-center gap-2 border-b border-dv-border bg-dv-app px-3"
         >
-            <Tooltip>
-                <TooltipTrigger as-child>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        class="gap-2 border-dv-border text-[13px] font-medium text-dv-fg hover:bg-dv-hover"
-                        @click="comparison.openRepository()"
-                    >
-                        <span class="size-1.5 rounded-sm bg-dv-accent" />
-                        {{ comparison.repoName }}
-                        <ChevronDown :size="12" class="text-dv-faint" />
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent>Open repository</TooltipContent>
-            </Tooltip>
+            <repo-picker />
 
             <div class="mx-1 h-5 w-px bg-dv-border" />
 

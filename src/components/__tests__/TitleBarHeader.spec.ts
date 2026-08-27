@@ -4,7 +4,7 @@ import { mount } from '@vue/test-utils';
 import { Moon, Sun } from '@lucide/vue';
 import TitleBarHeader from '@/components/headers/TitleBarHeader.vue';
 import { useUiStore } from '@/stores/ui';
-import { MOCK_REPO_NAME } from '@/lib/mock';
+import { useComparisonStore } from '@/stores/comparison';
 
 describe('TitleBarHeader', () => {
     let pinia: Pinia;
@@ -15,11 +15,18 @@ describe('TitleBarHeader', () => {
         document.documentElement.classList.remove('dark');
     });
 
-    it('shows the repo name and the sun icon while dark', () => {
+    it('shows the open repo name and the sun icon while dark', () => {
+        useComparisonStore().repoName = 'demo-repo';
         const wrapper = mount(TitleBarHeader, { global: { plugins: [pinia] } });
-        expect(wrapper.text()).toContain(MOCK_REPO_NAME);
+        expect(wrapper.text()).toContain('demo-repo');
         expect(wrapper.findComponent(Sun).exists()).toBe(true);
         expect(wrapper.findComponent(Moon).exists()).toBe(false);
+    });
+
+    it('falls back to just the app name when no repo is open', () => {
+        const wrapper = mount(TitleBarHeader, { global: { plugins: [pinia] } });
+        expect(wrapper.text()).toContain('Moiré');
+        expect(wrapper.text()).not.toContain('—');
     });
 
     it('toggles the theme when the button is clicked', async () => {

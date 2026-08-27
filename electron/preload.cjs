@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('api', {
     openRepoDialog: () => ipcRenderer.invoke('dialog:open-repo'),
     openRepo: (repoPath) => ipcRenderer.invoke('repo:open', repoPath),
     getRecentRepos: () => ipcRenderer.invoke('repo:recent'),
+    removeRecentRepo: (repoPath) => ipcRenderer.invoke('repo:remove-recent', repoPath),
 });

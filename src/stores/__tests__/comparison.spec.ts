@@ -1,5 +1,5 @@
 import { setActivePinia, createPinia } from 'pinia';
-import { beforeEach, describe, it, expect } from 'vitest';
+import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { useComparisonStore } from '@/stores/comparison';
 import type { DirNode, FileNode, TreeNode } from '@/stores/comparison';
 
@@ -142,5 +142,101 @@ describe('comparison store', () => {
         expect(shown.length).toBeGreaterThan(0);
         expect(shown.every((n) => n.path.includes('parsers'))).toBe(true);
         expect(store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts')).toBe(true);
+    });
+
+    describe('repository opening', () => {
+        const RECENTS = ['/repos/moire', '/work/api-service'];
+
+        function stubApi(overrides: Record<string, unknown> = {}) {
+            const api = {
+                openRepoDialog: vi
+                    .fn<() => Promise<string | null>>()
+                    .mockResolvedValue('/repos/design-system'),
+                openRepo: vi.fn<(path: string) => Promise<{ path: string; name: string }>>((path) =>
+                    Promise.resolve({ path, name: path.split('/').pop() ?? path })
+                ),
+                getRecentRepos: vi.fn<() => Promise<string[]>>().mockResolvedValue(RECENTS),
+                removeRecentRepo: vi.fn<(path: string) => Promise<string[]>>((path) =>
+                    Promise.resolve(RECENTS.filter((entry) => entry !== path))
+                ),
+                ...overrides,
+            };
+            window.api = api as unknown as Window['api'];
+            return api;
+        }
+
+        afterEach(() => {
+            delete window.api;
+            vi.restoreAllMocks();
+        });
+
+        it('loads recent repos from the bridge', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.loadRecentRepos();
+            expect(api.getRecentRepos).toHaveBeenCalled();
+            expect(store.recentRepos).toEqual(RECENTS);
+        });
+
+        it('opens a repo by path, names it, and refreshes recents', async () => {
+            stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/work/api-service');
+            expect(store.repoName).toBe('api-service');
+            expect(store.repoPath).toBe('/work/api-service');
+            expect(store.recentRepos).toEqual(RECENTS);
+        });
+
+        it('runs the picker then opens the chosen folder', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRepository();
+            expect(api.openRepoDialog).toHaveBeenCalled();
+            expect(store.repoName).toBe('design-system');
+        });
+
+        it('removes a repo from recents', async () => {
+            stubApi();
+            const store = useComparisonStore();
+            await store.loadRecentRepos();
+            await store.removeRecent('/repos/moire');
+            expect(store.recentRepos).toEqual(['/work/api-service']);
+        });
+
+        it('clears the selection when the open repo is removed from recents', async () => {
+            stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.repoName).toBe('moire');
+
+            await store.removeRecent('/repos/moire');
+            expect(store.repoName).toBe('');
+            expect(store.repoPath).toBe('');
+        });
+
+        it('restores the most recent repo on startup', async () => {
+            stubApi();
+            const store = useComparisonStore();
+            await store.restoreLastRepo();
+            expect(store.repoName).toBe('moire');
+            expect(store.repoPath).toBe('/repos/moire');
+            expect(store.recentRepos).toEqual(RECENTS);
+        });
+
+        it('leaves state untouched when main rejects the folder', async () => {
+            stubApi({ openRepo: vi.fn<() => Promise<null>>().mockResolvedValue(null) });
+            const store = useComparisonStore();
+            await store.openRecent('/not/a/repo');
+            expect(store.repoName).toBe('');
+            expect(store.repoPath).toBe('');
+        });
+
+        it('no-ops without the preload bridge', async () => {
+            const store = useComparisonStore();
+            await store.openRepository();
+            await store.loadRecentRepos();
+            expect(store.repoName).toBe('');
+            expect(store.recentRepos).toEqual([]);
+        });
     });
 });

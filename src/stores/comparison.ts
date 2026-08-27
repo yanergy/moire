@@ -7,7 +7,6 @@ import {
     DEFAULT_SELECTED,
     MOCK_BRANCHES,
     MOCK_FILES,
-    MOCK_REPO_NAME,
     mockFilePair,
 } from '@/lib/mock';
 
@@ -57,8 +56,10 @@ function baseName(path: string): string {
 }
 
 export const useComparisonStore = defineStore('comparison', () => {
-    const repoName = ref(MOCK_REPO_NAME);
+    // Empty until a repo is opened or the last one is restored on startup.
+    const repoName = ref('');
     const repoPath = ref('');
+    const recentRepos = ref<string[]>([]);
     const branches = ref(MOCK_BRANCHES);
     const files = ref(MOCK_FILES);
 
@@ -252,33 +253,79 @@ export const useComparisonStore = defineStore('comparison', () => {
         head.value = previousBase;
     }
 
-    // Native folder picker -> git-repo validation, both in the main process. The
-    // branches and file set stay on mock data until the git backend (Phase 2)
-    // replaces them; for now this proves the preload round-trip and names the repo.
-    async function openRepository() {
+    async function loadRecentRepos() {
         const api = window.api;
         if (!api) {
             return;
         }
 
-        const picked = await api.openRepoDialog();
-        if (!picked) {
+        recentRepos.value = await api.getRecentRepos();
+    }
+
+    async function removeRecent(path: string) {
+        const api = window.api;
+        if (!api) {
             return;
         }
 
-        // Main shows its own error box and returns null for an invalid folder.
-        const info = await api.openRepo(picked);
+        recentRepos.value = await api.removeRecentRepo(path);
+
+        // Removing the open repo clears the selection back to the placeholder.
+        if (path === repoPath.value) {
+            repoName.value = '';
+            repoPath.value = '';
+        }
+    }
+
+    // Startup restore: load recents and reopen the most recent one. The name is
+    // derived from the path so it stays selected without re-validating (and
+    // without popping the not-a-repo dialog if the folder has since moved); the
+    // git backend (Phase 2) will validate and load its data. No-op with no history.
+    async function restoreLastRepo() {
+        await loadRecentRepos();
+        const last = recentRepos.value[0];
+        if (!last) {
+            return;
+        }
+
+        const parts = last.split(/[/\\]/).filter(Boolean);
+        repoName.value = parts[parts.length - 1] ?? last;
+        repoPath.value = last;
+    }
+
+    // Open a repo by path (a recent entry or a freshly picked folder), validated
+    // in the main process. Main shows its own error box and returns null for an
+    // invalid folder, so state is left untouched in that case. Branches and files
+    // stay on mock data until the git backend (Phase 2) replaces them.
+    async function openRecent(path: string) {
+        const api = window.api;
+        if (!api) {
+            return;
+        }
+
+        const info = await api.openRepo(path);
         if (!info) {
             return;
         }
 
         repoName.value = info.name;
         repoPath.value = info.path;
+        recentRepos.value = await api.getRecentRepos();
+    }
+
+    // Native folder picker -> openRecent. Proves the preload round-trip and names
+    // the repo without touching the (still mock) branches and file set.
+    async function openRepository() {
+        const picked = await window.api?.openRepoDialog();
+        if (picked) {
+            await openRecent(picked);
+        }
     }
 
     return {
         repoName,
         repoPath,
+        recentRepos,
         branches,
         files,
         base,
@@ -311,6 +358,10 @@ export const useComparisonStore = defineStore('comparison', () => {
         setHead,
         setCompareMode,
         swap,
+        loadRecentRepos,
+        removeRecent,
+        restoreLastRepo,
+        openRecent,
         openRepository,
     };
 });
