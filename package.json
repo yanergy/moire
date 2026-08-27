@@ -11,7 +11,8 @@
         "test:unit": "vitest",
         "type-check": "vue-tsc --build",
         "lint": "oxlint . --fix",
-        "format": "oxfmt",
+        "format": "oxfmt \"**/*.{js,mjs,cjs,ts,mts,cts,vue,css,scss,json,html}\"",
+        "format:check": "oxfmt --check \"**/*.{js,mjs,cjs,ts,mts,cts,vue,css,scss,json,html}\"",
         "prepare": "husky"
     },
     "dependencies": {
