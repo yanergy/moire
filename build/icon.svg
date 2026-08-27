@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Moiré">
+  <!-- Packaging master. A slim transparent margin keeps the corners from touching
+       the frame edge; the rounded body carries the shape since the OS does not
+       round app-icon corners for us. The bar artwork is the same as
+       src/assets/moire-icon.svg, scaled up to nearly fill the body. -->
+  <rect x="44" y="44" width="936" height="936" rx="211" fill="#14181C"></rect>
+  <g transform="translate(35.84 35.84) scale(1.86)">
+    <g fill="#F4F3F0">
+      <rect x="108" y="64" width="56" height="336" rx="28"></rect>
+      <rect x="204" y="128" width="56" height="272" rx="28"></rect>
+      <rect x="300" y="64" width="56" height="336" rx="28"></rect>
+    </g>
+    <g fill="#F4F3F0" opacity="0.45">
+      <rect x="156" y="112" width="56" height="336" rx="28"></rect>
+      <rect x="252" y="176" width="56" height="272" rx="28"></rect>
+      <rect x="348" y="112" width="56" height="336" rx="28"></rect>
+    </g>
+  </g>
+</svg>
