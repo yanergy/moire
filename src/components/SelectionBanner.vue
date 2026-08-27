@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { ArrowDown, ArrowUp, Check, Circle } from '@lucide/vue';
 import type { ChangedFile, FileStatus } from '@/shared/types';
 
 const props = defineProps<{
@@ -61,18 +62,18 @@ const name = computed(() => {
             <button
                 type="button"
                 title="Previous change"
-                class="flex size-7 items-center justify-center rounded-md border border-dv-border text-[11px] text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                class="flex size-7 items-center justify-center rounded-md border border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
                 @click="emit('prev')"
             >
-                ↑
+                <arrow-up :size="16" />
             </button>
             <button
                 type="button"
                 title="Next change"
-                class="flex size-7 items-center justify-center rounded-md border border-dv-border text-[11px] text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+                class="flex size-7 items-center justify-center rounded-md border border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
                 @click="emit('next')"
             >
-                ↓
+                <arrow-down :size="16" />
             </button>
         </div>
 
@@ -86,7 +87,8 @@ const name = computed(() => {
             "
             @click="emit('toggleViewed')"
         >
-            <span class="text-[10px]">{{ viewed ? '✓' : '○' }}</span>
+            <check v-if="viewed" :size="16" />
+            <circle v-else :size="16" />
             {{ viewed ? 'Viewed' : 'Mark viewed' }}
         </button>
     </div>

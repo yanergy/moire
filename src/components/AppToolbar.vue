@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowRightLeft, RefreshCw } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
@@ -40,7 +41,7 @@ const viewOptions: { value: ViewMode; label: string }[] = [
                 class="flex size-7 items-center justify-center rounded-md text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
                 @click="comparison.swap()"
             >
-                ⇄
+                <arrow-right-left :size="16" />
             </button>
             <ref-selector side="head" />
         </div>
@@ -62,9 +63,9 @@ const viewOptions: { value: ViewMode; label: string }[] = [
         <button
             type="button"
             title="Refresh"
-            class="flex size-8 items-center justify-center rounded-md border border-dv-border text-sm text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+            class="flex size-8 items-center justify-center rounded-md border border-dv-border text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
         >
-            ⟳
+            <refresh-cw :size="16" />
         </button>
     </div>
 </template>

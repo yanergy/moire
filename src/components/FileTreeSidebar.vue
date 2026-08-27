@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from '@lucide/vue';
+import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import type { FileNode } from '@/stores/comparison';
 import type { FileStatus } from '@/shared/types';
@@ -78,8 +78,8 @@ function checkboxClass(node: FileNode): string {
                 class="flex size-6 items-center justify-center rounded-md text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
                 @click="comparison.toggleAll()"
             >
-                <chevrons-up-down v-if="comparison.allCollapsed" :size="14" />
-                <chevrons-down-up v-else :size="14" />
+                <chevrons-up-down v-if="comparison.allCollapsed" :size="16" />
+                <chevrons-down-up v-else :size="16" />
             </button>
             <span class="flex items-center gap-1.5 text-[11px] text-dv-muted">
                 <span class="size-2 rounded-sm bg-dv-viewed-edge" />
@@ -104,8 +104,8 @@ function checkboxClass(node: FileNode): string {
                     :style="{ paddingLeft: indent(node.depth) }"
                     @click="comparison.toggleDir(node.path)"
                 >
-                    <chevron-down v-if="node.open" :size="13" class="shrink-0 text-dv-faint" />
-                    <chevron-right v-else :size="13" class="shrink-0 text-dv-faint" />
+                    <chevron-down v-if="node.open" :size="16" class="shrink-0 text-dv-faint" />
+                    <chevron-right v-else :size="16" class="shrink-0 text-dv-faint" />
                     <span class="flex-1 truncate text-left font-mono text-xs text-dv-muted">
                         {{ node.name }}
                     </span>
@@ -148,7 +148,7 @@ function checkboxClass(node: FileNode): string {
                         :class="checkboxClass(node)"
                         @click.stop="comparison.toggleViewed(node.path)"
                     >
-                        {{ node.viewed ? '✓' : '' }}
+                        <check v-if="node.viewed" :size="11" />
                     </button>
                 </div>
             </template>

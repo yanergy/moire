@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Moon, Sun } from '@lucide/vue';
 import { useUiStore } from '@/stores/ui';
 import { useComparisonStore } from '@/stores/comparison';
 
@@ -23,10 +24,11 @@ const comparison = useComparisonStore();
         <button
             type="button"
             title="Toggle theme"
-            class="flex h-[22px] w-7 items-center justify-center rounded-md text-xs text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
+            class="flex h-[22px] w-7 items-center justify-center rounded-md text-dv-muted hover:bg-dv-hover hover:text-dv-fg"
             @click="ui.toggleTheme()"
         >
-            {{ ui.isDark ? '☀' : '☾' }}
+            <sun v-if="ui.isDark" :size="16" />
+            <moon v-else :size="16" />
         </button>
     </div>
 </template>
