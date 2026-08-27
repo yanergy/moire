@@ -19,9 +19,10 @@ async function isGitRepo(repoPath) {
 
 // Confirms a git binary is on PATH by running `git --version` (which needs no
 // repo). The app can do nothing without git, so main runs this as a launch gate.
-async function isGitAvailable() {
+// The runner is injectable so the probe is unit-testable without spawning git.
+async function isGitAvailable(git = simpleGit()) {
     try {
-        await simpleGit().raw(['--version']);
+        await git.raw(['--version']);
         return true;
     } catch {
         return false;
