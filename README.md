@@ -115,8 +115,9 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 
 ### Phase 4, live updates and polish
 
-- [x] Dark and light theme toggle with matching Monaco themes. Lives in the native application
-  menu (View, Toggle Theme, Cmd+Shift+L), wired to the renderer over the preload bridge.
+- [x] System, light, and dark theme selection with matching Monaco themes. Lives in the native
+  application menu (View, Theme) as a radio group. The main process owns it via `nativeTheme`
+  (`system` follows the OS) and pushes the resolved theme to the renderer over the preload bridge.
 - [x] Filter box and viewed checkboxes.
 - [x] Open repo name shown in the native window title.
 - [ ] `RepoWatcher` (chokidar) with auto refresh on change.
@@ -124,7 +125,8 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [ ] Size threshold and a "Load diff" gate for large files.
 - [ ] Binary and image preview.
 - [ ] Rename display, showing the old path moving to the new path, in the UI.
-- [ ] Theme persistence via `electron-store` and `nativeTheme`.
+- [x] Theme persistence via `electron-store` and `nativeTheme`. The chosen preference (`system`,
+  `light`, or `dark`) is saved on change and restored on launch to seed `nativeTheme`.
 
 ### Phase 5, packaging and release
 

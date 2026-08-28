@@ -7,6 +7,7 @@ const { ipcMain, dialog } = require('electron');
 const { simpleGit } = require('simple-git');
 const { GitService } = require('../git/GitService.cjs');
 const { getRecentRepos, addRecentRepo, removeRecentRepo } = require('../settings.cjs');
+const { currentThemeState } = require('../theme.cjs');
 
 // The app compares one repository at a time (multi-repo is a non-goal), so the
 // git-backed channels operate on whichever repo was opened last. `repo:open`
@@ -73,6 +74,10 @@ function registerIpcHandlers() {
     ipcMain.handle('repo:recent', () => getRecentRepos());
 
     ipcMain.handle('repo:remove-recent', (_event, repoPath) => removeRecentRepo(repoPath));
+
+    // Theme is owned by nativeTheme in the main process; the renderer reads the
+    // current resolved state on launch, then stays in sync via 'theme:changed'.
+    ipcMain.handle('theme:get', () => currentThemeState());
 
     // Git-backed channels. Each operates on the currently open repo and has a
     // matching method in the preload bridge and an entry in MoireApi.

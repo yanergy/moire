@@ -9,7 +9,8 @@ let storePromise;
 function getStore() {
     if (!storePromise) {
         storePromise = import('electron-store').then(
-            ({ default: Store }) => new Store({ name: 'moire', defaults: { recentRepos: [] } })
+            ({ default: Store }) =>
+                new Store({ name: 'moire', defaults: { recentRepos: [], theme: 'system' } })
         );
     }
 
@@ -41,4 +42,22 @@ async function removeRecentRepo(repoPath) {
     return next;
 }
 
-module.exports = { getRecentRepos, addRecentRepo, removeRecentRepo };
+// Theme preference ('system' | 'light' | 'dark'). Restored on launch to seed
+// nativeTheme; persisted whenever the user changes it from the View → Theme menu.
+async function getThemePreference() {
+    const store = await getStore();
+    return store.get('theme', 'system');
+}
+
+async function setThemePreference(preference) {
+    const store = await getStore();
+    store.set('theme', preference);
+}
+
+module.exports = {
+    getRecentRepos,
+    addRecentRepo,
+    removeRecentRepo,
+    getThemePreference,
+    setThemePreference,
+};

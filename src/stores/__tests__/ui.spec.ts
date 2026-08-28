@@ -9,25 +9,33 @@ describe('ui store', () => {
         document.documentElement.classList.remove('dark');
     });
 
-    it('defaults to dark and reflects it on the root element', () => {
+    it('defaults to the system preference, resolving dark on the root element', () => {
         const store = useUiStore();
-        expect(store.theme).toBe('dark');
+        expect(store.preference).toBe('system');
         expect(store.isDark).toBe(true);
         expect(document.documentElement.classList.contains('dark')).toBe(true);
     });
 
-    it('toggles between dark and light, updating the root class', async () => {
+    it('applies pushed theme state, updating the preference and the root class', async () => {
         const store = useUiStore();
 
-        store.toggleTheme();
-        expect(store.theme).toBe('light');
+        store.applyThemeState({ preference: 'light', isDark: false });
+        expect(store.preference).toBe('light');
         expect(store.isDark).toBe(false);
         await nextTick();
         expect(document.documentElement.classList.contains('dark')).toBe(false);
 
-        store.toggleTheme();
+        store.applyThemeState({ preference: 'dark', isDark: true });
+        expect(store.preference).toBe('dark');
         await nextTick();
         expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+        // 'system' keeps the preference distinct from the resolved dark/light.
+        store.applyThemeState({ preference: 'system', isDark: false });
+        expect(store.preference).toBe('system');
+        expect(store.isDark).toBe(false);
+        await nextTick();
+        expect(document.documentElement.classList.contains('dark')).toBe(false);
     });
 
     it('sets the view mode', () => {

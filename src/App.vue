@@ -13,7 +13,7 @@ defineMonacoThemes();
 const comparison = useComparisonStore();
 const ui = useUiStore();
 
-let stopThemeMenu: (() => void) | undefined;
+let stopThemeSync: (() => void) | undefined;
 
 // Electron mirrors document.title into the native window title bar, so the open
 // repo shows there. This replaces the in-app title the removed fake title bar
@@ -22,15 +22,22 @@ watchEffect(() => {
     document.title = windowTitle(comparison.repoName);
 });
 
-onMounted(() => {
+onMounted(async () => {
     // Reopen the most recently opened repo on launch.
     comparison.restoreLastRepo();
-    // The theme toggle lives in the native View menu; its command arrives here
-    // through the preload bridge. Guard for jsdom/tests where window.api is absent.
-    stopThemeMenu = window.api?.onToggleTheme(() => ui.toggleTheme());
+    // Theme is owned by the main process (nativeTheme). Pull the current resolved
+    // state, then stay in sync as the View → Theme selection or the OS theme
+    // changes. Guard for jsdom/tests where window.api is absent.
+    const api = window.api;
+    if (!api) {
+        return;
+    }
+
+    ui.applyThemeState(await api.getTheme());
+    stopThemeSync = api.onThemeChanged((state) => ui.applyThemeState(state));
 });
 
-onUnmounted(() => stopThemeMenu?.());
+onUnmounted(() => stopThemeSync?.());
 </script>
 
 <template>

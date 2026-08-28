@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, nativeImage } = require('electron');
 const path = require('node:path');
 const { registerIpcHandlers, isGitAvailable } = require('./ipc/handlers.cjs');
 const { installAppMenu } = require('./menu.cjs');
+const { initTheme, setThemePreference, registerThemeBroadcast } = require('./theme.cjs');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -45,8 +46,14 @@ app.whenReady().then(async () => {
         return;
     }
 
+    // Seed nativeTheme from the persisted preference, then broadcast resolved
+    // theme changes to windows. registerThemeBroadcast runs after initTheme so
+    // the initial seed doesn't fire a pointless broadcast (no window exists yet).
+    const themePreference = await initTheme();
+    registerThemeBroadcast();
+
     registerIpcHandlers();
-    installAppMenu();
+    installAppMenu(themePreference, (preference) => setThemePreference(preference));
     createWindow();
 });
 

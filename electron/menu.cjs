@@ -1,16 +1,21 @@
 // The native application menu (File / Edit / View / Window). Electron would
 // synthesize a default menu on its own; we build our own so the View menu can
-// carry a "Toggle Theme" command that reaches the renderer over the preload
-// bridge (window.api.onToggleTheme). Channel name matches electron/preload.cjs.
+// carry a "Theme" submenu (System / Light / Dark). Picking an item sets the
+// preference in the main process (electron/theme.cjs → nativeTheme), which then
+// pushes the resolved theme to the renderer over the preload bridge.
 
-const { Menu, BrowserWindow } = require('electron');
+const { Menu } = require('electron');
 
-const THEME_TOGGLE_CHANNEL = 'theme:toggle';
+const THEME_OPTIONS = [
+    { label: 'System', preference: 'system' },
+    { label: 'Light', preference: 'light' },
+    { label: 'Dark', preference: 'dark' },
+];
 
-// Pure builder so the menu shape (and the Toggle Theme item) can be unit-tested
-// without a running Electron instance. `onToggleTheme` is injected as the item's
-// click handler.
-function buildMenuTemplate({ isMac, onToggleTheme }) {
+// Pure builder so the menu shape (and the Theme radio group) can be unit-tested
+// without a running Electron instance. `currentTheme` marks the checked item and
+// `onSelectTheme(preference)` is injected as each item's click handler.
+function buildMenuTemplate({ isMac, currentTheme, onSelectTheme }) {
     return [
         ...(isMac ? [{ role: 'appMenu' }] : []),
         { role: 'fileMenu' },
@@ -29,9 +34,13 @@ function buildMenuTemplate({ isMac, onToggleTheme }) {
                 { role: 'togglefullscreen' },
                 { type: 'separator' },
                 {
-                    label: 'Toggle Theme',
-                    accelerator: 'CmdOrCtrl+Shift+L',
-                    click: onToggleTheme,
+                    label: 'Theme',
+                    submenu: THEME_OPTIONS.map(({ label, preference }) => ({
+                        label,
+                        type: 'radio',
+                        checked: currentTheme === preference,
+                        click: () => onSelectTheme(preference),
+                    })),
                 },
             ],
         },
@@ -39,19 +48,13 @@ function buildMenuTemplate({ isMac, onToggleTheme }) {
     ];
 }
 
-// Sends the toggle to the window that owned the menu command, falling back to
-// the focused window when the accelerator fires with no window argument.
-function sendThemeToggle(_menuItem, browserWindow) {
-    const target = browserWindow ?? BrowserWindow.getFocusedWindow();
-    target?.webContents?.send(THEME_TOGGLE_CHANNEL);
-}
-
-function installAppMenu() {
+function installAppMenu(currentTheme, onSelectTheme) {
     const template = buildMenuTemplate({
         isMac: process.platform === 'darwin',
-        onToggleTheme: sendThemeToggle,
+        currentTheme,
+        onSelectTheme,
     });
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-module.exports = { installAppMenu, buildMenuTemplate, sendThemeToggle, THEME_TOGGLE_CHANNEL };
+module.exports = { installAppMenu, buildMenuTemplate, THEME_OPTIONS };

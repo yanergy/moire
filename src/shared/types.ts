@@ -6,7 +6,17 @@
 export type FileStatus = 'A' | 'M' | 'D' | 'R';
 export type CompareMode = 'merge-base' | 'direct';
 export type ViewMode = 'split' | 'unified';
+// The concrete theme the UI resolves to. `ThemePreference` is what the user
+// picks; `system` follows the OS and resolves to one of these.
 export type ThemeName = 'dark' | 'light';
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+// The theme state the main process owns (via nativeTheme) and pushes to the
+// renderer: the chosen preference plus the resolved dark/light it maps to.
+export interface ThemeState {
+    preference: ThemePreference;
+    isDark: boolean;
+}
 
 // Head-side sentinel for "compare against the on-disk working tree".
 export const WORKING_TREE = 'WORKING TREE';
@@ -56,7 +66,10 @@ export interface MoireApi {
     getChangedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]>;
     getFilePair(base: string, head: string, path: string): Promise<FilePair>;
     onRepoChanged(cb: (event: RepoChangeEvent) => void): () => void;
-    // Fires when the native "View → Toggle Theme" menu command runs in the main
-    // process. Returns an unsubscribe function.
-    onToggleTheme(cb: () => void): () => void;
+    // Theme is owned by the main process via nativeTheme. `getTheme` reads the
+    // current resolved state; `onThemeChanged` fires when the native "View →
+    // Theme" selection or the OS theme changes, and returns an unsubscribe
+    // function.
+    getTheme(): Promise<ThemeState>;
+    onThemeChanged(cb: (state: ThemeState) => void): () => void;
 }

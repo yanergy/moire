@@ -1,18 +1,20 @@
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { ThemeName, ViewMode } from '@/shared/types';
+import type { ThemePreference, ThemeState, ViewMode } from '@/shared/types';
 
-// View-level preferences: theme (dark default, matching the design) and the
-// split/unified diff layout. Persistence via electron-store lands with the
-// backend; for now these are in-memory.
+// View-level preferences. The theme is owned by the Electron main process
+// (nativeTheme): `preference` is what the user picked in the View → Theme menu
+// ('system' follows the OS) and `isDark` is the resolved value main pushes over
+// IPC. This store only mirrors and applies that; it never decides the theme
+// itself. The split/unified diff layout is local renderer state.
 export const useUiStore = defineStore('ui', () => {
-    const theme = ref<ThemeName>('dark');
+    const preference = ref<ThemePreference>('system');
+    const isDark = ref(true);
     const viewMode = ref<ViewMode>('split');
 
-    const isDark = computed(() => theme.value === 'dark');
-
-    function toggleTheme() {
-        theme.value = isDark.value ? 'light' : 'dark';
+    function applyThemeState(state: ThemeState) {
+        preference.value = state.preference;
+        isDark.value = state.isDark;
     }
 
     function setViewMode(mode: ViewMode) {
@@ -29,7 +31,7 @@ export const useUiStore = defineStore('ui', () => {
         { immediate: true }
     );
 
-    return { theme, viewMode, isDark, toggleTheme, setViewMode };
+    return { preference, isDark, viewMode, applyThemeState, setViewMode };
 });
 
 if (import.meta.hot) {

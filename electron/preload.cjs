@@ -15,11 +15,13 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.invoke('git:changed-files', base, head, mode),
     getFilePair: (base, head, filePath) =>
         ipcRenderer.invoke('git:file-pair', base, head, filePath),
-    // Main-process menu event (View → Toggle Theme), pushed to the renderer.
-    // Returns an unsubscribe function so the caller can drop the listener.
-    onToggleTheme: (callback) => {
-        const listener = () => callback();
-        ipcRenderer.on('theme:toggle', listener);
-        return () => ipcRenderer.removeListener('theme:toggle', listener);
+    // Theme is owned by main (nativeTheme). `getTheme` reads the resolved state;
+    // `onThemeChanged` fires when the View → Theme selection or the OS theme
+    // changes, returning an unsubscribe function so the caller can drop it.
+    getTheme: () => ipcRenderer.invoke('theme:get'),
+    onThemeChanged: (callback) => {
+        const listener = (_event, state) => callback(state);
+        ipcRenderer.on('theme:changed', listener);
+        return () => ipcRenderer.removeListener('theme:changed', listener);
     },
 });

@@ -1,31 +1,40 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildMenuTemplate, sendThemeToggle, THEME_TOGGLE_CHANNEL } from '../electron/menu.cjs';
+import { buildMenuTemplate } from '../electron/menu.cjs';
 
 // menu.cjs is CommonJS loaded natively under vitest, so `require('electron')`
-// inside it resolves to the binary path (not the API) and Menu/BrowserWindow are
-// undefined. The template builder is pure and the click handler takes its target
-// window as an argument, so both are testable without a running Electron.
+// inside it resolves to the binary path (not the API) and Menu is undefined. The
+// template builder is pure — it takes the current preference and a select handler
+// as arguments — so it is testable without a running Electron.
+function themeSubmenu(currentTheme: string, onSelectTheme = () => {}) {
+    const template = buildMenuTemplate({ isMac: true, currentTheme, onSelectTheme });
+    const view = template.find((menu) => menu.label === 'View');
+    return view?.submenu.find((entry) => entry.label === 'Theme')?.submenu;
+}
+
 describe('application menu', () => {
-    it('adds a Toggle Theme command to the View menu', () => {
-        const onToggleTheme = vi.fn<() => void>();
-        const template = buildMenuTemplate({ isMac: true, onToggleTheme });
+    it('offers System, Light, and Dark as radio items in the View → Theme menu', () => {
+        const items = themeSubmenu('system');
+        expect(items?.map((item) => item.label)).toEqual(['System', 'Light', 'Dark']);
+        expect(items?.every((item) => item.type === 'radio')).toBe(true);
+    });
 
-        const view = template.find((menu) => menu.label === 'View');
-        const item = view?.submenu.find((entry) => entry.label === 'Toggle Theme');
+    it('checks the item matching the current preference', () => {
+        const checked = themeSubmenu('light')?.filter((item) => item.checked);
+        expect(checked?.map((item) => item.label)).toEqual(['Light']);
+    });
 
-        expect(item).toBeDefined();
-        expect(item?.accelerator).toBe('CmdOrCtrl+Shift+L');
-        expect(item?.click).toBe(onToggleTheme);
+    it('reports the chosen preference through onSelectTheme', () => {
+        const onSelectTheme = vi.fn<(preference: string) => void>();
+        const items = themeSubmenu('system', onSelectTheme);
+
+        items?.find((item) => item.label === 'Dark')?.click();
+        expect(onSelectTheme).toHaveBeenCalledWith('dark');
     });
 
     it('omits the macOS app menu on other platforms', () => {
-        expect(buildMenuTemplate({ isMac: true, onToggleTheme() {} })[0].role).toBe('appMenu');
-        expect(buildMenuTemplate({ isMac: false, onToggleTheme() {} })[0].role).toBe('fileMenu');
-    });
-
-    it('sends the toggle to the window that owns the command', () => {
-        const send = vi.fn<(channel: string) => void>();
-        sendThemeToggle(null, { webContents: { send } });
-        expect(send).toHaveBeenCalledWith(THEME_TOGGLE_CHANNEL);
+        expect(buildMenuTemplate({ isMac: true, currentTheme: 'system' })[0].role).toBe('appMenu');
+        expect(buildMenuTemplate({ isMac: false, currentTheme: 'system' })[0].role).toBe(
+            'fileMenu'
+        );
     });
 });
