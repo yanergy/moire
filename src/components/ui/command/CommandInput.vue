@@ -34,7 +34,8 @@ const { filterState } = useCommand();
             auto-focus
             :class="
                 cn(
-                    'placeholder:text-muted-foreground flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
+                    // text-xs to match Moiré's dense UI scale (stock shadcn is text-sm).
+                    'placeholder:text-muted-foreground flex h-10 w-full rounded-md bg-transparent py-3 text-xs outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
                     props.class
                 )
             "

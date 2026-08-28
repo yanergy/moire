@@ -110,7 +110,7 @@ function checkboxClass(node: FileNode): string {
                 <Input
                     v-model="comparison.treeFilter"
                     placeholder="Filter files…"
-                    class="h-8 border-moire-border bg-transparent font-mono text-xs text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                    class="h-8 border-moire-border bg-transparent font-mono text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
                 />
             </div>
 

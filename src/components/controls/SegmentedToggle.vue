@@ -39,7 +39,7 @@ function onChange(value: unknown) {
             v-for="option in options"
             :key="option.value"
             :value="option.value"
-            class="h-auto min-w-0 rounded px-2.5 py-1 text-xs font-medium text-moire-muted hover:bg-transparent hover:text-moire-fg data-[state=on]:bg-moire-seg-active data-[state=on]:text-moire-fg data-[state=on]:shadow-[var(--moire-seg-shadow)]"
+            class="h-auto min-w-0 rounded px-2.5 py-1 font-medium text-moire-muted hover:bg-transparent hover:text-moire-fg data-[state=on]:bg-moire-seg-active data-[state=on]:text-moire-fg data-[state=on]:shadow-[var(--moire-seg-shadow)]"
         >
             {{ option.label }}
         </ToggleGroupItem>

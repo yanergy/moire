@@ -99,6 +99,12 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - Style the shadcn primitives with this project's `--moire-*` design tokens (pass them through
   the `class` prop, which shadcn-vue merges via `cn`) so they match the custom look. Never
   hardcode hex values, and never revert a control to plain HTML to avoid the primitive.
+- App-wide defaults that every instance would otherwise repeat live in the primitive itself
+  (its `cva` base or `class`), not on each call site, so a new consumer inherits them for free.
+  The interactive primitives (`Button`, `Input`, `CommandInput`, `Toggle`) default their text
+  size to `text-xs` to match the dense UI scale, deviating from stock shadcn's `text-sm`; a
+  consumer sets a text size on the `class` prop only for a deliberate exception. When you change
+  a primitive's default this way, note it in a comment there so it does not read as an accident.
 - shadcn-vue UI primitives are referenced in PascalCase in templates (`<Button>`, `<Input>`,
   `<TooltipTrigger>`) rather than kebab-case, because names like `button` and `input` collide
   with native HTML elements. This is the one exception to the kebab-case component rule below;
