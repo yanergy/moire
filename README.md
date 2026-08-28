@@ -9,13 +9,13 @@ superimposition.
 
 ## Status
 
-Moiré is an early work in progress. The renderer is a complete, tested UI shell, but every
-value it shows is still placeholder data from `src/lib/mock.ts`. The git backend now runs in
-the Electron main process (branch listing, changed files, and file pairs over IPC), but the
-renderer stores have not been switched onto it yet, so the UI keeps showing mocks. The stores
-are shaped so that swapping the mocks for a real backend is a store level change rather than a
-component rewrite. See the Checklist below for the full breakdown of what is done and what
-remains.
+Moiré is an early work in progress. The renderer is a complete, tested UI shell and the git
+backend now runs in the Electron main process (branch listing, changed files, and file pairs
+over IPC). The renderer is being switched onto it a piece at a time: the ref selectors show the
+open repo's real branches, while the file tree and diff pane still read placeholder data from
+`src/lib/mock.ts`. The stores are shaped so that swapping each mock for the real backend is a
+store level change rather than a component rewrite. See the Checklist below for the full
+breakdown of what is done and what remains.
 
 ## Stack
 
@@ -106,6 +106,9 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] Toolbar with ref selectors and mode toggles.
 - [x] Split and unified toggle, plus prev and next change navigation.
 - [x] Status bar totals.
+- [x] Ref selectors wired to the real branch list via `getBranches`, loaded on repo open with a
+  default base chosen per repo (the current branch, then main, then master). Switching or closing
+  a repo resets the branch selection.
 - [~] File tree wired to changed files. Reads `MOCK_FILES` via the store, not
   `getChangedFiles`.
 - [~] File selection to file pair to Monaco. Reads `mockFilePair`, not `getFilePair`.

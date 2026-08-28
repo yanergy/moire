@@ -3,10 +3,12 @@ import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import type { BranchInfo } from '@/shared/types';
 
 const RECENTS = ['/repos/moire', '/work/api-service'];
 
-// A partial window.api stub; RepoPicker only reaches the repo-opening methods.
+// A partial window.api stub; RepoPicker only reaches the repo-opening methods,
+// plus getBranches which openRecent calls after a successful open.
 function stubApi() {
     const api = {
         openRepoDialog: vi
@@ -19,6 +21,7 @@ function stubApi() {
         removeRecentRepo: vi.fn<(path: string) => Promise<string[]>>((path) =>
             Promise.resolve(RECENTS.filter((entry) => entry !== path))
         ),
+        getBranches: vi.fn<() => Promise<BranchInfo[]>>().mockResolvedValue([]),
     };
     window.api = api as unknown as Window['api'];
     return api;

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { ChangedFile, CompareMode, FilePair, FileStatus } from '@/shared/types';
+import type { BranchInfo, ChangedFile, CompareMode, FilePair, FileStatus } from '@/shared/types';
+import { WORKING_TREE } from '@/shared/types';
 import {
     DEFAULT_BASE,
     DEFAULT_HEAD,
@@ -53,6 +54,22 @@ const EMPTY_FILE: ChangedFile = {
 function baseName(path: string): string {
     const parts = path.split('/');
     return parts[parts.length - 1] ?? path;
+}
+
+// The default base for a freshly opened repo is the branch the user is on, so
+// the diff opens against their current work. Falls back to main, then master,
+// then the first local branch, and to empty when the repo has no local branches
+// (a bare or unborn HEAD).
+function pickDefaultBase(list: BranchInfo[]): string {
+    const locals = list.filter((b) => b.kind === 'local');
+    const named = (name: string) => locals.find((b) => b.name === name)?.name;
+    return (
+        locals.find((b) => b.isCurrent)?.name ??
+        named('main') ??
+        named('master') ??
+        locals[0]?.name ??
+        ''
+    );
 }
 
 export const useComparisonStore = defineStore('comparison', () => {
@@ -270,10 +287,14 @@ export const useComparisonStore = defineStore('comparison', () => {
 
         recentRepos.value = await api.removeRecentRepo(path);
 
-        // Removing the open repo clears the selection back to the placeholder.
+        // Removing the open repo clears the selection back to the placeholder and
+        // drops its branches so the ref selectors do not keep offering stale refs.
         if (path === repoPath.value) {
             repoName.value = '';
             repoPath.value = '';
+            branches.value = [];
+            base.value = '';
+            head.value = WORKING_TREE;
         }
     }
 
@@ -326,7 +347,23 @@ export const useComparisonStore = defineStore('comparison', () => {
         repoName.value = info.name;
         repoPath.value = info.path;
         recentRepos.value = await api.getRecentRepos();
+        await loadBranches();
         return true;
+    }
+
+    // Replace the branch list with the open repo's real branches and reset the
+    // comparison to a valid default (base on a real branch, head on the working
+    // tree). Resetting matters on a repo switch, where the previous base or head
+    // may not exist in the new repo.
+    async function loadBranches() {
+        const api = window.api;
+        if (!api) {
+            return;
+        }
+
+        branches.value = await api.getBranches();
+        base.value = pickDefaultBase(branches.value);
+        head.value = WORKING_TREE;
     }
 
     // Native folder picker -> openRecent. Proves the preload round-trip and names

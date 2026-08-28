@@ -2,6 +2,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { useComparisonStore } from '@/stores/comparison';
 import type { DirNode, FileNode, TreeNode } from '@/stores/comparison';
+import type { BranchInfo } from '@/shared/types';
 
 const dirs = (nodes: TreeNode[]): DirNode[] => nodes.filter((n): n is DirNode => n.kind === 'dir');
 const files = (nodes: TreeNode[]): FileNode[] =>
@@ -146,6 +147,11 @@ describe('comparison store', () => {
 
     describe('repository opening', () => {
         const RECENTS = ['/repos/moire', '/work/api-service'];
+        const BRANCHES: BranchInfo[] = [
+            { name: 'main', kind: 'local', isCurrent: true },
+            { name: 'develop', kind: 'local' },
+            { name: 'origin/main', kind: 'remote' },
+        ];
 
         function stubApi(overrides: Record<string, unknown> = {}) {
             const api = {
@@ -159,6 +165,7 @@ describe('comparison store', () => {
                 removeRecentRepo: vi.fn<(path: string) => Promise<string[]>>((path) =>
                     Promise.resolve(RECENTS.filter((entry) => entry !== path))
                 ),
+                getBranches: vi.fn<() => Promise<BranchInfo[]>>().mockResolvedValue(BRANCHES),
                 ...overrides,
             };
             window.api = api as unknown as Window['api'];
@@ -185,6 +192,55 @@ describe('comparison store', () => {
             expect(store.repoName).toBe('api-service');
             expect(store.repoPath).toBe('/work/api-service');
             expect(store.recentRepos).toEqual(RECENTS);
+        });
+
+        it('loads the real branch list and defaults the base on open', async () => {
+            stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.branches).toEqual(BRANCHES);
+            expect(store.localBranches.map((b) => b.name)).toEqual(['main', 'develop']);
+            expect(store.remoteBranches.map((b) => b.name)).toEqual(['origin/main']);
+            expect(store.base).toBe('main');
+            expect(store.head).toBe('WORKING TREE');
+        });
+
+        it('defaults the base to the current branch, even when main exists', async () => {
+            stubApi({
+                getBranches: vi.fn<() => Promise<BranchInfo[]>>().mockResolvedValue([
+                    { name: 'main', kind: 'local' },
+                    { name: 'feature', kind: 'local', isCurrent: true },
+                ]),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.base).toBe('feature');
+        });
+
+        it('falls back to main when no branch is marked current', async () => {
+            stubApi({
+                getBranches: vi.fn<() => Promise<BranchInfo[]>>().mockResolvedValue([
+                    { name: 'topic', kind: 'local' },
+                    { name: 'main', kind: 'local' },
+                ]),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.base).toBe('main');
+        });
+
+        it('resets the branch list and selection when the open repo is removed', async () => {
+            stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.branches.length).toBeGreaterThan(0);
+            expect(store.base).toBe('main');
+
+            await store.removeRecent('/repos/moire');
+            expect(store.repoName).toBe('');
+            expect(store.branches).toEqual([]);
+            expect(store.base).toBe('');
+            expect(store.head).toBe('WORKING TREE');
         });
 
         it('runs the picker then opens the chosen folder', async () => {
