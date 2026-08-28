@@ -14,6 +14,7 @@ const comparison = useComparisonStore();
 const ui = useUiStore();
 
 let stopThemeSync: (() => void) | undefined;
+let stopMenuRefresh: (() => void) | undefined;
 
 // Electron mirrors document.title into the native window title bar, so the open
 // repo shows there. This replaces the in-app title the removed fake title bar
@@ -35,9 +36,15 @@ onMounted(async () => {
 
     ui.applyThemeState(await api.getTheme());
     stopThemeSync = api.onThemeChanged((state) => ui.applyThemeState(state));
+
+    // The native View → Refresh item re-reads the repo through the store.
+    stopMenuRefresh = api.onMenuRefresh(() => void comparison.refresh());
 });
 
-onUnmounted(() => stopThemeSync?.());
+onUnmounted(() => {
+    stopThemeSync?.();
+    stopMenuRefresh?.();
+});
 </script>
 
 <template>

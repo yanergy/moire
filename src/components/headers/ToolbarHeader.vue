@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRightLeft, RefreshCw } from '@lucide/vue';
+import { ArrowRightLeft } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
@@ -63,19 +63,6 @@ const viewOptions: { value: ViewMode; label: string }[] = [
                 :model-value="ui.viewMode"
                 @update:model-value="ui.setViewMode"
             />
-
-            <Tooltip>
-                <TooltipTrigger as-child>
-                    <Button
-                        variant="outline"
-                        size="icon-sm"
-                        class="border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                    >
-                        <RefreshCw :size="16" />
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent>Refresh</TooltipContent>
-            </Tooltip>
         </div>
     </TooltipProvider>
 </template>

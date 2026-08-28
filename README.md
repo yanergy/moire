@@ -126,6 +126,9 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   (`system` follows the OS) and pushes the resolved theme to the renderer over the preload bridge.
 - [x] Filter box and viewed checkboxes.
 - [x] Open repo name shown in the native window title.
+- [x] Manual refresh from the native menu (View → Refresh, Cmd/Ctrl+R). The item messages the
+  focused window over `menu:refresh`; the renderer re-reads the branch list, changed files, and
+  open file pair for the current range without resetting the selection (`comparison.refresh`).
 - [ ] `RepoWatcher` (chokidar) with auto refresh on change.
 - [ ] Virtualized file tree using the installed `vue-virtual-scroller`.
 - [ ] Size threshold and a "Load diff" gate for large files.

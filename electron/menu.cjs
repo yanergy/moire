@@ -13,9 +13,10 @@ const THEME_OPTIONS = [
 ];
 
 // Pure builder so the menu shape (and the Theme radio group) can be unit-tested
-// without a running Electron instance. `currentTheme` marks the checked item and
-// `onSelectTheme(preference)` is injected as each item's click handler.
-function buildMenuTemplate({ isMac, currentTheme, onSelectTheme }) {
+// without a running Electron instance. `currentTheme` marks the checked item,
+// `onSelectTheme(preference)` is each theme item's click handler, and `onRefresh`
+// backs the View → Refresh item.
+function buildMenuTemplate({ isMac, currentTheme, onSelectTheme, onRefresh }) {
     return [
         ...(isMac ? [{ role: 'appMenu' }] : []),
         { role: 'fileMenu' },
@@ -23,7 +24,10 @@ function buildMenuTemplate({ isMac, currentTheme, onSelectTheme }) {
         {
             label: 'View',
             submenu: [
-                { role: 'reload' },
+                // Re-reads the repo for the current range (branches, changed files,
+                // open pair). Takes Cmd/Ctrl+R since a git re-scan is the refresh a
+                // user of this app wants; the full-page reload stays on Force Reload.
+                { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => onRefresh() },
                 { role: 'forceReload' },
                 { role: 'toggleDevTools' },
                 { type: 'separator' },
@@ -48,11 +52,12 @@ function buildMenuTemplate({ isMac, currentTheme, onSelectTheme }) {
     ];
 }
 
-function installAppMenu(currentTheme, onSelectTheme) {
+function installAppMenu(currentTheme, onSelectTheme, onRefresh) {
     const template = buildMenuTemplate({
         isMac: process.platform === 'darwin',
         currentTheme,
         onSelectTheme,
+        onRefresh,
     });
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

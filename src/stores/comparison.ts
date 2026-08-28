@@ -544,6 +544,22 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
     }
 
+    // Re-read the open repo from disk for the current range, keeping the chosen
+    // base/head (unlike loadBranches, which resets them). Refreshes the branch
+    // list so new or deleted branches surface, then re-fetches the changed files
+    // and the open file's pair. Backs the native View → Refresh item; a no-op with
+    // no repo open.
+    async function refresh() {
+        const api = window.api;
+        if (!api || !repoPath.value) {
+            return;
+        }
+
+        branches.value = await api.getBranches();
+        await loadChangedFiles();
+        await loadFilePair();
+    }
+
     // Native folder picker -> openRecent, which names the repo and loads its real
     // branches and change set.
     async function openRepository() {
@@ -596,6 +612,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         restoreLastRepo,
         openRecent,
         openRepository,
+        refresh,
         loadChangedFiles,
         loadFilePair,
     };

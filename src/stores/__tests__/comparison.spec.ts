@@ -641,6 +641,38 @@ describe('comparison store', () => {
             expect(store.disappearedBranches).toEqual([]);
         });
 
+        it('refreshes branches, changed files, and the open pair without resetting the range', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            store.setBase('develop');
+            await flushPromises();
+            api.getBranches.mockClear();
+            api.getChangedFiles.mockClear();
+            api.getFilePair.mockClear();
+
+            await store.refresh();
+            await flushPromises();
+
+            expect(api.getBranches).toHaveBeenCalledTimes(1);
+            expect(api.getChangedFiles).toHaveBeenCalledWith(
+                'develop',
+                'WORKING TREE',
+                'merge-base'
+            );
+            expect(api.getFilePair).toHaveBeenCalled();
+            // The chosen range survives, unlike a repo (re)open which resets it.
+            expect(store.base).toBe('develop');
+            expect(store.head).toBe('WORKING TREE');
+        });
+
+        it('refresh is a no-op with no repo open', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.refresh();
+            expect(api.getBranches).not.toHaveBeenCalled();
+        });
+
         it('no-ops without the preload bridge', async () => {
             const store = useComparisonStore();
             await store.openRepository();

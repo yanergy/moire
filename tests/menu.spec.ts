@@ -5,10 +5,14 @@ import { buildMenuTemplate } from '../electron/menu.cjs';
 // inside it resolves to the binary path (not the API) and Menu is undefined. The
 // template builder is pure — it takes the current preference and a select handler
 // as arguments — so it is testable without a running Electron.
+function viewSubmenu(currentTheme: string, extra = {}) {
+    const template = buildMenuTemplate({ isMac: true, currentTheme, ...extra });
+    return template.find((menu) => menu.label === 'View')?.submenu;
+}
+
 function themeSubmenu(currentTheme: string, onSelectTheme = () => {}) {
-    const template = buildMenuTemplate({ isMac: true, currentTheme, onSelectTheme });
-    const view = template.find((menu) => menu.label === 'View');
-    return view?.submenu.find((entry) => entry.label === 'Theme')?.submenu;
+    return viewSubmenu(currentTheme, { onSelectTheme })?.find((entry) => entry.label === 'Theme')
+        ?.submenu;
 }
 
 describe('application menu', () => {
@@ -29,6 +33,21 @@ describe('application menu', () => {
 
         items?.find((item) => item.label === 'Dark')?.click();
         expect(onSelectTheme).toHaveBeenCalledWith('dark');
+    });
+
+    it('offers a Refresh item bound to Cmd/Ctrl+R in the View menu', () => {
+        const refresh = viewSubmenu('system')?.find((item) => item.label === 'Refresh');
+        expect(refresh?.accelerator).toBe('CmdOrCtrl+R');
+    });
+
+    it('re-reads the repo through onRefresh when the item is chosen', () => {
+        const onRefresh = vi.fn<() => void>();
+        const refresh = viewSubmenu('system', { onRefresh })?.find(
+            (item) => item.label === 'Refresh'
+        );
+
+        refresh?.click();
+        expect(onRefresh).toHaveBeenCalledTimes(1);
     });
 
     it('omits the macOS app menu on other platforms', () => {

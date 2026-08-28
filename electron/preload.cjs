@@ -27,4 +27,11 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('theme:changed', listener);
         return () => ipcRenderer.removeListener('theme:changed', listener);
     },
+    // Fired when the native View → Refresh item is chosen. Returns an unsubscribe
+    // function so the caller can drop the listener.
+    onMenuRefresh: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on('menu:refresh', listener);
+        return () => ipcRenderer.removeListener('menu:refresh', listener);
+    },
 });

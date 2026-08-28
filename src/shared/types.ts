@@ -82,4 +82,7 @@ export interface MoireApi {
     // function.
     getTheme(): Promise<ThemeState>;
     onThemeChanged(cb: (state: ThemeState) => void): () => void;
+    // Fired when the native View → Refresh item is chosen; the renderer re-reads
+    // the repo for the current range. Returns an unsubscribe function.
+    onMenuRefresh(cb: () => void): () => void;
 }

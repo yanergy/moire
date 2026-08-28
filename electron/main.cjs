@@ -20,7 +20,6 @@ function createWindow() {
 
     if (process.env.VITE_DEV_SERVER_URL) {
         win.loadURL(process.env.VITE_DEV_SERVER_URL);
-        win.webContents.openDevTools();
     } else {
         win.loadFile(path.join(app.getAppPath(), 'dist/index.html'));
     }
@@ -53,7 +52,16 @@ app.whenReady().then(async () => {
     registerThemeBroadcast();
 
     registerIpcHandlers();
-    installAppMenu(themePreference, (preference) => setThemePreference(preference));
+    installAppMenu(
+        themePreference,
+        (preference) => setThemePreference(preference),
+        // The store owns the git re-read, so the menu item just pokes the focused
+        // window; the renderer refreshes on 'menu:refresh'.
+        () => {
+            const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+            win?.webContents.send('menu:refresh');
+        }
+    );
     createWindow();
 });
 

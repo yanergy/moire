@@ -27,8 +27,8 @@ describe('ToolbarHeader', () => {
         const comparison = useComparisonStore();
         const swap = vi.spyOn(comparison, 'swap');
 
-        // With the child controls stubbed, the swap button is the first real
-        // button in DOM order (the refresh button follows it).
+        // With the child controls stubbed, the swap button is the only real
+        // button the toolbar owns.
         await wrapper.get('button').trigger('click');
         expect(swap).toHaveBeenCalledTimes(1);
     });
