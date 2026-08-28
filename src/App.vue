@@ -15,6 +15,7 @@ const ui = useUiStore();
 
 let stopThemeSync: (() => void) | undefined;
 let stopMenuRefresh: (() => void) | undefined;
+let stopRepoChanged: (() => void) | undefined;
 
 // Electron mirrors document.title into the native window title bar, so the open
 // repo shows there. This replaces the in-app title the removed fake title bar
@@ -39,11 +40,16 @@ onMounted(async () => {
 
     // The native View → Refresh item re-reads the repo through the store.
     stopMenuRefresh = api.onMenuRefresh(() => void comparison.refresh());
+
+    // The RepoWatcher pushes a coalesced event when the open repo's refs or
+    // working tree change on disk, so the diff refreshes without a manual poke.
+    stopRepoChanged = api.onRepoChanged(() => void comparison.refresh());
 });
 
 onUnmounted(() => {
     stopThemeSync?.();
     stopMenuRefresh?.();
+    stopRepoChanged?.();
 });
 </script>
 

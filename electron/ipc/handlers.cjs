@@ -6,6 +6,7 @@ const path = require('node:path');
 const { ipcMain, dialog } = require('electron');
 const { simpleGit } = require('simple-git');
 const { GitService } = require('../git/GitService.cjs');
+const { watchRepo } = require('../watcher/RepoWatcher.cjs');
 const {
     getRecentRepos,
     addRecentRepo,
@@ -74,6 +75,9 @@ function registerIpcHandlers() {
 
         await addRecentRepo(repoPath);
         currentRepo = new GitService(repoPath);
+        // Watch the newly opened repo so the diff auto-refreshes; this replaces
+        // any watcher from a previously opened repo.
+        watchRepo(repoPath);
         return { path: repoPath, name: path.basename(repoPath) };
     });
 

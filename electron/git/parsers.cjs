@@ -95,6 +95,13 @@ function parseNumstat(out) {
     return counts;
 }
 
+// `git ls-files --others --exclude-standard -z` → a NUL-separated list of the
+// untracked file paths (git-ignored files already filtered out by
+// --exclude-standard). The trailing NUL leaves an empty final token, dropped.
+function parseNulPaths(out) {
+    return out.split('\0').filter((token) => token !== '');
+}
+
 // Combine the two porcelain passes into ChangedFile[]. name-status is the
 // authority on the file set and status; numstat contributes the line counts and
 // the binary flag. A file missing from numstat (an empty-content change) keeps
@@ -117,4 +124,4 @@ function mergeChangedFiles(nameStatus, numstat) {
     });
 }
 
-module.exports = { parseNameStatus, parseNumstat, mergeChangedFiles };
+module.exports = { parseNameStatus, parseNumstat, parseNulPaths, mergeChangedFiles };

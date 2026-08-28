@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { parseNameStatus, parseNumstat, mergeChangedFiles } from '../electron/git/parsers.cjs';
+import {
+    parseNameStatus,
+    parseNumstat,
+    parseNulPaths,
+    mergeChangedFiles,
+} from '../electron/git/parsers.cjs';
 
 // The inputs below mirror the exact `-z` bytes `git diff` emits (NUL as \x00,
 // TAB as \t), captured from a real repo with a modify, add, binary change,
@@ -69,6 +74,19 @@ describe('parseNumstat', () => {
             deletions: 0,
             binary: false,
         });
+    });
+});
+
+describe('parseNulPaths', () => {
+    it('splits the untracked-file list and drops the trailing empty token', () => {
+        expect(parseNulPaths('new.ts\x00dir/with space.txt\x00')).toEqual([
+            'new.ts',
+            'dir/with space.txt',
+        ]);
+    });
+
+    it('returns nothing for empty output', () => {
+        expect(parseNulPaths('')).toEqual([]);
     });
 });
 

@@ -92,7 +92,10 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] `GitService` for branches, changed files, and file pairs. Lives in
   `electron/git/GitService.cjs`, wraps `simple-git`, and is exposed to the renderer over the
   `git:branches`, `git:changed-files`, and `git:file-pair` IPC channels (set on repo open).
-  Supports the three-dot merge-base default, two-dot direct, and working-tree comparisons.
+  Supports the three-dot merge-base default, two-dot direct, and working-tree comparisons. The
+  working-tree comparison also folds in untracked files (via `git ls-files --others
+  --exclude-standard`, so git-ignored paths stay out) as adds, since `git diff` alone reports only
+  tracked files and a brand-new file is a real uncommitted change.
 - [x] Rename and binary detection. `-M` rename detection surfaces `oldPath`, numstat's dash
   markers flag binaries in the changed-file list, and file pairs withhold binary content and
   flag oversized files.
@@ -129,7 +132,16 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] Manual refresh from the native menu (View → Refresh, Cmd/Ctrl+R). The item messages the
   focused window over `menu:refresh`; the renderer re-reads the branch list, changed files, and
   open file pair for the current range without resetting the selection (`comparison.refresh`).
-- [ ] `RepoWatcher` (chokidar) with auto refresh on change.
+- [x] `RepoWatcher` with auto refresh on change. Lives in `electron/watcher/RepoWatcher.cjs`,
+  started on repo open. On macOS and Windows it uses one native recursive `fs.watch` over the repo
+  (a single OS-level watcher), classifying each path into a working-tree change or a ref change
+  (`HEAD`, `packed-refs`, `refs/`) and ignoring `.git` churn and `node_modules`. Linux has no
+  recursive `fs.watch`, so it falls back to two scoped `chokidar` watchers there. The single-watcher
+  approach is deliberate: `chokidar` opens one `fs.watch` handle per directory (~1800 for a modest
+  repo), and on macOS that file-descriptor churn collides with the fds `git` needs when it spawns,
+  producing `spawn EBADF`. A git operation storms the watcher, so events are coalesced into one
+  `repo:changed` push (`refs` outranks `worktree`) after a 250ms quiet window. The renderer
+  subscribes via `onRepoChanged` and re-reads the range through `comparison.refresh` (`App.vue`).
 - [ ] Virtualized file tree using the installed `vue-virtual-scroller`.
 - [ ] Size threshold and a "Load diff" gate for large files.
 - [ ] Binary and image preview.

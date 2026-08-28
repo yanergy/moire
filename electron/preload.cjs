@@ -1,7 +1,6 @@
 // Context-isolated bridge: the only surface the renderer (window.api) can reach.
 // Each method forwards to an ipcMain.handle channel in electron/ipc/handlers.cjs
-// and is typed by MoireApi in src/shared/types.ts. onRepoChanged lands with the
-// RepoWatcher in Phase 4; nothing pushes those events yet.
+// and is typed by MoireApi in src/shared/types.ts.
 
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -33,5 +32,13 @@ contextBridge.exposeInMainWorld('api', {
         const listener = () => callback();
         ipcRenderer.on('menu:refresh', listener);
         return () => ipcRenderer.removeListener('menu:refresh', listener);
+    },
+    // Fired when the RepoWatcher (main process) sees the open repo's refs or
+    // working tree change, so the renderer can auto-refresh. Returns an
+    // unsubscribe function so the caller can drop the listener.
+    onRepoChanged: (callback) => {
+        const listener = (_event, change) => callback(change);
+        ipcRenderer.on('repo:changed', listener);
+        return () => ipcRenderer.removeListener('repo:changed', listener);
     },
 });

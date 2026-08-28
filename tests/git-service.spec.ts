@@ -1,4 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { GitService } from '../electron/git/GitService.cjs';
 
 // GitService takes an injectable git so its orchestration is testable without a
@@ -76,6 +79,38 @@ describe('GitService.changedFiles', () => {
             '-z',
             'main...feature',
         ]);
+    });
+
+    it('does not list untracked files for a branch-to-branch comparison', async () => {
+        const raw = vi.fn<(args: string[]) => Promise<string>>(async () => '');
+        await new GitService('/repo', { raw }).changedFiles('main', 'feature', 'merge-base');
+
+        expect(raw.mock.calls.some((call) => call[0].includes('ls-files'))).toBe(false);
+    });
+
+    it('folds untracked files into the working-tree change set as adds', async () => {
+        const repo = await mkdtemp(path.join(tmpdir(), 'moire-untracked-'));
+        await writeFile(path.join(repo, 'new.txt'), 'one\ntwo\nthree\n');
+        await writeFile(path.join(repo, 'logo.png'), 'PNG\x00\x01binary');
+
+        const raw = vi.fn<(args: string[]) => Promise<string>>(async (args) => {
+            if (args.includes('--name-status')) return 'M\x00tracked.ts\x00';
+            if (args.includes('--numstat')) return '2\t1\ttracked.ts\x00';
+            return 'new.txt\x00logo.png\x00'; // git ls-files --others
+        });
+
+        const files = await new GitService(repo, { raw }).changedFiles(
+            'main',
+            'WORKING TREE',
+            'merge-base'
+        );
+
+        expect(files).toEqual([
+            { path: 'tracked.ts', status: 'M', additions: 2, deletions: 1, binary: false },
+            { path: 'new.txt', status: 'A', additions: 3, deletions: 0, binary: false },
+            { path: 'logo.png', status: 'A', additions: 0, deletions: 0, binary: true },
+        ]);
+        expect(raw.mock.calls.some((call) => call[0].includes('ls-files'))).toBe(true);
     });
 });
 

@@ -6,7 +6,12 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { simpleGit } = require('simple-git');
-const { parseNameStatus, parseNumstat, mergeChangedFiles } = require('./parsers.cjs');
+const {
+    parseNameStatus,
+    parseNumstat,
+    parseNulPaths,
+    mergeChangedFiles,
+} = require('./parsers.cjs');
 
 // Must match WORKING_TREE in src/shared/types.ts. That shared constant belongs
 // to the renderer; the strict process split (electron never imports from src/)
@@ -62,6 +67,18 @@ function byteLength(content) {
     return content === null ? 0 : Buffer.byteLength(content, 'utf8');
 }
 
+// Line count of newly added content, matching git's numstat addition count for a
+// new file: a trailing newline closes the last line rather than adding an empty
+// one.
+function countLines(content) {
+    if (!content) {
+        return 0;
+    }
+
+    const lines = content.split('\n').length;
+    return content.endsWith('\n') ? lines - 1 : lines;
+}
+
 class GitService {
     // git is injectable so the service is unit-testable without a real repo.
     constructor(repoPath, git = simpleGit(repoPath)) {
@@ -100,7 +117,35 @@ class GitService {
             this.git.raw(['diff', '--numstat', '-M', '-z', ...range]),
         ]);
 
-        return mergeChangedFiles(parseNameStatus(nameStatusOut), parseNumstat(numstatOut));
+        const tracked = mergeChangedFiles(parseNameStatus(nameStatusOut), parseNumstat(numstatOut));
+        if (head !== WORKING_TREE) {
+            return tracked;
+        }
+
+        // git diff reports only tracked files, so a brand-new file on disk is
+        // invisible to it. Against the working tree that file is a real addition,
+        // so list untracked files (git-ignored ones excluded) and fold them in.
+        return [...tracked, ...(await this.untrackedFiles())];
+    }
+
+    // Untracked files as added ChangedFile entries, for the working-tree
+    // comparison. --exclude-standard drops git-ignored paths so build output and
+    // node_modules never show up.
+    async untrackedFiles() {
+        const out = await this.git.raw(['ls-files', '--others', '--exclude-standard', '-z']);
+        return Promise.all(parseNulPaths(out).map((filePath) => this.untrackedFile(filePath)));
+    }
+
+    async untrackedFile(filePath) {
+        const content = await this.diskContent(filePath);
+        const binary = isBinary(content);
+        return {
+            path: filePath,
+            status: 'A',
+            additions: binary ? 0 : countLines(content),
+            deletions: 0,
+            binary,
+        };
     }
 
     async filePair(base, head, filePath) {
