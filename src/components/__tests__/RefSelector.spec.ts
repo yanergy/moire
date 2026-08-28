@@ -13,6 +13,21 @@ async function open(wrapper: VueWrapper) {
 
 const commandInput = () => document.querySelector('[data-slot="command-input"]');
 const listText = () => document.body.textContent ?? '';
+const headings = () =>
+    [...document.querySelectorAll('[data-slot="ref-group-label"]')].map((el) =>
+        el.textContent?.trim()
+    );
+
+const groupHeader = (label: string) =>
+    [...document.querySelectorAll('[data-slot="ref-group-label"]')]
+        .find((el) => el.textContent?.trim() === label)
+        ?.closest('[data-slot="ref-group-header"]') as HTMLElement | undefined;
+
+const commandItem = (fullName: string) =>
+    document.querySelector(`span[title="${fullName}"]`)?.closest('[data-slot="command-item"]');
+
+const toggleAllButton = () =>
+    document.querySelector('[aria-label$="all groups"]') as HTMLElement | null;
 
 describe('RefSelector', () => {
     let pinia: Pinia;
@@ -34,15 +49,23 @@ describe('RefSelector', () => {
         });
     }
 
-    it('shows the current ref and opens the popover on click', async () => {
+    it('shows the current ref and groups branches by prefix on open', async () => {
         const wrapper = mountSide('base');
         expect(wrapper.text()).toContain('main');
         expect(commandInput()).toBeNull();
 
         await open(wrapper);
         expect(commandInput()).not.toBeNull();
-        expect(listText()).toContain('Local branches');
-        expect(listText()).toContain('Remotes');
+        // Flat branches stay under "Local branches"; prefixed ones get a heading
+        // per prefix, with remotes under their remote name.
+        expect(headings()).toEqual(
+            expect.arrayContaining(['Local branches', 'feat', 'fix', 'release', 'origin'])
+        );
+        // A grouped branch is displayed as its leaf under the prefix heading.
+        const label = document.querySelector(
+            '[data-slot="command-item"] span[title="feat/monaco-spike"]'
+        );
+        expect(label?.textContent).toBe('monaco-spike');
     });
 
     it('offers the working tree entry only on the head side', async () => {
@@ -58,7 +81,7 @@ describe('RefSelector', () => {
         expect(listText()).not.toContain('Uncommitted');
     });
 
-    it('filters the ref list by the search query', async () => {
+    it('filters the ref list by the search query, matching the full path', async () => {
         const wrapper = mountSide('base');
         await open(wrapper);
 
@@ -67,23 +90,70 @@ describe('RefSelector', () => {
         input.dispatchEvent(new Event('input'));
         await flushPromises();
 
-        expect(listText()).toContain('feat/monaco-spike');
+        // The query matches the full ref (feat/monaco-spike), shown as its leaf.
+        expect(listText()).toContain('monaco-spike');
         expect(listText()).not.toContain('develop');
     });
 
-    it('picks a ref, updates the store, and closes the popover', async () => {
+    it('picks a grouped ref by its full name and closes the popover', async () => {
         const wrapper = mountSide('base');
         const store = useComparisonStore();
         await open(wrapper);
 
         const items = [...document.querySelectorAll('[data-slot="command-item"]')] as HTMLElement[];
-        const develop = items.find(
-            (el) => el.textContent?.includes('develop') && !el.textContent.includes('origin')
-        );
-        develop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const monaco = items.find((el) => el.textContent?.includes('monaco-spike'));
+        monaco?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         await flushPromises();
 
-        expect(store.base).toBe('develop');
+        expect(store.base).toBe('feat/monaco-spike');
         expect(commandInput()).toBeNull();
+    });
+
+    it('collapses and expands a group when its header is clicked', async () => {
+        const wrapper = mountSide('base');
+        await open(wrapper);
+        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+
+        groupHeader('feat')?.click();
+        await flushPromises();
+        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(true);
+
+        groupHeader('feat')?.click();
+        await flushPromises();
+        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+    });
+
+    it('keeps a collapsed group searchable, revealing matches on query', async () => {
+        const wrapper = mountSide('base');
+        await open(wrapper);
+
+        groupHeader('feat')?.click();
+        await flushPromises();
+        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(true);
+
+        const input = commandInput() as HTMLInputElement;
+        input.value = 'monaco';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+
+        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+    });
+
+    it('collapses and expands every group with the toggle-all button', async () => {
+        const wrapper = mountSide('base');
+        await open(wrapper);
+
+        expect(commandItem('main')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+
+        toggleAllButton()?.click();
+        await flushPromises();
+        expect(commandItem('main')?.classList.contains('hidden')).toBe(true);
+        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(true);
+
+        toggleAllButton()?.click();
+        await flushPromises();
+        expect(commandItem('main')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
     });
 });

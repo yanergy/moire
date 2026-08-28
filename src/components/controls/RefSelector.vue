@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { Check, ChevronDown } from '@lucide/vue';
+import { computed, ref, watch } from 'vue';
+import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
+import type { BranchInfo } from '@/shared/types';
 import { WORKING_TREE } from '@/shared/types';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -22,10 +23,40 @@ const comparison = useComparisonStore();
 
 const open = ref(false);
 
+// The live search text, mirrored from Command's input (whose input events bubble
+// up to the <Command> root). Used so a collapsed group still reveals its matches
+// while the user is searching.
+const search = ref('');
+const searching = computed(() => search.value.trim().length > 0);
+const collapsed = ref<Record<string, boolean>>({});
+
+// Reset the transient search when the popover closes, so a stale query does not
+// keep groups force-expanded the next time it opens.
+watch(open, (isOpen) => {
+    if (!isOpen) {
+        search.value = '';
+    }
+});
+
+function onSearch(event: Event) {
+    search.value = (event.target as HTMLInputElement).value;
+}
+
+function toggleGroup(label: string) {
+    collapsed.value = { ...collapsed.value, [label]: !collapsed.value[label] };
+}
+
+// A collapsed group hides its items, except while searching, when every match
+// must stay reachable regardless of the collapse state.
+function isCollapsed(label: string): boolean {
+    return collapsed.value[label] === true && !searching.value;
+}
+
 const current = computed(() => (props.side === 'base' ? comparison.base : comparison.head));
 
 interface RefItem {
-    name: string;
+    name: string; // full ref, used as the value, the check, and the store update
+    label: string; // the leaf shown in the list (the segment after the last slash)
     meta: string;
 }
 
@@ -34,27 +65,99 @@ interface RefGroup {
     items: RefItem[];
 }
 
+// Group branches by their path prefix so a long flat list stays scannable:
+// `user/feature/dev-123` shows as `dev-123` under a `user/feature` heading.
+// Branches with no slash stay flat under the given top-level heading.
+function groupByPrefix(list: BranchInfo[], topLabel: string): RefGroup[] {
+    const top: RefItem[] = [];
+    const byPrefix = new Map<string, RefItem[]>();
+
+    for (const branch of list) {
+        const slash = branch.name.lastIndexOf('/');
+        const item: RefItem = {
+            name: branch.name,
+            label: slash === -1 ? branch.name : branch.name.slice(slash + 1),
+            meta: branch.meta ?? '',
+        };
+        if (slash === -1) {
+            top.push(item);
+            continue;
+        }
+
+        const prefix = branch.name.slice(0, slash);
+        const bucket = byPrefix.get(prefix);
+        if (bucket) {
+            bucket.push(item);
+            continue;
+        }
+
+        byPrefix.set(prefix, [item]);
+    }
+
+    const groups: RefGroup[] = [];
+    if (top.length > 0) {
+        groups.push({ label: topLabel, items: top });
+    }
+
+    // A fresh array from the Map spread, so sorting it in place mutates nothing
+    // shared (and toSorted is not in the project's TS lib target).
+    // oxlint-disable-next-line unicorn/no-array-sort
+    const sorted = [...byPrefix].sort((a, b) => a[0].localeCompare(b[0]));
+    for (const [prefix, items] of sorted) {
+        groups.push({ label: prefix, items });
+    }
+
+    return groups;
+}
+
 // The full, unfiltered set of refs. Command does the text filtering itself as
 // the user types, so this component only owns the grouping.
 const groups = computed<RefGroup[]>(() => {
     const result: RefGroup[] = [];
 
     if (props.side === 'head') {
-        result.push({ label: 'Uncommitted', items: [{ name: WORKING_TREE, meta: 'on disk' }] });
+        result.push({
+            label: 'Uncommitted',
+            items: [{ name: WORKING_TREE, label: WORKING_TREE, meta: 'on disk' }],
+        });
     }
 
-    const local = comparison.localBranches.map((b) => ({ name: b.name, meta: b.meta ?? '' }));
-    if (local.length > 0) {
-        result.push({ label: 'Local branches', items: local });
-    }
-
-    const remote = comparison.remoteBranches.map((b) => ({ name: b.name, meta: b.meta ?? '' }));
-    if (remote.length > 0) {
-        result.push({ label: 'Remotes', items: remote });
-    }
+    result.push(...groupByPrefix(comparison.localBranches, 'Local branches'));
+    result.push(...groupByPrefix(comparison.remoteBranches, 'Remotes'));
 
     return result;
 });
+
+// Collapse/expand-all mirrors the file tree: the single toggle opens everything
+// only when it is already fully closed, and otherwise closes everything.
+const groupLabels = computed(() => groups.value.map((group) => group.label));
+const allCollapsed = computed(
+    () =>
+        groupLabels.value.length > 0 &&
+        groupLabels.value.every((label) => collapsed.value[label] === true)
+);
+
+function expandAll() {
+    collapsed.value = {};
+}
+
+function collapseAll() {
+    const next: Record<string, boolean> = {};
+    for (const label of groupLabels.value) {
+        next[label] = true;
+    }
+
+    collapsed.value = next;
+}
+
+function toggleAll() {
+    if (allCollapsed.value) {
+        expandAll();
+        return;
+    }
+
+    collapseAll();
+}
 
 function pick(name: string) {
     if (props.side === 'base') {
@@ -94,16 +197,53 @@ function pick(name: string) {
             class="w-[306px] overflow-hidden border-moire-border bg-moire-pop p-0"
             :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
         >
-            <Command class="bg-transparent">
+            <Command class="bg-transparent" @input="onSearch">
                 <CommandInput placeholder="Search refs…" class="font-mono text-moire-fg" />
+                <div class="flex items-center justify-between px-2.5 py-1">
+                    <span class="text-[10px] font-medium tracking-wider text-moire-faint uppercase">
+                        Branches
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        :aria-label="allCollapsed ? 'Expand all groups' : 'Collapse all groups'"
+                        :title="allCollapsed ? 'Expand all' : 'Collapse all'"
+                        class="text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
+                        @click="toggleAll()"
+                    >
+                        <ChevronsUpDown v-if="allCollapsed" :size="14" />
+                        <ChevronsDownUp v-else :size="14" />
+                    </Button>
+                </div>
                 <CommandList class="max-h-[322px]">
                     <CommandEmpty class="text-moire-faint">No refs found.</CommandEmpty>
-                    <CommandGroup v-for="group in groups" :key="group.label" :heading="group.label">
+                    <CommandGroup v-for="group in groups" :key="group.label">
+                        <button
+                            type="button"
+                            data-slot="ref-group-header"
+                            class="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-left text-xs font-medium text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
+                            :aria-expanded="!isCollapsed(group.label)"
+                            @click="toggleGroup(group.label)"
+                        >
+                            <ChevronRight
+                                :size="12"
+                                class="shrink-0 transition-transform"
+                                :class="isCollapsed(group.label) ? '' : 'rotate-90'"
+                            />
+                            <span data-slot="ref-group-label" class="flex-1 truncate">{{
+                                group.label
+                            }}</span>
+                            <span class="text-[10px] tabular-nums text-moire-faint">{{
+                                group.items.length
+                            }}</span>
+                        </button>
                         <CommandItem
                             v-for="item in group.items"
                             :key="item.name"
                             :value="item.name"
+                            :disabled="isCollapsed(group.label)"
                             class="gap-2 font-mono text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                            :class="{ hidden: isCollapsed(group.label) }"
                             @select="pick(item.name)"
                         >
                             <Check
@@ -112,7 +252,10 @@ function pick(name: string) {
                                     item.name === current ? 'text-moire-fg' : 'text-transparent'
                                 "
                             />
-                            <span class="flex-1 truncate">{{ item.name }}</span>
+                            <span class="flex-1 truncate" :title="item.name">{{ item.label }}</span>
+                            <!-- Full path, hidden but kept in the text so Command
+                                 searches match the prefix as well as the leaf. -->
+                            <span class="sr-only">{{ item.name }}</span>
                             <span class="text-[11px] whitespace-nowrap text-moire-faint">
                                 {{ item.meta }}
                             </span>
