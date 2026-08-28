@@ -1,8 +1,7 @@
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import type { BranchInfo, ChangedFile, CompareMode, FilePair, FileStatus } from '@/shared/types';
 import { WORKING_TREE } from '@/shared/types';
-import { mockFilePair } from '@/lib/mock';
 
 export interface DirNode {
     kind: 'dir';
@@ -42,6 +41,17 @@ const EMPTY_FILE: ChangedFile = {
     additions: 0,
     deletions: 0,
     binary: false,
+};
+
+// Blank pair shown before the first load, with no repo or selection, and on a
+// failed fetch, so the diff pane and status bar read empty rather than stale.
+const EMPTY_PAIR: FilePair = {
+    path: '',
+    oldContent: '',
+    newContent: '',
+    language: 'plaintext',
+    binary: false,
+    tooLarge: false,
 };
 
 function baseName(path: string): string {
@@ -152,7 +162,42 @@ export const useComparisonStore = defineStore('comparison', () => {
         () => files.value.find((f) => f.path === selectedPath.value) ?? files.value[0] ?? EMPTY_FILE
     );
 
-    const selectedPair = computed<FilePair>(() => mockFilePair(selectedFile.value.path));
+    // The diffed content for the selected file, loaded from the git backend.
+    // Unlike the change set, a pair is fetched per file, so it lives in its own
+    // ref that loadFilePair fills and the diff pane and status bar read.
+    const selectedPair = ref<FilePair>({ ...EMPTY_PAIR });
+
+    // Monotonic token so an out-of-order getFilePair response (the user picked
+    // another file, or moved the range, before this one resolved) is dropped
+    // rather than overwriting the current pair. The latest dispatched request
+    // wins regardless of which resolves first.
+    let pairRequest = 0;
+
+    // Pull the diffed content for the selected file from the git backend. Runs on
+    // selection and whenever the compared range changes, since a range change can
+    // keep the same file selected but still alters the base (and so the old side).
+    async function loadFilePair() {
+        const api = window.api;
+        const path = selectedFile.value.path;
+        if (!api || !base.value || !path) {
+            selectedPair.value = { ...EMPTY_PAIR };
+            return;
+        }
+
+        const token = ++pairRequest;
+        try {
+            const result = await api.getFilePair(base.value, head.value, path);
+            if (token === pairRequest) {
+                selectedPair.value = result;
+            }
+        } catch {
+            if (token === pairRequest) {
+                selectedPair.value = { ...EMPTY_PAIR, path };
+            }
+        }
+    }
+
+    watch([() => selectedFile.value.path, base, head, compareMode], () => void loadFilePair());
 
     const treeNodes = computed<TreeNode[]>(() => {
         const filter = treeFilter.value.toLowerCase();
@@ -486,6 +531,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         openRecent,
         openRepository,
         loadChangedFiles,
+        loadFilePair,
     };
 });
 

@@ -100,7 +100,7 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   (parsers live in `electron/git/parsers.cjs`), with `tests/git-service.spec.ts` covering the
   service orchestration.
 
-### Phase 3, core UI
+### Phase 3, core UI ✅
 
 - [x] Monaco DiffEditor spike.
 - [x] Toolbar with ref selectors and mode toggles.
@@ -114,7 +114,9 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   keeping a valid selection and clearing when no repo is open.
 - [x] Collapse single-child directory chains into one combined row (GitHub-style path
   compression), so `a/b/c/file` shows as an `a/b/c` folder with the file directly under it.
-- [~] File selection to file pair to Monaco. Reads `mockFilePair`, not `getFilePair`.
+- [x] File selection to file pair to Monaco. The store loads the selected file's pair via
+  `getFilePair` on selection and on any range change, dropping stale out-of-order responses, and
+  feeds the real content and language into the Monaco diff editor.
 
 ### Phase 4, live updates and polish
 

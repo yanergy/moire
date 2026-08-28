@@ -3,12 +3,23 @@ import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { useComparisonStore } from '@/stores/comparison';
 import type { DirNode, FileNode, TreeNode } from '@/stores/comparison';
-import type { BranchInfo, ChangedFile, CompareMode } from '@/shared/types';
+import type { BranchInfo, ChangedFile, CompareMode, FilePair } from '@/shared/types';
 import { BRANCHES as PROTOTYPE_BRANCHES, CHANGED_FILES } from '@/components/__tests__/fixtures';
 
 const dirs = (nodes: TreeNode[]): DirNode[] => nodes.filter((n): n is DirNode => n.kind === 'dir');
 const files = (nodes: TreeNode[]): FileNode[] =>
     nodes.filter((n): n is FileNode => n.kind === 'file');
+
+// A file pair that echoes the requested path, so a test can assert both the call
+// arguments and that the returned pair reached the store.
+const pairFor = (path: string): FilePair => ({
+    path,
+    oldContent: `old ${path}`,
+    newContent: `new ${path}`,
+    language: 'typescript',
+    binary: false,
+    tooLarge: false,
+});
 
 // Seed the store's state directly with the prototype dataset (no bridge), the
 // way a repo open would, so the tree/viewed/filter getters have data to work on
@@ -96,14 +107,12 @@ describe('comparison store', () => {
         expect(store.viewedCount).toBe(2);
     });
 
-    it('selects a file and exposes its file pair', () => {
+    it('selects a file', () => {
         const store = seededStore();
         expect(store.selectedFile.path).toBe('electron/git/parsers.ts');
 
         store.selectFile('shared/types.ts');
         expect(store.selectedFile.path).toBe('shared/types.ts');
-        expect(store.selectedPair.path).toBe('shared/types.ts');
-        expect(store.selectedPair.language).toBe('typescript');
     });
 
     it('builds a directory-grouped tree with depth-based nesting', () => {
@@ -254,6 +263,9 @@ describe('comparison store', () => {
                 getChangedFiles: vi
                     .fn<(base: string, head: string, mode: CompareMode) => Promise<ChangedFile[]>>()
                     .mockResolvedValue(CHANGED),
+                getFilePair: vi.fn<(base: string, head: string, path: string) => Promise<FilePair>>(
+                    (_base, _head, path) => Promise.resolve(pairFor(path))
+                ),
                 ...overrides,
             };
             window.api = api as unknown as Window['api'];
@@ -377,6 +389,82 @@ describe('comparison store', () => {
             await store.openRecent('/repos/moire');
             expect(store.files).toEqual([]);
             expect(store.selectedPath).toBe('');
+        });
+
+        it('loads the file pair for the selected file on open', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+
+            expect(api.getFilePair).toHaveBeenCalledWith('main', 'WORKING TREE', 'src/app.ts');
+            expect(store.selectedPair.path).toBe('src/app.ts');
+            expect(store.selectedPair.newContent).toBe('new src/app.ts');
+        });
+
+        it('reloads the file pair when a different file is selected', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+            api.getFilePair.mockClear();
+
+            store.selectFile('src/lib/util.ts');
+            await flushPromises();
+
+            expect(api.getFilePair).toHaveBeenCalledWith('main', 'WORKING TREE', 'src/lib/util.ts');
+            expect(store.selectedPair.path).toBe('src/lib/util.ts');
+        });
+
+        it('reloads the file pair when the range changes with the selection kept', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+            api.getFilePair.mockClear();
+
+            // src/app.ts still exists under the new base, so the selection holds
+            // but the pair must refetch against the changed base.
+            store.setBase('develop');
+            await flushPromises();
+
+            expect(api.getFilePair).toHaveBeenCalledWith('develop', 'WORKING TREE', 'src/app.ts');
+        });
+
+        it('drops a stale file-pair response so the latest selection wins', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+
+            // Stage a slow first response, then a fast second one, both for the
+            // current selection. The later request must win regardless of order.
+            let resolveStale!: (pair: FilePair) => void;
+            api.getFilePair
+                .mockImplementationOnce(() => new Promise((resolve) => (resolveStale = resolve)))
+                .mockResolvedValueOnce(pairFor('fresh'));
+
+            const stalePending = store.loadFilePair();
+            const freshDone = store.loadFilePair();
+            await freshDone;
+            expect(store.selectedPair.path).toBe('fresh');
+
+            resolveStale(pairFor('stale'));
+            await stalePending;
+            expect(store.selectedPair.path).toBe('fresh');
+        });
+
+        it('blanks the file pair when getFilePair rejects', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+
+            api.getFilePair.mockRejectedValueOnce(new Error('unreadable'));
+            await store.loadFilePair();
+
+            expect(store.selectedPair.oldContent).toBe('');
+            expect(store.selectedPair.newContent).toBe('');
         });
 
         it('runs the picker then opens the chosen folder', async () => {
