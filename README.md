@@ -149,8 +149,16 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   feeds the store's already-flat `treeNodes` (folded, expand-aware) into a `RecycleScroller`, so
   only the rows in view are in the DOM. Rows are one fixed height, and the base indent absorbs
   the container padding the old scrolled list carried.
-- [ ] Size threshold and a "Load diff" gate for large files.
-- [ ] Binary and image preview.
+- [x] Size threshold and a "Load diff" gate for large files. A file pair over the render
+  threshold (`GitService`'s `MAX_RENDER_BYTES`, ~512 KB) carries a `tooLarge` flag and its
+  `sizeBytes`; the diff pane shows a `LargeFileGate` placeholder (size plus a "Load diff" button)
+  in place of Monaco until the user opts in (`comparison.showDiffGate` / `loadLargeDiff`), so an
+  accidental click on a huge file can't freeze the editor. Re-gates on each selection or refresh;
+  binary files are excluded since their content is already withheld.
+- [~] Binary and image preview. A binary file (content withheld, no text diff) now shows a
+  `BinaryFileNotice` in the diff pane instead of an empty editor (`comparison.showBinaryNotice`),
+  built on the same `DiffPlaceholder` shell as the large-file gate. Image preview (rendering the
+  actual before/after images) is still to come.
 - [ ] Rename display, showing the old path moving to the new path, in the UI.
 - [x] Theme persistence via `electron-store` and `nativeTheme`. The chosen preference (`system`,
   `light`, or `dark`) is saved on change and restored on launch to seed `nativeTheme`.

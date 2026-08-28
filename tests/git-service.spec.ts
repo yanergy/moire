@@ -130,6 +130,7 @@ describe('GitService.filePair', () => {
             language: 'typescript',
             binary: false,
             tooLarge: false,
+            sizeBytes: 4, // 'new\n' is the larger (equal) side
         });
     });
 
@@ -149,6 +150,17 @@ describe('GitService.filePair', () => {
         );
         expect(pair.oldContent).toBeNull();
         expect(pair.newContent).toBe('added\n');
+    });
+
+    it('flags a file over the render threshold and reports its size', async () => {
+        const big = 'x'.repeat(512 * 1024 + 10);
+        const show = vi.fn<(options: string[]) => Promise<string>>(async () => big);
+        const pair = await new GitService('/repo', { show }).filePair('main', 'feature', 'big.txt');
+
+        expect(pair.tooLarge).toBe(true);
+        expect(pair.sizeBytes).toBe(big.length);
+        // Content is still returned; the renderer gates it behind "Load diff".
+        expect(pair.oldContent).toBe(big);
     });
 
     it('withholds binary content and flags it', async () => {

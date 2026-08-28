@@ -167,6 +167,7 @@ class GitService {
             language: languageForPath(filePath),
             binary,
             tooLarge: size > MAX_RENDER_BYTES,
+            sizeBytes: size,
         };
     }
 

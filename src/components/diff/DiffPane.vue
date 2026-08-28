@@ -2,7 +2,9 @@
 import { ref } from 'vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
+import BinaryFileNotice from '@/components/diff/BinaryFileNotice.vue';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
+import LargeFileGate from '@/components/diff/LargeFileGate.vue';
 import SelectionBanner from '@/components/diff/SelectionBanner.vue';
 import StatusBar from '@/components/diff/StatusBar.vue';
 
@@ -18,7 +20,7 @@ const changeCount = ref(0);
         <selection-banner
             :file="comparison.selectedFile"
             :viewed="comparison.isViewed(comparison.selectedFile.path)"
-            :change-count="changeCount"
+            :change-count="comparison.showDiffGate || comparison.showBinaryNotice ? 0 : changeCount"
             @prev="diffRef?.prev()"
             @next="diffRef?.next()"
             @toggle-viewed="comparison.toggleViewed(comparison.selectedFile.path)"
@@ -41,7 +43,18 @@ const changeCount = ref(0);
             </div>
         </div>
 
+        <!-- A large file is held behind a gate so an accidental click can't freeze
+             Monaco; picking "Load diff" mounts the editor with the fetched pair. A
+             binary file has no text diff, so it shows a notice instead. -->
+        <large-file-gate
+            v-if="comparison.showDiffGate"
+            class="min-h-0 flex-1"
+            :size-bytes="comparison.selectedPair.sizeBytes"
+            @load="comparison.loadLargeDiff()"
+        />
+        <binary-file-notice v-else-if="comparison.showBinaryNotice" class="min-h-0 flex-1" />
         <diff-viewer
+            v-else
             ref="diffRef"
             class="min-h-0 flex-1"
             :original="comparison.selectedPair.oldContent"

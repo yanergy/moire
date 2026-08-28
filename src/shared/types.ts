@@ -37,6 +37,7 @@ export interface FilePair {
     language: string; // inferred from extension, for Monaco
     binary: boolean;
     tooLarge: boolean; // above render threshold
+    sizeBytes: number; // larger side's byte length, shown on the large-file gate
 }
 
 export interface BranchInfo {

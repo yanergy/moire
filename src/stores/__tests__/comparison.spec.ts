@@ -19,6 +19,7 @@ const pairFor = (path: string): FilePair => ({
     language: 'typescript',
     binary: false,
     tooLarge: false,
+    sizeBytes: 0,
 });
 
 // Seed the store's state directly with the prototype dataset (no bridge), the
@@ -457,6 +458,60 @@ describe('comparison store', () => {
             expect(api.getFilePair).toHaveBeenCalledWith('main', 'WORKING TREE', 'src/app.ts');
             expect(store.selectedPair.path).toBe('src/app.ts');
             expect(store.selectedPair.newContent).toBe('new src/app.ts');
+        });
+
+        it('gates a large file behind Load diff, then reveals it once loaded', async () => {
+            const api = stubApi();
+            api.getFilePair.mockResolvedValue({
+                ...pairFor('src/app.ts'),
+                tooLarge: true,
+                sizeBytes: 2 * 1024 * 1024,
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+
+            expect(store.showDiffGate).toBe(true);
+
+            store.loadLargeDiff();
+            expect(store.showDiffGate).toBe(false);
+        });
+
+        it('re-gates a large file after the selection changes', async () => {
+            const api = stubApi();
+            api.getFilePair.mockResolvedValue({
+                ...pairFor('big'),
+                tooLarge: true,
+                sizeBytes: 2 * 1024 * 1024,
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+
+            store.loadLargeDiff();
+            expect(store.showDiffGate).toBe(false);
+
+            store.selectFile('src/lib/util.ts');
+            await flushPromises();
+            expect(store.showDiffGate).toBe(true);
+        });
+
+        it('does not gate a large binary file, whose content is already withheld', async () => {
+            const api = stubApi();
+            api.getFilePair.mockResolvedValue({
+                ...pairFor('logo.png'),
+                oldContent: null,
+                newContent: null,
+                binary: true,
+                tooLarge: true,
+                sizeBytes: 4 * 1024 * 1024,
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+
+            expect(store.showDiffGate).toBe(false);
+            expect(store.showBinaryNotice).toBe(true);
         });
 
         it('reloads the file pair when a different file is selected', async () => {

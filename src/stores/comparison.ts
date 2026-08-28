@@ -52,6 +52,7 @@ const EMPTY_PAIR: FilePair = {
     language: 'plaintext',
     binary: false,
     tooLarge: false,
+    sizeBytes: 0,
 };
 
 function baseName(path: string): string {
@@ -172,6 +173,12 @@ export const useComparisonStore = defineStore('comparison', () => {
     // ref that loadFilePair fills and the diff pane and status bar read.
     const selectedPair = ref<FilePair>({ ...EMPTY_PAIR });
 
+    // A large file's diff is not rendered until the user asks for it, so an
+    // accidental click on a huge file can't freeze Monaco. This flips true only
+    // for the current file once "Load diff" is chosen, and resets on every pair
+    // load (a new file, a range change, a refresh), so each large file re-gates.
+    const largeDiffLoaded = ref(false);
+
     // Monotonic token so an out-of-order getFilePair response (the user picked
     // another file, or moved the range, before this one resolved) is dropped
     // rather than overwriting the current pair. The latest dispatched request
@@ -182,6 +189,7 @@ export const useComparisonStore = defineStore('comparison', () => {
     // selection and whenever the compared range changes, since a range change can
     // keep the same file selected but still alters the base (and so the old side).
     async function loadFilePair() {
+        largeDiffLoaded.value = false;
         const api = window.api;
         const path = selectedFile.value.path;
         if (!api || !base.value || !path) {
@@ -203,6 +211,23 @@ export const useComparisonStore = defineStore('comparison', () => {
     }
 
     watch([() => selectedFile.value.path, base, head, compareMode], () => void loadFilePair());
+
+    // The diff pane shows a "Load diff" gate in place of the editor when the
+    // selected file is over the size threshold and has not been loaded yet. Binary
+    // files are excluded: their content is already withheld, so there is nothing to
+    // gate (they get their own preview).
+    const showDiffGate = computed(
+        () => selectedPair.value.tooLarge && !selectedPair.value.binary && !largeDiffLoaded.value
+    );
+
+    function loadLargeDiff() {
+        largeDiffLoaded.value = true;
+    }
+
+    // A binary file has no text diff (its content is withheld), so the pane shows a
+    // notice instead of an empty editor. Takes precedence over the size gate, since
+    // there is nothing to load.
+    const showBinaryNotice = computed(() => selectedPair.value.binary);
 
     // Remember the chosen base/head per repo so reopening it restores the range.
     // Guarded on an open repo, so clearing the selection when a repo closes (its
@@ -620,6 +645,9 @@ export const useComparisonStore = defineStore('comparison', () => {
         rangeLabel,
         selectedFile,
         selectedPair,
+        showDiffGate,
+        showBinaryNotice,
+        loadLargeDiff,
         treeNodes,
         allCollapsed,
         selectFile,
