@@ -36,13 +36,14 @@ describe('FileTreeSidebar', () => {
         expect(wrapper.text()).toContain('2 viewed');
     });
 
-    it('indents a file one level in from its parent folder', () => {
+    it('indents a file one level in from its parent folder', async () => {
         const wrapper = mountTree();
+        await flushPromises();
         const fileRow = wrapper.find('div[title="electron/git/parsers.ts"]');
 
         expect(fileRow.exists()).toBe(true);
-        // depth 2 → 8 + 2 * 15 = 38px
-        expect(fileRow.attributes('style')).toContain('padding-left: 38px');
+        // depth 2 → 16 + 2 * 15 = 46px
+        expect(fileRow.attributes('style')).toContain('padding-left: 46px');
     });
 
     it('reveals a folded folder full path in a tooltip on hover', async () => {
@@ -55,6 +56,7 @@ describe('FileTreeSidebar', () => {
             attachTo: document.body,
             global: { plugins: [pinia] },
         });
+        await flushPromises();
 
         // The row shows the folded label a/b/c; the tooltip carries the full
         // path, which appears as visible text only once the tooltip opens.
@@ -69,6 +71,7 @@ describe('FileTreeSidebar', () => {
 
     it('selects a file when its row is clicked', async () => {
         const wrapper = mountTree();
+        await flushPromises();
         const store = useComparisonStore();
 
         await wrapper.find('div[title="shared/types.ts"]').trigger('click');
@@ -77,6 +80,7 @@ describe('FileTreeSidebar', () => {
 
     it('toggles viewed via the row checkbox without selecting the row', async () => {
         const wrapper = mountTree();
+        await flushPromises();
         const store = useComparisonStore();
         const target = 'electron/git/GitService.ts';
 
@@ -89,13 +93,16 @@ describe('FileTreeSidebar', () => {
 
     it('toggles all folders from the single header control', async () => {
         const wrapper = mountTree();
+        await flushPromises();
 
         // Starts expanded, so the control collapses and its label flips.
         await wrapper.find('[aria-label="Collapse all"]').trigger('click');
+        await flushPromises();
         expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(false);
 
         // Now fully collapsed, so the same control expands.
         await wrapper.find('[aria-label="Expand all"]').trigger('click');
+        await flushPromises();
         expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(true);
     });
 });

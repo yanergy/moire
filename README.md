@@ -142,7 +142,10 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   producing `spawn EBADF`. A git operation storms the watcher, so events are coalesced into one
   `repo:changed` push (`refs` outranks `worktree`) after a 250ms quiet window. The renderer
   subscribes via `onRepoChanged` and re-reads the range through `comparison.refresh` (`App.vue`).
-- [ ] Virtualized file tree using the installed `vue-virtual-scroller`.
+- [x] Virtualized file tree using the installed `vue-virtual-scroller`. `FileTreeSidebar.vue`
+  feeds the store's already-flat `treeNodes` (folded, expand-aware) into a `RecycleScroller`, so
+  only the rows in view are in the DOM. Rows are one fixed height, and the base indent absorbs
+  the container padding the old scrolled list carried.
 - [ ] Size threshold and a "Load diff" gate for large files.
 - [ ] Binary and image preview.
 - [ ] Rename display, showing the old path moving to the new path, in the UI.

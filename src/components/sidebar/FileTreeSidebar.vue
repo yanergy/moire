@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from '@lucide/vue';
+import { RecycleScroller } from 'vue-virtual-scroller';
 import { useComparisonStore } from '@/stores/comparison';
 import type { FileNode } from '@/stores/comparison';
 import type { FileStatus } from '@/shared/types';
@@ -7,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
@@ -15,6 +15,12 @@ const comparison = useComparisonStore();
 // The folder tooltip is a slow, deliberate reveal (not the snappy default), shown
 // on every folder row so the full path is always reachable on hover.
 const FOLDER_TOOLTIP_DELAY = 1500;
+
+// The tree is virtualized (vue-virtual-scroller), so every row is one fixed height
+// the scroller uses to place items. Dir and file rows both hold a single 16px line
+// with 5px above and below, so 26px is their real rendered height; the rows set it
+// explicitly (below) so the value the scroller trusts can never drift from the CSS.
+const ROW_HEIGHT = 26;
 
 // The --moire-status-* tokens carry separate light/dark values tuned for contrast
 // on each background, so full strength stays legible in both themes.
@@ -25,8 +31,10 @@ const STATUS_CLASS: Record<FileStatus, string> = {
     R: 'text-moire-status-r',
 };
 
+// The base inset (16px) matches what the old scrolled list carried as container
+// padding; the scroller places rows edge to edge, so each row owns that inset now.
 function indent(depth: number): string {
-    return `${8 + depth * 15}px`;
+    return `${16 + depth * 15}px`;
 }
 
 // Reviewed files keep the green "viewed" treatment; selection gets a neutral
@@ -42,7 +50,10 @@ function rowClasses(node: FileNode): string {
 }
 
 function rowStyle(node: FileNode): Record<string, string> {
-    const style: Record<string, string> = { paddingLeft: indent(node.depth) };
+    const style: Record<string, string> = {
+        paddingLeft: indent(node.depth),
+        height: `${ROW_HEIGHT}px`,
+    };
     if (node.selected) {
         const color = node.viewed ? 'var(--moire-viewed-edge)' : 'var(--moire-accent)';
         style.boxShadow = `inset 2px 0 0 0 ${color}`;
@@ -114,89 +125,91 @@ function checkboxClass(node: FileNode): string {
                 />
             </div>
 
-            <ScrollArea class="min-h-0 flex-1">
-                <div class="px-2 pb-3">
-                    <template v-for="node in comparison.treeNodes" :key="node.key">
-                        <Tooltip v-if="node.kind === 'dir'" :delay-duration="FOLDER_TOOLTIP_DELAY">
-                            <TooltipTrigger as-child>
-                                <Button
-                                    variant="ghost"
-                                    class="h-auto w-full justify-start gap-1.5 rounded-md py-[5px] pr-2 font-normal text-moire-muted hover:bg-moire-hover hover:text-moire-muted dark:hover:bg-moire-hover"
-                                    :style="{ paddingLeft: indent(node.depth) }"
-                                    @click="comparison.toggleDir(node.path)"
-                                >
-                                    <ChevronDown
-                                        v-if="node.open"
-                                        class="size-4 shrink-0 text-moire-faint"
-                                    />
-                                    <ChevronRight v-else class="size-4 shrink-0 text-moire-faint" />
-                                    <span
-                                        class="flex-1 truncate text-left font-mono text-xs text-moire-muted"
-                                    >
-                                        {{ node.name }}
-                                    </span>
-                                    <span
-                                        class="font-mono text-[10px]"
-                                        :class="
-                                            node.allSeen
-                                                ? 'text-moire-viewed-fg'
-                                                : 'text-moire-faint'
-                                        "
-                                    >
-                                        {{ node.seen }}/{{ node.total }}
-                                    </span>
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" class="font-mono">
-                                {{ node.path }}
-                            </TooltipContent>
-                        </Tooltip>
-
-                        <!-- A file row stays a div, not a Button: it holds an interactive
-                             Checkbox (a button-in-button is invalid), and shadcn has no
-                             list-row primitive. Click selects; double-click marks viewed. -->
-                        <div
-                            v-else
-                            class="group flex w-full cursor-pointer items-center gap-2 rounded-md py-[5px] pr-2"
-                            :class="rowClasses(node)"
-                            :style="rowStyle(node)"
-                            :title="node.path"
-                            @click="comparison.selectFile(node.path)"
-                            @dblclick="comparison.toggleViewed(node.path)"
+            <!-- Only the rows in view are in the DOM. treeNodes is already the flat,
+                 folded, expand-aware row list, so it feeds the scroller directly and
+                 each row keeps its own height (ROW_HEIGHT) for placement. -->
+            <recycle-scroller
+                v-slot="{ item: node }"
+                class="min-h-0 flex-1 pb-3"
+                :items="comparison.treeNodes"
+                :item-size="ROW_HEIGHT"
+                key-field="key"
+            >
+                <Tooltip v-if="node.kind === 'dir'" :delay-duration="FOLDER_TOOLTIP_DELAY">
+                    <TooltipTrigger as-child>
+                        <!-- transition-colors, not the Button's default transition-all:
+                             the scroller recycles a row's DOM node for a folder at a
+                             different depth, changing paddingLeft, and transition-all
+                             would animate that as a horizontal slide while scrolling. -->
+                        <Button
+                            variant="ghost"
+                            class="w-full justify-start gap-1.5 rounded-md py-0 pr-4 font-normal text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-muted dark:hover:bg-moire-hover"
+                            :style="{ paddingLeft: indent(node.depth), height: `${ROW_HEIGHT}px` }"
+                            @click="comparison.toggleDir(node.path)"
                         >
+                            <ChevronDown
+                                v-if="node.open"
+                                class="size-4 shrink-0 text-moire-faint"
+                            />
+                            <ChevronRight v-else class="size-4 shrink-0 text-moire-faint" />
                             <span
-                                class="w-[13px] shrink-0 text-center font-mono text-[11px] font-bold"
-                                :class="STATUS_CLASS[node.status]"
-                            >
-                                {{ node.status }}
-                            </span>
-                            <span
-                                class="flex-1 truncate font-mono text-xs"
-                                :class="nameClass(node)"
+                                class="flex-1 truncate text-left font-mono text-xs text-moire-muted"
                             >
                                 {{ node.name }}
                             </span>
-                            <span class="font-mono text-[11px] text-moire-add-fg">
-                                {{ node.additions ? '+' + node.additions : '' }}
+                            <span
+                                class="font-mono text-[10px]"
+                                :class="node.allSeen ? 'text-moire-viewed-fg' : 'text-moire-faint'"
+                            >
+                                {{ node.seen }}/{{ node.total }}
                             </span>
-                            <span class="font-mono text-[11px] text-moire-del-fg">
-                                {{ node.deletions ? '−' + node.deletions : '' }}
-                            </span>
-                            <span @click.stop>
-                                <Checkbox
-                                    :model-value="node.viewed"
-                                    :aria-label="node.viewed ? 'Marked viewed' : 'Mark as viewed'"
-                                    class="size-[15px] rounded-sm shadow-none"
-                                    :class="checkboxClass(node)"
-                                    @update:model-value="comparison.toggleViewed(node.path)"
-                                >
-                                    <Check :size="11" />
-                                </Checkbox>
-                            </span>
-                        </div>
-                    </template>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" class="font-mono">
+                        {{ node.path }}
+                    </TooltipContent>
+                </Tooltip>
+
+                <!-- A file row stays a div, not a Button: it holds an interactive
+                     Checkbox (a button-in-button is invalid), and shadcn has no
+                     list-row primitive. Click selects; double-click marks viewed. -->
+                <div
+                    v-else
+                    class="group flex w-full cursor-pointer items-center gap-2 rounded-md pr-4"
+                    :class="rowClasses(node)"
+                    :style="rowStyle(node)"
+                    :title="node.path"
+                    @click="comparison.selectFile(node.path)"
+                    @dblclick="comparison.toggleViewed(node.path)"
+                >
+                    <span
+                        class="w-[13px] shrink-0 text-center font-mono text-[11px] font-bold"
+                        :class="STATUS_CLASS[node.status]"
+                    >
+                        {{ node.status }}
+                    </span>
+                    <span class="flex-1 truncate font-mono text-xs" :class="nameClass(node)">
+                        {{ node.name }}
+                    </span>
+                    <span class="font-mono text-[11px] text-moire-add-fg">
+                        {{ node.additions ? '+' + node.additions : '' }}
+                    </span>
+                    <span class="font-mono text-[11px] text-moire-del-fg">
+                        {{ node.deletions ? '−' + node.deletions : '' }}
+                    </span>
+                    <span @click.stop>
+                        <Checkbox
+                            :model-value="node.viewed"
+                            :aria-label="node.viewed ? 'Marked viewed' : 'Mark as viewed'"
+                            class="size-[15px] rounded-sm shadow-none"
+                            :class="checkboxClass(node)"
+                            @update:model-value="comparison.toggleViewed(node.path)"
+                        >
+                            <Check :size="11" />
+                        </Checkbox>
+                    </span>
                 </div>
-            </ScrollArea>
+            </recycle-scroller>
         </div>
     </TooltipProvider>
 </template>
