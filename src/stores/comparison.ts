@@ -297,9 +297,16 @@ export const useComparisonStore = defineStore('comparison', () => {
     }
 
     function swap() {
-        const previousBase = base.value;
-        base.value = head.value;
-        head.value = previousBase;
+        // The head side can hold the working-tree sentinel and the base side an
+        // empty placeholder; neither is valid on the other side. Swap exchanges the
+        // two, mapping the working tree to a cleared base (there is no
+        // `WORKING TREE...<ref>` revision) and an empty base to the working tree, so
+        // each selector keeps a value it can legally hold. loadChangedFiles empties
+        // the diff while the base is blank, until a new base is picked.
+        const nextBase = head.value === WORKING_TREE ? '' : head.value;
+        const nextHead = base.value === '' ? WORKING_TREE : base.value;
+        base.value = nextBase;
+        head.value = nextHead;
         void loadChangedFiles();
     }
 

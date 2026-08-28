@@ -62,6 +62,26 @@ describe('comparison store', () => {
         expect(store.head).toBe('develop');
     });
 
+    it('clears the base when swapping away from the working tree', () => {
+        const store = useComparisonStore();
+        store.setBase('main');
+        store.setHead('WORKING TREE');
+
+        store.swap();
+
+        // The working-tree sentinel is head-only, so it cannot become the base:
+        // the base selector clears and the old base moves to the head, instead of
+        // producing an invalid `WORKING TREE...main` revision.
+        expect(store.base).toBe('');
+        expect(store.head).toBe('main');
+
+        // Swapping back restores the working tree to the head and the branch to
+        // the base (an empty base maps to the working tree, not an empty head).
+        store.swap();
+        expect(store.base).toBe('main');
+        expect(store.head).toBe('WORKING TREE');
+    });
+
     it('tracks viewed files and the viewed count', () => {
         const store = seededStore();
         expect(store.viewedCount).toBe(2);
