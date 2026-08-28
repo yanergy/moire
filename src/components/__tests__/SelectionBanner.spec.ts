@@ -26,6 +26,32 @@ describe('SelectionBanner', () => {
         expect(text).toContain('3 changes');
     });
 
+    it('shows the old path moving to the new one for a rename', () => {
+        const renamed: ChangedFile = {
+            path: 'src/stores/comparison.ts',
+            oldPath: 'src/lib/compare.ts',
+            status: 'R',
+            additions: 4,
+            deletions: 2,
+            binary: false,
+        };
+        const wrapper = mount(SelectionBanner, {
+            props: { file: renamed, viewed: false, changeCount: 1 },
+        });
+        const text = wrapper.text();
+
+        expect(text).toContain('src/lib/compare.ts');
+        expect(text).toContain('comparison.ts');
+        expect(wrapper.find('.lucide-arrow-right').exists()).toBe(true);
+    });
+
+    it('shows no rename arrow for a non-rename file', () => {
+        const wrapper = mount(SelectionBanner, {
+            props: { file, viewed: false, changeCount: 0 },
+        });
+        expect(wrapper.find('.lucide-arrow-right').exists()).toBe(false);
+    });
+
     it('switches the toggle label between the viewed states', async () => {
         const wrapper = mount(SelectionBanner, {
             props: { file, viewed: false, changeCount: 0 },

@@ -71,6 +71,24 @@ describe('FileTreeSidebar', () => {
         expect(document.body.textContent).toContain('root/a/b/c');
     });
 
+    it('shows the rename as old → new in a file row title', async () => {
+        const store = useComparisonStore();
+        store.files = [
+            {
+                path: 'src/new.ts',
+                oldPath: 'src/old.ts',
+                status: 'R',
+                additions: 2,
+                deletions: 1,
+                binary: false,
+            },
+        ];
+        const wrapper = mount(FileTreeSidebar, { global: { plugins: [pinia] } });
+        await flushPromises();
+
+        expect(wrapper.find('div[title="src/old.ts → src/new.ts"]').exists()).toBe(true);
+    });
+
     it('selects a file when its row is clicked', async () => {
         const wrapper = mountTree();
         await flushPromises();

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ArrowDown, ArrowUp, Check } from '@lucide/vue';
+import { ArrowDown, ArrowRight, ArrowUp, Check } from '@lucide/vue';
 import type { ChangedFile, FileStatus } from '@/shared/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,8 +42,16 @@ const name = computed(() => {
             class="flex h-11 flex-none items-center gap-2.5 border-b border-moire-border px-3.5"
             :class="viewed ? 'bg-moire-viewed' : 'bg-moire-app'"
         >
-            <span class="truncate font-mono text-xs text-moire-muted">
-                {{ dir }}<span class="font-medium text-moire-fg">{{ name }}</span>
+            <!-- A rename shows the old path moving to the new one; every other
+                 status shows the path on its own. -->
+            <span class="flex min-w-0 items-center gap-1.5 font-mono text-xs text-moire-muted">
+                <template v-if="file.oldPath">
+                    <span class="min-w-0 truncate">{{ file.oldPath }}</span>
+                    <ArrowRight :size="13" class="shrink-0 text-moire-faint" />
+                </template>
+                <span class="min-w-0 truncate">
+                    {{ dir }}<span class="font-medium text-moire-fg">{{ name }}</span>
+                </span>
             </span>
             <Badge
                 variant="outline"

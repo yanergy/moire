@@ -20,6 +20,7 @@ export interface FileNode {
     key: string;
     name: string;
     path: string;
+    oldPath?: string; // set for renames, for the "old → new" hover title
     depth: number;
     status: FileStatus;
     additions: number;
@@ -299,6 +300,7 @@ export const useComparisonStore = defineStore('comparison', () => {
                     key: 'f:' + file.path,
                     name: baseName(file.path),
                     path: file.path,
+                    oldPath: file.oldPath,
                     depth,
                     status: file.status,
                     additions: file.additions,

@@ -219,7 +219,7 @@ function dirCheckState(node: DirNode): boolean | 'indeterminate' {
                     class="group flex w-full cursor-pointer items-center gap-2 rounded-md pr-4"
                     :class="rowClasses(node)"
                     :style="rowStyle(node)"
-                    :title="node.path"
+                    :title="node.oldPath ? `${node.oldPath} → ${node.path}` : node.path"
                     @click="comparison.selectFile(node.path)"
                     @dblclick="comparison.toggleViewed(node.path)"
                 >

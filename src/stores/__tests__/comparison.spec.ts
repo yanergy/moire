@@ -127,6 +127,23 @@ describe('comparison store', () => {
         expect(parsers?.depth).toBe(2);
     });
 
+    it('carries the old path on a renamed file node', () => {
+        const store = useComparisonStore();
+        store.files = [
+            {
+                path: 'src/stores/comparison.ts',
+                oldPath: 'src/lib/compare.ts',
+                status: 'R',
+                additions: 2,
+                deletions: 1,
+                binary: false,
+            },
+        ];
+
+        const node = files(store.treeNodes).find((n) => n.path === 'src/stores/comparison.ts');
+        expect(node?.oldPath).toBe('src/lib/compare.ts');
+    });
+
     it('folds a single-child directory chain into one combined row', () => {
         const store = useComparisonStore();
         store.files = [

@@ -159,7 +159,9 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   `BinaryFileNotice` in the diff pane instead of an empty editor (`comparison.showBinaryNotice`),
   built on the same `DiffPlaceholder` shell as the large-file gate. Image preview (rendering the
   actual before/after images) is still to come.
-- [ ] Rename display, showing the old path moving to the new path, in the UI.
+- [x] Rename display, showing the old path moving to the new path, in the UI. The selection
+  banner renders `oldPath → newPath` (with an arrow) for a renamed file, and the file-tree row's
+  hover title shows the same. The backend already surfaces `oldPath`; `FileNode` now carries it.
 - [x] Theme persistence via `electron-store` and `nativeTheme`. The chosen preference (`system`,
   `light`, or `dark`) is saved on change and restored on launch to seed `nativeTheme`.
 - [x] Base/head branch persistence via `electron-store` (`branchSelections` keyed by repo path,
