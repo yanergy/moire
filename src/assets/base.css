@@ -103,6 +103,10 @@
     --moire-viewed: rgba(60, 150, 75, 0.12);
     --moire-viewed-hover: rgba(60, 150, 75, 0.2);
     --moire-viewed-edge: rgba(50, 140, 65, 0.8);
+    /* A subdued green tint for a partially-viewed folder's checkbox, so it reads as
+       distinct from the solid fill of a fully-viewed one. Low alpha, so it recedes
+       toward the theme background (softer on light, dimmer on dark). */
+    --moire-viewed-partial: rgba(60, 150, 75, 0.32);
     --moire-viewed-fg: #2f7a3d;
     --moire-viewed-sel: rgba(60, 150, 75, 0.24);
     --moire-sel-row: #e4e4e7;
@@ -231,6 +235,7 @@ body {
     --color-moire-viewed: var(--moire-viewed);
     --color-moire-viewed-hover: var(--moire-viewed-hover);
     --color-moire-viewed-edge: var(--moire-viewed-edge);
+    --color-moire-viewed-partial: var(--moire-viewed-partial);
     --color-moire-viewed-fg: var(--moire-viewed-fg);
     --color-moire-viewed-sel: var(--moire-viewed-sel);
     --color-moire-sel-row: var(--moire-sel-row);
@@ -304,6 +309,7 @@ body {
     --moire-viewed: rgba(80, 160, 90, 0.13);
     --moire-viewed-hover: rgba(80, 160, 90, 0.22);
     --moire-viewed-edge: rgba(100, 190, 110, 0.75);
+    --moire-viewed-partial: rgba(100, 190, 110, 0.3);
     --moire-viewed-fg: #7ec98a;
     --moire-viewed-sel: rgba(80, 160, 90, 0.26);
     --moire-sel-row: #27272a;

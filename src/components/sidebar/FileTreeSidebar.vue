@@ -1,8 +1,15 @@
 <script setup lang="ts">
-import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from '@lucide/vue';
+import {
+    Check,
+    ChevronDown,
+    ChevronRight,
+    ChevronsDownUp,
+    ChevronsUpDown,
+    Minus,
+} from '@lucide/vue';
 import { RecycleScroller } from 'vue-virtual-scroller';
 import { useComparisonStore } from '@/stores/comparison';
-import type { FileNode } from '@/stores/comparison';
+import type { DirNode, FileNode } from '@/stores/comparison';
 import type { FileStatus } from '@/shared/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,17 +75,36 @@ function nameClass(node: FileNode): string {
     return node.viewed ? 'text-moire-viewed-fg' : STATUS_CLASS[node.status];
 }
 
-function checkboxClass(node: FileNode): string {
-    const checked =
-        'data-[state=checked]:border-moire-viewed-edge data-[state=checked]:bg-moire-viewed-edge data-[state=checked]:text-moire-check-fg';
+// Checked is a solid green fill with a light glyph. Indeterminate keeps the green
+// edge but fills with a subdued tint and a green glyph, so a partly-viewed folder
+// reads as distinct (and more muted) than a fully-viewed one. Files only ever go
+// checked/unchecked; a folder is indeterminate when some, but not all, of its files
+// are viewed.
+const VIEWED_CHECK_CLASS =
+    'data-[state=checked]:border-moire-viewed-edge data-[state=checked]:bg-moire-viewed-edge data-[state=checked]:text-moire-check-fg data-[state=indeterminate]:border-moire-viewed-edge data-[state=indeterminate]:bg-moire-viewed-partial data-[state=indeterminate]:text-moire-viewed-fg';
 
+// The resting/hover border, used by folder checkboxes always and by file
+// checkboxes on unselected rows.
+const RESTING_CHECKBOX_CLASS = `border-moire-border group-hover:border-moire-ring ${VIEWED_CHECK_CLASS}`;
+
+function checkboxClass(node: FileNode): string {
     // On a selected row the background matches --moire-border, so lift the empty
     // checkbox to --moire-ring to keep it visible (hover does the same).
     if (node.selected) {
-        return `border-moire-ring ${checked}`;
+        return `border-moire-ring ${VIEWED_CHECK_CLASS}`;
     }
 
-    return `border-moire-border group-hover:border-moire-ring ${checked}`;
+    return RESTING_CHECKBOX_CLASS;
+}
+
+// A folder's checkbox is checked when every file under it is viewed, empty when
+// none are, and indeterminate in between.
+function dirCheckState(node: DirNode): boolean | 'indeterminate' {
+    if (node.allSeen) {
+        return true;
+    }
+
+    return node.seen > 0 ? 'indeterminate' : false;
 }
 </script>
 
@@ -135,15 +161,16 @@ function checkboxClass(node: FileNode): string {
                 :item-size="ROW_HEIGHT"
                 key-field="key"
             >
+                <!-- Rows are divs, not Buttons: each holds an interactive Checkbox (a
+                     button-in-button is invalid) and shadcn has no list-row primitive.
+                     A div also has no transition, so the scroller repositioning a row on
+                     recycle can't animate the paddingLeft change into a sideways slide. -->
                 <Tooltip v-if="node.kind === 'dir'" :delay-duration="FOLDER_TOOLTIP_DELAY">
                     <TooltipTrigger as-child>
-                        <!-- transition-colors, not the Button's default transition-all:
-                             the scroller recycles a row's DOM node for a folder at a
-                             different depth, changing paddingLeft, and transition-all
-                             would animate that as a horizontal slide while scrolling. -->
-                        <Button
-                            variant="ghost"
-                            class="w-full justify-start gap-1.5 rounded-md py-0 pr-4 font-normal text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-muted dark:hover:bg-moire-hover"
+                        <!-- Click toggles the folder open; the checkbox marks every file
+                             under it viewed. -->
+                        <div
+                            class="group flex w-full cursor-pointer items-center gap-1.5 rounded-md pr-4 hover:bg-moire-hover"
                             :style="{ paddingLeft: indent(node.depth), height: `${ROW_HEIGHT}px` }"
                             @click="comparison.toggleDir(node.path)"
                         >
@@ -163,16 +190,30 @@ function checkboxClass(node: FileNode): string {
                             >
                                 {{ node.seen }}/{{ node.total }}
                             </span>
-                        </Button>
+                            <span @click.stop>
+                                <Checkbox
+                                    :model-value="dirCheckState(node)"
+                                    :aria-label="
+                                        node.allSeen
+                                            ? 'Mark folder as not viewed'
+                                            : 'Mark folder as viewed'
+                                    "
+                                    class="size-[15px] rounded-sm shadow-none"
+                                    :class="RESTING_CHECKBOX_CLASS"
+                                    @update:model-value="comparison.toggleDirViewed(node.path)"
+                                >
+                                    <Minus v-if="!node.allSeen" :size="11" />
+                                    <Check v-else :size="11" />
+                                </Checkbox>
+                            </span>
+                        </div>
                     </TooltipTrigger>
                     <TooltipContent side="top" class="font-mono">
                         {{ node.path }}
                     </TooltipContent>
                 </Tooltip>
 
-                <!-- A file row stays a div, not a Button: it holds an interactive
-                     Checkbox (a button-in-button is invalid), and shadcn has no
-                     list-row primitive. Click selects; double-click marks viewed. -->
+                <!-- Click selects; double-click marks viewed. -->
                 <div
                     v-else
                     class="group flex w-full cursor-pointer items-center gap-2 rounded-md pr-4"

@@ -216,10 +216,17 @@ export const useComparisonStore = defineStore('comparison', () => {
         void window.api?.setBranchSelection?.(repoPath.value, nextBase, nextHead);
     });
 
+    // The change set narrowed to the filter box, shared by the tree render and the
+    // per-folder "mark viewed" action so the folder checkbox and the files it
+    // toggles always agree on what the folder contains.
+    const shownFiles = computed(() => {
+        const filter = treeFilter.value.toLowerCase();
+        return files.value.filter((f) => !filter || f.path.toLowerCase().includes(filter));
+    });
+
     const treeNodes = computed<TreeNode[]>(() => {
         const filter = treeFilter.value.toLowerCase();
-        const shown = files.value.filter((f) => !filter || f.path.toLowerCase().includes(filter));
-        const root = buildTree(shown);
+        const root = buildTree(shownFiles.value);
 
         const tallyOf = (node: RawDir): { total: number; seen: number } => {
             let total = 0;
@@ -286,6 +293,26 @@ export const useComparisonStore = defineStore('comparison', () => {
 
     function toggleViewed(path: string) {
         viewed.value = { ...viewed.value, [path]: !viewed.value[path] };
+    }
+
+    // Mark or clear "viewed" for every file under a folder in one go. Acts on the
+    // folder's shown files, so it matches the tally on the row; if they are all
+    // already viewed it clears them, otherwise it marks the lot, mirroring how the
+    // file checkbox flips a single file.
+    function toggleDirViewed(path: string) {
+        const prefix = path + '/';
+        const targets = shownFiles.value.filter((f) => f.path.startsWith(prefix));
+        if (targets.length === 0) {
+            return;
+        }
+
+        const markAll = !targets.every((f) => isViewed(f.path));
+        const next = { ...viewed.value };
+        for (const file of targets) {
+            next[file.path] = markAll;
+        }
+
+        viewed.value = next;
     }
 
     function toggleDir(path: string) {
@@ -597,6 +624,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         allCollapsed,
         selectFile,
         toggleViewed,
+        toggleDirViewed,
         toggleDir,
         expandAll,
         collapseAll,

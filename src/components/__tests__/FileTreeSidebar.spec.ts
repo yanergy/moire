@@ -60,7 +60,9 @@ describe('FileTreeSidebar', () => {
 
         // The row shows the folded label a/b/c; the tooltip carries the full
         // path, which appears as visible text only once the tooltip opens.
-        const trigger = wrapper.findAll('button').find((b) => b.text().includes('a/b/c'));
+        const trigger = wrapper
+            .findAll('[data-slot="tooltip-trigger"]')
+            .find((el) => el.text().includes('a/b/c'));
         expect(document.body.textContent).not.toContain('root/a/b/c');
 
         await trigger?.trigger('focus');
@@ -89,6 +91,40 @@ describe('FileTreeSidebar', () => {
 
         expect(store.isViewed(target)).toBe(true);
         expect(store.selectedPath).toBe('electron/git/parsers.ts');
+    });
+
+    it('marks a whole folder viewed from its row checkbox', async () => {
+        const wrapper = mountTree();
+        await flushPromises();
+        const store = useComparisonStore();
+
+        expect(store.isViewed('electron/git/parsers.ts')).toBe(false);
+        expect(store.isViewed('electron/git/GitService.ts')).toBe(false);
+
+        const folderRow = wrapper
+            .findAll('[data-slot="tooltip-trigger"]')
+            .find((el) => el.text().includes('git'));
+        await folderRow?.find('button').trigger('click');
+
+        expect(store.isViewed('electron/git/parsers.ts')).toBe(true);
+        expect(store.isViewed('electron/git/GitService.ts')).toBe(true);
+    });
+
+    it('shows folder checkboxes as checked, indeterminate, or empty by tally', async () => {
+        const wrapper = mountTree();
+        await flushPromises();
+
+        const stateOf = (label: string) =>
+            wrapper
+                .findAll('[data-slot="tooltip-trigger"]')
+                .find((el) => el.text().includes(label))
+                ?.find('[data-slot="checkbox"]')
+                .attributes('data-state');
+
+        // shared: its one file is viewed. src: 1 of 4 viewed. electron: none viewed.
+        expect(stateOf('shared')).toBe('checked');
+        expect(stateOf('src')).toBe('indeterminate');
+        expect(stateOf('electron')).toBe('unchecked');
     });
 
     it('toggles all folders from the single header control', async () => {

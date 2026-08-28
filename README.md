@@ -128,6 +128,9 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   application menu (View, Theme) as a radio group. The main process owns it via `nativeTheme`
   (`system` follows the OS) and pushes the resolved theme to the renderer over the preload bridge.
 - [x] Filter box and viewed checkboxes.
+- [x] Mark a whole folder viewed from its file-tree row. A checkbox on each folder row toggles
+  every file under it (respecting the active filter), reading checked, indeterminate, or empty
+  from the folder's viewed tally (`comparison.toggleDirViewed`).
 - [x] Open repo name shown in the native window title.
 - [x] Manual refresh from the native menu (View → Refresh, Cmd/Ctrl+R). The item messages the
   focused window over `menu:refresh`; the renderer re-reads the branch list, changed files, and

@@ -178,6 +178,57 @@ describe('comparison store', () => {
         expect(shared?.allSeen).toBe(true);
     });
 
+    it('marks every file under a folder viewed, then clears them', () => {
+        const store = seededStore();
+        expect(store.isViewed('electron/git/parsers.ts')).toBe(false);
+        expect(store.isViewed('electron/git/GitService.ts')).toBe(false);
+
+        store.toggleDirViewed('electron/git');
+        expect(store.isViewed('electron/git/parsers.ts')).toBe(true);
+        expect(store.isViewed('electron/git/GitService.ts')).toBe(true);
+        expect(dirs(store.treeNodes).find((n) => n.path === 'electron/git')?.allSeen).toBe(true);
+
+        // All viewed now, so toggling the same folder clears the lot.
+        store.toggleDirViewed('electron/git');
+        expect(store.isViewed('electron/git/parsers.ts')).toBe(false);
+        expect(store.isViewed('electron/git/GitService.ts')).toBe(false);
+    });
+
+    it('marks a partially-viewed folder as fully viewed in one toggle', () => {
+        const store = seededStore(); // src/stores/comparison.ts is already viewed
+        const src = () => dirs(store.treeNodes).find((n) => n.path === 'src');
+        expect(src()?.seen).toBe(1);
+        expect(src()?.total).toBe(4);
+
+        store.toggleDirViewed('src');
+        expect(src()?.allSeen).toBe(true);
+        expect(store.isViewed('src/components/DiffPane.vue')).toBe(true);
+        expect(store.isViewed('src/stores/comparison.ts')).toBe(true);
+    });
+
+    it('reaches nested files when a parent folder is toggled', () => {
+        const store = seededStore();
+        store.toggleDirViewed('electron');
+
+        for (const path of [
+            'electron/git/parsers.ts',
+            'electron/ipc/handlers.ts',
+            'electron/watcher/RepoWatcher.ts',
+        ]) {
+            expect(store.isViewed(path)).toBe(true);
+        }
+    });
+
+    it('toggles only a folder’s filtered files', () => {
+        const store = seededStore();
+        store.setTreeFilter('parsers');
+
+        // Under electron/git only parsers.ts is shown; GitService.ts is filtered out.
+        store.toggleDirViewed('electron/git');
+        expect(store.isViewed('electron/git/parsers.ts')).toBe(true);
+        expect(store.isViewed('electron/git/GitService.ts')).toBe(false);
+    });
+
     it('collapses and expands a single directory', () => {
         const store = seededStore();
         store.toggleDir('electron');
