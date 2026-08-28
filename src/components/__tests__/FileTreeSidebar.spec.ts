@@ -1,6 +1,6 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
-import { beforeEach, describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { beforeEach, afterEach, describe, it, expect } from 'vitest';
+import { mount, flushPromises } from '@vue/test-utils';
 import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { CHANGED_FILES } from '@/components/__tests__/fixtures';
@@ -11,6 +11,11 @@ describe('FileTreeSidebar', () => {
     beforeEach(() => {
         pinia = createPinia();
         setActivePinia(pinia);
+    });
+
+    // Tooltip content teleports to document.body; clear it between tests.
+    afterEach(() => {
+        document.body.innerHTML = '';
     });
 
     // The store starts empty (no repo open), so seed the change set and a couple
@@ -38,6 +43,28 @@ describe('FileTreeSidebar', () => {
         expect(fileRow.exists()).toBe(true);
         // depth 2 → 8 + 2 * 15 = 38px
         expect(fileRow.attributes('style')).toContain('padding-left: 38px');
+    });
+
+    it('reveals a folded folder full path in a tooltip on hover', async () => {
+        const store = useComparisonStore();
+        store.files = [
+            { path: 'root/one.txt', status: 'M', additions: 1, deletions: 0, binary: false },
+            { path: 'root/a/b/c/file.txt', status: 'M', additions: 1, deletions: 0, binary: false },
+        ];
+        const wrapper = mount(FileTreeSidebar, {
+            attachTo: document.body,
+            global: { plugins: [pinia] },
+        });
+
+        // The row shows the folded label a/b/c; the tooltip carries the full
+        // path, which appears as visible text only once the tooltip opens.
+        const trigger = wrapper.findAll('button').find((b) => b.text().includes('a/b/c'));
+        expect(document.body.textContent).not.toContain('root/a/b/c');
+
+        await trigger?.trigger('focus');
+        await flushPromises();
+
+        expect(document.body.textContent).toContain('root/a/b/c');
     });
 
     it('selects a file when its row is clicked', async () => {

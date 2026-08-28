@@ -12,6 +12,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 const comparison = useComparisonStore();
 
+// The folder tooltip is a slow, deliberate reveal (not the snappy default), shown
+// on every folder row so the full path is always reachable on hover.
+const FOLDER_TOOLTIP_DELAY = 1500;
+
 // The --moire-status-* tokens carry separate light/dark values tuned for contrast
 // on each background, so full strength stays legible in both themes.
 const STATUS_CLASS: Record<FileStatus, string> = {
@@ -113,30 +117,40 @@ function checkboxClass(node: FileNode): string {
             <ScrollArea class="min-h-0 flex-1">
                 <div class="px-2 pb-3">
                     <template v-for="node in comparison.treeNodes" :key="node.key">
-                        <Button
-                            v-if="node.kind === 'dir'"
-                            variant="ghost"
-                            class="h-auto w-full justify-start gap-1.5 rounded-md py-[5px] pr-2 font-normal text-moire-muted hover:bg-moire-hover hover:text-moire-muted dark:hover:bg-moire-hover"
-                            :style="{ paddingLeft: indent(node.depth) }"
-                            @click="comparison.toggleDir(node.path)"
-                        >
-                            <ChevronDown
-                                v-if="node.open"
-                                class="size-4 shrink-0 text-moire-faint"
-                            />
-                            <ChevronRight v-else class="size-4 shrink-0 text-moire-faint" />
-                            <span
-                                class="flex-1 truncate text-left font-mono text-xs text-moire-muted"
-                            >
-                                {{ node.name }}
-                            </span>
-                            <span
-                                class="font-mono text-[10px]"
-                                :class="node.allSeen ? 'text-moire-viewed-fg' : 'text-moire-faint'"
-                            >
-                                {{ node.seen }}/{{ node.total }}
-                            </span>
-                        </Button>
+                        <Tooltip v-if="node.kind === 'dir'" :delay-duration="FOLDER_TOOLTIP_DELAY">
+                            <TooltipTrigger as-child>
+                                <Button
+                                    variant="ghost"
+                                    class="h-auto w-full justify-start gap-1.5 rounded-md py-[5px] pr-2 font-normal text-moire-muted hover:bg-moire-hover hover:text-moire-muted dark:hover:bg-moire-hover"
+                                    :style="{ paddingLeft: indent(node.depth) }"
+                                    @click="comparison.toggleDir(node.path)"
+                                >
+                                    <ChevronDown
+                                        v-if="node.open"
+                                        class="size-4 shrink-0 text-moire-faint"
+                                    />
+                                    <ChevronRight v-else class="size-4 shrink-0 text-moire-faint" />
+                                    <span
+                                        class="flex-1 truncate text-left font-mono text-xs text-moire-muted"
+                                    >
+                                        {{ node.name }}
+                                    </span>
+                                    <span
+                                        class="font-mono text-[10px]"
+                                        :class="
+                                            node.allSeen
+                                                ? 'text-moire-viewed-fg'
+                                                : 'text-moire-faint'
+                                        "
+                                    >
+                                        {{ node.seen }}/{{ node.total }}
+                                    </span>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" class="font-mono">
+                                {{ node.path }}
+                            </TooltipContent>
+                        </Tooltip>
 
                         <!-- A file row stays a div, not a Button: it holds an interactive
                              Checkbox (a button-in-button is invalid), and shadcn has no
