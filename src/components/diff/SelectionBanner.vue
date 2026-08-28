@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ArrowDown, ArrowUp, Check, Circle } from '@lucide/vue';
+import { ArrowDown, ArrowUp, Check } from '@lucide/vue';
 import type { ChangedFile, FileStatus } from '@/shared/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -96,7 +96,7 @@ const name = computed(() => {
             <Button
                 variant="outline"
                 size="sm"
-                class="h-7 min-w-[116px] gap-1.5"
+                class="h-7 w-[128px] gap-2 pr-3 pl-2"
                 :class="
                     viewed
                         ? 'border-moire-viewed-edge bg-moire-viewed text-moire-viewed-fg hover:bg-moire-viewed-hover hover:text-moire-viewed-fg'
@@ -104,9 +104,20 @@ const name = computed(() => {
                 "
                 @click="emit('toggleViewed')"
             >
-                <Check v-if="viewed" :size="16" />
-                <Circle v-else :size="16" />
-                {{ viewed ? 'Viewed' : 'Mark viewed' }}
+                <!-- A checkbox look, not the real Checkbox primitive: that renders a
+                     button, and a button inside this Button is invalid. The whole
+                     Button is the single click target, so this stays presentational. -->
+                <span
+                    class="flex size-[15px] shrink-0 items-center justify-center rounded-sm border"
+                    :class="
+                        viewed
+                            ? 'border-moire-viewed-edge bg-moire-viewed-edge text-moire-check-fg'
+                            : 'border-current'
+                    "
+                >
+                    <Check v-if="viewed" class="size-[11px]" />
+                </span>
+                <span class="flex-1 text-center">{{ viewed ? 'Viewed' : 'Mark viewed' }}</span>
             </Button>
         </div>
     </TooltipProvider>
