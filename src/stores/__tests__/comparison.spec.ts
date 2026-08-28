@@ -214,21 +214,43 @@ describe('comparison store', () => {
             expect(store.repoPath).toBe('');
         });
 
-        it('restores the most recent repo on startup', async () => {
-            stubApi();
+        it('restores and opens the most recent repo on startup', async () => {
+            const api = stubApi();
             const store = useComparisonStore();
             await store.restoreLastRepo();
+            expect(api.openRepo).toHaveBeenCalledWith('/repos/moire');
             expect(store.repoName).toBe('moire');
             expect(store.repoPath).toBe('/repos/moire');
             expect(store.recentRepos).toEqual(RECENTS);
         });
 
-        it('leaves state untouched when main rejects the folder', async () => {
-            stubApi({ openRepo: vi.fn<() => Promise<null>>().mockResolvedValue(null) });
+        it('clears the selection and prunes recents when the restored folder is gone', async () => {
+            const api = stubApi({ openRepo: vi.fn<() => Promise<null>>().mockResolvedValue(null) });
+            const store = useComparisonStore();
+            await store.restoreLastRepo();
+            expect(store.repoName).toBe('');
+            expect(store.repoPath).toBe('');
+            expect(api.removeRecentRepo).toHaveBeenCalledWith('/repos/moire');
+            expect(store.recentRepos).toEqual(['/work/api-service']);
+        });
+
+        it('leaves state untouched when main rejects a freshly picked folder', async () => {
+            const api = stubApi({ openRepo: vi.fn<() => Promise<null>>().mockResolvedValue(null) });
             const store = useComparisonStore();
             await store.openRecent('/not/a/repo');
             expect(store.repoName).toBe('');
             expect(store.repoPath).toBe('');
+            // Never a recent, so the list is left alone.
+            expect(api.removeRecentRepo).not.toHaveBeenCalled();
+        });
+
+        it('prunes a recent entry that no longer opens', async () => {
+            const api = stubApi({ openRepo: vi.fn<() => Promise<null>>().mockResolvedValue(null) });
+            const store = useComparisonStore();
+            await store.loadRecentRepos();
+            await store.openRecent('/repos/moire');
+            expect(api.removeRecentRepo).toHaveBeenCalledWith('/repos/moire');
+            expect(store.recentRepos).toEqual(['/work/api-service']);
         });
 
         it('no-ops without the preload bridge', async () => {

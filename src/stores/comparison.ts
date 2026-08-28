@@ -277,10 +277,12 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
     }
 
-    // Startup restore: load recents and reopen the most recent one. The name is
-    // derived from the path so it stays selected without re-validating (and
-    // without popping the not-a-repo dialog if the folder has since moved); the
-    // git backend (Phase 2) will validate and load its data. No-op with no history.
+    // Startup restore: load recents and reopen the most recent one through the
+    // backend, so the main-process GitService is set and the git-backed channels
+    // work. The repo is shown as selected straight away, then opened; if the
+    // folder has since moved or been deleted, main pops the not-a-repo dialog,
+    // openRecent drops it from recents, and we clear the selection. No-op with no
+    // history.
     async function restoreLastRepo() {
         await loadRecentRepos();
         const last = recentRepos.value[0];
@@ -291,26 +293,40 @@ export const useComparisonStore = defineStore('comparison', () => {
         const parts = last.split(/[/\\]/).filter(Boolean);
         repoName.value = parts[parts.length - 1] ?? last;
         repoPath.value = last;
+
+        if (!(await openRecent(last))) {
+            repoName.value = '';
+            repoPath.value = '';
+        }
     }
 
     // Open a repo by path (a recent entry or a freshly picked folder), validated
-    // in the main process. Main shows its own error box and returns null for an
-    // invalid folder, so state is left untouched in that case. Branches and files
-    // stay on mock data until the git backend (Phase 2) replaces them.
-    async function openRecent(path: string) {
+    // in the main process, which sets the current GitService. Main shows its own
+    // error box and returns null for an invalid folder, so the selection is left
+    // untouched in that case. Returns whether the open succeeded. Branches and
+    // files stay on mock data until the git backend replaces them (Phase 3).
+    async function openRecent(path: string): Promise<boolean> {
         const api = window.api;
         if (!api) {
-            return;
+            return false;
         }
 
         const info = await api.openRepo(path);
         if (!info) {
-            return;
+            // A recent that no longer opens (moved or deleted) is pruned so it
+            // stops being offered. A freshly picked folder was never a recent,
+            // so leave the list alone.
+            if (recentRepos.value.includes(path)) {
+                recentRepos.value = await api.removeRecentRepo(path);
+            }
+
+            return false;
         }
 
         repoName.value = info.name;
         repoPath.value = info.path;
         recentRepos.value = await api.getRecentRepos();
+        return true;
     }
 
     // Native folder picker -> openRecent. Proves the preload round-trip and names
