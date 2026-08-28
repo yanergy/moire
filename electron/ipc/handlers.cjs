@@ -6,7 +6,13 @@ const path = require('node:path');
 const { ipcMain, dialog } = require('electron');
 const { simpleGit } = require('simple-git');
 const { GitService } = require('../git/GitService.cjs');
-const { getRecentRepos, addRecentRepo, removeRecentRepo } = require('../settings.cjs');
+const {
+    getRecentRepos,
+    addRecentRepo,
+    removeRecentRepo,
+    getBranchSelection,
+    setBranchSelection,
+} = require('../settings.cjs');
 const { currentThemeState } = require('../theme.cjs');
 
 // The app compares one repository at a time (multi-repo is a non-goal), so the
@@ -74,6 +80,16 @@ function registerIpcHandlers() {
     ipcMain.handle('repo:recent', () => getRecentRepos());
 
     ipcMain.handle('repo:remove-recent', (_event, repoPath) => removeRecentRepo(repoPath));
+
+    // Per-repo base/head persistence, so reopening a repo restores its last
+    // compared range (validated against the live branch list in the renderer).
+    ipcMain.handle('settings:branch-selection:get', (_event, repoPath) =>
+        getBranchSelection(repoPath)
+    );
+
+    ipcMain.handle('settings:branch-selection:set', (_event, repoPath, base, head) =>
+        setBranchSelection(repoPath, base, head)
+    );
 
     // Theme is owned by nativeTheme in the main process; the renderer reads the
     // current resolved state on launch, then stays in sync via 'theme:changed'.

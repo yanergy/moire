@@ -107,8 +107,9 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] Split and unified toggle, plus prev and next change navigation.
 - [x] Status bar totals.
 - [x] Ref selectors wired to the real branch list via `getBranches`, loaded on repo open with a
-  default base chosen per repo (the current branch, then main, then master). Switching or closing
-  a repo resets the branch selection.
+  default base chosen per repo (the current branch, then main, then master) when the repo has no
+  remembered range (see the branch-persistence item in Phase 4). Closing a repo resets the
+  branch selection.
 - [x] File tree wired to changed files. The store loads the change set via
   `getChangedFiles` on repo open and whenever the base, head, or compare mode changes,
   keeping a valid selection and clearing when no repo is open.
@@ -132,6 +133,10 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [ ] Rename display, showing the old path moving to the new path, in the UI.
 - [x] Theme persistence via `electron-store` and `nativeTheme`. The chosen preference (`system`,
   `light`, or `dark`) is saved on change and restored on launch to seed `nativeTheme`.
+- [x] Base/head branch persistence via `electron-store` (`branchSelections` keyed by repo path,
+  `settings.cjs`), saved whenever the range changes and restored when the repo is reopened. A
+  remembered ref deleted since last time is dropped (a missing base clears to empty, a missing head
+  falls back to the working tree) and named in a small `MissingBranchNotice` under the toolbar.
 
 ### Phase 5, packaging and release
 

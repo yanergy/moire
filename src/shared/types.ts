@@ -51,6 +51,14 @@ export interface RepoInfo {
     name: string;
 }
 
+// The base/head refs a repo was last compared on, persisted per repo so
+// reopening it restores the range. `head` may be the WORKING_TREE sentinel;
+// `base` may be empty (the user swapped it away).
+export interface BranchSelection {
+    base: string;
+    head: string;
+}
+
 export interface RepoChangeEvent {
     reason: 'refs' | 'worktree';
     at: number;
@@ -62,6 +70,8 @@ export interface MoireApi {
     openRepo(path: string): Promise<RepoInfo | null>; // null when the folder is not a Git repo
     getRecentRepos(): Promise<string[]>;
     removeRecentRepo(path: string): Promise<string[]>; // returns the updated list
+    getBranchSelection(path: string): Promise<BranchSelection | null>; // null when none is remembered
+    setBranchSelection(path: string, base: string, head: string): Promise<void>;
     getBranches(): Promise<BranchInfo[]>;
     getChangedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]>;
     getFilePair(base: string, head: string, path: string): Promise<FilePair>;

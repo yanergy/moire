@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('api', {
     openRepo: (repoPath) => ipcRenderer.invoke('repo:open', repoPath),
     getRecentRepos: () => ipcRenderer.invoke('repo:recent'),
     removeRecentRepo: (repoPath) => ipcRenderer.invoke('repo:remove-recent', repoPath),
+    getBranchSelection: (repoPath) => ipcRenderer.invoke('settings:branch-selection:get', repoPath),
+    setBranchSelection: (repoPath, base, head) =>
+        ipcRenderer.invoke('settings:branch-selection:set', repoPath, base, head),
     getBranches: () => ipcRenderer.invoke('git:branches'),
     getChangedFiles: (base, head, mode) =>
         ipcRenderer.invoke('git:changed-files', base, head, mode),

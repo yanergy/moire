@@ -259,6 +259,12 @@ describe('comparison store', () => {
                 removeRecentRepo: vi.fn<(path: string) => Promise<string[]>>((path) =>
                     Promise.resolve(RECENTS.filter((entry) => entry !== path))
                 ),
+                getBranchSelection: vi
+                    .fn<(path: string) => Promise<{ base: string; head: string } | null>>()
+                    .mockResolvedValue(null),
+                setBranchSelection: vi
+                    .fn<(path: string, base: string, head: string) => Promise<void>>()
+                    .mockResolvedValue(undefined),
                 getBranches: vi.fn<() => Promise<BranchInfo[]>>().mockResolvedValue(BRANCHES),
                 getChangedFiles: vi
                     .fn<(base: string, head: string, mode: CompareMode) => Promise<ChangedFile[]>>()
@@ -531,6 +537,108 @@ describe('comparison store', () => {
             await store.openRecent('/repos/moire');
             expect(api.removeRecentRepo).toHaveBeenCalledWith('/repos/moire');
             expect(store.recentRepos).toEqual(['/work/api-service']);
+        });
+
+        it('persists the base and head per repo when the range changes', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+            api.setBranchSelection.mockClear();
+
+            store.setBase('develop');
+            await flushPromises();
+            expect(api.setBranchSelection).toHaveBeenCalledWith(
+                '/repos/moire',
+                'develop',
+                'WORKING TREE'
+            );
+
+            store.setHead('main');
+            await flushPromises();
+            expect(api.setBranchSelection).toHaveBeenLastCalledWith(
+                '/repos/moire',
+                'develop',
+                'main'
+            );
+        });
+
+        it('restores a remembered base and head that still exist', async () => {
+            const api = stubApi({
+                getBranchSelection: vi
+                    .fn<() => Promise<{ base: string; head: string }>>()
+                    .mockResolvedValue({ base: 'develop', head: 'main' }),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(api.getBranchSelection).toHaveBeenCalledWith('/repos/moire');
+            expect(store.base).toBe('develop');
+            expect(store.head).toBe('main');
+            expect(store.disappearedBranches).toEqual([]);
+        });
+
+        it('clears a remembered base that no longer exists and reports it', async () => {
+            stubApi({
+                getBranchSelection: vi
+                    .fn<() => Promise<{ base: string; head: string }>>()
+                    .mockResolvedValue({ base: 'feature/gone', head: 'WORKING TREE' }),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.base).toBe('');
+            expect(store.head).toBe('WORKING TREE');
+            expect(store.disappearedBranches).toEqual(['feature/gone']);
+        });
+
+        it('falls a remembered head that no longer exists back to the working tree', async () => {
+            stubApi({
+                getBranchSelection: vi
+                    .fn<() => Promise<{ base: string; head: string }>>()
+                    .mockResolvedValue({ base: 'main', head: 'feature/gone' }),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.base).toBe('main');
+            expect(store.head).toBe('WORKING TREE');
+            expect(store.disappearedBranches).toEqual(['feature/gone']);
+        });
+
+        it('reports both refs when the base and head are both gone', async () => {
+            stubApi({
+                getBranchSelection: vi
+                    .fn<() => Promise<{ base: string; head: string }>>()
+                    .mockResolvedValue({ base: 'old-base', head: 'old-head' }),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.disappearedBranches).toEqual(['old-base', 'old-head']);
+        });
+
+        it('clears the disappeared notice when a ref is picked or it is dismissed', async () => {
+            stubApi({
+                getBranchSelection: vi
+                    .fn<() => Promise<{ base: string; head: string }>>()
+                    .mockResolvedValue({ base: 'feature/gone', head: 'WORKING TREE' }),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.disappearedBranches).toEqual(['feature/gone']);
+
+            store.setBase('develop');
+            expect(store.disappearedBranches).toEqual([]);
+
+            store.disappearedBranches = ['feature/gone'];
+            store.dismissMissingBranches();
+            expect(store.disappearedBranches).toEqual([]);
+        });
+
+        it('defaults the base and clears the notice with no remembered selection', async () => {
+            stubApi(); // getBranchSelection resolves null
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.base).toBe('main');
+            expect(store.head).toBe('WORKING TREE');
+            expect(store.disappearedBranches).toEqual([]);
         });
 
         it('no-ops without the preload bridge', async () => {

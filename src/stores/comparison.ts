@@ -137,6 +137,11 @@ export const useComparisonStore = defineStore('comparison', () => {
     const head = ref<string>(WORKING_TREE);
     const compareMode = ref<CompareMode>('merge-base');
 
+    // Names of the remembered base/head refs that no longer exist in the reopened
+    // repo. Drives the "branch disappeared" notice; cleared once the user picks a
+    // ref or dismisses it.
+    const disappearedBranches = ref<string[]>([]);
+
     const selectedPath = ref('');
     const viewed = ref<Record<string, boolean>>({});
     const treeFilter = ref('');
@@ -198,6 +203,18 @@ export const useComparisonStore = defineStore('comparison', () => {
     }
 
     watch([() => selectedFile.value.path, base, head, compareMode], () => void loadFilePair());
+
+    // Remember the chosen base/head per repo so reopening it restores the range.
+    // Guarded on an open repo, so clearing the selection when a repo closes (its
+    // path is blanked first) writes nothing. The optional chain also makes this a
+    // no-op in tests/jsdom where the bridge is absent.
+    watch([base, head], ([nextBase, nextHead]) => {
+        if (!repoPath.value) {
+            return;
+        }
+
+        void window.api?.setBranchSelection?.(repoPath.value, nextBase, nextHead);
+    });
 
     const treeNodes = computed<TreeNode[]>(() => {
         const filter = treeFilter.value.toLowerCase();
@@ -328,12 +345,18 @@ export const useComparisonStore = defineStore('comparison', () => {
 
     function setBase(name: string) {
         base.value = name;
+        disappearedBranches.value = [];
         void loadChangedFiles();
     }
 
     function setHead(name: string) {
         head.value = name;
+        disappearedBranches.value = [];
         void loadChangedFiles();
+    }
+
+    function dismissMissingBranches() {
+        disappearedBranches.value = [];
     }
 
     function setCompareMode(mode: CompareMode) {
@@ -383,6 +406,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             head.value = WORKING_TREE;
             files.value = [];
             selectedPath.value = '';
+            disappearedBranches.value = [];
         }
     }
 
@@ -439,10 +463,51 @@ export const useComparisonStore = defineStore('comparison', () => {
         return true;
     }
 
-    // Replace the branch list with the open repo's real branches and reset the
-    // comparison to a valid default (base on a real branch, head on the working
-    // tree). Resetting matters on a repo switch, where the previous base or head
-    // may not exist in the new repo.
+    function branchExists(name: string): boolean {
+        return branches.value.some((b) => b.name === name);
+    }
+
+    // Reapply the base/head this repo was last compared on. A remembered ref that
+    // has since been deleted is dropped: a missing base clears to empty, a missing
+    // head falls back to the working tree, and the dropped names feed the
+    // "branch disappeared" notice. With no remembered selection (a repo not opened
+    // since this landed) it falls back to the defaulted base and working-tree head.
+    // The working-tree sentinel and an intentionally empty base always restore as
+    // they were, since neither can "disappear".
+    async function restoreSelection() {
+        const saved = await window.api?.getBranchSelection?.(repoPath.value);
+        if (!saved) {
+            base.value = pickDefaultBase(branches.value);
+            head.value = WORKING_TREE;
+            disappearedBranches.value = [];
+            return;
+        }
+
+        const missing: string[] = [];
+
+        base.value = '';
+        if (saved.base && branchExists(saved.base)) {
+            base.value = saved.base;
+        } else if (saved.base) {
+            missing.push(saved.base);
+        }
+
+        head.value = WORKING_TREE;
+        if (saved.head && saved.head !== WORKING_TREE) {
+            if (branchExists(saved.head)) {
+                head.value = saved.head;
+            } else {
+                missing.push(saved.head);
+            }
+        }
+
+        disappearedBranches.value = missing;
+    }
+
+    // Replace the branch list with the open repo's real branches, then restore the
+    // range this repo was last left on (validated against the real branches).
+    // Restoring matters on a repo switch, where the previous base or head may not
+    // exist in the newly opened repo.
     async function loadBranches() {
         const api = window.api;
         if (!api) {
@@ -450,8 +515,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
 
         branches.value = await api.getBranches();
-        base.value = pickDefaultBase(branches.value);
-        head.value = WORKING_TREE;
+        await restoreSelection();
         await loadChangedFiles();
     }
 
@@ -498,6 +562,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         base,
         head,
         compareMode,
+        disappearedBranches,
         selectedPath,
         viewed,
         treeFilter,
@@ -524,6 +589,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         setBase,
         setHead,
         setCompareMode,
+        dismissMissingBranches,
         swap,
         loadRecentRepos,
         removeRecent,

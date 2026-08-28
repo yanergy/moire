@@ -10,7 +10,10 @@ function getStore() {
     if (!storePromise) {
         storePromise = import('electron-store').then(
             ({ default: Store }) =>
-                new Store({ name: 'moire', defaults: { recentRepos: [], theme: 'system' } })
+                new Store({
+                    name: 'moire',
+                    defaults: { recentRepos: [], theme: 'system', branchSelections: {} },
+                })
         );
     }
 
@@ -34,12 +37,35 @@ async function addRecentRepo(repoPath) {
     return next;
 }
 
-// Drop one entry. Returns the new list.
+// Drop one entry, along with any branch selection remembered for it, so a
+// removed repo leaves nothing behind. Returns the new list.
 async function removeRecentRepo(repoPath) {
     const store = await getStore();
     const next = store.get('recentRepos', []).filter((entry) => entry !== repoPath);
     store.set('recentRepos', next);
+
+    const selections = store.get('branchSelections', {});
+    if (repoPath in selections) {
+        delete selections[repoPath];
+        store.set('branchSelections', selections);
+    }
+
     return next;
+}
+
+// The base/head refs a repo was last compared on, keyed by repo path so each
+// repo restores its own range. Null when the repo has no remembered selection
+// (never opened since the feature landed, or the entry was pruned).
+async function getBranchSelection(repoPath) {
+    const store = await getStore();
+    return store.get('branchSelections', {})[repoPath] ?? null;
+}
+
+async function setBranchSelection(repoPath, base, head) {
+    const store = await getStore();
+    const selections = store.get('branchSelections', {});
+    selections[repoPath] = { base, head };
+    store.set('branchSelections', selections);
 }
 
 // Theme preference ('system' | 'light' | 'dark'). Restored on launch to seed
@@ -58,6 +84,8 @@ module.exports = {
     getRecentRepos,
     addRecentRepo,
     removeRecentRepo,
+    getBranchSelection,
+    setBranchSelection,
     getThemePreference,
     setThemePreference,
 };
