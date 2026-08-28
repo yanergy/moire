@@ -132,8 +132,8 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - Branch comparisons default to merge-base (three-dot `base...head`) semantics — what a
   GitHub PR shows. Direct two-dot comparison is a user-facing toggle, not a default.
 - Parse git output with `-z` (NUL-separated) flags; never split on whitespace or newlines
-  (paths can contain spaces). Parsers live in `electron/git/parsers.ts` and every parser
-  change needs a matching case in `tests/parsers.spec.ts`.
+  (paths can contain spaces). Parsers live in `electron/git/parsers.cjs` (the main process is
+  CommonJS) and every parser change needs a matching case in `tests/parsers.spec.ts`.
 - Treat file content as potentially huge or binary: check the `binary` and `tooLarge`
   flags before rendering; never assume UTF-8 text.
 

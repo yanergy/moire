@@ -5,7 +5,21 @@
 const path = require('node:path');
 const { ipcMain, dialog } = require('electron');
 const { simpleGit } = require('simple-git');
+const { GitService } = require('../git/GitService.cjs');
 const { getRecentRepos, addRecentRepo, removeRecentRepo } = require('../settings.cjs');
+
+// The app compares one repository at a time (multi-repo is a non-goal), so the
+// git-backed channels operate on whichever repo was opened last. `repo:open`
+// sets this on a successful open.
+let currentRepo = null;
+
+function requireRepo() {
+    if (!currentRepo) {
+        throw new Error('No repository is open.');
+    }
+
+    return currentRepo;
+}
 
 async function isGitRepo(repoPath) {
     try {
@@ -52,12 +66,25 @@ function registerIpcHandlers() {
         }
 
         await addRecentRepo(repoPath);
+        currentRepo = new GitService(repoPath);
         return { path: repoPath, name: path.basename(repoPath) };
     });
 
     ipcMain.handle('repo:recent', () => getRecentRepos());
 
     ipcMain.handle('repo:remove-recent', (_event, repoPath) => removeRecentRepo(repoPath));
+
+    // Git-backed channels. Each operates on the currently open repo and has a
+    // matching method in the preload bridge and an entry in MoireApi.
+    ipcMain.handle('git:branches', () => requireRepo().branches());
+
+    ipcMain.handle('git:changed-files', (_event, base, head, mode) =>
+        requireRepo().changedFiles(base, head, mode)
+    );
+
+    ipcMain.handle('git:file-pair', (_event, base, head, filePath) =>
+        requireRepo().filePair(base, head, filePath)
+    );
 }
 
 module.exports = { registerIpcHandlers, isGitAvailable };

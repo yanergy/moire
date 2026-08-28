@@ -10,10 +10,12 @@ superimposition.
 ## Status
 
 Moiré is an early work in progress. The renderer is a complete, tested UI shell, but every
-value it shows is placeholder data from `src/lib/mock.ts`. The Electron and git backend does
-not exist yet, so nothing crosses the IPC boundary. The stores are shaped so that swapping the
-mocks for a real backend is a store level change rather than a component rewrite. See the
-Checklist below for the full breakdown of what is done and what remains.
+value it shows is still placeholder data from `src/lib/mock.ts`. The git backend now runs in
+the Electron main process (branch listing, changed files, and file pairs over IPC), but the
+renderer stores have not been switched onto it yet, so the UI keeps showing mocks. The stores
+are shaped so that swapping the mocks for a real backend is a store level change rather than a
+component rewrite. See the Checklist below for the full breakdown of what is done and what
+remains.
 
 ## Stack
 
@@ -85,11 +87,18 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   successful open, restored on launch, and listed in the toolbar repo-picker menu
   (`RepoPicker.vue`) where each entry can be removed.
 
-### Phase 2, git integration
+### Phase 2, git integration ✅
 
-- [ ] `GitService` for branches, changed files, and file pairs.
-- [ ] Rename and binary detection.
-- [ ] Vitest parser tests for numstat, name status, and `-z` output.
+- [x] `GitService` for branches, changed files, and file pairs. Lives in
+  `electron/git/GitService.cjs`, wraps `simple-git`, and is exposed to the renderer over the
+  `git:branches`, `git:changed-files`, and `git:file-pair` IPC channels (set on repo open).
+  Supports the three-dot merge-base default, two-dot direct, and working-tree comparisons.
+- [x] Rename and binary detection. `-M` rename detection surfaces `oldPath`, numstat's dash
+  markers flag binaries in the changed-file list, and file pairs withhold binary content and
+  flag oversized files.
+- [x] Vitest parser tests for numstat, name status, and `-z` output in `tests/parsers.spec.ts`
+  (parsers live in `electron/git/parsers.cjs`), with `tests/git-service.spec.ts` covering the
+  service orchestration.
 
 ### Phase 3, core UI
 
