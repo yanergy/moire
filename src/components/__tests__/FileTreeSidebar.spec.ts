@@ -3,6 +3,7 @@ import { beforeEach, describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { CHANGED_FILES } from '@/components/__tests__/fixtures';
 
 describe('FileTreeSidebar', () => {
     let pinia: Pinia;
@@ -12,7 +13,14 @@ describe('FileTreeSidebar', () => {
         setActivePinia(pinia);
     });
 
+    // The store starts empty (no repo open), so seed the change set and a couple
+    // of viewed files the way a repo open would before mounting the tree.
     function mountTree() {
+        const store = useComparisonStore();
+        store.files = CHANGED_FILES;
+        store.selectFile('electron/git/parsers.ts');
+        store.toggleViewed('shared/types.ts');
+        store.toggleViewed('src/stores/comparison.ts');
         return mount(FileTreeSidebar, { global: { plugins: [pinia] } });
     }
 

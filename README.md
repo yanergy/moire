@@ -109,8 +109,11 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] Ref selectors wired to the real branch list via `getBranches`, loaded on repo open with a
   default base chosen per repo (the current branch, then main, then master). Switching or closing
   a repo resets the branch selection.
-- [~] File tree wired to changed files. Reads `MOCK_FILES` via the store, not
-  `getChangedFiles`.
+- [x] File tree wired to changed files. The store loads the change set via
+  `getChangedFiles` on repo open and whenever the base, head, or compare mode changes,
+  keeping a valid selection and clearing when no repo is open.
+- [x] Collapse single-child directory chains into one combined row (GitHub-style path
+  compression), so `a/b/c/file` shows as an `a/b/c` folder with the file directly under it.
 - [~] File selection to file pair to Monaco. Reads `mockFilePair`, not `getFilePair`.
 
 ### Phase 4, live updates and polish

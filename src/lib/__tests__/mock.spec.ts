@@ -1,13 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MOCK_BRANCHES, MOCK_FILES, mockFilePair } from '@/lib/mock';
-
-describe('mock dataset', () => {
-    it('exposes the changed files and branches from the prototype', () => {
-        expect(MOCK_FILES).toHaveLength(10);
-        expect(MOCK_BRANCHES.some((b) => b.name === 'main' && b.kind === 'local')).toBe(true);
-        expect(MOCK_BRANCHES.some((b) => b.kind === 'remote')).toBe(true);
-    });
-});
+import { mockFilePair } from '@/lib/mock';
 
 describe('mockFilePair', () => {
     it('builds a modified pair with both sides and inferred language', () => {

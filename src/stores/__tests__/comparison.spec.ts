@@ -1,12 +1,28 @@
 import { setActivePinia, createPinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+import { flushPromises } from '@vue/test-utils';
 import { useComparisonStore } from '@/stores/comparison';
 import type { DirNode, FileNode, TreeNode } from '@/stores/comparison';
-import type { BranchInfo } from '@/shared/types';
+import type { BranchInfo, ChangedFile, CompareMode } from '@/shared/types';
+import { BRANCHES as PROTOTYPE_BRANCHES, CHANGED_FILES } from '@/components/__tests__/fixtures';
 
 const dirs = (nodes: TreeNode[]): DirNode[] => nodes.filter((n): n is DirNode => n.kind === 'dir');
 const files = (nodes: TreeNode[]): FileNode[] =>
     nodes.filter((n): n is FileNode => n.kind === 'file');
+
+// Seed the store's state directly with the prototype dataset (no bridge), the
+// way a repo open would, so the tree/viewed/filter getters have data to work on
+// without a repo open. Assigning refs skips the range setters, so nothing reaches
+// for window.api. The +/- totals (336/267) are asserted below.
+function seededStore() {
+    const store = useComparisonStore();
+    store.branches = PROTOTYPE_BRANCHES;
+    store.files = CHANGED_FILES;
+    store.base = 'main';
+    store.toggleViewed('shared/types.ts');
+    store.toggleViewed('src/stores/comparison.ts');
+    return store;
+}
 
 describe('comparison store', () => {
     beforeEach(() => {
@@ -14,14 +30,14 @@ describe('comparison store', () => {
     });
 
     it('reports file count and +/- totals from the change set', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
         expect(store.fileCount).toBe(10);
         expect(store.totalAdditions).toBe(336);
         expect(store.totalDeletions).toBe(267);
     });
 
     it('splits branches into local and remote', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
         expect(store.localBranches.every((b) => b.kind === 'local')).toBe(true);
         expect(store.remoteBranches.every((b) => b.kind === 'remote')).toBe(true);
         expect(store.localBranches.length + store.remoteBranches.length).toBe(
@@ -31,6 +47,7 @@ describe('comparison store', () => {
 
     it('formats the range label per compare mode', () => {
         const store = useComparisonStore();
+        store.base = 'main';
         expect(store.rangeLabel).toBe('main...WORKING TREE');
         store.setCompareMode('direct');
         expect(store.rangeLabel).toBe('main..WORKING TREE');
@@ -46,7 +63,7 @@ describe('comparison store', () => {
     });
 
     it('tracks viewed files and the viewed count', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
         expect(store.viewedCount).toBe(2);
         expect(store.isViewed('shared/types.ts')).toBe(true);
 
@@ -60,7 +77,7 @@ describe('comparison store', () => {
     });
 
     it('selects a file and exposes its file pair', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
         expect(store.selectedFile.path).toBe('electron/git/parsers.ts');
 
         store.selectFile('shared/types.ts');
@@ -70,7 +87,7 @@ describe('comparison store', () => {
     });
 
     it('builds a directory-grouped tree with depth-based nesting', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
         const electron = dirs(store.treeNodes).find((n) => n.path === 'electron');
         const git = dirs(store.treeNodes).find((n) => n.path === 'electron/git');
         const parsers = files(store.treeNodes).find((n) => n.path === 'electron/git/parsers.ts');
@@ -80,8 +97,52 @@ describe('comparison store', () => {
         expect(parsers?.depth).toBe(2);
     });
 
-    it('computes per-directory viewed tallies', () => {
+    it('folds a single-child directory chain into one combined row', () => {
         const store = useComparisonStore();
+        store.files = [
+            { path: 'a/b/c/file.txt', status: 'M', additions: 1, deletions: 0, binary: false },
+        ];
+
+        const dirNodes = dirs(store.treeNodes);
+        expect(dirNodes).toHaveLength(1);
+        expect(dirNodes[0]?.name).toBe('a/b/c');
+        expect(dirNodes[0]?.path).toBe('a/b/c');
+        expect(dirNodes[0]?.depth).toBe(0);
+
+        const file = files(store.treeNodes).find((n) => n.name === 'file.txt');
+        expect(file?.depth).toBe(1);
+    });
+
+    it('stops folding at a directory that holds files or branches', () => {
+        const store = useComparisonStore();
+        store.files = [
+            { path: 'a/b/one.txt', status: 'M', additions: 1, deletions: 0, binary: false },
+            { path: 'a/b/c/two.txt', status: 'M', additions: 1, deletions: 0, binary: false },
+        ];
+
+        const dirNodes = dirs(store.treeNodes);
+        // a folds into b (a has no files and one child); b holds a file and a
+        // child, so it is the branch point and c stays a separate row under it.
+        expect(dirNodes.find((n) => n.name === 'a/b')?.path).toBe('a/b');
+        expect(dirNodes.find((n) => n.name === 'c')?.path).toBe('a/b/c');
+    });
+
+    it('collapses a folded chain as a single unit', () => {
+        const store = useComparisonStore();
+        store.files = [
+            { path: 'a/b/c/file.txt', status: 'M', additions: 1, deletions: 0, binary: false },
+        ];
+
+        store.collapseAll();
+        expect(store.allCollapsed).toBe(true);
+        expect(dirs(store.treeNodes)[0]?.open).toBe(false);
+
+        store.toggleDir('a/b/c');
+        expect(dirs(store.treeNodes)[0]?.open).toBe(true);
+    });
+
+    it('computes per-directory viewed tallies', () => {
+        const store = seededStore();
         const shared = dirs(store.treeNodes).find((n) => n.path === 'shared');
         expect(shared?.seen).toBe(1);
         expect(shared?.total).toBe(1);
@@ -89,7 +150,7 @@ describe('comparison store', () => {
     });
 
     it('collapses and expands a single directory', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
         store.toggleDir('electron');
 
         const electron = dirs(store.treeNodes).find((n) => n.path === 'electron');
@@ -101,7 +162,7 @@ describe('comparison store', () => {
     });
 
     it('collapses and expands all folders', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
 
         store.collapseAll();
         const collapsed = store.treeNodes;
@@ -113,7 +174,7 @@ describe('comparison store', () => {
     });
 
     it('toggleAll opens everything only when fully collapsed', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
         expect(store.allCollapsed).toBe(false); // default is fully expanded
 
         store.toggleAll(); // expanded → collapse
@@ -126,7 +187,7 @@ describe('comparison store', () => {
     });
 
     it('toggleAll collapses from a mixed open/closed state', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
         store.toggleDir('electron'); // close a single folder → mixed
         expect(store.allCollapsed).toBe(false);
 
@@ -135,7 +196,7 @@ describe('comparison store', () => {
     });
 
     it('filters the tree and force-opens matching folders even when collapsed', () => {
-        const store = useComparisonStore();
+        const store = seededStore();
         store.collapseAll();
         store.setTreeFilter('parsers');
 
@@ -152,6 +213,10 @@ describe('comparison store', () => {
             { name: 'develop', kind: 'local' },
             { name: 'origin/main', kind: 'remote' },
         ];
+        const CHANGED: ChangedFile[] = [
+            { path: 'src/app.ts', status: 'M', additions: 3, deletions: 1, binary: false },
+            { path: 'src/lib/util.ts', status: 'A', additions: 12, deletions: 0, binary: false },
+        ];
 
         function stubApi(overrides: Record<string, unknown> = {}) {
             const api = {
@@ -166,6 +231,9 @@ describe('comparison store', () => {
                     Promise.resolve(RECENTS.filter((entry) => entry !== path))
                 ),
                 getBranches: vi.fn<() => Promise<BranchInfo[]>>().mockResolvedValue(BRANCHES),
+                getChangedFiles: vi
+                    .fn<(base: string, head: string, mode: CompareMode) => Promise<ChangedFile[]>>()
+                    .mockResolvedValue(CHANGED),
                 ...overrides,
             };
             window.api = api as unknown as Window['api'];
@@ -241,6 +309,54 @@ describe('comparison store', () => {
             expect(store.branches).toEqual([]);
             expect(store.base).toBe('');
             expect(store.head).toBe('WORKING TREE');
+            expect(store.files).toEqual([]);
+            expect(store.selectedPath).toBe('');
+        });
+
+        it('loads the changed files and selects the first on open', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(api.getChangedFiles).toHaveBeenCalledWith('main', 'WORKING TREE', 'merge-base');
+            expect(store.files).toEqual(CHANGED);
+            expect(store.selectedPath).toBe('src/app.ts');
+        });
+
+        it('reloads the changed files when the range changes', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            api.getChangedFiles.mockClear();
+
+            store.setBase('develop');
+            await flushPromises();
+            expect(api.getChangedFiles).toHaveBeenCalledWith(
+                'develop',
+                'WORKING TREE',
+                'merge-base'
+            );
+        });
+
+        it('keeps the current selection across a reload when the file still exists', async () => {
+            stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            store.selectFile('src/lib/util.ts');
+
+            await store.loadChangedFiles();
+            expect(store.selectedPath).toBe('src/lib/util.ts');
+        });
+
+        it('clears the change set when getChangedFiles rejects', async () => {
+            stubApi({
+                getChangedFiles: vi
+                    .fn<() => Promise<ChangedFile[]>>()
+                    .mockRejectedValue(new Error('bad ref')),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.files).toEqual([]);
+            expect(store.selectedPath).toBe('');
         });
 
         it('runs the picker then opens the chosen folder', async () => {

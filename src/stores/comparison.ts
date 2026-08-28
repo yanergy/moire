@@ -2,14 +2,7 @@ import { computed, ref } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import type { BranchInfo, ChangedFile, CompareMode, FilePair, FileStatus } from '@/shared/types';
 import { WORKING_TREE } from '@/shared/types';
-import {
-    DEFAULT_BASE,
-    DEFAULT_HEAD,
-    DEFAULT_SELECTED,
-    MOCK_BRANCHES,
-    MOCK_FILES,
-    mockFilePair,
-} from '@/lib/mock';
+import { mockFilePair } from '@/lib/mock';
 
 export interface DirNode {
     kind: 'dir';
@@ -56,6 +49,56 @@ function baseName(path: string): string {
     return parts[parts.length - 1] ?? path;
 }
 
+// Group a flat change set into a nested directory tree, keyed by path segment.
+function buildTree(fileList: ChangedFile[]): RawDir {
+    const root: RawDir = { dirs: new Map(), files: [] };
+    for (const file of fileList) {
+        const parts = file.path.split('/');
+        parts.pop(); // drop the file name; the rest are directories
+        let node = root;
+        for (const part of parts) {
+            let child = node.dirs.get(part);
+            if (!child) {
+                child = { dirs: new Map(), files: [] };
+                node.dirs.set(part, child);
+            }
+
+            node = child;
+        }
+
+        node.files.push(file);
+    }
+
+    return root;
+}
+
+// GitHub-style path compression: fold a run of single-child directories into one
+// row. While a directory holds no files of its own and exactly one subdirectory,
+// absorb that child, joining the names with '/'. Returns the display label, the
+// full path to the deepest folded directory, and that directory's contents.
+function foldChain(
+    name: string,
+    node: RawDir,
+    prefix: string
+): {
+    label: string;
+    path: string;
+    dir: RawDir;
+} {
+    let label = name;
+    let path = prefix ? prefix + '/' + name : name;
+    let dir = node;
+    while (dir.files.length === 0 && dir.dirs.size === 1) {
+        for (const [childName, childDir] of dir.dirs) {
+            label += '/' + childName;
+            path += '/' + childName;
+            dir = childDir;
+        }
+    }
+
+    return { label, path, dir };
+}
+
 // The default base for a freshly opened repo is the branch the user is on, so
 // the diff opens against their current work. Falls back to main, then master,
 // then the first local branch, and to empty when the repo has no local branches
@@ -77,18 +120,15 @@ export const useComparisonStore = defineStore('comparison', () => {
     const repoName = ref('');
     const repoPath = ref('');
     const recentRepos = ref<string[]>([]);
-    const branches = ref(MOCK_BRANCHES);
-    const files = ref(MOCK_FILES);
+    const branches = ref<BranchInfo[]>([]);
+    const files = ref<ChangedFile[]>([]);
 
-    const base = ref(DEFAULT_BASE);
-    const head = ref(DEFAULT_HEAD);
+    const base = ref('');
+    const head = ref<string>(WORKING_TREE);
     const compareMode = ref<CompareMode>('merge-base');
 
-    const selectedPath = ref(DEFAULT_SELECTED);
-    const viewed = ref<Record<string, boolean>>({
-        'shared/types.ts': true,
-        'src/stores/comparison.ts': true,
-    });
+    const selectedPath = ref('');
+    const viewed = ref<Record<string, boolean>>({});
     const treeFilter = ref('');
     const collapsed = ref<Record<string, boolean>>({});
 
@@ -117,22 +157,7 @@ export const useComparisonStore = defineStore('comparison', () => {
     const treeNodes = computed<TreeNode[]>(() => {
         const filter = treeFilter.value.toLowerCase();
         const shown = files.value.filter((f) => !filter || f.path.toLowerCase().includes(filter));
-
-        const root: RawDir = { dirs: new Map(), files: [] };
-        for (const file of shown) {
-            const parts = file.path.split('/');
-            parts.pop(); // drop the file name; the rest are directories
-            let node = root;
-            for (const part of parts) {
-                let child = node.dirs.get(part);
-                if (!child) {
-                    child = { dirs: new Map(), files: [] };
-                    node.dirs.set(part, child);
-                }
-                node = child;
-            }
-            node.files.push(file);
-        }
+        const root = buildTree(shown);
 
         const tallyOf = (node: RawDir): { total: number; seen: number } => {
             let total = 0;
@@ -154,14 +179,16 @@ export const useComparisonStore = defineStore('comparison', () => {
         const out: TreeNode[] = [];
         const walk = (node: RawDir, depth: number, prefix: string) => {
             for (const [name, child] of node.dirs) {
-                const dirPath = prefix ? prefix + '/' + name : name;
-                const open = filter ? true : !collapsed.value[dirPath];
-                const { total, seen } = tallyOf(child);
+                const { label, path, dir } = foldChain(name, child, prefix);
+                const open = filter ? true : !collapsed.value[path];
+                // Folded intermediates carry no files, so the deepest directory's
+                // tally is the tally of the whole combined row.
+                const { total, seen } = tallyOf(dir);
                 out.push({
                     kind: 'dir',
-                    key: 'd:' + dirPath,
-                    name,
-                    path: dirPath,
+                    key: 'd:' + path,
+                    name: label,
+                    path,
                     depth,
                     open,
                     seen,
@@ -169,7 +196,7 @@ export const useComparisonStore = defineStore('comparison', () => {
                     allSeen: total > 0 && seen === total,
                 });
                 if (open) {
-                    walk(child, depth + 1, dirPath);
+                    walk(dir, depth + 1, path);
                 }
             }
             for (const file of node.files) {
@@ -203,19 +230,21 @@ export const useComparisonStore = defineStore('comparison', () => {
         collapsed.value = { ...collapsed.value, [path]: !collapsed.value[path] };
     }
 
+    // The collapsible directory rows, folded the same way the tree renders them,
+    // so collapse-all and the all-collapsed check target exactly what is shown.
     const directoryPaths = computed<string[]>(() => {
-        const paths = new Set<string>();
-        for (const file of files.value) {
-            const parts = file.path.split('/');
-            parts.pop(); // drop the file name
-            let prefix = '';
-            for (const part of parts) {
-                prefix = prefix ? prefix + '/' + part : part;
-                paths.add(prefix);
+        const root = buildTree(files.value);
+        const paths: string[] = [];
+        const walk = (node: RawDir, prefix: string) => {
+            for (const [name, child] of node.dirs) {
+                const { path, dir } = foldChain(name, child, prefix);
+                paths.push(path);
+                walk(dir, path);
             }
-        }
+        };
 
-        return [...paths];
+        walk(root, '');
+        return paths;
     });
 
     const allCollapsed = computed(
@@ -254,20 +283,24 @@ export const useComparisonStore = defineStore('comparison', () => {
 
     function setBase(name: string) {
         base.value = name;
+        void loadChangedFiles();
     }
 
     function setHead(name: string) {
         head.value = name;
+        void loadChangedFiles();
     }
 
     function setCompareMode(mode: CompareMode) {
         compareMode.value = mode;
+        void loadChangedFiles();
     }
 
     function swap() {
         const previousBase = base.value;
         base.value = head.value;
         head.value = previousBase;
+        void loadChangedFiles();
     }
 
     async function loadRecentRepos() {
@@ -288,13 +321,16 @@ export const useComparisonStore = defineStore('comparison', () => {
         recentRepos.value = await api.removeRecentRepo(path);
 
         // Removing the open repo clears the selection back to the placeholder and
-        // drops its branches so the ref selectors do not keep offering stale refs.
+        // drops its branches and change set so the ref selectors and file tree do
+        // not keep showing stale refs or diffs.
         if (path === repoPath.value) {
             repoName.value = '';
             repoPath.value = '';
             branches.value = [];
             base.value = '';
             head.value = WORKING_TREE;
+            files.value = [];
+            selectedPath.value = '';
         }
     }
 
@@ -324,8 +360,8 @@ export const useComparisonStore = defineStore('comparison', () => {
     // Open a repo by path (a recent entry or a freshly picked folder), validated
     // in the main process, which sets the current GitService. Main shows its own
     // error box and returns null for an invalid folder, so the selection is left
-    // untouched in that case. Returns whether the open succeeded. Branches and
-    // files stay on mock data until the git backend replaces them (Phase 3).
+    // untouched in that case. Returns whether the open succeeded. Loading the
+    // branches also pulls the change set for the defaulted range.
     async function openRecent(path: string): Promise<boolean> {
         const api = window.api;
         if (!api) {
@@ -364,10 +400,36 @@ export const useComparisonStore = defineStore('comparison', () => {
         branches.value = await api.getBranches();
         base.value = pickDefaultBase(branches.value);
         head.value = WORKING_TREE;
+        await loadChangedFiles();
     }
 
-    // Native folder picker -> openRecent. Proves the preload round-trip and names
-    // the repo without touching the (still mock) branches and file set.
+    // Pull the changed-file list for the current range from the git backend.
+    // Runs on repo open and whenever the base, head, or compare mode changes.
+    // Keeps a valid selection by falling back to the first file when the previous
+    // pick is gone (a repo switch or a range change). Clears the list when no
+    // repo is open, and swallows a bad range (e.g. an unresolvable ref) rather
+    // than surfacing an unhandled rejection from a fire-and-forget setter.
+    async function loadChangedFiles() {
+        const api = window.api;
+        if (!api || !base.value) {
+            files.value = [];
+            selectedPath.value = '';
+            return;
+        }
+
+        try {
+            files.value = await api.getChangedFiles(base.value, head.value, compareMode.value);
+        } catch {
+            files.value = [];
+        }
+
+        if (!files.value.some((f) => f.path === selectedPath.value)) {
+            selectedPath.value = files.value[0]?.path ?? '';
+        }
+    }
+
+    // Native folder picker -> openRecent, which names the repo and loads its real
+    // branches and change set.
     async function openRepository() {
         const picked = await window.api?.openRepoDialog();
         if (picked) {
@@ -416,6 +478,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         restoreLastRepo,
         openRecent,
         openRepository,
+        loadChangedFiles,
     };
 });
 

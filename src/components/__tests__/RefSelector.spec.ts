@@ -3,6 +3,7 @@ import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import RefSelector from '@/components/controls/RefSelector.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { BRANCHES } from '@/components/__tests__/fixtures';
 
 // The ref picker is a shadcn-vue Popover + Command. Its list is teleported to
 // document.body, so assertions query the document rather than the wrapper.
@@ -41,7 +42,12 @@ describe('RefSelector', () => {
         document.body.innerHTML = '';
     });
 
+    // The store starts empty (no repo open), so seed the prototype branch list
+    // and a base the way a repo open would before mounting a selector.
     function mountSide(side: 'base' | 'head') {
+        const store = useComparisonStore();
+        store.branches = BRANCHES;
+        store.base = 'main';
         return mount(RefSelector, {
             props: { side },
             attachTo: document.body,
