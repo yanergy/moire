@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { GitService, WORKING_TREE } from '../electron/git/GitService.cjs';
+import { GitService, WORKING_TREE } from '../electron/git/GitService';
 
 // GitService takes an injectable git so its orchestration is testable without a
 // real repo (parsing itself is covered in parsers.spec.ts). Each fake stubs only

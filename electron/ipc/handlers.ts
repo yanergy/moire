@@ -1,29 +1,32 @@
 // IPC handlers bridging window.api to main-process work. Each channel here has a
-// matching method in the preload contextBridge (electron/preload.cjs) and an
+// matching method in the preload contextBridge (electron/preload.ts) and an
 // entry in MoireApi (src/shared/types.ts). Keep the three in sync.
 
-const path = require('node:path');
-const { ipcMain, dialog } = require('electron');
-const { simpleGit, CheckRepoActions } = require('simple-git');
-const { GitService } = require('../git/GitService.cjs');
-const { watchRepo } = require('../watcher/RepoWatcher.cjs');
-const {
+import path from 'node:path';
+import { ipcMain, dialog } from 'electron';
+import { simpleGit, CheckRepoActions } from 'simple-git';
+import { GitService } from '../git/GitService';
+import { watchRepo } from '../watcher/RepoWatcher';
+import {
     getRecentRepos,
     addRecentRepo,
     removeRecentRepo,
     getBranchSelection,
     setBranchSelection,
-} = require('../settings.cjs');
-const { currentThemeState } = require('../theme.cjs');
-const { logError } = require('../logger.cjs');
+} from '../settings';
+import { currentThemeState } from '../theme';
+import { logError } from '../logger';
+
+type CompareMode = 'merge-base' | 'direct';
 
 // ipcMain.handle that logs a handler rejection before it propagates. A git
 // operation that fails (a bad ref, a repo that moved) otherwise surfaces only as
 // a rejected promise the renderer swallows, leaving no trace; this records it.
-function handle(channel, fn) {
-    ipcMain.handle(channel, async (event, ...args) => {
+// The IPC event is unused by every handler, so it is dropped from the callback.
+function handle<A extends unknown[], R>(channel: string, fn: (...args: A) => R | Promise<R>): void {
+    ipcMain.handle(channel, async (_event, ...args) => {
         try {
-            return await fn(event, ...args);
+            return await fn(...(args as A));
         } catch (error) {
             logError(`ipc ${channel}`, error);
             throw error;
@@ -34,9 +37,9 @@ function handle(channel, fn) {
 // The app compares one repository at a time (multi-repo is a non-goal), so the
 // git-backed channels operate on whichever repo was opened last. `repo:open`
 // sets this on a successful open.
-let currentRepo = null;
+let currentRepo: GitService | null = null;
 
-function requireRepo() {
+function requireRepo(): GitService {
     if (!currentRepo) {
         throw new Error('No repository is open.');
     }
@@ -46,11 +49,11 @@ function requireRepo() {
 
 // The open repo's path (null when none), so the menu can mark it active in the
 // Open Recent list.
-function getCurrentRepoPath() {
+function getCurrentRepoPath(): string | null {
     return currentRepo?.repoPath ?? null;
 }
 
-async function isGitRepo(repoPath) {
+async function isGitRepo(repoPath: string): Promise<boolean> {
     try {
         // IS_REPO_ROOT is the string 'root'; using the enum keeps the type check happy.
         return await simpleGit(repoPath).checkIsRepo(CheckRepoActions.IS_REPO_ROOT);
@@ -64,7 +67,9 @@ async function isGitRepo(repoPath) {
 // Confirms a git binary is on PATH by running `git --version` (which needs no
 // repo). The app can do nothing without git, so main runs this as a launch gate.
 // The runner is injectable so the probe is unit-testable without spawning git.
-async function isGitAvailable(git = simpleGit()) {
+async function isGitAvailable(
+    git: { raw: (args: string[]) => Promise<unknown> } = simpleGit()
+): Promise<boolean> {
     try {
         await git.raw(['--version']);
         return true;
@@ -75,8 +80,7 @@ async function isGitAvailable(git = simpleGit()) {
 
 // onRecentsChanged fires after the recent-repos list changes (an open or a
 // removal) so main can rebuild the app menu's "Open Recent" submenu.
-/** @param {{ onRecentsChanged?: () => void }} [options] */
-function registerIpcHandlers({ onRecentsChanged } = {}) {
+function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => void } = {}): void {
     handle('dialog:open-repo', async () => {
         const result = await dialog.showOpenDialog({
             title: 'Open repository',
@@ -89,7 +93,7 @@ function registerIpcHandlers({ onRecentsChanged } = {}) {
         return result.filePaths[0];
     });
 
-    handle('repo:open', async (_event, repoPath) => {
+    handle('repo:open', async (repoPath: string) => {
         if (!(await isGitRepo(repoPath))) {
             dialog.showErrorBox(
                 'Not a Git repository',
@@ -110,7 +114,7 @@ function registerIpcHandlers({ onRecentsChanged } = {}) {
 
     handle('repo:recent', () => getRecentRepos());
 
-    handle('repo:remove-recent', async (_event, repoPath) => {
+    handle('repo:remove-recent', async (repoPath: string) => {
         const next = await removeRecentRepo(repoPath);
         onRecentsChanged?.();
         return next;
@@ -118,9 +122,9 @@ function registerIpcHandlers({ onRecentsChanged } = {}) {
 
     // Per-repo base/head persistence, so reopening a repo restores its last
     // compared range (validated against the live branch list in the renderer).
-    handle('settings:branch-selection:get', (_event, repoPath) => getBranchSelection(repoPath));
+    handle('settings:branch-selection:get', (repoPath: string) => getBranchSelection(repoPath));
 
-    handle('settings:branch-selection:set', (_event, repoPath, base, head) =>
+    handle('settings:branch-selection:set', (repoPath: string, base: string, head: string) =>
         setBranchSelection(repoPath, base, head)
     );
 
@@ -132,13 +136,13 @@ function registerIpcHandlers({ onRecentsChanged } = {}) {
     // matching method in the preload bridge and an entry in MoireApi.
     handle('git:branches', () => requireRepo().branches());
 
-    handle('git:changed-files', (_event, base, head, mode) =>
+    handle('git:changed-files', (base: string, head: string, mode: CompareMode) =>
         requireRepo().changedFiles(base, head, mode)
     );
 
-    handle('git:file-pair', (_event, base, head, filePath) =>
+    handle('git:file-pair', (base: string, head: string, filePath: string) =>
         requireRepo().filePair(base, head, filePath)
     );
 }
 
-module.exports = { registerIpcHandlers, isGitAvailable, getCurrentRepoPath };
+export { registerIpcHandlers, isGitAvailable, getCurrentRepoPath };

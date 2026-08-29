@@ -3,11 +3,34 @@
 // instead of being split apart on whitespace. Each parser here has matching
 // cases in tests/parsers.spec.ts (see documentation/code-conventions.md).
 
+export type FileStatus = 'A' | 'M' | 'D' | 'R';
+
+export interface NameStatusEntry {
+    status: FileStatus;
+    path: string;
+    oldPath?: string;
+}
+
+export interface NumstatEntry {
+    additions: number;
+    deletions: number;
+    binary: boolean;
+}
+
+export interface ChangedFile {
+    path: string;
+    status: FileStatus;
+    additions: number;
+    deletions: number;
+    binary: boolean;
+    oldPath?: string;
+}
+
 // git emits A, M, D, R, C, T, U, and rename/copy carry a similarity score
 // (e.g. R065). The renderer's FileStatus is only A|M|D|R, so fold the rest:
 // a copy reads as a rename (it has an old path and a new path); a type change
 // reads as a modification.
-function normalizeStatus(token) {
+function normalizeStatus(token: string): FileStatus {
     const letter = token[0];
     if (letter === 'A' || letter === 'M' || letter === 'D' || letter === 'R') {
         return letter;
@@ -20,7 +43,7 @@ function normalizeStatus(token) {
 }
 
 // Rename and copy records carry two paths (old then new); everything else one.
-function hasTwoPaths(token) {
+function hasTwoPaths(token: string): boolean {
     return token[0] === 'R' || token[0] === 'C';
 }
 
@@ -29,9 +52,9 @@ function hasTwoPaths(token) {
 //   R065 \0 old \0 new     (rename/copy: score token, then two paths)
 // Returns one entry per file, keyed on the new path, with oldPath set only for
 // renames. The trailing NUL leaves an empty final token, which is skipped.
-function parseNameStatus(out) {
+export function parseNameStatus(out: string): NameStatusEntry[] {
     const tokens = out.split('\0');
-    const files = [];
+    const files: NameStatusEntry[] = [];
 
     let i = 0;
     while (i < tokens.length) {
@@ -60,9 +83,9 @@ function parseNameStatus(out) {
 //   add \t del \t \0 old \0 new   (rename: empty path field, then two tokens)
 // Binary files report `-` for both counts. Returns a Map keyed by the new path,
 // each value carrying additions, deletions, and a binary flag.
-function parseNumstat(out) {
+export function parseNumstat(out: string): Map<string, NumstatEntry> {
     const tokens = out.split('\0');
-    const counts = new Map();
+    const counts = new Map<string, NumstatEntry>();
 
     let i = 0;
     while (i < tokens.length) {
@@ -74,7 +97,7 @@ function parseNumstat(out) {
 
         const [add, del, path] = token.split('\t');
         const binary = add === '-' && del === '-';
-        const stat = {
+        const stat: NumstatEntry = {
             additions: binary ? 0 : Number(add),
             deletions: binary ? 0 : Number(del),
             binary,
@@ -98,7 +121,7 @@ function parseNumstat(out) {
 // `git ls-files --others --exclude-standard -z` → a NUL-separated list of the
 // untracked file paths (git-ignored files already filtered out by
 // --exclude-standard). The trailing NUL leaves an empty final token, dropped.
-function parseNulPaths(out) {
+export function parseNulPaths(out: string): string[] {
     return out.split('\0').filter((token) => token !== '');
 }
 
@@ -106,10 +129,13 @@ function parseNulPaths(out) {
 // authority on the file set and status; numstat contributes the line counts and
 // the binary flag. A file missing from numstat (an empty-content change) keeps
 // zero counts rather than dropping out.
-function mergeChangedFiles(nameStatus, numstat) {
+export function mergeChangedFiles(
+    nameStatus: NameStatusEntry[],
+    numstat: Map<string, NumstatEntry>
+): ChangedFile[] {
     return nameStatus.map((entry) => {
         const stat = numstat.get(entry.path);
-        const file = {
+        const file: ChangedFile = {
             path: entry.path,
             status: entry.status,
             additions: stat ? stat.additions : 0,
@@ -123,5 +149,3 @@ function mergeChangedFiles(nameStatus, numstat) {
         return file;
     });
 }
-
-module.exports = { parseNameStatus, parseNumstat, parseNulPaths, mergeChangedFiles };

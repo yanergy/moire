@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isOnScreen } from '../electron/window-state.cjs';
+import { isOnScreen } from '../electron/window-state';
 
 // A typical primary display work area (top bar / taskbar already excluded).
 const primary = { x: 0, y: 0, width: 1920, height: 1080 };

@@ -1,24 +1,19 @@
-const { app, BrowserWindow, dialog, nativeImage, shell } = require('electron');
-const path = require('node:path');
-const { registerIpcHandlers, isGitAvailable, getCurrentRepoPath } = require('./ipc/handlers.cjs');
-const { installAppMenu } = require('./menu.cjs');
-const {
-    initTheme,
-    setThemePreference,
-    registerThemeBroadcast,
-    currentThemeState,
-} = require('./theme.cjs');
-const { restoreWindowState, trackWindowState } = require('./window-state.cjs');
-const { initLogging, logError } = require('./logger.cjs');
-const { getRecentRepos } = require('./settings.cjs');
+import { app, BrowserWindow, dialog, nativeImage, shell } from 'electron';
+import path from 'node:path';
+import { registerIpcHandlers, isGitAvailable, getCurrentRepoPath } from './ipc/handlers';
+import { installAppMenu } from './menu';
+import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
+import { restoreWindowState, trackWindowState } from './window-state';
+import { initLogging, logError } from './logger';
+import { getRecentRepos } from './settings';
 
 // Send a menu-triggered message to the window the user is in (or the only one).
-function sendToFocused(channel, ...args) {
+function sendToFocused(channel: string, ...args: unknown[]): void {
     const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
     win?.webContents.send(channel, ...args);
 }
 
-async function createWindow() {
+async function createWindow(): Promise<void> {
     // Reopen at the last session's size/position (off-screen positions dropped).
     const { bounds, maximized } = await restoreWindowState();
     const win = new BrowserWindow({

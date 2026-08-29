@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildMenuTemplate } from '../electron/menu.cjs';
+import { buildMenuTemplate } from '../electron/menu';
 
 // menu.cjs is CommonJS loaded natively under vitest, so `require('electron')`
 // inside it resolves to the binary path (not the API) and Menu is undefined. The

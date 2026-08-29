@@ -1,21 +1,49 @@
 // GitService wraps the system git binary (via simple-git) for one open
 // repository. All git and filesystem work stays in the main process; the
 // renderer reaches these methods only through the preload bridge. Output parsing
-// lives in ./parsers.cjs so the porcelain formats stay unit-testable.
+// lives in ./parsers so the porcelain formats stay unit-testable.
 
-const fs = require('node:fs/promises');
-const path = require('node:path');
-const { execFile } = require('node:child_process');
-const { promisify } = require('node:util');
-const { simpleGit } = require('simple-git');
-
-const execFileAsync = promisify(execFile);
-const {
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { simpleGit, type SimpleGit } from 'simple-git';
+import {
     parseNameStatus,
     parseNumstat,
     parseNulPaths,
     mergeChangedFiles,
-} = require('./parsers.cjs');
+    type ChangedFile,
+    type FileStatus,
+} from './parsers';
+
+const execFileAsync = promisify(execFile);
+
+type CompareMode = 'merge-base' | 'direct';
+
+interface BranchInfo {
+    name: string;
+    kind: 'local' | 'remote';
+    isCurrent?: boolean;
+}
+
+interface FilePair {
+    path: string;
+    oldContent: string | null;
+    newContent: string | null;
+    language: string;
+    binary: boolean;
+    tooLarge: boolean;
+    sizeBytes: number;
+    image?: boolean;
+    oldImage?: string | null;
+    newImage?: string | null;
+}
+
+interface GitServiceDeps {
+    readBlobBytes?: (ref: string, filePath: string) => Promise<Buffer | null>;
+    readDiskBytes?: (filePath: string) => Promise<Buffer | null>;
+}
 
 // Must match WORKING_TREE in src/shared/types.ts. That shared constant belongs
 // to the renderer; the strict process split (electron never imports from src/)
@@ -23,8 +51,8 @@ const {
 const WORKING_TREE = 'WORKING TREE';
 
 // Content larger than this is flagged tooLarge so the renderer can gate
-// rendering (the "Load diff" gate lands in Phase 4). The bytes are still
-// returned; the flag only signals that the file is heavy.
+// rendering (the "Load diff" gate). The bytes are still returned; the flag only
+// signals that the file is heavy.
 const MAX_RENDER_BYTES = 512 * 1024;
 
 // Images are previewed inline as base64 data URIs. Above this the base64 payload
@@ -35,7 +63,7 @@ const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 // Raster image extensions Monaco can't diff but the renderer can show as before/
 // after pictures. SVG is deliberately left out: it is text, so it gets a real
 // text diff instead.
-const IMAGE_MIME = {
+const IMAGE_MIME: Record<string, string> = {
     png: 'image/png',
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
@@ -46,7 +74,7 @@ const IMAGE_MIME = {
     avif: 'image/avif',
 };
 
-function imageMimeForPath(filePath) {
+function imageMimeForPath(filePath: string): string | null {
     const dot = filePath.lastIndexOf('.');
     if (dot === -1) {
         return null;
@@ -55,14 +83,14 @@ function imageMimeForPath(filePath) {
     return IMAGE_MIME[filePath.slice(dot + 1).toLowerCase()] ?? null;
 }
 
-function dataUri(mime, buffer) {
+function dataUri(mime: string, buffer: Buffer | null): string | null {
     return buffer === null ? null : `data:${mime};base64,${buffer.toString('base64')}`;
 }
 
 // Extension → Monaco language id. This mirrors src/lib/language.ts, duplicated
 // across the process boundary on purpose: the renderer owns that module and the
 // main process cannot import from src/. Keep the two in rough sync.
-const LANGUAGE_BY_EXTENSION = {
+const LANGUAGE_BY_EXTENSION: Record<string, string> = {
     ts: 'typescript',
     tsx: 'typescript',
     mts: 'typescript',
@@ -84,7 +112,7 @@ const LANGUAGE_BY_EXTENSION = {
     sh: 'shell',
 };
 
-function languageForPath(filePath) {
+function languageForPath(filePath: string): string {
     const dot = filePath.lastIndexOf('.');
     if (dot === -1) {
         return 'plaintext';
@@ -95,18 +123,18 @@ function languageForPath(filePath) {
 
 // A NUL byte in the decoded content is git's own binary heuristic; it also
 // stands in for content that is not valid UTF-8 text.
-function isBinary(content) {
+function isBinary(content: string | null): boolean {
     return content !== null && content.includes('\0');
 }
 
-function byteLength(content) {
+function byteLength(content: string | null): number {
     return content === null ? 0 : Buffer.byteLength(content, 'utf8');
 }
 
 // Line count of newly added content, matching git's numstat addition count for a
 // new file: a trailing newline closes the last line rather than adding an empty
 // one.
-function countLines(content) {
+function countLines(content: string | null): number {
     if (!content) {
         return 0;
     }
@@ -116,10 +144,15 @@ function countLines(content) {
 }
 
 class GitService {
+    repoPath: string;
+    git: SimpleGit;
+    readBlobBytes: (ref: string, filePath: string) => Promise<Buffer | null>;
+    readDiskBytes: (filePath: string) => Promise<Buffer | null>;
+
     // git is injectable so the service is unit-testable without a real repo. The
     // binary readers (raw image bytes at a ref / on disk) are injectable too, since
     // they shell out for Buffer output that simple-git's string API can't give.
-    constructor(repoPath, git = simpleGit(repoPath), deps = {}) {
+    constructor(repoPath: string, git: SimpleGit = simpleGit(repoPath), deps: GitServiceDeps = {}) {
         this.repoPath = repoPath;
         this.git = git;
         this.readBlobBytes =
@@ -131,7 +164,7 @@ class GitService {
     // there. simple-git decodes stdout to a string (lossy for binary), so read the
     // blob with buffer output instead. maxBuffer is generous so the caller can
     // measure the size and decide whether to inline it.
-    async blobBytes(ref, filePath) {
+    async blobBytes(ref: string, filePath: string): Promise<Buffer | null> {
         try {
             const { stdout } = await execFileAsync(
                 'git',
@@ -144,7 +177,7 @@ class GitService {
         }
     }
 
-    async diskBytes(filePath) {
+    async diskBytes(filePath: string): Promise<Buffer | null> {
         try {
             return await fs.readFile(path.join(this.repoPath, filePath));
         } catch {
@@ -153,14 +186,14 @@ class GitService {
     }
 
     // Local branches first (current one flagged), then remote-tracking branches.
-    async branches() {
+    async branches(): Promise<BranchInfo[]> {
         const [local, remote] = await Promise.all([
             this.git.branchLocal(),
             this.git.branch(['-r']),
         ]);
 
-        const locals = local.all.map((name) => {
-            const info = { name, kind: 'local' };
+        const locals: BranchInfo[] = local.all.map((name) => {
+            const info: BranchInfo = { name, kind: 'local' };
             if (name === local.current) {
                 info.isCurrent = true;
             }
@@ -168,7 +201,7 @@ class GitService {
             return info;
         });
 
-        const remotes = remote.all
+        const remotes: BranchInfo[] = remote.all
             // Drop the symbolic `origin/HEAD -> origin/main` pointer.
             .filter((name) => !name.includes(' -> ') && !name.endsWith('/HEAD'))
             .map((name) => ({ name, kind: 'remote' }));
@@ -176,7 +209,7 @@ class GitService {
         return [...locals, ...remotes];
     }
 
-    async changedFiles(base, head, mode) {
+    async changedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]> {
         const range = this.rangeArgs(base, head, mode);
         const [nameStatusOut, numstatOut] = await Promise.all([
             this.git.raw(['diff', '--name-status', '-M', '-z', ...range]),
@@ -197,24 +230,25 @@ class GitService {
     // Untracked files as added ChangedFile entries, for the working-tree
     // comparison. --exclude-standard drops git-ignored paths so build output and
     // node_modules never show up.
-    async untrackedFiles() {
+    async untrackedFiles(): Promise<ChangedFile[]> {
         const out = await this.git.raw(['ls-files', '--others', '--exclude-standard', '-z']);
         return Promise.all(parseNulPaths(out).map((filePath) => this.untrackedFile(filePath)));
     }
 
-    async untrackedFile(filePath) {
+    async untrackedFile(filePath: string): Promise<ChangedFile> {
         const content = await this.diskContent(filePath);
         const binary = isBinary(content);
+        const status: FileStatus = 'A';
         return {
             path: filePath,
-            status: 'A',
+            status,
             additions: binary ? 0 : countLines(content),
             deletions: 0,
             binary,
         };
     }
 
-    async filePair(base, head, filePath) {
+    async filePair(base: string, head: string, filePath: string): Promise<FilePair> {
         const imageMime = imageMimeForPath(filePath);
         if (imageMime) {
             return this.imagePair(base, head, filePath, imageMime);
@@ -246,7 +280,7 @@ class GitService {
     // instead. Both sides are inlined as base64 data URIs (a missing side is null,
     // for an add or a delete). An image past the size cap drops back to the plain
     // binary notice (image false, no data URIs) so a huge payload isn't shipped.
-    async imagePair(base, head, filePath, mime) {
+    async imagePair(base: string, head: string, filePath: string, mime: string): Promise<FilePair> {
         const oldBytes = await this.readBlobBytes(base, filePath);
         const newBytes =
             head === WORKING_TREE
@@ -273,7 +307,7 @@ class GitService {
     // Three-dot (merge-base) is the default, matching what a GitHub PR shows;
     // two-dot is the literal diff. A working-tree head has no second ref:
     // `git diff <base>` compares the base against what is currently on disk.
-    rangeArgs(base, head, mode) {
+    rangeArgs(base: string, head: string, mode: CompareMode): string[] {
         if (head === WORKING_TREE) {
             return [base];
         }
@@ -283,7 +317,7 @@ class GitService {
 
     // File content at a committed ref, or null when the path does not exist there
     // (an added file has no base side; a deleted file has no head side).
-    async contentAt(ref, filePath) {
+    async contentAt(ref: string, filePath: string): Promise<string | null> {
         try {
             return await this.git.show([`${ref}:${filePath}`]);
         } catch {
@@ -291,7 +325,7 @@ class GitService {
         }
     }
 
-    async diskContent(filePath) {
+    async diskContent(filePath: string): Promise<string | null> {
         try {
             return await fs.readFile(path.join(this.repoPath, filePath), 'utf8');
         } catch {
@@ -300,4 +334,4 @@ class GitService {
     }
 }
 
-module.exports = { GitService, WORKING_TREE };
+export { GitService, WORKING_TREE };

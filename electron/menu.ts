@@ -1,20 +1,38 @@
 // The native application menu (File / Edit / View / Window). Electron would
 // synthesize a default menu on its own; we build our own so the View menu can
 // carry a "Theme" submenu (System / Light / Dark). Picking an item sets the
-// preference in the main process (electron/theme.cjs → nativeTheme), which then
+// preference in the main process (electron/theme.ts → nativeTheme), which then
 // pushes the resolved theme to the renderer over the preload bridge.
 
-const { Menu } = require('electron');
+import { Menu, type MenuItemConstructorOptions } from 'electron';
+import type { ThemePreference } from './settings';
 
-const THEME_OPTIONS = [
+interface ThemeOption {
+    label: string;
+    preference: ThemePreference;
+}
+
+export const THEME_OPTIONS: ThemeOption[] = [
     { label: 'System', preference: 'system' },
     { label: 'Light', preference: 'light' },
     { label: 'Dark', preference: 'dark' },
 ];
 
+export interface MenuOptions {
+    isMac: boolean;
+    currentTheme: ThemePreference;
+    onSelectTheme: (preference: ThemePreference) => void;
+    onRefresh: () => void;
+    onOpenLog?: () => void;
+    onOpenRepo?: () => void;
+    onOpenRecent?: (repoPath: string) => void;
+    recentRepos?: string[];
+    activeRepo?: string | null;
+}
+
 // The trailing path segment, for a readable "Open Recent" label (the full path
 // stays available on hover as the item's toolTip).
-function repoLabel(repoPath) {
+function repoLabel(repoPath: string): string {
     const parts = repoPath.split(/[/\\]/).filter(Boolean);
     return parts[parts.length - 1] || repoPath;
 }
@@ -24,7 +42,7 @@ function repoLabel(repoPath) {
 // checked theme; `onSelectTheme(preference)`, `onRefresh`, and `onOpenLog` back
 // the View/Help items; `onOpenRepo` and `onOpenRecent(path)` back the File menu,
 // whose "Open Recent" submenu is built from `recentRepos` (most-recent-first).
-function buildMenuTemplate({
+export function buildMenuTemplate({
     isMac,
     currentTheme,
     onSelectTheme,
@@ -34,9 +52,9 @@ function buildMenuTemplate({
     onOpenRecent,
     recentRepos = [],
     activeRepo = null,
-}) {
-    const recentItems = recentRepos.length
-        ? recentRepos.map((repoPath) => ({
+}: MenuOptions): MenuItemConstructorOptions[] {
+    const recentItems: MenuItemConstructorOptions[] = recentRepos.length
+        ? recentRepos.map((repoPath): MenuItemConstructorOptions => ({
               label: repoLabel(repoPath),
               toolTip: repoPath,
               // A checkmark marks the repo that is currently open.
@@ -46,8 +64,10 @@ function buildMenuTemplate({
           }))
         : [{ label: 'No recent repositories', enabled: false }];
 
+    const appMenu: MenuItemConstructorOptions[] = isMac ? [{ role: 'appMenu' }] : [];
+
     return [
-        ...(isMac ? [{ role: 'appMenu' }] : []),
+        ...appMenu,
         {
             label: 'File',
             submenu: [
@@ -80,12 +100,14 @@ function buildMenuTemplate({
                 { type: 'separator' },
                 {
                     label: 'Theme',
-                    submenu: THEME_OPTIONS.map(({ label, preference }) => ({
-                        label,
-                        type: 'radio',
-                        checked: currentTheme === preference,
-                        click: () => onSelectTheme(preference),
-                    })),
+                    submenu: THEME_OPTIONS.map(
+                        ({ label, preference }): MenuItemConstructorOptions => ({
+                            label,
+                            type: 'radio',
+                            checked: currentTheme === preference,
+                            click: () => onSelectTheme(preference),
+                        })
+                    ),
                 },
             ],
         },
@@ -97,13 +119,7 @@ function buildMenuTemplate({
     ];
 }
 
-function installAppMenu(options) {
+export function installAppMenu(options: Omit<MenuOptions, 'isMac'>): void {
     const template = buildMenuTemplate({ isMac: process.platform === 'darwin', ...options });
-    Menu.setApplicationMenu(
-        Menu.buildFromTemplate(
-            /** @type {import('electron').MenuItemConstructorOptions[]} */ (template)
-        )
-    );
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
-
-module.exports = { installAppMenu, buildMenuTemplate, THEME_OPTIONS };

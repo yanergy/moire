@@ -4,18 +4,18 @@
 // surfaces them in the terminal too. formatValue is pure and unit-tested; the
 // file/electron wiring is exercised by hand.
 
-const fs = require('node:fs');
-const path = require('node:path');
+import fs from 'node:fs';
+import path from 'node:path';
 
 // A log past this is truncated on the next launch, so it can't grow unbounded.
 const MAX_LOG_BYTES = 512 * 1024;
 
-let logStream = null;
+let logStream: fs.WriteStream | null = null;
 let logPath = '';
 
 // Render any logged value: an Error keeps its stack (the useful part), a string
 // passes through, anything else is JSON so an object still reads.
-function formatValue(value) {
+export function formatValue(value: unknown): string {
     if (value instanceof Error) {
         return value.stack ?? `${value.name}: ${value.message}`;
     }
@@ -31,20 +31,20 @@ function formatValue(value) {
     }
 }
 
-function write(level, message) {
+function write(level: string, message: string): void {
     const line = `${new Date().toISOString()} [${level}] ${message}\n`;
     (level === 'ERROR' ? console.error : console.log)(line.trimEnd());
     logStream?.write(line);
 }
 
-function logError(context, error) {
+export function logError(context: string, error: unknown): void {
     write('ERROR', `${context}: ${formatValue(error)}`);
 }
 
 // Open the log file under userData and route main-process crashes to it. Returns
 // the log file path (so the menu can offer to open it). Appends across launches
 // until the file passes the size cap, then starts fresh.
-function initLogging(userDataPath) {
+export function initLogging(userDataPath: string): string {
     logPath = path.join(userDataPath, 'moire.log');
 
     try {
@@ -63,5 +63,3 @@ function initLogging(userDataPath) {
     write('INFO', `Moiré started; logging to ${logPath}`);
     return logPath;
 }
-
-module.exports = { initLogging, logError, formatValue };

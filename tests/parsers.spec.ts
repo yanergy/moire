@@ -4,7 +4,7 @@ import {
     parseNumstat,
     parseNulPaths,
     mergeChangedFiles,
-} from '../electron/git/parsers.cjs';
+} from '../electron/git/parsers';
 
 // The inputs below mirror the exact `-z` bytes `git diff` emits (NUL as \x00,
 // TAB as \t), captured from a real repo with a modify, add, binary change,

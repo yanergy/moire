@@ -5,7 +5,7 @@ import {
     worktreeIgnored,
     refWatchPaths,
     coalesceReason,
-} from '../electron/watcher/RepoWatcher.cjs';
+} from '../electron/watcher/RepoWatcher';
 
 // Stand-in for a native fs.watch FSWatcher: records the target and options it was
 // created with, keeps the change listener so tests can fire synthetic events, and

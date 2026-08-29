@@ -17,23 +17,41 @@
 // dozens of events, so reasons are collected and flushed as ONE event after a
 // quiet window. refs outranks worktree in the coalesce.
 
-const fs = require('node:fs');
-const path = require('node:path');
-const defaultChokidar = require('chokidar');
-const { BrowserWindow } = require('electron');
+import fs from 'node:fs';
+import path from 'node:path';
+import defaultChokidar from 'chokidar';
+import { BrowserWindow } from 'electron';
 
-const REPO_CHANGED_CHANNEL = 'repo:changed';
+export const REPO_CHANGED_CHANNEL = 'repo:changed';
 
 // Long enough to swallow the event burst of a single git operation, short enough
 // that the refresh still feels immediate after it settles.
 const DEBOUNCE_MS = 250;
+
+type ChangeReason = 'refs' | 'worktree';
+
+interface RepoChangeEvent {
+    reason: ChangeReason;
+    at: number;
+}
+
+interface RepoWatcherOptions {
+    debounceMs?: number;
+    fsWatch?: typeof fs.watch;
+    chokidar?: typeof defaultChokidar;
+    gitDir?: string;
+}
+
+interface Closable {
+    close: () => void | Promise<void>;
+}
 
 // The only paths inside .git worth refreshing on: HEAD (checkout), packed-refs
 // (gc/pack-refs), and refs/ (branch create, delete, and commits moving a ref).
 // Everything else there (objects/, logs/, index, *.lock, COMMIT_EDITMSG,
 // FETCH_HEAD) is write churn we ignore, or every git command would trigger a
 // refresh storm.
-function refWatchPaths(gitDir) {
+export function refWatchPaths(gitDir: string): string[] {
     return [path.join(gitDir, 'HEAD'), path.join(gitDir, 'packed-refs'), path.join(gitDir, 'refs')];
 }
 
@@ -41,7 +59,7 @@ function refWatchPaths(gitDir) {
 // should trigger, or null to ignore it. Used by the native recursive watcher,
 // which sees the whole tree, so it does the .git filtering the two chokidar
 // watchers get from their scoped paths instead.
-function classifyRelPath(rel) {
+export function classifyRelPath(rel: string): ChangeReason | null {
     if (rel === '' || rel.startsWith('..')) {
         return null;
     }
@@ -73,7 +91,7 @@ function classifyRelPath(rel) {
 // .git dir (its ref bits are covered by the dedicated fallback ref watcher) and
 // node_modules (a performance guard, since chokidar watches it one dir at a time
 // and would exhaust inotify on Linux for no benefit).
-function worktreeIgnored(repoPath, fullPath) {
+export function worktreeIgnored(repoPath: string, fullPath: string): boolean {
     const rel = path.relative(repoPath, fullPath);
     if (rel === '') {
         return false; // the repo root itself
@@ -86,22 +104,32 @@ function worktreeIgnored(repoPath, fullPath) {
 // refs outranks worktree: a checkout touches both, and the moved ref is the more
 // meaningful change to report. The event is informational for now (the renderer
 // re-reads everything on any change), but keeping it accurate future-proofs it.
-function coalesceReason(reasons) {
+export function coalesceReason(reasons: Set<string>): ChangeReason {
     return reasons.has('refs') ? 'refs' : 'worktree';
 }
 
-class RepoWatcher {
+export class RepoWatcher {
+    repoPath: string;
+    onChange: (event: RepoChangeEvent) => void;
+    debounceMs: number;
+    fsWatch: typeof fs.watch;
+    chokidar: typeof defaultChokidar;
+    gitDir: string;
+    watchers: Closable[];
+    pendingReasons: Set<ChangeReason>;
+    timer: ReturnType<typeof setTimeout> | null;
+
     // fs.watch, chokidar, and gitDir are injectable so the backends and the
     // debounce are unit-testable without a real filesystem.
-    /**
-     * @param {string} repoPath
-     * @param {(event: { reason: string, at: number }) => void} onChange
-     * @param {{ debounceMs?: number, fsWatch?: typeof fs.watch, chokidar?: typeof defaultChokidar, gitDir?: string }} [options]
-     */
     constructor(
-        repoPath,
-        onChange,
-        { debounceMs = DEBOUNCE_MS, fsWatch = fs.watch, chokidar = defaultChokidar, gitDir } = {}
+        repoPath: string,
+        onChange: (event: RepoChangeEvent) => void,
+        {
+            debounceMs = DEBOUNCE_MS,
+            fsWatch = fs.watch,
+            chokidar = defaultChokidar,
+            gitDir,
+        }: RepoWatcherOptions = {}
     ) {
         this.repoPath = repoPath;
         this.onChange = onChange;
@@ -114,7 +142,7 @@ class RepoWatcher {
         this.timer = null;
     }
 
-    start() {
+    start(): this {
         const native = this.startNative();
         this.watchers = native ?? this.startChokidar();
         return this;
@@ -123,7 +151,7 @@ class RepoWatcher {
     // One recursive fs.watch over the whole repo, classifying each event path.
     // Returns the watcher wrappers, or null when recursive watching is not
     // supported (Linux), so the caller falls back to chokidar.
-    startNative() {
+    startNative(): Closable[] | null {
         try {
             const watcher = this.fsWatch(
                 this.repoPath,
@@ -134,7 +162,7 @@ class RepoWatcher {
                     }
 
                     const reason = classifyRelPath(
-                        path.relative(this.repoPath, path.join(this.repoPath, name))
+                        path.relative(this.repoPath, path.join(this.repoPath, name.toString()))
                     );
                     if (reason) {
                         this.record(reason);
@@ -153,10 +181,10 @@ class RepoWatcher {
     // Linux fallback: two scoped chokidar watchers (per-dir inotify, which is not
     // affected by the macOS EBADF problem). The working tree minus .git and
     // node_modules, and the ref-defining .git paths.
-    startChokidar() {
+    startChokidar(): Closable[] {
         const worktree = this.chokidar.watch(this.repoPath, {
             ignoreInitial: true,
-            ignored: (fullPath) => worktreeIgnored(this.repoPath, fullPath),
+            ignored: (fullPath: string) => worktreeIgnored(this.repoPath, fullPath),
         });
         worktree.on('all', () => this.record('worktree'));
         worktree.on('error', () => {});
@@ -168,7 +196,7 @@ class RepoWatcher {
         return [{ close: () => worktree.close() }, { close: () => refs.close() }];
     }
 
-    record(reason) {
+    record(reason: ChangeReason): void {
         this.pendingReasons.add(reason);
         if (this.timer) {
             clearTimeout(this.timer);
@@ -177,14 +205,14 @@ class RepoWatcher {
         this.timer = setTimeout(() => this.flush(), this.debounceMs);
     }
 
-    flush() {
+    flush(): void {
         this.timer = null;
         const reason = coalesceReason(this.pendingReasons);
         this.pendingReasons.clear();
         this.onChange({ reason, at: Date.now() });
     }
 
-    async close() {
+    async close(): Promise<void> {
         if (this.timer) {
             clearTimeout(this.timer);
             this.timer = null;
@@ -198,14 +226,17 @@ class RepoWatcher {
 
 // The app compares one repository at a time, so a single watcher is kept and
 // replaced whenever a repo is opened. Broadcasting to every window mirrors the
-// theme broadcast (electron/theme.cjs); the renderer's refresh is a no-op when
+// theme broadcast (electron/theme.ts); the renderer's refresh is a no-op when
 // no repo is open, so a lingering event is harmless.
-let current = null;
+let current: RepoWatcher | null = null;
 
-function watchRepo(
-    repoPath,
-    { getWindows = () => BrowserWindow.getAllWindows(), ...options } = {}
-) {
+export function watchRepo(
+    repoPath: string,
+    {
+        getWindows = () => BrowserWindow.getAllWindows(),
+        ...options
+    }: { getWindows?: () => BrowserWindow[] } & RepoWatcherOptions = {}
+): RepoWatcher {
     stopWatchingRepo();
     current = new RepoWatcher(
         repoPath,
@@ -219,7 +250,7 @@ function watchRepo(
     return current;
 }
 
-function stopWatchingRepo() {
+export function stopWatchingRepo(): void {
     if (!current) {
         return;
     }
@@ -227,14 +258,3 @@ function stopWatchingRepo() {
     void current.close();
     current = null;
 }
-
-module.exports = {
-    REPO_CHANGED_CHANNEL,
-    RepoWatcher,
-    classifyRelPath,
-    worktreeIgnored,
-    refWatchPaths,
-    coalesceReason,
-    watchRepo,
-    stopWatchingRepo,
-};

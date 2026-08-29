@@ -14,11 +14,11 @@ export default defineConfig({
         vueDevTools(),
         tailwindcss(),
         electron({
-            main: { entry: 'electron/main.cjs' },
+            main: { entry: 'electron/main.ts' },
             // A sandboxed preload must be CommonJS, so emit it as preload.cjs even
-            // though the project is "type": "module".
+            // though the source is TypeScript ESM and the project is "type": "module".
             preload: {
-                input: 'electron/preload.cjs',
+                input: 'electron/preload.ts',
                 vite: {
                     build: {
                         rollupOptions: {

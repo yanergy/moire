@@ -5,7 +5,7 @@ import {
     setThemePreference,
     registerThemeBroadcast,
     THEME_CHANGED_CHANNEL,
-} from '../electron/theme.cjs';
+} from '../electron/theme';
 
 // theme.cjs is CommonJS loaded natively under vitest, so `require('electron')`
 // resolves to the binary path and `nativeTheme` is undefined. Every function

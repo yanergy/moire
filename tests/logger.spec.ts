@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatValue } from '../electron/logger.cjs';
+import { formatValue } from '../electron/logger';
 
 describe('logger formatValue', () => {
     it('keeps an Error stack, the useful part', () => {

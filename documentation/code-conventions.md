@@ -14,10 +14,12 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
       the preload bridge (`window.api`).
     - Types shared across the IPC boundary (`ChangedFile`, `FilePair`, `MoireApi`, ...) go in
       `shared/types.ts`. Never duplicate these definitions on either side.
-- `electron/main.cjs` is CommonJS (`require`). Renderer code is TypeScript ESM. Do not "fix"
-  the main process to ESM or convert its `require` calls to `import`. The `.cjs` files are still
-  type-checked (`tsconfig.electron.json` runs `checkJs`, included in `npm run type-check`); add
-  types with JSDoc rather than by converting to TypeScript.
+- `electron/` is TypeScript authored as ESM (`import`/`export`), the same as the renderer.
+  vite-plugin-electron bundles it into the CommonJS `dist-electron/` output the app actually runs
+  (`main.js`, and `preload.cjs` which a sandboxed preload must be), so the source language is free
+  even though the runtime module format is CommonJS. It is type-checked by `tsconfig.electron.json`
+  (real TS, no `checkJs`), included in `npm run type-check`. The one file that stays `.cjs` is
+  `build/afterPack.cjs`, which electron-builder `require`s directly.
 - Adding a new IPC channel means three changes, always together:
     1. handler in `electron/ipc/`
     2. exposure in the preload `contextBridge`
@@ -143,8 +145,8 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - Branch comparisons default to merge-base (three-dot `base...head`) semantics — what a
   GitHub PR shows. Direct two-dot comparison is a user-facing toggle, not a default.
 - Parse git output with `-z` (NUL-separated) flags; never split on whitespace or newlines
-  (paths can contain spaces). Parsers live in `electron/git/parsers.cjs` (the main process is
-  CommonJS) and every parser change needs a matching case in `tests/parsers.spec.ts`.
+  (paths can contain spaces). Parsers live in `electron/git/parsers.ts` and every parser change
+  needs a matching case in `tests/parsers.spec.ts`.
 - Treat file content as potentially huge or binary: check the `binary` and `tooLarge`
   flags before rendering; never assume UTF-8 text.
 

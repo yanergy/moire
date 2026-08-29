@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { isGitAvailable } from '../electron/ipc/handlers.cjs';
+import { isGitAvailable } from '../electron/ipc/handlers';
 
 // isGitAvailable wraps `git.raw(['--version'])`. The runner is injected here so
 // both outcomes are deterministic and no real git is spawned. handlers.cjs is
