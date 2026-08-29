@@ -92,4 +92,10 @@ export interface MoireApi {
     // Fired when the native View → Refresh item is chosen; the renderer re-reads
     // the repo for the current range. Returns an unsubscribe function.
     onMenuRefresh(cb: () => void): () => void;
+    // Fired when the native File → Open Repository… item is chosen; the renderer
+    // runs its open-folder flow. Returns an unsubscribe function.
+    onMenuOpenRepo(cb: () => void): () => void;
+    // Fired when a native File → Open Recent entry is chosen, with its path.
+    // Returns an unsubscribe function.
+    onMenuOpenRecent(cb: (path: string) => void): () => void;
 }

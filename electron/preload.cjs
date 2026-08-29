@@ -33,6 +33,20 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('menu:refresh', listener);
         return () => ipcRenderer.removeListener('menu:refresh', listener);
     },
+    // Fired when the native File → Open Repository… item is chosen; the renderer
+    // runs its open-folder flow. Returns an unsubscribe function.
+    onMenuOpenRepo: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on('menu:open-repo', listener);
+        return () => ipcRenderer.removeListener('menu:open-repo', listener);
+    },
+    // Fired when a native File → Open Recent entry is chosen, with its path.
+    // Returns an unsubscribe function.
+    onMenuOpenRecent: (callback) => {
+        const listener = (_event, repoPath) => callback(repoPath);
+        ipcRenderer.on('menu:open-recent', listener);
+        return () => ipcRenderer.removeListener('menu:open-recent', listener);
+    },
     // Fired when the RepoWatcher (main process) sees the open repo's refs or
     // working tree change, so the renderer can auto-refresh. Returns an
     // unsubscribe function so the caller can drop the listener.

@@ -44,6 +44,12 @@ function requireRepo() {
     return currentRepo;
 }
 
+// The open repo's path (null when none), so the menu can mark it active in the
+// Open Recent list.
+function getCurrentRepoPath() {
+    return currentRepo?.repoPath ?? null;
+}
+
 async function isGitRepo(repoPath) {
     try {
         return await simpleGit(repoPath).checkIsRepo('root');
@@ -66,7 +72,9 @@ async function isGitAvailable(git = simpleGit()) {
     }
 }
 
-function registerIpcHandlers() {
+// onRecentsChanged fires after the recent-repos list changes (an open or a
+// removal) so main can rebuild the app menu's "Open Recent" submenu.
+function registerIpcHandlers({ onRecentsChanged } = {}) {
     handle('dialog:open-repo', async () => {
         const result = await dialog.showOpenDialog({
             title: 'Open repository',
@@ -93,12 +101,18 @@ function registerIpcHandlers() {
         // Watch the newly opened repo so the diff auto-refreshes; this replaces
         // any watcher from a previously opened repo.
         watchRepo(repoPath);
+        // After currentRepo is set, so the rebuilt menu can mark it active.
+        onRecentsChanged?.();
         return { path: repoPath, name: path.basename(repoPath) };
     });
 
     handle('repo:recent', () => getRecentRepos());
 
-    handle('repo:remove-recent', (_event, repoPath) => removeRecentRepo(repoPath));
+    handle('repo:remove-recent', async (_event, repoPath) => {
+        const next = await removeRecentRepo(repoPath);
+        onRecentsChanged?.();
+        return next;
+    });
 
     // Per-repo base/head persistence, so reopening a repo restores its last
     // compared range (validated against the live branch list in the renderer).
@@ -125,4 +139,4 @@ function registerIpcHandlers() {
     );
 }
 
-module.exports = { registerIpcHandlers, isGitAvailable };
+module.exports = { registerIpcHandlers, isGitAvailable, getCurrentRepoPath };

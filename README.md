@@ -135,6 +135,11 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
 - [x] Manual refresh from the native menu (View → Refresh, Cmd/Ctrl+R). The item messages the
   focused window over `menu:refresh`; the renderer re-reads the branch list, changed files, and
   open file pair for the current range without resetting the selection (`comparison.refresh`).
+- [x] Native File menu: Open Repository… (Cmd/Ctrl+O) and an Open Recent submenu. The items
+  message the focused window (`menu:open-repo`, `menu:open-recent`); the renderer runs the same
+  store flow as the toolbar repo-picker (`openRepository` / `openRecent`). The menu rebuilds
+  whenever the recent list changes (an `onRecentsChanged` callback from the IPC handlers), so
+  Open Recent stays current and marks the open repo with a checkmark.
 - [x] `RepoWatcher` with auto refresh on change. Lives in `electron/watcher/RepoWatcher.cjs`,
   started on repo open. On macOS and Windows it uses one native recursive `fs.watch` over the repo
   (a single OS-level watcher), classifying each path into a working-tree change or a ref change

@@ -15,6 +15,8 @@ const ui = useUiStore();
 
 let stopThemeSync: (() => void) | undefined;
 let stopMenuRefresh: (() => void) | undefined;
+let stopMenuOpenRepo: (() => void) | undefined;
+let stopMenuOpenRecent: (() => void) | undefined;
 let stopRepoChanged: (() => void) | undefined;
 
 // Electron mirrors document.title into the native window title bar, so the open
@@ -41,6 +43,11 @@ onMounted(async () => {
     // The native View → Refresh item re-reads the repo through the store.
     stopMenuRefresh = api.onMenuRefresh(() => void comparison.refresh());
 
+    // The native File menu opens repos through the same store flow the toolbar
+    // repo-picker uses: a folder dialog, or a chosen recent path.
+    stopMenuOpenRepo = api.onMenuOpenRepo(() => void comparison.openRepository());
+    stopMenuOpenRecent = api.onMenuOpenRecent((path) => void comparison.openRecent(path));
+
     // The RepoWatcher pushes a coalesced event when the open repo's refs or
     // working tree change on disk, so the diff refreshes without a manual poke.
     stopRepoChanged = api.onRepoChanged(() => void comparison.refresh());
@@ -49,6 +56,8 @@ onMounted(async () => {
 onUnmounted(() => {
     stopThemeSync?.();
     stopMenuRefresh?.();
+    stopMenuOpenRepo?.();
+    stopMenuOpenRecent?.();
     stopRepoChanged?.();
 });
 </script>

@@ -12,14 +12,55 @@ const THEME_OPTIONS = [
     { label: 'Dark', preference: 'dark' },
 ];
 
-// Pure builder so the menu shape (and the Theme radio group) can be unit-tested
-// without a running Electron instance. `currentTheme` marks the checked item,
-// `onSelectTheme(preference)` is each theme item's click handler, `onRefresh`
-// backs the View → Refresh item, and `onOpenLog` opens the log file from Help.
-function buildMenuTemplate({ isMac, currentTheme, onSelectTheme, onRefresh, onOpenLog }) {
+// The trailing path segment, for a readable "Open Recent" label (the full path
+// stays available on hover as the item's toolTip).
+function repoLabel(repoPath) {
+    const parts = repoPath.split(/[/\\]/).filter(Boolean);
+    return parts[parts.length - 1] || repoPath;
+}
+
+// Pure builder so the menu shape (the Theme radio group, the recent list) can be
+// unit-tested without a running Electron instance. `currentTheme` marks the
+// checked theme; `onSelectTheme(preference)`, `onRefresh`, and `onOpenLog` back
+// the View/Help items; `onOpenRepo` and `onOpenRecent(path)` back the File menu,
+// whose "Open Recent" submenu is built from `recentRepos` (most-recent-first).
+function buildMenuTemplate({
+    isMac,
+    currentTheme,
+    onSelectTheme,
+    onRefresh,
+    onOpenLog,
+    onOpenRepo,
+    onOpenRecent,
+    recentRepos = [],
+    activeRepo = null,
+}) {
+    const recentItems = recentRepos.length
+        ? recentRepos.map((repoPath) => ({
+              label: repoLabel(repoPath),
+              toolTip: repoPath,
+              // A checkmark marks the repo that is currently open.
+              type: 'checkbox',
+              checked: repoPath === activeRepo,
+              click: () => onOpenRecent?.(repoPath),
+          }))
+        : [{ label: 'No recent repositories', enabled: false }];
+
     return [
         ...(isMac ? [{ role: 'appMenu' }] : []),
-        { role: 'fileMenu' },
+        {
+            label: 'File',
+            submenu: [
+                {
+                    label: 'Open Repository…',
+                    accelerator: 'CmdOrCtrl+O',
+                    click: () => onOpenRepo?.(),
+                },
+                { label: 'Open Recent', submenu: recentItems },
+                { type: 'separator' },
+                isMac ? { role: 'close' } : { role: 'quit' },
+            ],
+        },
         { role: 'editMenu' },
         {
             label: 'View',
@@ -56,14 +97,8 @@ function buildMenuTemplate({ isMac, currentTheme, onSelectTheme, onRefresh, onOp
     ];
 }
 
-function installAppMenu(currentTheme, onSelectTheme, onRefresh, onOpenLog) {
-    const template = buildMenuTemplate({
-        isMac: process.platform === 'darwin',
-        currentTheme,
-        onSelectTheme,
-        onRefresh,
-        onOpenLog,
-    });
+function installAppMenu(options) {
+    const template = buildMenuTemplate({ isMac: process.platform === 'darwin', ...options });
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 

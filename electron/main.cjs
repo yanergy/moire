@@ -1,10 +1,22 @@
 const { app, BrowserWindow, dialog, nativeImage, shell } = require('electron');
 const path = require('node:path');
-const { registerIpcHandlers, isGitAvailable } = require('./ipc/handlers.cjs');
+const { registerIpcHandlers, isGitAvailable, getCurrentRepoPath } = require('./ipc/handlers.cjs');
 const { installAppMenu } = require('./menu.cjs');
-const { initTheme, setThemePreference, registerThemeBroadcast } = require('./theme.cjs');
+const {
+    initTheme,
+    setThemePreference,
+    registerThemeBroadcast,
+    currentThemeState,
+} = require('./theme.cjs');
 const { restoreWindowState, trackWindowState } = require('./window-state.cjs');
 const { initLogging, logError } = require('./logger.cjs');
+const { getRecentRepos } = require('./settings.cjs');
+
+// Send a menu-triggered message to the window the user is in (or the only one).
+function sendToFocused(channel, ...args) {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    win?.webContents.send(channel, ...args);
+}
 
 async function createWindow() {
     // Reopen at the last session's size/position (off-screen positions dropped).
@@ -67,22 +79,29 @@ app.whenReady().then(async () => {
     // Seed nativeTheme from the persisted preference, then broadcast resolved
     // theme changes to windows. registerThemeBroadcast runs after initTheme so
     // the initial seed doesn't fire a pointless broadcast (no window exists yet).
-    const themePreference = await initTheme();
+    await initTheme();
     registerThemeBroadcast();
 
-    registerIpcHandlers();
-    installAppMenu(
-        themePreference,
-        (preference) => setThemePreference(preference),
-        // The store owns the git re-read, so the menu item just pokes the focused
-        // window; the renderer refreshes on 'menu:refresh'.
-        () => {
-            const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-            win?.webContents.send('menu:refresh');
-        },
-        // Help → Open Log File opens the log in the OS default text viewer.
-        () => void shell.openPath(logPath)
-    );
+    // Rebuilt whenever the recent-repos list changes, so the File → Open Recent
+    // submenu stays current. Reads the live theme so the right radio stays checked.
+    const buildMenu = async () => {
+        installAppMenu({
+            currentTheme: currentThemeState().preference,
+            onSelectTheme: (preference) => setThemePreference(preference),
+            // The store owns the git re-read / the open flow, so these items just
+            // poke the focused window; the renderer acts on the message.
+            onRefresh: () => sendToFocused('menu:refresh'),
+            onOpenRepo: () => sendToFocused('menu:open-repo'),
+            onOpenRecent: (repoPath) => sendToFocused('menu:open-recent', repoPath),
+            // Help → Open Log File opens the log in the OS default text viewer.
+            onOpenLog: () => void shell.openPath(logPath),
+            recentRepos: await getRecentRepos(),
+            activeRepo: getCurrentRepoPath(),
+        });
+    };
+
+    registerIpcHandlers({ onRecentsChanged: () => void buildMenu() });
+    await buildMenu();
     await createWindow();
 });
 

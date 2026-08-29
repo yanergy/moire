@@ -15,6 +15,11 @@ function themeSubmenu(currentTheme: string, onSelectTheme = () => {}) {
         ?.submenu;
 }
 
+function fileSubmenu(extra = {}) {
+    const template = buildMenuTemplate({ isMac: true, currentTheme: 'system', ...extra });
+    return template.find((menu) => menu.label === 'File')?.submenu;
+}
+
 describe('application menu', () => {
     it('offers System, Light, and Dark as radio items in the View → Theme menu', () => {
         const items = themeSubmenu('system');
@@ -50,6 +55,44 @@ describe('application menu', () => {
         expect(onRefresh).toHaveBeenCalledTimes(1);
     });
 
+    it('offers Open Repository… bound to Cmd/Ctrl+O and wired to onOpenRepo', () => {
+        const onOpenRepo = vi.fn<() => void>();
+        const open = fileSubmenu({ onOpenRepo })?.find((item) => item.label === 'Open Repository…');
+
+        expect(open?.accelerator).toBe('CmdOrCtrl+O');
+        open?.click();
+        expect(onOpenRepo).toHaveBeenCalledTimes(1);
+    });
+
+    it('lists recent repos by name and opens the chosen path', () => {
+        const onOpenRecent = vi.fn<(path: string) => void>();
+        const recentRepos = ['/Users/me/Repos/moire', '/Users/me/work/api'];
+        const recent = fileSubmenu({ recentRepos, onOpenRecent })?.find(
+            (item) => item.label === 'Open Recent'
+        )?.submenu;
+
+        expect(recent?.map((item) => item.label)).toEqual(['moire', 'api']);
+        recent?.[1]?.click();
+        expect(onOpenRecent).toHaveBeenCalledWith('/Users/me/work/api');
+    });
+
+    it('marks the active repo checked in the recent list', () => {
+        const recentRepos = ['/Users/me/Repos/moire', '/Users/me/work/api'];
+        const recent = fileSubmenu({ recentRepos, activeRepo: '/Users/me/work/api' })?.find(
+            (item) => item.label === 'Open Recent'
+        )?.submenu;
+
+        expect(recent?.map((item) => item.checked)).toEqual([false, true]);
+    });
+
+    it('shows a disabled placeholder when there are no recent repos', () => {
+        const recent = fileSubmenu()?.find((item) => item.label === 'Open Recent')?.submenu;
+
+        expect(recent).toHaveLength(1);
+        expect(recent?.[0]?.label).toBe('No recent repositories');
+        expect(recent?.[0]?.enabled).toBe(false);
+    });
+
     it('opens the log through onOpenLog from the Help menu', () => {
         const onOpenLog = vi.fn<() => void>();
         const template = buildMenuTemplate({ isMac: true, currentTheme: 'system', onOpenLog });
@@ -61,9 +104,9 @@ describe('application menu', () => {
     });
 
     it('omits the macOS app menu on other platforms', () => {
+        // With the app menu present (mac) the File menu is second; without it, first.
         expect(buildMenuTemplate({ isMac: true, currentTheme: 'system' })[0].role).toBe('appMenu');
-        expect(buildMenuTemplate({ isMac: false, currentTheme: 'system' })[0].role).toBe(
-            'fileMenu'
-        );
+        expect(buildMenuTemplate({ isMac: true, currentTheme: 'system' })[1].label).toBe('File');
+        expect(buildMenuTemplate({ isMac: false, currentTheme: 'system' })[0].label).toBe('File');
     });
 });
