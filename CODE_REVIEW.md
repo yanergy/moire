@@ -21,19 +21,6 @@ Verification run at review time:
 
 ---
 
-## Bugs (functional correctness)
-
-### B3. `refresh()` blanks the diff instead of reporting a deleted branch
-
-`src/stores/comparison.ts:609`. `refresh` reloads the branch list but keeps the current base/head
-and does not call `restoreSelection`. If the compared branch was deleted (and the file watcher or
-the View > Refresh menu triggers `refresh`), `loadChangedFiles` throws, the error is swallowed, and
-the file list silently empties. The "branch disappeared" notice is produced only by
-`restoreSelection`, so the user sees a blank diff with no explanation. Re-validate the range on
-refresh and feed missing names into `disappearedBranches`.
-
----
-
 ## Useless or misleading features
 
 ### U1. The status bar shows fabricated telemetry

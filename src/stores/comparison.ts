@@ -616,11 +616,35 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
     }
 
+    // Drop a base or head whose branch has vanished from the refreshed list, and
+    // name the losses so the "branch disappeared" notice explains the now-empty
+    // range instead of the diff going silently blank. An empty base and the
+    // working-tree head can never disappear, so they are left alone. Mirrors
+    // restoreSelection, but against the live range rather than a persisted one.
+    function reconcileSelection() {
+        const missing: string[] = [];
+
+        if (base.value && !branchExists(base.value)) {
+            missing.push(base.value);
+            base.value = '';
+        }
+
+        if (head.value !== WORKING_TREE && !branchExists(head.value)) {
+            missing.push(head.value);
+            head.value = WORKING_TREE;
+        }
+
+        if (missing.length > 0) {
+            disappearedBranches.value = missing;
+        }
+    }
+
     // Re-read the open repo from disk for the current range, keeping the chosen
     // base/head (unlike loadBranches, which resets them). Refreshes the branch
-    // list so new or deleted branches surface, then re-fetches the changed files
-    // and the open file's pair. Backs the native View → Refresh item; a no-op with
-    // no repo open.
+    // list so new or deleted branches surface, reconciles the range against it (so
+    // a branch deleted out from under the current comparison is reported rather
+    // than blanking the diff), then re-fetches the changed files and the open
+    // file's pair. Backs the native View → Refresh item; a no-op with no repo open.
     async function refresh() {
         const api = window.api;
         if (!api || !repoPath.value) {
@@ -628,6 +652,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
 
         branches.value = await api.getBranches();
+        reconcileSelection();
         await loadChangedFiles();
         await loadFilePair();
     }

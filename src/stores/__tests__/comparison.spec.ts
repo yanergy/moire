@@ -835,6 +835,28 @@ describe('comparison store', () => {
             expect(store.head).toBe('WORKING TREE');
         });
 
+        it('reports a compared branch that disappeared on refresh instead of blanking silently', async () => {
+            const api = stubApi();
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            store.setBase('develop');
+            await flushPromises();
+
+            // develop is deleted out from under the comparison before the refresh.
+            api.getBranches.mockResolvedValue([
+                { name: 'main', kind: 'local', isCurrent: true },
+                { name: 'origin/main', kind: 'remote' },
+            ]);
+
+            await store.refresh();
+            await flushPromises();
+
+            // The missing base is dropped and named, so the notice explains the
+            // empty range rather than leaving a blank diff with no reason.
+            expect(store.base).toBe('');
+            expect(store.disappearedBranches).toEqual(['develop']);
+        });
+
         it('refresh is a no-op with no repo open', async () => {
             const api = stubApi();
             const store = useComparisonStore();
