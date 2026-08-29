@@ -8,9 +8,10 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - This is an Electron app with strict process separation:
     - `electron/` = main process (Node). All git (`simple-git`), filesystem, and file-watching
       (`chokidar`) work lives here. Nowhere else.
-    - `src/` = renderer (Vue). NEVER import `electron` or `node:*` modules in `src/` — a custom
-      oxlint rule enforces this. The renderer talks to main only through the preload bridge
-      (`window.api`).
+    - `src/` = renderer (Vue). NEVER import `electron` or Node built-in modules in `src/`. Oxlint
+      enforces this in a `src/**` override (`no-restricted-imports` for `electron`,
+      `import/no-nodejs-modules` for the Node built-ins). The renderer talks to main only through
+      the preload bridge (`window.api`).
     - Types shared across the IPC boundary (`ChangedFile`, `FilePair`, `MoireApi`, ...) go in
       `shared/types.ts`. Never duplicate these definitions on either side.
 - `electron/main.cjs` is CommonJS (`require`). Renderer code is TypeScript ESM. Do not "fix"

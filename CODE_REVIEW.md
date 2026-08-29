@@ -23,13 +23,6 @@ Verification run at review time:
 
 ## Inconsistencies (docs vs code)
 
-### I1. The architectural boundary the docs call "enforced" is not enforced
-
-`documentation/code-conventions.md:11` states that "a custom oxlint rule" forbids importing
-`electron` or `node:*` modules in `src/`. No such rule exists in `.oxlintrc.json` (there is no
-`no-restricted-imports` and no `import/no-nodejs-modules`). The boundary is currently maintained by
-discipline only. Either add the rule (so the claim becomes true) or correct the doc.
-
 ### I2. Docs reference the wrong formatter config filename
 
 `documentation/code-conventions.md:33` cites `.oxfmtrc.jsonc`; the actual file is `.oxfmtrc.json`.
@@ -171,8 +164,7 @@ handles at exit, so this is harmless in practice, but the teardown path is incom
 
 ## Suggested priority
 
-1. I1 and I4 (the enforced-boundary claim is false; the backend is untyped): the two findings that
-   most undermine the project's stated guarantees.
+1. I4 (the backend is untyped): the finding that most undermines the project's stated guarantees.
 2. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
 3. The settings.cjs and handlers.cjs test gaps: the highest-value untested logic.
 4. Everything else as cleanup.

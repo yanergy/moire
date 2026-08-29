@@ -24,6 +24,16 @@
             }
         },
         {
+            "files": ["src/**"],
+            "rules": {
+                "no-restricted-imports": [
+                    "error",
+                    { "paths": ["electron"], "patterns": ["electron/*"] }
+                ],
+                "import/no-nodejs-modules": "error"
+            }
+        },
+        {
             "files": ["src/**/__tests__/**"],
             "env": { "vitest": true }
         }
