@@ -531,6 +531,25 @@ describe('comparison store', () => {
             expect(store.showBinaryNotice).toBe(true);
         });
 
+        it('shows an image preview, not the binary notice, for an image pair', async () => {
+            const api = stubApi();
+            api.getFilePair.mockResolvedValue({
+                ...pairFor('logo.png'),
+                oldContent: null,
+                newContent: null,
+                binary: true,
+                image: true,
+                oldImage: 'data:image/png;base64,AAAA',
+                newImage: 'data:image/png;base64,BBBB',
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            await flushPromises();
+
+            expect(store.showImagePreview).toBe(true);
+            expect(store.showBinaryNotice).toBe(false);
+        });
+
         it('reloads the file pair when a different file is selected', async () => {
             const api = stubApi();
             const store = useComparisonStore();

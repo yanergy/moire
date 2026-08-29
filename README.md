@@ -155,10 +155,12 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   in place of Monaco until the user opts in (`comparison.showDiffGate` / `loadLargeDiff`), so an
   accidental click on a huge file can't freeze the editor. Re-gates on each selection or refresh;
   binary files are excluded since their content is already withheld.
-- [~] Binary and image preview. A binary file (content withheld, no text diff) now shows a
-  `BinaryFileNotice` in the diff pane instead of an empty editor (`comparison.showBinaryNotice`),
-  built on the same `DiffPlaceholder` shell as the large-file gate. Image preview (rendering the
-  actual before/after images) is still to come.
+- [x] Binary and image preview. A non-image binary file shows a `BinaryFileNotice` (no text
+  diff), built on the same `DiffPlaceholder` shell as the large-file gate. An image file is shown
+  as a before/after `ImagePreview` (`comparison.showImagePreview`): `GitService.imagePair` reads
+  the raw blob bytes (via `git show` with buffer output, since simple-git's string API is lossy
+  for binary) and inlines each side as a base64 data URI, with a missing side for an add or delete
+  and a size cap that falls back to the plain notice. SVG stays a text diff.
 - [x] Rename display, showing the old path moving to the new path, in the UI. The selection
   banner renders `oldPath → newPath` (with an arrow) for a renamed file, and the file-tree row's
   hover title shows the same. The backend already surfaces `oldPath`; `FileNode` now carries it.

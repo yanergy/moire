@@ -38,6 +38,12 @@ export interface FilePair {
     binary: boolean;
     tooLarge: boolean; // above render threshold
     sizeBytes: number; // larger side's byte length, shown on the large-file gate
+    // Set for image files the renderer can preview. `image` gates the preview;
+    // the two sides are base64 data URIs (null for an add/delete side, or when the
+    // image is too large to inline).
+    image?: boolean;
+    oldImage?: string | null;
+    newImage?: string | null;
 }
 
 export interface BranchInfo {

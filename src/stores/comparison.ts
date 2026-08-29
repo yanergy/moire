@@ -225,10 +225,13 @@ export const useComparisonStore = defineStore('comparison', () => {
         largeDiffLoaded.value = true;
     }
 
-    // A binary file has no text diff (its content is withheld), so the pane shows a
-    // notice instead of an empty editor. Takes precedence over the size gate, since
-    // there is nothing to load.
-    const showBinaryNotice = computed(() => selectedPair.value.binary);
+    // An image file is shown as a before/after preview rather than a text diff.
+    const showImagePreview = computed(() => !!selectedPair.value.image);
+
+    // A non-image binary file has no text diff (its content is withheld), so the
+    // pane shows a notice instead of an empty editor. Takes precedence over the size
+    // gate, since there is nothing to load; images are handled above instead.
+    const showBinaryNotice = computed(() => selectedPair.value.binary && !selectedPair.value.image);
 
     // Remember the chosen base/head per repo so reopening it restores the range.
     // Guarded on an open repo, so clearing the selection when a repo closes (its
@@ -649,6 +652,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         selectedPair,
         showDiffGate,
         showBinaryNotice,
+        showImagePreview,
         loadLargeDiff,
         treeNodes,
         allCollapsed,

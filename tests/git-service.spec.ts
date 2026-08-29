@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { GitService } from '../electron/git/GitService.cjs';
+import { GitService, WORKING_TREE } from '../electron/git/GitService.cjs';
 
 // GitService takes an injectable git so its orchestration is testable without a
 // real repo (parsing itself is covered in parsers.spec.ts). Each fake stubs only
@@ -164,15 +164,68 @@ describe('GitService.filePair', () => {
     });
 
     it('withholds binary content and flags it', async () => {
-        const show = vi.fn<(options: string[]) => Promise<string>>(async () => 'PNG\x00\x01binary');
-        const pair = await new GitService('/repo', { show }).filePair(
-            'main',
-            'feature',
-            'logo.png'
-        );
+        const show = vi.fn<(options: string[]) => Promise<string>>(async () => 'ELF\x00\x01binary');
+        const pair = await new GitService('/repo', { show }).filePair('main', 'feature', 'app.bin');
 
         expect(pair.binary).toBe(true);
         expect(pair.oldContent).toBeNull();
         expect(pair.newContent).toBeNull();
+    });
+});
+
+describe('GitService.filePair images', () => {
+    const oldPng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const newPng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 9, 9, 9, 9]);
+
+    type BlobReader = (ref: string, filePath: string) => Promise<Buffer | null>;
+    type DiskReader = (filePath: string) => Promise<Buffer | null>;
+
+    it('previews an image as before/after data URIs, withholding text content', async () => {
+        const readBlobBytes = vi.fn<BlobReader>(async (ref) => (ref === 'main' ? oldPng : newPng));
+        const service = new GitService('/repo', {}, { readBlobBytes });
+
+        const pair = await service.filePair('main', 'feature', 'assets/logo.png');
+
+        expect(pair.image).toBe(true);
+        expect(pair.binary).toBe(true);
+        expect(pair.oldImage).toBe(`data:image/png;base64,${oldPng.toString('base64')}`);
+        expect(pair.newImage).toBe(`data:image/png;base64,${newPng.toString('base64')}`);
+        expect(pair.oldContent).toBeNull();
+        expect(pair.newContent).toBeNull();
+    });
+
+    it('reads the working-tree side from disk for an image', async () => {
+        const readBlobBytes = vi.fn<BlobReader>(async () => oldPng);
+        const readDiskBytes = vi.fn<DiskReader>(async () => newPng);
+        const service = new GitService('/repo', {}, { readBlobBytes, readDiskBytes });
+
+        const pair = await service.filePair('main', WORKING_TREE, 'logo.png');
+
+        expect(readDiskBytes).toHaveBeenCalledWith('logo.png');
+        expect(pair.newImage).toBe(`data:image/png;base64,${newPng.toString('base64')}`);
+    });
+
+    it('nulls the missing side of an added image', async () => {
+        const readBlobBytes = vi.fn<BlobReader>(async (ref) => (ref === 'main' ? null : newPng));
+        const service = new GitService('/repo', {}, { readBlobBytes });
+
+        const pair = await service.filePair('main', 'feature', 'new.png');
+
+        expect(pair.oldImage).toBeNull();
+        expect(pair.newImage).toContain('base64,');
+    });
+
+    it('falls back to a plain binary notice for an oversized image', async () => {
+        const huge = Buffer.alloc(7 * 1024 * 1024); // over the 6 MB inline cap
+        const readBlobBytes = vi.fn<BlobReader>(async () => huge);
+        const service = new GitService('/repo', {}, { readBlobBytes });
+
+        const pair = await service.filePair('main', 'feature', 'big.png');
+
+        expect(pair.image).toBe(false);
+        expect(pair.binary).toBe(true);
+        expect(pair.oldImage).toBeNull();
+        expect(pair.newImage).toBeNull();
+        expect(pair.sizeBytes).toBe(huge.length);
     });
 });

@@ -5,7 +5,11 @@
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const { simpleGit } = require('simple-git');
+
+const execFileAsync = promisify(execFile);
 const {
     parseNameStatus,
     parseNumstat,
@@ -22,6 +26,38 @@ const WORKING_TREE = 'WORKING TREE';
 // rendering (the "Load diff" gate lands in Phase 4). The bytes are still
 // returned; the flag only signals that the file is heavy.
 const MAX_RENDER_BYTES = 512 * 1024;
+
+// Images are previewed inline as base64 data URIs. Above this the base64 payload
+// (which inflates ~33%) gets heavy to pass over IPC and render, so an oversized
+// image falls back to the plain binary notice instead of a preview.
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+
+// Raster image extensions Monaco can't diff but the renderer can show as before/
+// after pictures. SVG is deliberately left out: it is text, so it gets a real
+// text diff instead.
+const IMAGE_MIME = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    bmp: 'image/bmp',
+    ico: 'image/x-icon',
+    avif: 'image/avif',
+};
+
+function imageMimeForPath(filePath) {
+    const dot = filePath.lastIndexOf('.');
+    if (dot === -1) {
+        return null;
+    }
+
+    return IMAGE_MIME[filePath.slice(dot + 1).toLowerCase()] ?? null;
+}
+
+function dataUri(mime, buffer) {
+    return buffer === null ? null : `data:${mime};base64,${buffer.toString('base64')}`;
+}
 
 // Extension → Monaco language id. This mirrors src/lib/language.ts, duplicated
 // across the process boundary on purpose: the renderer owns that module and the
@@ -80,10 +116,40 @@ function countLines(content) {
 }
 
 class GitService {
-    // git is injectable so the service is unit-testable without a real repo.
-    constructor(repoPath, git = simpleGit(repoPath)) {
+    // git is injectable so the service is unit-testable without a real repo. The
+    // binary readers (raw image bytes at a ref / on disk) are injectable too, since
+    // they shell out for Buffer output that simple-git's string API can't give.
+    constructor(repoPath, git = simpleGit(repoPath), deps = {}) {
         this.repoPath = repoPath;
         this.git = git;
+        this.readBlobBytes =
+            deps.readBlobBytes ?? ((ref, filePath) => this.blobBytes(ref, filePath));
+        this.readDiskBytes = deps.readDiskBytes ?? ((filePath) => this.diskBytes(filePath));
+    }
+
+    // Raw bytes of a blob at a committed ref, or null when the path is absent
+    // there. simple-git decodes stdout to a string (lossy for binary), so read the
+    // blob with buffer output instead. maxBuffer is generous so the caller can
+    // measure the size and decide whether to inline it.
+    async blobBytes(ref, filePath) {
+        try {
+            const { stdout } = await execFileAsync(
+                'git',
+                ['-C', this.repoPath, 'show', `${ref}:${filePath}`],
+                { encoding: 'buffer', maxBuffer: 4 * MAX_IMAGE_BYTES }
+            );
+            return stdout;
+        } catch {
+            return null;
+        }
+    }
+
+    async diskBytes(filePath) {
+        try {
+            return await fs.readFile(path.join(this.repoPath, filePath));
+        } catch {
+            return null; // absent on disk (deleted) or unreadable
+        }
     }
 
     // Local branches first (current one flagged), then remote-tracking branches.
@@ -149,6 +215,11 @@ class GitService {
     }
 
     async filePair(base, head, filePath) {
+        const imageMime = imageMimeForPath(filePath);
+        if (imageMime) {
+            return this.imagePair(base, head, filePath, imageMime);
+        }
+
         const oldContent = await this.contentAt(base, filePath);
         const newContent =
             head === WORKING_TREE
@@ -160,13 +231,41 @@ class GitService {
 
         return {
             path: filePath,
-            // Binary content is withheld from the text diff; Phase 4 adds a
-            // dedicated binary/image preview.
+            // Binary content is withheld from the text diff; images get a preview
+            // (imagePair), other binaries a plain notice in the renderer.
             oldContent: binary ? null : oldContent,
             newContent: binary ? null : newContent,
             language: languageForPath(filePath),
             binary,
             tooLarge: size > MAX_RENDER_BYTES,
+            sizeBytes: size,
+        };
+    }
+
+    // An image file has no text diff; the renderer shows the before/after pictures
+    // instead. Both sides are inlined as base64 data URIs (a missing side is null,
+    // for an add or a delete). An image past the size cap drops back to the plain
+    // binary notice (image false, no data URIs) so a huge payload isn't shipped.
+    async imagePair(base, head, filePath, mime) {
+        const oldBytes = await this.readBlobBytes(base, filePath);
+        const newBytes =
+            head === WORKING_TREE
+                ? await this.readDiskBytes(filePath)
+                : await this.readBlobBytes(head, filePath);
+
+        const size = Math.max(oldBytes?.length ?? 0, newBytes?.length ?? 0);
+        const image = size <= MAX_IMAGE_BYTES;
+
+        return {
+            path: filePath,
+            oldContent: null,
+            newContent: null,
+            language: 'plaintext',
+            binary: true,
+            image,
+            oldImage: image ? dataUri(mime, oldBytes) : null,
+            newImage: image ? dataUri(mime, newBytes) : null,
+            tooLarge: false,
             sizeBytes: size,
         };
     }
