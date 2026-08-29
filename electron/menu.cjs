@@ -14,9 +14,9 @@ const THEME_OPTIONS = [
 
 // Pure builder so the menu shape (and the Theme radio group) can be unit-tested
 // without a running Electron instance. `currentTheme` marks the checked item,
-// `onSelectTheme(preference)` is each theme item's click handler, and `onRefresh`
-// backs the View → Refresh item.
-function buildMenuTemplate({ isMac, currentTheme, onSelectTheme, onRefresh }) {
+// `onSelectTheme(preference)` is each theme item's click handler, `onRefresh`
+// backs the View → Refresh item, and `onOpenLog` opens the log file from Help.
+function buildMenuTemplate({ isMac, currentTheme, onSelectTheme, onRefresh, onOpenLog }) {
     return [
         ...(isMac ? [{ role: 'appMenu' }] : []),
         { role: 'fileMenu' },
@@ -49,15 +49,20 @@ function buildMenuTemplate({ isMac, currentTheme, onSelectTheme, onRefresh }) {
             ],
         },
         { role: 'windowMenu' },
+        {
+            role: 'help',
+            submenu: [{ label: 'Open Log File', click: () => onOpenLog?.() }],
+        },
     ];
 }
 
-function installAppMenu(currentTheme, onSelectTheme, onRefresh) {
+function installAppMenu(currentTheme, onSelectTheme, onRefresh, onOpenLog) {
     const template = buildMenuTemplate({
         isMac: process.platform === 'darwin',
         currentTheme,
         onSelectTheme,
         onRefresh,
+        onOpenLog,
     });
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

@@ -50,6 +50,16 @@ describe('application menu', () => {
         expect(onRefresh).toHaveBeenCalledTimes(1);
     });
 
+    it('opens the log through onOpenLog from the Help menu', () => {
+        const onOpenLog = vi.fn<() => void>();
+        const template = buildMenuTemplate({ isMac: true, currentTheme: 'system', onOpenLog });
+        const help = template.find((menu) => menu.role === 'help');
+        const item = help?.submenu?.find((entry) => entry.label === 'Open Log File');
+
+        item?.click();
+        expect(onOpenLog).toHaveBeenCalledTimes(1);
+    });
+
     it('omits the macOS app menu on other platforms', () => {
         expect(buildMenuTemplate({ isMac: true, currentTheme: 'system' })[0].role).toBe('appMenu');
         expect(buildMenuTemplate({ isMac: false, currentTheme: 'system' })[0].role).toBe(

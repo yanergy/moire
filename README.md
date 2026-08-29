@@ -184,7 +184,12 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   (`electron/window-state.cjs`). A remembered position that would land off every current display
   (a monitor since unplugged) is dropped so the window never opens off-screen; the window is shown
   on `ready-to-show` to avoid a blank frame or a flash at the restored size before maximizing.
-- [ ] Error reporting and a log file in userData.
+- [x] Error reporting and a log file in userData. `electron/logger.cjs` writes a timestamped
+  `moire.log` under the app's userData directory (mirrored to the console for `npm run dev`),
+  captures `uncaughtException` and `unhandledRejection` so a main-process crash leaves a trail,
+  and caps the file so it can't grow unbounded. IPC handler rejections (a bad ref, a moved repo)
+  are logged through a `handle` wrapper in `handlers.cjs` before they propagate, and Help → Open
+  Log File opens the log in the OS default viewer.
 
 ## Documentation
 

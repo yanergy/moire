@@ -15,6 +15,21 @@ const {
     setBranchSelection,
 } = require('../settings.cjs');
 const { currentThemeState } = require('../theme.cjs');
+const { logError } = require('../logger.cjs');
+
+// ipcMain.handle that logs a handler rejection before it propagates. A git
+// operation that fails (a bad ref, a repo that moved) otherwise surfaces only as
+// a rejected promise the renderer swallows, leaving no trace; this records it.
+function handle(channel, fn) {
+    ipcMain.handle(channel, async (event, ...args) => {
+        try {
+            return await fn(event, ...args);
+        } catch (error) {
+            logError(`ipc ${channel}`, error);
+            throw error;
+        }
+    });
+}
 
 // The app compares one repository at a time (multi-repo is a non-goal), so the
 // git-backed channels operate on whichever repo was opened last. `repo:open`
@@ -52,7 +67,7 @@ async function isGitAvailable(git = simpleGit()) {
 }
 
 function registerIpcHandlers() {
-    ipcMain.handle('dialog:open-repo', async () => {
+    handle('dialog:open-repo', async () => {
         const result = await dialog.showOpenDialog({
             title: 'Open repository',
             properties: ['openDirectory'],
@@ -64,7 +79,7 @@ function registerIpcHandlers() {
         return result.filePaths[0];
     });
 
-    ipcMain.handle('repo:open', async (_event, repoPath) => {
+    handle('repo:open', async (_event, repoPath) => {
         if (!(await isGitRepo(repoPath))) {
             dialog.showErrorBox(
                 'Not a Git repository',
@@ -81,33 +96,31 @@ function registerIpcHandlers() {
         return { path: repoPath, name: path.basename(repoPath) };
     });
 
-    ipcMain.handle('repo:recent', () => getRecentRepos());
+    handle('repo:recent', () => getRecentRepos());
 
-    ipcMain.handle('repo:remove-recent', (_event, repoPath) => removeRecentRepo(repoPath));
+    handle('repo:remove-recent', (_event, repoPath) => removeRecentRepo(repoPath));
 
     // Per-repo base/head persistence, so reopening a repo restores its last
     // compared range (validated against the live branch list in the renderer).
-    ipcMain.handle('settings:branch-selection:get', (_event, repoPath) =>
-        getBranchSelection(repoPath)
-    );
+    handle('settings:branch-selection:get', (_event, repoPath) => getBranchSelection(repoPath));
 
-    ipcMain.handle('settings:branch-selection:set', (_event, repoPath, base, head) =>
+    handle('settings:branch-selection:set', (_event, repoPath, base, head) =>
         setBranchSelection(repoPath, base, head)
     );
 
     // Theme is owned by nativeTheme in the main process; the renderer reads the
     // current resolved state on launch, then stays in sync via 'theme:changed'.
-    ipcMain.handle('theme:get', () => currentThemeState());
+    handle('theme:get', () => currentThemeState());
 
     // Git-backed channels. Each operates on the currently open repo and has a
     // matching method in the preload bridge and an entry in MoireApi.
-    ipcMain.handle('git:branches', () => requireRepo().branches());
+    handle('git:branches', () => requireRepo().branches());
 
-    ipcMain.handle('git:changed-files', (_event, base, head, mode) =>
+    handle('git:changed-files', (_event, base, head, mode) =>
         requireRepo().changedFiles(base, head, mode)
     );
 
-    ipcMain.handle('git:file-pair', (_event, base, head, filePath) =>
+    handle('git:file-pair', (_event, base, head, filePath) =>
         requireRepo().filePair(base, head, filePath)
     );
 }
