@@ -404,12 +404,16 @@ describe('comparison store', () => {
             expect(store.base).toBe('main');
         });
 
-        it('resets the branch list and selection when the open repo is removed', async () => {
+        it('resets the branch list, selection, and view state when the open repo is removed', async () => {
             stubApi();
             const store = useComparisonStore();
             await store.openRecent('/repos/moire');
             expect(store.branches.length).toBeGreaterThan(0);
             expect(store.base).toBe('main');
+
+            store.toggleViewed('src/app.ts');
+            store.setTreeFilter('app');
+            store.toggleDir('src');
 
             await store.removeRecent('/repos/moire');
             expect(store.repoName).toBe('');
@@ -418,6 +422,29 @@ describe('comparison store', () => {
             expect(store.head).toBe('WORKING TREE');
             expect(store.files).toEqual([]);
             expect(store.selectedPath).toBe('');
+            expect(store.viewed).toEqual({});
+            expect(store.treeFilter).toBe('');
+            expect(store.collapsed).toEqual({});
+        });
+
+        it('clears viewed marks, collapsed folders, and the filter when switching repos', async () => {
+            stubApi();
+            const store = useComparisonStore();
+
+            await store.openRecent('/repos/moire');
+            store.toggleViewed('src/app.ts');
+            store.setTreeFilter('app');
+            store.toggleDir('src');
+            expect(store.viewed).toEqual({ 'src/app.ts': true });
+            expect(store.treeFilter).toBe('app');
+            expect(store.collapsed).toEqual({ src: true });
+
+            // Opening a different repo starts from a clean tree: paths from the
+            // previous repo mean nothing here, so none of that state carries over.
+            await store.openRecent('/work/api-service');
+            expect(store.viewed).toEqual({});
+            expect(store.treeFilter).toBe('');
+            expect(store.collapsed).toEqual({});
         });
 
         it('loads the changed files and selects the first on open', async () => {

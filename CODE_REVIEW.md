@@ -23,19 +23,6 @@ Verification run at review time:
 
 ## Bugs (functional correctness)
 
-### B2. Per-repo view state is never reset when switching repositories
-
-`src/stores/comparison.ts`. `openRecent` (line 498) and `removeRecent` (line 447) never clear
-`viewed`, `collapsed`, or `treeFilter`. The only writers to those three refs are user actions, so
-they leak across repositories:
-
-- The filter box keeps the previous repo's text, hiding files in the newly opened repo.
-- Folders stay collapsed if their path matches a collapsed path from the previous repo.
-- Any file in the new repo whose path matches a file marked "viewed" in the previous repo shows as
-  already viewed (the `viewed` map is keyed by path only).
-
-Reset these when `repoPath` changes (or inside `openRecent` / `removeRecent`).
-
 ### B3. `refresh()` blanks the diff instead of reporting a deleted branch
 
 `src/stores/comparison.ts:609`. `refresh` reloads the branch list but keeps the current base/head
@@ -256,10 +243,9 @@ handles at exit, so this is harmless in practice, but the teardown path is incom
 
 ## Suggested priority
 
-1. B2 (state leaks across repos): user-visible correctness.
-2. U1 (fake status text): actively misleading.
-3. I1 and I4 (the enforced-boundary claim is false; the backend is untyped): the two findings that
+1. U1 (fake status text): actively misleading.
+2. I1 and I4 (the enforced-boundary claim is false; the backend is untyped): the two findings that
    most undermine the project's stated guarantees.
-4. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
-5. The settings.cjs and handlers.cjs test gaps: the highest-value untested logic.
-6. Everything else as cleanup.
+3. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
+4. The settings.cjs and handlers.cjs test gaps: the highest-value untested logic.
+5. Everything else as cleanup.

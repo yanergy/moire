@@ -444,6 +444,18 @@ export const useComparisonStore = defineStore('comparison', () => {
         recentRepos.value = await api.getRecentRepos();
     }
 
+    // Per-repo view state that must not leak between repositories: the viewed
+    // checkmarks, the collapsed folders, the filter box, and the selection are all
+    // keyed by paths that mean nothing in a different repo. Cleared on every
+    // deliberate repo open and on closing the open repo. Not called from refresh(),
+    // which keeps the user's place while re-reading the same repo.
+    function resetViewState() {
+        viewed.value = {};
+        collapsed.value = {};
+        treeFilter.value = '';
+        selectedPath.value = '';
+    }
+
     async function removeRecent(path: string) {
         const api = window.api;
         if (!api) {
@@ -462,8 +474,8 @@ export const useComparisonStore = defineStore('comparison', () => {
             base.value = '';
             head.value = WORKING_TREE;
             files.value = [];
-            selectedPath.value = '';
             disappearedBranches.value = [];
+            resetViewState();
         }
     }
 
@@ -515,6 +527,9 @@ export const useComparisonStore = defineStore('comparison', () => {
 
         repoName.value = info.name;
         repoPath.value = info.path;
+        // A fresh repo starts with a clean tree: no carried-over viewed marks,
+        // collapsed folders, or filter text from the previously open one.
+        resetViewState();
         recentRepos.value = await api.getRecentRepos();
         await loadBranches();
         return true;
