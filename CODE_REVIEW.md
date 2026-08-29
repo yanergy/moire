@@ -23,20 +23,6 @@ Verification run at review time:
 
 ## Inconsistencies (docs vs code)
 
-### I2. Docs reference the wrong formatter config filename
-
-`documentation/code-conventions.md:33` cites `.oxfmtrc.jsonc`; the actual file is `.oxfmtrc.json`.
-
-### I3. Diff colors are hardcoded as hex in monaco-theme.ts
-
-`documentation/code-conventions.md` (lines 100 and 115) says colors must come from `--moire-*`
-tokens and hex must never be hardcoded in components. `src/lib/monaco-theme.ts` defines the editor's
-diff-overlay colors as hex8. This is a sanctioned exception (Monaco requires hex, and it is a lib
-module rather than a Vue component), and now that the dead diff tokens have been removed these colors
-have a single source of truth here, so the earlier "two sources of truth" concern is resolved. Left
-as a note only: if the diff palette should ever be tunable from the design tokens, it would need
-re-exposing. Low priority.
-
 ### I4. The entire main process has no static type checking
 
 None of the tsconfig projects include `electron/**` (`tsconfig.app.json` covers `src/`,

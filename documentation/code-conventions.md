@@ -31,7 +31,7 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - Never run `electron .` directly. Dev = `npm run dev` (vite-plugin-electron launches Electron
   itself). Packaged smoke test = `npm run pack`, then run the binary in `release/linux-unpacked/`.
 - Never commit or edit anything in `dist/`, `dist-electron/`, or `release/` — build output only.
-- Config files that are the source of truth: `.oxlintrc.json` (linting), `.oxfmtrc.jsonc`
+- Config files that are the source of truth: `.oxlintrc.json` (linting), `.oxfmtrc.json`
   (formatting), `vite.config.ts` (build). Don't create parallel/duplicate configs.
 
 ## Code conventions
@@ -112,8 +112,10 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
   app-level components (`<file-tree-sidebar />`, `<diff-pane />`) stay kebab-case.
 - Styling is Tailwind utility classes. No `<style scoped>` blocks unless a Tailwind
   equivalent genuinely doesn't exist; if you add one, say why in a comment.
-- Theme values (colors, diff status colors) come from the CSS variable tokens — never
-  hardcode hex values in components.
+- Theme values (colors, diff status colors) come from the CSS variable tokens. Never
+  hardcode hex values in components. The one exception is `src/lib/monaco-theme.ts`: Monaco's
+  theme API only accepts hex (`#RRGGBB` or `#RRGGBBAA`), so the editor's surface and diff-overlay
+  colors are defined there directly. Keep them consistent with the `--moire-*` tokens by hand.
 - Prefer Lucide icons (`@lucide/vue`) over unicode glyphs for buttons. SVG icons center
   reliably in a flex button and size via `:size`. Use a consistent 16px icon
   (`:size="16"`) for every icon button. An icon that sits inside a small fixed container
