@@ -23,19 +23,6 @@ Verification run at review time:
 
 ## Useless or misleading features
 
-### U1. The status bar shows fabricated telemetry
-
-`src/components/diff/StatusBar.vue:21`. Two pieces of the status bar are fake:
-
-- `{{ langLabel }} · UTF-8 · LF` hardcodes the encoding and line ending. The app never detects
-  either, so it always claims UTF-8 and LF regardless of the file.
-- `watching .git/refs · synced 4s ago` is entirely static text. The "4s ago" never changes and the
-  green dot is not wired to any real watcher state.
-
-This presents invented information as live status. Either wire it to real data (the watcher already
-knows when it last fired, and the file pair already carries enough to detect line endings) or
-remove it.
-
 ### U2. `BranchInfo.meta` is dead for real branches, and the current branch is not shown
 
 `electron/git/GitService.cjs:156` (`branches`) never sets `meta`. The only place a value appears is
@@ -192,8 +179,6 @@ ships with a matching test."
 - `src/App.vue`: no test, despite real logic (the `onMounted` IPC subscriptions, the
   `document.title` watchEffect, the `onUnmounted` cleanup).
 - `src/components/pages/MoirePage.vue`: no test.
-- `src/components/diff/StatusBar.vue`: no test. This is also the component carrying the fake status
-  text (U1).
 - `src/lib/monaco-theme.ts`: no test, even though `monacoThemeFor` is a trivial pure function.
 - `src/lib/utils.ts`: no test (`cn`).
 - `src/lib/monaco-env.ts`, `src/main.ts`: no test (worker wiring and entry point; reasonable to
@@ -230,9 +215,8 @@ handles at exit, so this is harmless in practice, but the teardown path is incom
 
 ## Suggested priority
 
-1. U1 (fake status text): actively misleading.
-2. I1 and I4 (the enforced-boundary claim is false; the backend is untyped): the two findings that
+1. I1 and I4 (the enforced-boundary claim is false; the backend is untyped): the two findings that
    most undermine the project's stated guarantees.
-3. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
-4. The settings.cjs and handlers.cjs test gaps: the highest-value untested logic.
-5. Everything else as cleanup.
+2. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
+3. The settings.cjs and handlers.cjs test gaps: the highest-value untested logic.
+4. Everything else as cleanup.

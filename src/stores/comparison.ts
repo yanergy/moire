@@ -149,6 +149,11 @@ export const useComparisonStore = defineStore('comparison', () => {
     const treeFilter = ref('');
     const collapsed = ref<Record<string, boolean>>({});
 
+    // When the change set was last read from disk (epoch ms), or null when no
+    // repo is loaded. Drives the status bar's "synced N ago"; the repo watcher
+    // re-reads on change, so this doubles as a liveness signal.
+    const lastSyncedAt = ref<number | null>(null);
+
     function isViewed(path: string): boolean {
         return !!viewed.value[path];
     }
@@ -475,6 +480,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             head.value = WORKING_TREE;
             files.value = [];
             disappearedBranches.value = [];
+            lastSyncedAt.value = null;
             resetViewState();
         }
     }
@@ -602,11 +608,15 @@ export const useComparisonStore = defineStore('comparison', () => {
         if (!api || !base.value) {
             files.value = [];
             selectedPath.value = '';
+            lastSyncedAt.value = null;
             return;
         }
 
         try {
             files.value = await api.getChangedFiles(base.value, head.value, compareMode.value);
+            // A successful read from disk is the "synced" moment the status bar
+            // reports; a failed range leaves the previous time untouched.
+            lastSyncedAt.value = Date.now();
         } catch {
             files.value = [];
         }
@@ -680,6 +690,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         viewed,
         treeFilter,
         collapsed,
+        lastSyncedAt,
         isViewed,
         localBranches,
         remoteBranches,
