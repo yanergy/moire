@@ -49,8 +49,7 @@ export interface FilePair {
 export interface BranchInfo {
     name: string;
     kind: 'local' | 'remote';
-    isCurrent?: boolean;
-    meta?: string; // e.g. 'default', 'ahead 6', 'on disk'
+    isCurrent?: boolean; // the checked-out branch, marked in the ref selector
 }
 
 export interface RepoInfo {

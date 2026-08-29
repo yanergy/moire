@@ -30,6 +30,9 @@ const commandItem = (fullName: string) =>
 const toggleAllButton = () =>
     document.querySelector('[aria-label$="all groups"]') as HTMLElement | null;
 
+const firstItemTitle = () =>
+    document.querySelector('[data-slot="command-item"] span[title]')?.getAttribute('title');
+
 describe('RefSelector', () => {
     let pinia: Pinia;
 
@@ -74,17 +77,40 @@ describe('RefSelector', () => {
         expect(label?.textContent).toBe('monaco-spike');
     });
 
+    it('pins the checked-out branch as a plain top row, listed once', async () => {
+        const wrapper = mountSide('base');
+        await open(wrapper);
+
+        // main is isCurrent in the fixture: it is the first row, with no group
+        // heading of its own, but carries a "current" note so its pinning is clear.
+        expect(headings()).not.toContain('Current');
+        expect(firstItemTitle()).toBe('main');
+        expect(commandItem('main')?.textContent).toContain('current');
+
+        // It is dropped from "Local branches", so it appears exactly once.
+        expect(document.querySelectorAll('span[title="main"]').length).toBe(1);
+    });
+
+    it('pins the working tree as a plain top row on the head side', async () => {
+        const wrapper = mountSide('head');
+        await open(wrapper);
+
+        // The working tree leads the head side as a plain row, not an "Uncommitted"
+        // group with a header.
+        expect(headings()).not.toContain('Uncommitted');
+        expect(firstItemTitle()).toBe('WORKING TREE');
+    });
+
     it('offers the working tree entry only on the head side', async () => {
         const head = mountSide('head');
         await open(head);
-        expect(listText()).toContain('Uncommitted');
         expect(listText()).toContain('WORKING TREE');
         head.unmount();
         document.body.innerHTML = '';
 
         const base = mountSide('base');
         await open(base);
-        expect(listText()).not.toContain('Uncommitted');
+        expect(listText()).not.toContain('WORKING TREE');
     });
 
     it('filters the ref list by the search query, matching the full path', async () => {
@@ -149,17 +175,19 @@ describe('RefSelector', () => {
         const wrapper = mountSide('base');
         await open(wrapper);
 
-        expect(commandItem('main')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('develop')?.classList.contains('hidden')).toBe(false);
         expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
 
         toggleAllButton()?.click();
         await flushPromises();
-        expect(commandItem('main')?.classList.contains('hidden')).toBe(true);
+        expect(commandItem('develop')?.classList.contains('hidden')).toBe(true);
         expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(true);
+        // The pinned current branch has no collapsible header, so it stays visible.
+        expect(commandItem('main')?.classList.contains('hidden')).toBe(false);
 
         toggleAllButton()?.click();
         await flushPromises();
-        expect(commandItem('main')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('develop')?.classList.contains('hidden')).toBe(false);
         expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
     });
 });

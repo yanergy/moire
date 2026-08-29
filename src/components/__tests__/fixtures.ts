@@ -7,11 +7,11 @@
 import type { BranchInfo, ChangedFile } from '@/shared/types';
 
 export const BRANCHES: BranchInfo[] = [
-    { name: 'main', kind: 'local', isCurrent: true, meta: 'default' },
+    { name: 'main', kind: 'local', isCurrent: true },
     { name: 'develop', kind: 'local' },
     { name: 'release/2.4', kind: 'local' },
-    { name: 'feat/monaco-spike', kind: 'local', meta: 'ahead 6' },
-    { name: 'fix/rename-detection', kind: 'local', meta: 'ahead 2' },
+    { name: 'feat/monaco-spike', kind: 'local' },
+    { name: 'fix/rename-detection', kind: 'local' },
     { name: 'origin/main', kind: 'remote' },
     { name: 'origin/develop', kind: 'remote' },
     { name: 'origin/release/2.4', kind: 'remote' },

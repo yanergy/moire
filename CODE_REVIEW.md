@@ -21,19 +21,6 @@ Verification run at review time:
 
 ---
 
-## Useless or misleading features
-
-### U2. `BranchInfo.meta` is dead for real branches, and the current branch is not shown
-
-`electron/git/GitService.cjs:156` (`branches`) never sets `meta`. The only place a value appears is
-the hardcoded WORKING TREE row (`meta: 'on disk'` in `src/components/controls/RefSelector.vue:122`).
-The type comment in `src/shared/types.ts:53` advertises `'default'`, `'ahead 6'`, etc., none of
-which are ever produced, so every real branch renders an empty meta column. Separately, `isCurrent`
-is computed by the backend and used only to default the base; it is never displayed, so the ref
-dropdown gives no indication of which branch is checked out.
-
----
-
 ## Dead code
 
 ### D1. `inferLanguage` and its extension map are unused

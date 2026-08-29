@@ -63,6 +63,9 @@ interface RefItem {
 interface RefGroup {
     label: string;
     items: RefItem[];
+    // A pinned group renders its rows at the top with no collapsible header, for
+    // the working tree and the checked-out branch (the two most-picked refs).
+    pinned?: boolean;
 }
 
 // Group branches by their path prefix so a long flat list stays scannable:
@@ -77,7 +80,9 @@ function groupByPrefix(list: BranchInfo[], topLabel: string): RefGroup[] {
         const item: RefItem = {
             name: branch.name,
             label: slash === -1 ? branch.name : branch.name.slice(slash + 1),
-            meta: branch.meta ?? '',
+            // No per-branch note here: the working-tree and current-branch rows
+            // are the only annotated ones, and both are special-cased in `groups`.
+            meta: '',
         };
         if (slash === -1) {
             top.push(item);
@@ -115,14 +120,30 @@ function groupByPrefix(list: BranchInfo[], topLabel: string): RefGroup[] {
 const groups = computed<RefGroup[]>(() => {
     const result: RefGroup[] = [];
 
+    // The working tree and the checked-out branch are the two most-picked refs, so
+    // they sit at the very top as plain rows (pinned: no collapsible header). The
+    // current branch shows its full name and is dropped from "Local branches"
+    // below so it never appears twice.
     if (props.side === 'head') {
         result.push({
             label: 'Uncommitted',
+            pinned: true,
             items: [{ name: WORKING_TREE, label: WORKING_TREE, meta: 'on disk' }],
         });
     }
 
-    result.push(...groupByPrefix(comparison.localBranches, 'Local branches'));
+    const currentBranch = comparison.localBranches.find((b) => b.isCurrent);
+    if (currentBranch) {
+        result.push({
+            label: 'Current',
+            pinned: true,
+            // The "current" note makes clear why this row is pinned to the top.
+            items: [{ name: currentBranch.name, label: currentBranch.name, meta: 'current' }],
+        });
+    }
+
+    const locals = comparison.localBranches.filter((b) => !b.isCurrent);
+    result.push(...groupByPrefix(locals, 'Local branches'));
     result.push(...groupByPrefix(comparison.remoteBranches, 'Remotes'));
 
     return result;
@@ -130,7 +151,11 @@ const groups = computed<RefGroup[]>(() => {
 
 // Collapse/expand-all mirrors the file tree: the single toggle opens everything
 // only when it is already fully closed, and otherwise closes everything.
-const groupLabels = computed(() => groups.value.map((group) => group.label));
+// Only the collapsible groups take part in collapse/expand-all; the pinned rows
+// have no header and always stay visible.
+const groupLabels = computed(() =>
+    groups.value.filter((group) => !group.pinned).map((group) => group.label)
+);
 const allCollapsed = computed(
     () =>
         groupLabels.value.length > 0 &&
@@ -219,6 +244,7 @@ function pick(name: string) {
                     <CommandEmpty class="text-moire-faint">No refs found.</CommandEmpty>
                     <CommandGroup v-for="group in groups" :key="group.label">
                         <button
+                            v-if="!group.pinned"
                             type="button"
                             data-slot="ref-group-header"
                             class="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-left text-xs font-medium text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
