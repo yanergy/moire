@@ -3,11 +3,14 @@ const path = require('node:path');
 const { registerIpcHandlers, isGitAvailable } = require('./ipc/handlers.cjs');
 const { installAppMenu } = require('./menu.cjs');
 const { initTheme, setThemePreference, registerThemeBroadcast } = require('./theme.cjs');
+const { restoreWindowState, trackWindowState } = require('./window-state.cjs');
 
-function createWindow() {
+async function createWindow() {
+    // Reopen at the last session's size/position (off-screen positions dropped).
+    const { bounds, maximized } = await restoreWindowState();
     const win = new BrowserWindow({
-        width: 1280,
-        height: 800,
+        ...bounds,
+        show: false,
         webPreferences: {
             // Non-negotiable process separation: the renderer never touches Node.
             // It reaches main only through this preload bridge (window.api).
@@ -17,6 +20,17 @@ function createWindow() {
             sandbox: true,
         },
     });
+
+    // Maximize before showing so it doesn't flash at the restored size first.
+    if (maximized) {
+        win.maximize();
+    }
+
+    trackWindowState(win);
+
+    // Show once the renderer can paint, so there's no blank frame or a flash at
+    // the restored size before maximizing.
+    win.once('ready-to-show', () => win.show());
 
     if (process.env.VITE_DEV_SERVER_URL) {
         win.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -62,7 +76,7 @@ app.whenReady().then(async () => {
             win?.webContents.send('menu:refresh');
         }
     );
-    createWindow();
+    await createWindow();
 });
 
 app.on('window-all-closed', () => {

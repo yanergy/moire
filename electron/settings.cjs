@@ -12,7 +12,12 @@ function getStore() {
             ({ default: Store }) =>
                 new Store({
                     name: 'moire',
-                    defaults: { recentRepos: [], theme: 'system', branchSelections: {} },
+                    defaults: {
+                        recentRepos: [],
+                        theme: 'system',
+                        branchSelections: {},
+                        windowState: null,
+                    },
                 })
         );
     }
@@ -80,6 +85,18 @@ async function setThemePreference(preference) {
     store.set('theme', preference);
 }
 
+// The main window's last size, position, and maximized state, restored on launch
+// so the app reopens where it was left. Null until the first window closes.
+async function getWindowState() {
+    const store = await getStore();
+    return store.get('windowState', null);
+}
+
+async function setWindowState(state) {
+    const store = await getStore();
+    store.set('windowState', state);
+}
+
 module.exports = {
     getRecentRepos,
     addRecentRepo,
@@ -88,4 +105,6 @@ module.exports = {
     setBranchSelection,
     getThemePreference,
     setThemePreference,
+    getWindowState,
+    setWindowState,
 };

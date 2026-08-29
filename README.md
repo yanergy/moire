@@ -122,7 +122,7 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   `getFilePair` on selection and on any range change, dropping stale out-of-order responses, and
   feeds the real content and language into the Monaco diff editor.
 
-### Phase 4, live updates and polish
+### Phase 4, live updates and polish ✅
 
 - [x] System, light, and dark theme selection with matching Monaco themes. Lives in the native
   application menu (View, Theme) as a radio group. The main process owns it via `nativeTheme`
@@ -179,7 +179,11 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   the `src/assets/moire-icon.svg` artwork); `build/icon.icns`, `icon.ico`, and `icon.png` are
   generated from it and auto-detected by electron-builder. The dev dock icon is set from the
   PNG in `electron/main.cjs`.
-- [ ] Window state persistence.
+- [x] Window state persistence. The main window's size, position, and maximized state are saved
+  to `electron-store` (`windowState` in `settings.cjs`) as they change and restored on launch
+  (`electron/window-state.cjs`). A remembered position that would land off every current display
+  (a monitor since unplugged) is dropped so the window never opens off-screen; the window is shown
+  on `ready-to-show` to avoid a blank frame or a flash at the restored size before maximizing.
 - [ ] Error reporting and a log file in userData.
 
 ## Documentation
