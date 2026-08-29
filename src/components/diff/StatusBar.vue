@@ -13,10 +13,21 @@ const now = useTimestamp({ interval: 1000 });
 
 const langLabel = computed(() => languageLabel(comparison.selectedPair.language));
 
+// The main process reads all text as UTF-8, so that is the honest label for how
+// the shown content is decoded. Empty for a binary file, which has no text
+// encoding to report.
+const encoding = computed(() => (comparison.selectedPair.binary ? '' : 'UTF-8'));
+
 // Line ending detected from the file's own content (the head side, or the base
 // side for a deletion). Empty for a binary file, whose text is withheld.
 const eol = computed(() =>
     detectEol(comparison.selectedPair.newContent ?? comparison.selectedPair.oldContent)
+);
+
+// Language, encoding, and line ending joined for the readout, dropping the parts
+// that do not apply (a binary file contributes no encoding or line ending).
+const fileMeta = computed(() =>
+    [langLabel.value, encoding.value, eol.value].filter(Boolean).join(' · ')
 );
 
 const syncedAgo = computed(() =>
@@ -35,7 +46,7 @@ const syncedAgo = computed(() =>
         <div class="flex-1" />
 
         <span v-if="comparison.selectedPair.path" class="whitespace-nowrap text-moire-faint">
-            {{ langLabel }}<template v-if="eol"> · {{ eol }}</template>
+            {{ fileMeta }}
         </span>
         <!-- The repo watcher (main process) re-reads the diff whenever the open
              repo changes on disk, so a green dot and the last sync time are a

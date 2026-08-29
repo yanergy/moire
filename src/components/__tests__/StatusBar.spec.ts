@@ -34,10 +34,9 @@ describe('StatusBar', () => {
         expect(text).toContain('2 files changed');
         expect(text).toContain('+15');
         expect(text).toContain('−1');
-        expect(text).toContain('TypeScript');
-        // Line ending is derived from the file's own content, not hardcoded.
-        expect(text).toContain('CRLF');
-        expect(text).not.toContain('UTF-8');
+        // Language, encoding, and the line ending detected from the file's own
+        // content (not hardcoded) sit together.
+        expect(text).toContain('TypeScript · UTF-8 · CRLF');
         expect(text).toContain('Watching for changes');
         expect(text).toContain('synced');
     });
@@ -58,6 +57,8 @@ describe('StatusBar', () => {
         const text = mount(StatusBar).text();
         expect(text).not.toContain('CRLF');
         expect(text).not.toContain('LF');
+        // A binary file has no text encoding or line ending to report.
+        expect(text).not.toContain('UTF-8');
     });
 
     it('hides the language and watching readout when no repo is open', () => {
