@@ -15,7 +15,9 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
     - Types shared across the IPC boundary (`ChangedFile`, `FilePair`, `MoireApi`, ...) go in
       `shared/types.ts`. Never duplicate these definitions on either side.
 - `electron/main.cjs` is CommonJS (`require`). Renderer code is TypeScript ESM. Do not "fix"
-  the main process to ESM or convert its `require` calls to `import`.
+  the main process to ESM or convert its `require` calls to `import`. The `.cjs` files are still
+  type-checked (`tsconfig.electron.json` runs `checkJs`, included in `npm run type-check`); add
+  types with JSDoc rather than by converting to TypeScript.
 - Adding a new IPC channel means three changes, always together:
     1. handler in `electron/ipc/`
     2. exposure in the preload `contextBridge`

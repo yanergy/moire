@@ -4,7 +4,7 @@
 
 const path = require('node:path');
 const { ipcMain, dialog } = require('electron');
-const { simpleGit } = require('simple-git');
+const { simpleGit, CheckRepoActions } = require('simple-git');
 const { GitService } = require('../git/GitService.cjs');
 const { watchRepo } = require('../watcher/RepoWatcher.cjs');
 const {
@@ -52,7 +52,8 @@ function getCurrentRepoPath() {
 
 async function isGitRepo(repoPath) {
     try {
-        return await simpleGit(repoPath).checkIsRepo('root');
+        // IS_REPO_ROOT is the string 'root'; using the enum keeps the type check happy.
+        return await simpleGit(repoPath).checkIsRepo(CheckRepoActions.IS_REPO_ROOT);
     } catch {
         // Non-repo paths make checkIsRepo resolve false, but a missing path or an
         // absent git binary throws; treat every failure as "not a repo" here.
@@ -74,6 +75,7 @@ async function isGitAvailable(git = simpleGit()) {
 
 // onRecentsChanged fires after the recent-repos list changes (an open or a
 // removal) so main can rebuild the app menu's "Open Recent" submenu.
+/** @param {{ onRecentsChanged?: () => void }} [options] */
 function registerIpcHandlers({ onRecentsChanged } = {}) {
     handle('dialog:open-repo', async () => {
         const result = await dialog.showOpenDialog({

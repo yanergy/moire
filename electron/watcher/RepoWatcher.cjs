@@ -93,6 +93,11 @@ function coalesceReason(reasons) {
 class RepoWatcher {
     // fs.watch, chokidar, and gitDir are injectable so the backends and the
     // debounce are unit-testable without a real filesystem.
+    /**
+     * @param {string} repoPath
+     * @param {(event: { reason: string, at: number }) => void} onChange
+     * @param {{ debounceMs?: number, fsWatch?: typeof fs.watch, chokidar?: typeof defaultChokidar, gitDir?: string }} [options]
+     */
     constructor(
         repoPath,
         onChange,

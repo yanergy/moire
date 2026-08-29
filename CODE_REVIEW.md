@@ -23,15 +23,6 @@ Verification run at review time:
 
 ## Inconsistencies (docs vs code)
 
-### I4. The entire main process has no static type checking
-
-None of the tsconfig projects include `electron/**` (`tsconfig.app.json` covers `src/`,
-`tsconfig.node.json` covers only the vite/vitest config files, `tsconfig.vitest.json` covers the
-tests). The main-process files are `.cjs` with no `checkJs`. So `npm run type-check` never inspects
-`GitService`, the IPC handlers, `settings`, the watcher, `theme`, `window-state`, or `logger`. For a
-project that treats process separation as non-negotiable, the whole backend is untyped, and type
-errors there surface only at runtime or via tests.
-
 ### I5. `@electron/osx-sign` is used but not declared as a dependency
 
 `build/afterPack.cjs:17` does `require('@electron/osx-sign')`. It resolves only because
@@ -150,7 +141,6 @@ handles at exit, so this is harmless in practice, but the teardown path is incom
 
 ## Suggested priority
 
-1. I4 (the backend is untyped): the finding that most undermines the project's stated guarantees.
-2. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
-3. The settings.cjs and handlers.cjs test gaps: the highest-value untested logic.
-4. Everything else as cleanup.
+1. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
+2. The settings.cjs and handlers.cjs test gaps: the highest-value untested logic.
+3. Everything else as cleanup.

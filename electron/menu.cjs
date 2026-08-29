@@ -99,7 +99,11 @@ function buildMenuTemplate({
 
 function installAppMenu(options) {
     const template = buildMenuTemplate({ isMac: process.platform === 'darwin', ...options });
-    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+    Menu.setApplicationMenu(
+        Menu.buildFromTemplate(
+            /** @type {import('electron').MenuItemConstructorOptions[]} */ (template)
+        )
+    );
 }
 
 module.exports = { installAppMenu, buildMenuTemplate, THEME_OPTIONS };
