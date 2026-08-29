@@ -105,6 +105,17 @@ app.whenReady().then(async () => {
     await createWindow();
 });
 
+// macOS keeps the app running after its last window is closed (see
+// window-all-closed below), so reopening from the dock or the app switcher must
+// recreate a window. Without this, closing the window is a dead end: the app
+// stays in the dock but can never show a window again. The guard avoids a second
+// window on the launch-time 'activate'.
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        void createWindow();
+    }
+});
+
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 });
