@@ -2,12 +2,14 @@
     "name": "moire",
     "version": "0.0.0",
     "private": true,
+    "description": "Desktop app for viewing the diff between two branches of a local Git repository.",
+    "author": "yanergy",
     "type": "module",
     "main": "dist-electron/main.js",
     "scripts": {
         "dev": "vite",
         "build": "run-p type-check \"build-only {@}\" --",
-        "pack": "vite build && electron-builder --dir",
+        "pack": "vite build && electron-builder",
         "test:unit": "vitest",
         "type-check": "vue-tsc --build",
         "lint": "oxlint . --fix",
@@ -65,13 +67,63 @@
     },
     "build": {
         "appId": "com.yannieck.moire",
-        "productName": "Moiré",
+        "productName": "Moire",
+        "artifactName": "Moiré-${version}-${arch}.${ext}",
+        "afterPack": "build/afterPack.cjs",
         "directories": {
             "output": "release"
         },
         "files": [
             "dist/**",
-            "dist-electron/**"
-        ]
+            "dist-electron/**",
+            "!node_modules/**"
+        ],
+        "mac": {
+            "category": "public.app-category.developer-tools",
+            "target": [
+                {
+                    "target": "dmg",
+                    "arch": [
+                        "arm64",
+                        "x64"
+                    ]
+                },
+                {
+                    "target": "zip",
+                    "arch": [
+                        "arm64",
+                        "x64"
+                    ]
+                }
+            ],
+            "extendInfo": {
+                "CFBundleDisplayName": "Moiré"
+            }
+        },
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ]
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        },
+        "linux": {
+            "category": "Development",
+            "maintainer": "yanergy",
+            "target": [
+                "AppImage",
+                "deb"
+            ]
+        },
+        "dmg": {
+            "title": "Moiré ${version}"
+        }
     }
 }

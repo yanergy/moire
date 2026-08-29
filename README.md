@@ -176,10 +176,22 @@ here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
   remembered ref deleted since last time is dropped (a missing base clears to empty, a missing head
   falls back to the working tree) and named in a small `MissingBranchNotice` under the toolbar.
 
-### Phase 5, packaging and release
+### Phase 5, packaging and release ✅
 
-- [~] Full `electron-builder` config with per platform targets. Only a minimal `build` block
-  exists today.
+- [x] Full `electron-builder` config with per-platform targets: macOS (dmg + zip, arm64 and x64),
+  Windows (NSIS), and Linux (AppImage + deb). `npm run pack` builds installers for the host
+  platform. The main process is bundled into `dist-electron`, so the app is self-contained and
+  `node_modules` is excluded to keep it lean. Builds are unsigned (no certificate); on macOS an
+  `afterPack` hook (`build/afterPack.cjs`, via `@electron/osx-sign`) ad-hoc signs the app with the
+  `disable-library-validation` entitlement (`build/entitlements.mac.plist`) so an unsigned build
+  still launches on Apple Silicon. The internal bundle name (the `.app` filename, `CFBundleName`,
+  and executable) is the ASCII `Moire`, because a non-ASCII `CFBundleName` crashes the unsigned app
+  on arm64. The accented `Moiré` is used everywhere it can be: the window title, all in-app text,
+  the dmg volume title, the dmg/zip filenames, and `CFBundleDisplayName` (the Finder label). The
+  macOS menu bar, dock, and About panel read `CFBundleName` (before the app's JS runs), so they
+  show the ASCII `Moire`; putting the accent there (and distributing without a Gatekeeper/SmartScreen
+  warning) would need a real signing certificate (macOS Developer ID + notarization, Windows
+  Authenticode), which this project does not use.
 - [x] App icon. `build/icon.svg` is the packaging master (macOS-margined squircle around
   the `src/assets/moire-icon.svg` artwork); `build/icon.icns`, `icon.ico`, and `icon.png` are
   generated from it and auto-detected by electron-builder. The dev dock icon is set from the
