@@ -10,11 +10,11 @@ style, the strict Electron process separation and preload bridge rules, the shad
 component standard, the `--moire-*` design tokens, testing rules, and component naming. Follow it
 for every change.
 
-## Keeping the checklist current
+## Tracking status
 
-The README has a Checklist section that is the single source of truth for project status. Every
-time a feature or task is finished, mark it off there in the same change (switch its `[ ]` or
-`[~]` to `[x]`). Add a new item when you start work the checklist does not yet cover.
+The five-phase plan is complete, so the README no longer carries a per-task checklist. When you
+hit a bug or a limitation, record it in the README's "Known issues" section in the same change,
+and remove the entry once it is fixed.
 
 ## Other documentation
 

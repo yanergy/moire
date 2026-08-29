@@ -9,13 +9,13 @@ superimposition.
 
 ## Status
 
-Moiré is an early work in progress. The renderer is a complete, tested UI shell and the git
-backend now runs in the Electron main process (branch listing, changed files, and file pairs
-over IPC). The renderer is being switched onto it a piece at a time: the ref selectors show the
-open repo's real branches, while the file tree and diff pane still read placeholder data from
-`src/lib/mock.ts`. The stores are shaped so that swapping each mock for the real backend is a
-store level change rather than a component rewrite. See the Checklist below for the full
-breakdown of what is done and what remains.
+All five phases of the plan (`documentation/moire-plan.md`) are complete. The renderer runs
+entirely on the real git backend in the Electron main process (branches, changed files, and file pairs
+over IPC): the ref selectors, file tree, and diff pane all read live data, with a virtualized
+tree, per-folder "mark viewed", a large-file gate, binary and image previews, rename display,
+theme and range persistence, and auto-refresh on repository changes. `npm run pack` builds a
+self-contained desktop app for the host platform. Remaining work is polish and, for
+distribution beyond the local machine, code signing (macOS Developer ID, Windows Authenticode).
 
 ## Stack
 
@@ -49,164 +49,17 @@ hand-write bespoke replacements for something shadcn-vue provides. The primitive
 with the project's `--moire-*` design tokens so they match the custom look. See
 `documentation/code-conventions.md` for the full rules.
 
-## Checklist
+## Known issues
 
-The complete status, grouped by the phases in `documentation/moire-plan.md`. Mark items off
-here as work lands. `[x]` is done, `[~]` is partial, `[ ]` is not started.
+Track bugs and limitations here.
 
-### Setup and dependencies ✅
-
-- [x] `vite-plugin-electron` installed and wired in `vite.config.ts`.
-- [x] `tailwindcss` and `@tailwindcss/vite`.
-- [x] `simple-git`, `monaco-editor`, `electron-store`, and `chokidar` installed (only Monaco is
-      used so far).
-- [x] `vue-virtual-scroller` installed.
-- [x] `electron-builder` installed, with a minimal `build` block in `package.json`.
-- [x] shadcn-vue in use, primitives under `src/components/ui/`, with `reka-ui` and
-      `@vueuse/core`.
-
-### Phase 1, scaffold and plumbing ✅
-
-- [x] Tailwind v4 via `@tailwindcss/vite`.
-- [x] ESM output concern sidestepped by using `electron/main.cjs`.
-- [x] shadcn-vue init and components migrated onto the primitives, styled with `--moire-*` tokens,
-      verified in both themes.
-- [x] Harden the Electron entry. `electron/main.cjs` sets `contextIsolation: true`,
-  `nodeIntegration: false`, and `sandbox: true` on the window. The preload path is wired in with
-  the bridge below.
-- [x] Context isolated preload bridge (`electron/preload.cjs`) exposing `window.api`. Implements
-  the repo-opening surface of `MoireApi` (`openRepoDialog`, `openRepo`, `getRecentRepos`)
-  over `ipcMain.handle` channels in `electron/ipc/`; the git-backend methods land with Phase 2.
-- [x] Native folder picker wired to `openRepo`. The toolbar repo-picker menu's "Open folder…"
-  item opens it, and `openRepo` validates the folder is a Git repo (`simple-git` `checkIsRepo`)
-  in the main process.
-- [x] `git --version` startup check with an error dialog. `electron/main.cjs` gates launch on
-  `isGitAvailable()` (runs `git --version` via `simple-git`); if git is missing it shows a native
-  error box and quits, since the renderer is not up yet and nothing works without git.
-- [x] Recent repos persistence via `electron-store` (`electron/settings.cjs`), recorded on each
-  successful open, restored on launch, and listed in the toolbar repo-picker menu
-  (`RepoPicker.vue`) where each entry can be removed.
-
-### Phase 2, git integration ✅
-
-- [x] `GitService` for branches, changed files, and file pairs. Lives in
-  `electron/git/GitService.cjs`, wraps `simple-git`, and is exposed to the renderer over the
-  `git:branches`, `git:changed-files`, and `git:file-pair` IPC channels (set on repo open).
-  Supports the three-dot merge-base default, two-dot direct, and working-tree comparisons. The
-  working-tree comparison also folds in untracked files (via `git ls-files --others
-  --exclude-standard`, so git-ignored paths stay out) as adds, since `git diff` alone reports only
-  tracked files and a brand-new file is a real uncommitted change.
-- [x] Rename and binary detection. `-M` rename detection surfaces `oldPath`, numstat's dash
-  markers flag binaries in the changed-file list, and file pairs withhold binary content and
-  flag oversized files.
-- [x] Vitest parser tests for numstat, name status, and `-z` output in `tests/parsers.spec.ts`
-  (parsers live in `electron/git/parsers.cjs`), with `tests/git-service.spec.ts` covering the
-  service orchestration.
-
-### Phase 3, core UI ✅
-
-- [x] Monaco DiffEditor spike.
-- [x] Toolbar with ref selectors and mode toggles.
-- [x] Split and unified toggle, plus prev and next change navigation.
-- [x] Status bar totals.
-- [x] Ref selectors wired to the real branch list via `getBranches`, loaded on repo open with a
-  default base chosen per repo (the current branch, then main, then master) when the repo has no
-  remembered range (see the branch-persistence item in Phase 4). Closing a repo resets the
-  branch selection.
-- [x] File tree wired to changed files. The store loads the change set via
-  `getChangedFiles` on repo open and whenever the base, head, or compare mode changes,
-  keeping a valid selection and clearing when no repo is open.
-- [x] Collapse single-child directory chains into one combined row (GitHub-style path
-  compression), so `a/b/c/file` shows as an `a/b/c` folder with the file directly under it.
-- [x] File selection to file pair to Monaco. The store loads the selected file's pair via
-  `getFilePair` on selection and on any range change, dropping stale out-of-order responses, and
-  feeds the real content and language into the Monaco diff editor.
-
-### Phase 4, live updates and polish ✅
-
-- [x] System, light, and dark theme selection with matching Monaco themes. Lives in the native
-  application menu (View, Theme) as a radio group. The main process owns it via `nativeTheme`
-  (`system` follows the OS) and pushes the resolved theme to the renderer over the preload bridge.
-- [x] Filter box and viewed checkboxes.
-- [x] Mark a whole folder viewed from its file-tree row. A checkbox on each folder row toggles
-  every file under it (respecting the active filter), reading checked, indeterminate, or empty
-  from the folder's viewed tally (`comparison.toggleDirViewed`).
-- [x] Open repo name shown in the native window title.
-- [x] Manual refresh from the native menu (View → Refresh, Cmd/Ctrl+R). The item messages the
-  focused window over `menu:refresh`; the renderer re-reads the branch list, changed files, and
-  open file pair for the current range without resetting the selection (`comparison.refresh`).
-- [x] Native File menu: Open Repository… (Cmd/Ctrl+O) and an Open Recent submenu. The items
-  message the focused window (`menu:open-repo`, `menu:open-recent`); the renderer runs the same
-  store flow as the toolbar repo-picker (`openRepository` / `openRecent`). The menu rebuilds
-  whenever the recent list changes (an `onRecentsChanged` callback from the IPC handlers), so
-  Open Recent stays current and marks the open repo with a checkmark.
-- [x] `RepoWatcher` with auto refresh on change. Lives in `electron/watcher/RepoWatcher.cjs`,
-  started on repo open. On macOS and Windows it uses one native recursive `fs.watch` over the repo
-  (a single OS-level watcher), classifying each path into a working-tree change or a ref change
-  (`HEAD`, `packed-refs`, `refs/`) and ignoring `.git` churn and `node_modules`. Linux has no
-  recursive `fs.watch`, so it falls back to two scoped `chokidar` watchers there. The single-watcher
-  approach is deliberate: `chokidar` opens one `fs.watch` handle per directory (~1800 for a modest
-  repo), and on macOS that file-descriptor churn collides with the fds `git` needs when it spawns,
-  producing `spawn EBADF`. A git operation storms the watcher, so events are coalesced into one
-  `repo:changed` push (`refs` outranks `worktree`) after a 250ms quiet window. The renderer
-  subscribes via `onRepoChanged` and re-reads the range through `comparison.refresh` (`App.vue`).
-- [x] Virtualized file tree using the installed `vue-virtual-scroller`. `FileTreeSidebar.vue`
-  feeds the store's already-flat `treeNodes` (folded, expand-aware) into a `RecycleScroller`, so
-  only the rows in view are in the DOM. Rows are one fixed height, and the base indent absorbs
-  the container padding the old scrolled list carried.
-- [x] Size threshold and a "Load diff" gate for large files. A file pair over the render
-  threshold (`GitService`'s `MAX_RENDER_BYTES`, ~512 KB) carries a `tooLarge` flag and its
-  `sizeBytes`; the diff pane shows a `LargeFileGate` placeholder (size plus a "Load diff" button)
-  in place of Monaco until the user opts in (`comparison.showDiffGate` / `loadLargeDiff`), so an
-  accidental click on a huge file can't freeze the editor. Re-gates on each selection or refresh;
-  binary files are excluded since their content is already withheld.
-- [x] Binary and image preview. A non-image binary file shows a `BinaryFileNotice` (no text
-  diff), built on the same `DiffPlaceholder` shell as the large-file gate. An image file is shown
-  as a before/after `ImagePreview` (`comparison.showImagePreview`): `GitService.imagePair` reads
-  the raw blob bytes (via `git show` with buffer output, since simple-git's string API is lossy
-  for binary) and inlines each side as a base64 data URI, with a missing side for an add or delete
-  and a size cap that falls back to the plain notice. SVG stays a text diff.
-- [x] Rename display, showing the old path moving to the new path, in the UI. The selection
-  banner renders `oldPath → newPath` (with an arrow) for a renamed file, and the file-tree row's
-  hover title shows the same. The backend already surfaces `oldPath`; `FileNode` now carries it.
-- [x] Theme persistence via `electron-store` and `nativeTheme`. The chosen preference (`system`,
-  `light`, or `dark`) is saved on change and restored on launch to seed `nativeTheme`.
-- [x] Base/head branch persistence via `electron-store` (`branchSelections` keyed by repo path,
-  `settings.cjs`), saved whenever the range changes and restored when the repo is reopened. A
-  remembered ref deleted since last time is dropped (a missing base clears to empty, a missing head
-  falls back to the working tree) and named in a small `MissingBranchNotice` under the toolbar.
-
-### Phase 5, packaging and release ✅
-
-- [x] Full `electron-builder` config with per-platform targets: macOS (dmg + zip, arm64 and x64),
-  Windows (NSIS), and Linux (AppImage + deb). `npm run pack` builds installers for the host
-  platform. The main process is bundled into `dist-electron`, so the app is self-contained and
-  `node_modules` is excluded to keep it lean. Builds are unsigned (no certificate); on macOS an
-  `afterPack` hook (`build/afterPack.cjs`, via `@electron/osx-sign`) ad-hoc signs the app with the
-  `disable-library-validation` entitlement (`build/entitlements.mac.plist`) so an unsigned build
-  still launches on Apple Silicon. The internal bundle name (the `.app` filename, `CFBundleName`,
-  and executable) is the ASCII `Moire`, because a non-ASCII `CFBundleName` crashes the unsigned app
-  on arm64. The accented `Moiré` is used everywhere it can be: the window title, all in-app text,
-  the dmg volume title, the dmg/zip filenames, and `CFBundleDisplayName` (the Finder label). The
-  macOS menu bar, dock, and About panel read `CFBundleName` (before the app's JS runs), so they
-  show the ASCII `Moire`; putting the accent there (and distributing without a Gatekeeper/SmartScreen
-  warning) would need a real signing certificate (macOS Developer ID + notarization, Windows
-  Authenticode), which this project does not use.
-- [x] App icon. `build/icon.svg` is the packaging master (macOS-margined squircle around
-  the `src/assets/moire-icon.svg` artwork); `build/icon.icns`, `icon.ico`, and `icon.png` are
-  generated from it and auto-detected by electron-builder. The dev dock icon is set from the
-  PNG in `electron/main.cjs`.
-- [x] Window state persistence. The main window's size, position, and maximized state are saved
-  to `electron-store` (`windowState` in `settings.cjs`) as they change and restored on launch
-  (`electron/window-state.cjs`). A remembered position that would land off every current display
-  (a monitor since unplugged) is dropped so the window never opens off-screen; the window is shown
-  on `ready-to-show` to avoid a blank frame or a flash at the restored size before maximizing.
-- [x] Error reporting and a log file in userData. `electron/logger.cjs` writes a timestamped
-  `moire.log` under the app's userData directory (mirrored to the console for `npm run dev`),
-  captures `uncaughtException` and `unhandledRejection` so a main-process crash leaves a trail,
-  and caps the file so it can't grow unbounded. IPC handler rejections (a bad ref, a moved repo)
-  are logged through a `handle` wrapper in `handlers.cjs` before they propagate, and Help → Open
-  Log File opens the log in the OS default viewer.
+- **The macOS app name shows `Moire` (no accent) in the menu bar, dock, and About panel.** Those
+  come from `CFBundleName`, which has to be ASCII because a non-ASCII value crashes the unsigned
+  app on Apple Silicon. The accent is used everywhere else (window title, in-app UI, dmg volume
+  name and filenames, Finder label). Carrying the accent there too would need a code-signing
+  certificate, which this project does not use.
+- **Windows and Linux packaged builds are unverified.** The `electron-builder` config targets
+  them, but the app has only been built and run on macOS so far.
 
 ## Documentation
 
