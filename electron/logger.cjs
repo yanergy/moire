@@ -37,10 +37,6 @@ function write(level, message) {
     logStream?.write(line);
 }
 
-function log(message) {
-    write('INFO', message);
-}
-
 function logError(context, error) {
     write('ERROR', `${context}: ${formatValue(error)}`);
 }
@@ -68,8 +64,4 @@ function initLogging(userDataPath) {
     return logPath;
 }
 
-function getLogPath() {
-    return logPath;
-}
-
-module.exports = { initLogging, log, logError, getLogPath, formatValue };
+module.exports = { initLogging, logError, formatValue };

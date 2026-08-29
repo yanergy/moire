@@ -21,39 +21,6 @@ Verification run at review time:
 
 ---
 
-## Dead code
-
-### D1. `inferLanguage` and its extension map are unused
-
-`src/lib/language.ts:39` and the `BY_EXTENSION` map (lines 3 to 23). Nothing in the app calls
-`inferLanguage`; the only references are its own test. The renderer gets `language` directly from
-the backend `FilePair` (`GitService.languageForPath`). So the 20-line map exists solely to feed a
-dead function, and it duplicates the backend's `LANGUAGE_BY_EXTENSION`. Only `languageLabel` is
-actually used (by `StatusBar`). Deleting `inferLanguage`, `BY_EXTENSION`, and the matching test
-removes the very duplication the conventions call out as a deliberate compromise.
-
-### D2. Unused logger exports
-
-`electron/logger.cjs`. `log` (the INFO-level logger, line 40) is never called anywhere, and
-`getLogPath` (line 71) is never called (the menu uses the value `initLogging` returns). Both are
-dead exports.
-
-### D3. Roughly eleven design tokens are defined but never used
-
-`src/assets/base.css`. These `--moire-*` tokens are defined (in both themes) and exposed as Tailwind
-utilities in the `@theme` block, but are referenced nowhere:
-`--moire-add`, `--moire-add-strong`, `--moire-del`, `--moire-del-strong`, `--moire-empty`,
-`--moire-fold`, `--moire-fold-line`, `--moire-fold-fg`, `--moire-gutter`, `--moire-ruler`,
-`--moire-sel-fg`. They belong to a hand-rolled diff renderer that was never built (Monaco is used
-instead). Their live equivalents are hardcoded in `monaco-theme.ts` (see I3).
-
-### D4. Config points at test tooling that does not exist
-
-`tsconfig.node.json` includes `cypress.config.*` and `playwright.config.*`; `vitest.config.ts`
-excludes `e2e/**`. None of these exist. This is leftover Vite-template scaffolding.
-
----
-
 ## Inconsistencies (docs vs code)
 
 ### I1. The architectural boundary the docs call "enforced" is not enforced
@@ -67,13 +34,15 @@ discipline only. Either add the rule (so the claim becomes true) or correct the 
 
 `documentation/code-conventions.md:33` cites `.oxfmtrc.jsonc`; the actual file is `.oxfmtrc.json`.
 
-### I3. Diff colors have two sources of truth, contradicting the "never hardcode hex" rule
+### I3. Diff colors are hardcoded as hex in monaco-theme.ts
 
 `documentation/code-conventions.md` (lines 100 and 115) says colors must come from `--moire-*`
-tokens and hex must never be hardcoded in components. `src/lib/monaco-theme.ts` hardcodes every diff
-color as hex8, and the corresponding tokens are dead (see D3). Editing a `--moire-*` diff token has
-no visible effect. The module comment acknowledges this, but it still directly contradicts the
-stated rule and is a maintenance trap: two places to change, one of them silently inert.
+tokens and hex must never be hardcoded in components. `src/lib/monaco-theme.ts` defines the editor's
+diff-overlay colors as hex8. This is a sanctioned exception (Monaco requires hex, and it is a lib
+module rather than a Vue component), and now that the dead diff tokens have been removed these colors
+have a single source of truth here, so the earlier "two sources of truth" concern is resolved. Left
+as a note only: if the diff palette should ever be tunable from the design tokens, it would need
+re-exposing. Low priority.
 
 ### I4. The entire main process has no static type checking
 

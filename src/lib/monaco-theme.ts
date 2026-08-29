@@ -5,9 +5,10 @@ import * as monaco from 'monaco-editor';
 // vs-dark / vs themes (which already match the design's syntax palette) and
 // override only the surface, gutter, and diff-overlay colors.
 //
-// Monaco color values must be hex (#RRGGBB or #RRGGBBAA); the design's rgba
-// diff colors are converted to hex8 here. This module is the editor's palette
-// source, mirroring the --moire-* tokens in base.css.
+// Monaco color values must be hex (#RRGGBB or #RRGGBBAA), so the diff-overlay
+// and surface colors are defined here directly. The surface colors track the
+// --moire-* tokens in base.css (e.g. editor.background is --moire-code); the
+// diff-overlay colors live only here, since nothing else consumes them.
 
 const DARK: monaco.editor.IStandaloneThemeData = {
     base: 'vs-dark',
