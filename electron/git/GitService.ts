@@ -60,9 +60,10 @@ const MAX_RENDER_BYTES = 512 * 1024;
 // image falls back to the plain binary notice instead of a preview.
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 
-// Raster image extensions Monaco can't diff but the renderer can show as before/
-// after pictures. SVG is deliberately left out: it is text, so it gets a real
-// text diff instead.
+// Image extensions Monaco can't diff but the renderer can show as before/after
+// pictures. SVG is included: though it is text, it is shown as a rendered image
+// (from its markup) rather than a code diff. An <img>-loaded SVG does not run
+// scripts, so previewing untrusted markup this way is safe.
 const IMAGE_MIME: Record<string, string> = {
     png: 'image/png',
     jpg: 'image/jpeg',
@@ -72,6 +73,7 @@ const IMAGE_MIME: Record<string, string> = {
     bmp: 'image/bmp',
     ico: 'image/x-icon',
     avif: 'image/avif',
+    svg: 'image/svg+xml',
 };
 
 function imageMimeForPath(filePath: string): string | null {

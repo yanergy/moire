@@ -249,6 +249,21 @@ describe('GitService.filePair images', () => {
         expect(pair.newContent).toBeNull();
     });
 
+    it('previews an svg as a rendered image, not a code diff', async () => {
+        const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+        const readBlobBytes = vi.fn<BlobReader>(async () => svg);
+        const service = new GitService('/repo', {}, { readBlobBytes });
+
+        const pair = await service.filePair('main', 'feature', 'assets/logo.svg', 'direct');
+
+        expect(pair.image).toBe(true);
+        expect(pair.binary).toBe(true);
+        expect(pair.oldImage).toBe(`data:image/svg+xml;base64,${svg.toString('base64')}`);
+        // No text sides: the renderer shows the picture, not the markup.
+        expect(pair.oldContent).toBeNull();
+        expect(pair.newContent).toBeNull();
+    });
+
     it('reads the working-tree side from disk for an image', async () => {
         const readBlobBytes = vi.fn<BlobReader>(async () => oldPng);
         const readDiskBytes = vi.fn<DiskReader>(async () => newPng);
