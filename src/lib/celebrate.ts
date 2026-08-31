@@ -58,7 +58,7 @@ export function celebrate(): void {
         const speed = 4 + Math.random() * 6;
         particles.push({
             x: width / 2,
-            y: height / 3,
+            y: height / 2,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed - 5,
             rot: Math.random() * Math.PI,
