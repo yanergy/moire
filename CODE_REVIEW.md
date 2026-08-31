@@ -58,16 +58,6 @@ a reasonable choice for unit tests, but there is no integration or end-to-end la
 
 ## Low severity and defensive
 
-### L1. Git commands do not use `--` to separate options from refs and paths
-
-`electron/git/GitService.ts`. Ranges and pathspecs are interpolated straight into the argument
-arrays (for example `` `${ref}:${filePath}` `` at line 171 and the range spread into the `diff`
-arrays at lines 215 and 216). Because everything runs through `execFile` and `simple-git` argument
-arrays there is no shell injection, and the inputs are git-derived (the branch list and the
-changed-file list), so exploitability is low. Still, a ref or path beginning with a leading dash
-could be interpreted as an option (argument injection). Inserting `--` before refs and pathspecs is
-cheap hardening.
-
 ### L2. The repo watcher is never stopped on quit
 
 `electron/watcher/RepoWatcher.ts:253` exposes `stopWatchingRepo`, but `electron/main.ts` never calls

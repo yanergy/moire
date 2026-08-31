@@ -178,7 +178,9 @@ class GitService {
         try {
             const { stdout } = await execFileAsync(
                 'git',
-                ['-C', this.repoPath, 'show', `${ref}:${filePath}`],
+                // --end-of-options so a ref/path starting with '-' can't be read as
+                // an option (argument injection); see contentAt for the same guard.
+                ['-C', this.repoPath, 'show', '--end-of-options', `${ref}:${filePath}`],
                 { encoding: 'buffer', maxBuffer: 4 * MAX_IMAGE_BYTES }
             );
             return stdout;
@@ -222,8 +224,10 @@ class GitService {
     async changedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]> {
         const range = this.rangeArgs(base, head, mode);
         const [nameStatusOut, numstatOut] = await Promise.all([
-            this.git.raw(['diff', '--name-status', '-M', '-z', ...range]),
-            this.git.raw(['diff', '--numstat', '-M', '-z', ...range]),
+            // --end-of-options guards the range: a ref beginning with '-' would
+            // otherwise be parsed as an option rather than a revision.
+            this.git.raw(['diff', '--name-status', '-M', '-z', '--end-of-options', ...range]),
+            this.git.raw(['diff', '--numstat', '-M', '-z', '--end-of-options', ...range]),
         ]);
 
         const tracked = mergeChangedFiles(parseNameStatus(nameStatusOut), parseNumstat(numstatOut));
@@ -356,7 +360,7 @@ class GitService {
     // throwing.
     async mergeBase(base: string, head: string): Promise<string> {
         try {
-            const out = await this.git.raw(['merge-base', base, head]);
+            const out = await this.git.raw(['merge-base', '--end-of-options', base, head]);
             return out.trim() || base;
         } catch {
             return base;
@@ -367,7 +371,7 @@ class GitService {
     // (an added file has no base side; a deleted file has no head side).
     async contentAt(ref: string, filePath: string): Promise<string | null> {
         try {
-            return await this.git.show([`${ref}:${filePath}`]);
+            return await this.git.show(['--end-of-options', `${ref}:${filePath}`]);
         } catch {
             return null;
         }

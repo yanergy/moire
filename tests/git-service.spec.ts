@@ -77,6 +77,7 @@ describe('GitService.changedFiles', () => {
             '--name-status',
             '-M',
             '-z',
+            '--end-of-options',
             'main...feature',
         ]);
     });
@@ -116,8 +117,9 @@ describe('GitService.changedFiles', () => {
 
 describe('GitService.filePair', () => {
     it('returns both sides and the inferred language for a modified file', async () => {
-        const show = vi.fn<(options: string[]) => Promise<string>>(async ([spec]) =>
-            spec.startsWith('main:') ? 'old\n' : 'new\n'
+        // The <ref>:<path> object is the last arg (after --end-of-options).
+        const show = vi.fn<(options: string[]) => Promise<string>>(async (opts) =>
+            opts.at(-1)!.startsWith('main:') ? 'old\n' : 'new\n'
         );
         const service = new GitService('/repo', { show });
 
@@ -146,8 +148,8 @@ describe('GitService.filePair', () => {
     });
 
     it('nulls the base side of an added file (absent at base)', async () => {
-        const show = vi.fn<(options: string[]) => Promise<string>>(async ([spec]) => {
-            if (spec.startsWith('main:')) {
+        const show = vi.fn<(options: string[]) => Promise<string>>(async (opts) => {
+            if (opts.at(-1)!.startsWith('main:')) {
                 throw new Error("path 'src/b.ts' does not exist in 'main'");
             }
 
@@ -201,8 +203,8 @@ describe('GitService.filePair', () => {
         const raw = vi.fn<(args: string[]) => Promise<string>>(async (args) =>
             args[0] === 'merge-base' ? 'abc123\n' : ''
         );
-        const show = vi.fn<(options: string[]) => Promise<string>>(async ([spec]) =>
-            spec.startsWith('abc123:') ? 'ancestor\n' : 'new\n'
+        const show = vi.fn<(options: string[]) => Promise<string>>(async (opts) =>
+            opts.at(-1)!.startsWith('abc123:') ? 'ancestor\n' : 'new\n'
         );
         const service = new GitService('/repo', { raw, show });
 
@@ -210,23 +212,23 @@ describe('GitService.filePair', () => {
 
         // The old side is the file at the merge base commit, matching what the
         // changed-file list diffed against (`base...head`), not the base tip.
-        expect(raw).toHaveBeenCalledWith(['merge-base', 'main', 'feature']);
-        expect(show).toHaveBeenCalledWith(['abc123:src/a.ts']);
+        expect(raw).toHaveBeenCalledWith(['merge-base', '--end-of-options', 'main', 'feature']);
+        expect(show).toHaveBeenCalledWith(['--end-of-options', 'abc123:src/a.ts']);
         expect(pair.oldContent).toBe('ancestor\n');
         expect(pair.newContent).toBe('new\n');
     });
 
     it('reads the old side at the base tip in direct mode, without a merge-base lookup', async () => {
         const raw = vi.fn<(args: string[]) => Promise<string>>(async () => '');
-        const show = vi.fn<(options: string[]) => Promise<string>>(async ([spec]) =>
-            spec.startsWith('main:') ? 'base\n' : 'new\n'
+        const show = vi.fn<(options: string[]) => Promise<string>>(async (opts) =>
+            opts.at(-1)!.startsWith('main:') ? 'base\n' : 'new\n'
         );
         const service = new GitService('/repo', { raw, show });
 
         const pair = await service.filePair('main', 'feature', 'src/a.ts', 'direct');
 
         expect(raw).not.toHaveBeenCalled();
-        expect(show).toHaveBeenCalledWith(['main:src/a.ts']);
+        expect(show).toHaveBeenCalledWith(['--end-of-options', 'main:src/a.ts']);
         expect(pair.oldContent).toBe('base\n');
     });
 });
