@@ -5,6 +5,7 @@ const DISPLAY_LABEL: Record<string, string> = {
     typescript: 'TypeScript',
     javascript: 'JavaScript',
     html: 'HTML',
+    xml: 'XML',
     json: 'JSON',
     css: 'CSS',
     scss: 'SCSS',
@@ -12,6 +13,9 @@ const DISPLAY_LABEL: Record<string, string> = {
     markdown: 'Markdown',
     yaml: 'YAML',
     shell: 'Shell',
+    php: 'PHP',
+    ini: 'INI',
+    dockerfile: 'Dockerfile',
     plaintext: 'Plain Text',
 };
 

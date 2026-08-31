@@ -134,6 +134,17 @@ describe('GitService.filePair', () => {
         });
     });
 
+    it('infers the php language id for a .php file', async () => {
+        const show = vi.fn<(options: string[]) => Promise<string>>(async () => '<?php\n');
+        const pair = await new GitService('/repo', { show }).filePair(
+            'main',
+            'feature',
+            'index.php',
+            'direct'
+        );
+        expect(pair.language).toBe('php');
+    });
+
     it('nulls the base side of an added file (absent at base)', async () => {
         const show = vi.fn<(options: string[]) => Promise<string>>(async ([spec]) => {
             if (spec.startsWith('main:')) {

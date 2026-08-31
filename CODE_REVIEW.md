@@ -31,16 +31,6 @@ Resolved since the previous review:
 
 ---
 
-## Bugs
-
-### B3. No PHP syntax highlighting
-
-`src/lib/language.ts` has no `php` mapping, so `.php` files fall back to plaintext in the diff view.
-Add PHP to the language map (and confirm the language is included once the Monaco bundle is trimmed
-per A2).
-
----
-
 ## Inconsistencies (docs vs code)
 
 ### I5. `@electron/osx-sign` is used but not declared as a dependency
@@ -78,7 +68,9 @@ the full editor: roughly 90 language files plus four workers (ts.worker about 5.
 about 1 MB, html.worker about 720 KB, json.worker about 410 KB). The app supports about 13
 languages. This inflates the packaged app significantly. Import from
 `monaco-editor/esm/vs/editor/editor.api` with an explicit language allowlist, or use
-`vite-plugin-monaco-editor`.
+`vite-plugin-monaco-editor`. When trimming, the allowlist must cover every id the app maps in
+`GitService.LANGUAGE_BY_EXTENSION` (typescript, javascript, html, xml, json, css, scss, less,
+markdown, yaml, shell, php, ini, dockerfile), or those file types silently fall back to plaintext.
 
 ### A3. The file tree is mouse-only (no keyboard access)
 
@@ -174,7 +166,6 @@ handles at exit, so this is harmless in practice, but the teardown path is incom
 
 ## Suggested priority
 
-1. A2 (Monaco bundle size): the largest efficiency win for the packaged app, and a prerequisite for
-   B3 (PHP highlighting) to land cleanly.
+1. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
 2. The `settings.ts` and `handlers.ts` test gaps: the highest-value untested logic.
 3. Everything else as cleanup.

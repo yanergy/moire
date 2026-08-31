@@ -106,10 +106,15 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
     scss: 'scss',
     less: 'less',
     html: 'html',
+    xml: 'xml',
     md: 'markdown',
     yml: 'yaml',
     yaml: 'yaml',
     sh: 'shell',
+    php: 'php',
+    ini: 'ini',
+    dockerfile: 'dockerfile',
+    babelrc: 'json', // .babelrc is JSON
 };
 
 function languageForPath(filePath: string): string {
