@@ -28,6 +28,11 @@ export interface MenuOptions {
     onOpenRecent?: (repoPath: string) => void;
     recentRepos?: string[];
     activeRepo?: string | null;
+    // The review-complete flourishes. Left intentionally low-key: a plain
+    // "Flourishes" checkbox, checked when on, that gives nothing away about what it
+    // actually gates.
+    flourishes?: boolean;
+    onToggleFlourishes?: (enabled: boolean) => void;
 }
 
 // The trailing path segment, for a readable "Open Recent" label (the full path
@@ -54,6 +59,8 @@ export function buildMenuTemplate({
     onOpenRecent,
     recentRepos = [],
     activeRepo = null,
+    flourishes = true,
+    onToggleFlourishes,
 }: MenuOptions): MenuItemConstructorOptions[] {
     const recentItems: MenuItemConstructorOptions[] = recentRepos.length
         ? recentRepos.map((repoPath): MenuItemConstructorOptions => ({
@@ -110,6 +117,15 @@ export function buildMenuTemplate({
                             click: () => onSelectTheme(preference),
                         })
                     ),
+                },
+                { type: 'separator' },
+                // Unobtrusive toggle for the review-complete flourishes; the label
+                // deliberately doesn't spell out what it does.
+                {
+                    label: 'Flourishes',
+                    type: 'checkbox',
+                    checked: flourishes,
+                    click: (item) => onToggleFlourishes?.(item.checked),
                 },
             ],
         },

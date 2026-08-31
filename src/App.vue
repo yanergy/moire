@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, watchEffect } from 'vue';
 import { setupMonacoEnv } from '@/lib/monaco-env';
 import { defineMonacoThemes } from '@/lib/monaco-theme';
 import { windowTitle } from '@/lib/window-title';
+import { setFlourishesEnabled } from '@/lib/celebrate';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import MoirePage from '@/components/pages/MoirePage.vue';
@@ -18,6 +19,7 @@ let stopMenuRefresh: (() => void) | undefined;
 let stopMenuOpenRepo: (() => void) | undefined;
 let stopMenuOpenRecent: (() => void) | undefined;
 let stopRepoChanged: (() => void) | undefined;
+let stopFlourishes: (() => void) | undefined;
 
 // Electron mirrors document.title into the native window title bar, so the open
 // repo shows there. This replaces the in-app title the removed fake title bar
@@ -40,6 +42,10 @@ onMounted(async () => {
     ui.applyThemeState(await api.getTheme());
     stopThemeSync = api.onThemeChanged((state) => ui.applyThemeState(state));
 
+    // The review-complete flourishes, gated by the View menu toggle (persisted).
+    setFlourishesEnabled(await api.getFlourishes());
+    stopFlourishes = api.onFlourishesChanged((enabled) => setFlourishesEnabled(enabled));
+
     // The native View → Refresh item re-reads the repo through the store.
     stopMenuRefresh = api.onMenuRefresh(() => void comparison.refresh());
 
@@ -59,6 +65,7 @@ onUnmounted(() => {
     stopMenuOpenRepo?.();
     stopMenuOpenRecent?.();
     stopRepoChanged?.();
+    stopFlourishes?.();
 });
 </script>
 

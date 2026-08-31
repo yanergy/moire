@@ -40,6 +40,7 @@ function getStore(): Promise<SettingsStore> {
                         theme: 'system',
                         branchSelections: {},
                         windowState: null,
+                        flourishes: true,
                     },
                 }) as unknown as SettingsStore
         );
@@ -110,6 +111,18 @@ export async function getThemePreference(): Promise<ThemePreference> {
 export async function setThemePreference(preference: ThemePreference): Promise<void> {
     const store = await getStore();
     store.set('theme', preference);
+}
+
+// Whether the review-complete flourishes play. Persisted so the (deliberately
+// low-key) View menu toggle sticks across launches. Defaults on.
+export async function getFlourishes(): Promise<boolean> {
+    const store = await getStore();
+    return store.get<boolean>('flourishes', true);
+}
+
+export async function setFlourishes(enabled: boolean): Promise<void> {
+    const store = await getStore();
+    store.set('flourishes', enabled);
 }
 
 // The main window's last size, position, and maximized state, restored on launch

@@ -24,6 +24,7 @@ function stubApi() {
         openRepo: vi.fn<Unsub>(),
         openRecent: vi.fn<Unsub>(),
         repoChanged: vi.fn<Unsub>(),
+        flourishes: vi.fn<Unsub>(),
     };
     const api = {
         getTheme: vi.fn<() => Promise<ThemeState>>().mockResolvedValue({
@@ -35,6 +36,10 @@ function stubApi() {
         onMenuOpenRepo: vi.fn<(cb: () => void) => Unsub>(() => unsub.openRepo),
         onMenuOpenRecent: vi.fn<(cb: (path: string) => void) => Unsub>(() => unsub.openRecent),
         onRepoChanged: vi.fn<(cb: () => void) => Unsub>(() => unsub.repoChanged),
+        getFlourishes: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
+        onFlourishesChanged: vi.fn<(cb: (enabled: boolean) => void) => Unsub>(
+            () => unsub.flourishes
+        ),
     };
     window.api = api as unknown as Window['api'];
     return { api, unsub };
@@ -121,6 +126,7 @@ describe('App', () => {
         expect(unsub.openRepo).toHaveBeenCalledTimes(1);
         expect(unsub.openRecent).toHaveBeenCalledTimes(1);
         expect(unsub.repoChanged).toHaveBeenCalledTimes(1);
+        expect(unsub.flourishes).toHaveBeenCalledTimes(1);
     });
 
     it('does not touch the bridge when window.api is absent', async () => {

@@ -13,6 +13,7 @@ import {
     removeRecentRepo,
     getBranchSelection,
     setBranchSelection,
+    getFlourishes,
 } from '../settings';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
@@ -129,6 +130,10 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
     // Theme is owned by nativeTheme in the main process; the renderer reads the
     // current resolved state on launch, then stays in sync via 'theme:changed'.
     handle('theme:get', () => currentThemeState());
+
+    // Whether the review-complete flourishes are on. Read on launch; the menu
+    // toggle pushes later changes via 'flourishes:changed'.
+    handle('flourishes:get', () => getFlourishes());
 
     // Git-backed channels. Each operates on the currently open repo and has a
     // matching method in the preload bridge and an entry in MoireApi.

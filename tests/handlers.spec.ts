@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
     removeRecentRepo: vi.fn<(repoPath: string) => Promise<string[]>>(),
     getBranchSelection: vi.fn<(repoPath: string) => Promise<unknown>>(),
     setBranchSelection: vi.fn<() => Promise<void>>(),
+    getFlourishes: vi.fn<() => Promise<boolean>>(),
     currentThemeState: vi.fn<() => { preference: string; isDark: boolean }>(),
     logError: vi.fn<(context: string, error: unknown) => void>(),
     onRecentsChanged: vi.fn<() => void>(),
@@ -53,6 +54,7 @@ vi.mock('../electron/settings', () => ({
     removeRecentRepo: state.removeRecentRepo,
     getBranchSelection: state.getBranchSelection,
     setBranchSelection: state.setBranchSelection,
+    getFlourishes: state.getFlourishes,
 }));
 vi.mock('../electron/theme', () => ({ currentThemeState: state.currentThemeState }));
 vi.mock('../electron/logger', () => ({ logError: state.logError }));
@@ -80,6 +82,7 @@ describe('registerIpcHandlers', () => {
         state.removeRecentRepo.mockResolvedValue([]);
         state.getBranchSelection.mockResolvedValue(null);
         state.setBranchSelection.mockResolvedValue(undefined);
+        state.getFlourishes.mockResolvedValue(true);
         state.currentThemeState.mockReturnValue({ preference: 'system', isDark: false });
 
         // Fresh module each test so the internal currentRepo starts unset.
@@ -97,6 +100,7 @@ describe('registerIpcHandlers', () => {
             'settings:branch-selection:get',
             'settings:branch-selection:set',
             'theme:get',
+            'flourishes:get',
             'git:branches',
             'git:changed-files',
             'git:file-pair',
@@ -153,5 +157,9 @@ describe('registerIpcHandlers', () => {
 
     it('serves the current theme state', async () => {
         expect(await invoke('theme:get')).toEqual({ preference: 'system', isDark: false });
+    });
+
+    it('serves the flourishes setting', async () => {
+        expect(await invoke('flourishes:get')).toBe(true);
     });
 });

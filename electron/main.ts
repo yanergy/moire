@@ -5,7 +5,7 @@ import { installAppMenu } from './menu';
 import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
 import { restoreWindowState, trackWindowState } from './window-state';
 import { initLogging, logError } from './logger';
-import { getRecentRepos } from './settings';
+import { getRecentRepos, getFlourishes, setFlourishes } from './settings';
 
 // Send a menu-triggered message to the window the user is in (or the only one).
 function sendToFocused(channel: string, ...args: unknown[]): void {
@@ -92,6 +92,12 @@ app.whenReady().then(async () => {
             onOpenLog: () => void shell.openPath(logPath),
             recentRepos: await getRecentRepos(),
             activeRepo: getCurrentRepoPath(),
+            flourishes: await getFlourishes(),
+            // Persist the choice and tell the renderer, which gates the effects.
+            onToggleFlourishes: (enabled) => {
+                void setFlourishes(enabled);
+                sendToFocused('flourishes:changed', enabled);
+            },
         });
     };
 

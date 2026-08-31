@@ -100,6 +100,11 @@ export interface MoireApi {
     // function.
     getTheme(): Promise<ThemeState>;
     onThemeChanged(cb: (state: ThemeState) => void): () => void;
+    // Whether the review-complete flourishes are on. `getFlourishes` reads the
+    // stored value on launch; `onFlourishesChanged` fires when the View menu toggle
+    // flips it, and returns an unsubscribe function.
+    getFlourishes(): Promise<boolean>;
+    onFlourishesChanged(cb: (enabled: boolean) => void): () => void;
     // Fired when the native View → Refresh item is chosen; the renderer re-reads
     // the repo for the current range. Returns an unsubscribe function.
     onMenuRefresh(cb: () => void): () => void;

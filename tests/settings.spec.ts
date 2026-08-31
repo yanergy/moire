@@ -96,4 +96,12 @@ describe('settings: theme and window state', () => {
         await setWindowState({ width: 800, height: 600, maximized: false });
         expect(await getWindowState()).toEqual({ width: 800, height: 600, maximized: false });
     });
+
+    it('defaults flourishes on and persists a change', async () => {
+        const { getFlourishes, setFlourishes } = await loadSettings();
+        expect(await getFlourishes()).toBe(true);
+
+        await setFlourishes(false);
+        expect(await getFlourishes()).toBe(false);
+    });
 });

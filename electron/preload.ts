@@ -27,6 +27,15 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('theme:changed', listener);
         return () => ipcRenderer.removeListener('theme:changed', listener);
     },
+    // Whether the review-complete flourishes are on. `getFlourishes` reads the
+    // stored value on launch; `onFlourishesChanged` fires when the View menu toggle
+    // flips it. Returns an unsubscribe function.
+    getFlourishes: () => ipcRenderer.invoke('flourishes:get'),
+    onFlourishesChanged: (callback: (enabled: boolean) => void) => {
+        const listener = (_event: IpcRendererEvent, enabled: boolean) => callback(enabled);
+        ipcRenderer.on('flourishes:changed', listener);
+        return () => ipcRenderer.removeListener('flourishes:changed', listener);
+    },
     // Fired when the native View → Refresh item is chosen. Returns an unsubscribe
     // function so the caller can drop the listener.
     onMenuRefresh: (callback: () => void) => {

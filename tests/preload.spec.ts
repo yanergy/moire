@@ -53,6 +53,8 @@ describe('preload bridge', () => {
             'getFilePair',
             'getTheme',
             'onThemeChanged',
+            'getFlourishes',
+            'onFlourishesChanged',
             'onMenuRefresh',
             'onMenuOpenRepo',
             'onMenuOpenRecent',

@@ -93,6 +93,28 @@ describe('application menu', () => {
         expect(recent?.[0]?.enabled).toBe(false);
     });
 
+    it('offers a checked Flourishes toggle in the View menu and reports the new state', () => {
+        const onToggleFlourishes = vi.fn<(enabled: boolean) => void>();
+        const item = viewSubmenu('system', { flourishes: true, onToggleFlourishes })?.find(
+            (entry) => entry.label === 'Flourishes'
+        );
+
+        expect(item?.type).toBe('checkbox');
+        expect(item?.checked).toBe(true);
+
+        // Electron flips the checkbox before firing click; the handler forwards the new state.
+        const click = item!.click as unknown as (menuItem: { checked: boolean }) => void;
+        click({ checked: false });
+        expect(onToggleFlourishes).toHaveBeenCalledWith(false);
+    });
+
+    it('shows the Flourishes toggle unchecked when flourishes are off', () => {
+        const item = viewSubmenu('system', { flourishes: false })?.find(
+            (entry) => entry.label === 'Flourishes'
+        );
+        expect(item?.checked).toBe(false);
+    });
+
     it('opens the log through onOpenLog from the Help menu', () => {
         const onOpenLog = vi.fn<() => void>();
         const template = buildMenuTemplate({ isMac: true, currentTheme: 'system', onOpenLog });
