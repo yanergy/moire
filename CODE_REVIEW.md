@@ -1,23 +1,43 @@
 # Moiré code review
 
-Date: 2026-08-29. Scope: the whole repository (`electron/`, `src/`, config, build, tests).
+Date: 2026-08-31 (rechecked). Supersedes the 2026-08-29 review. Scope: the whole repository
+(`electron/`, `src/`, config, build, tests).
 
 ## Summary
 
 The codebase is, overall, in good shape. The process separation is respected, the parsers and
 watcher are carefully thought through, comments explain the "why" rather than the "what", and the
-test suite is real (183 passing tests, `type-check` and `oxlint` both clean). This review is
-deliberately critical, so the tone below skews negative. That is the assignment, not a reflection
-of the average quality.
+test suite is real. Since the previous review the entire `electron/` backend was converted from
+CommonJS `.cjs` to TypeScript `.ts`, so every backend path below has been updated to match. This
+review is deliberately critical, so the tone skews negative. That is the assignment, not a
+reflection of the average quality.
 
 Findings are grouped by kind and ordered by severity within each group. Each carries a file
-reference so it can be actioned directly.
+reference so it can be actioned directly. Identifiers are kept stable across rechecks, so gaps in
+the sequence (for example the removed A4) mark findings that were resolved.
 
-Verification run at review time:
+Verification run at recheck time:
 
-- `npx vitest run`: 25 files, 183 tests, all passing.
+- `npx vitest run`: 27 files, 193 tests, all passing.
 - `npm run type-check`: clean.
 - `npx oxlint .`: clean.
+
+Resolved since the previous review:
+
+- **A4** (reactive Component warning): a full test run no longer emits the "received a Component that
+  was made a reactive object" warning, so the symptom is gone. Removed.
+- **I6 correctness half**: the store's `baseName` no longer mishandles Windows paths (see I6 below).
+  The duplication smell remains, so the finding is kept in reduced form.
+
+---
+
+## Bugs
+
+### B3. No PHP syntax highlighting
+
+`src/lib/language.ts` has no `php` mapping, so `.php` files fall back to plaintext in the diff view.
+Add PHP to the language map (and confirm the language is included once the Monaco bundle is trimmed
+per A2).
 
 ---
 
@@ -29,12 +49,15 @@ Verification run at review time:
 `electron-builder` pulls it in transitively. An electron-builder upgrade that restructures its
 dependencies would break macOS packaging with no warning. Add it as an explicit devDependency.
 
-### I6. Four near-duplicate `baseName` implementations, one subtly wrong
+### I6. Three near-duplicate "last path segment" implementations
 
-`src/stores/comparison.ts:59` splits on `/` only; `src/stores/comparison.ts:483` (inline in
-`restoreLastRepo`), `src/components/controls/RepoPicker.vue:27`, and `electron/menu.cjs:17`
-(`repoLabel`) all split on `/` and `\`. The store's `baseName` therefore mishandles Windows paths
-while the others handle them. Consolidate.
+`src/stores/comparison.ts:59` (`baseName`), `src/stores/comparison.ts:501` (inline in
+`restoreLastRepo`), `src/components/controls/RepoPicker.vue:28`, and `electron/menu.ts:36`
+(`repoLabel`) each reimplement "take the final path segment". The earlier correctness concern is
+gone: the store's `baseName` splits on `/` only, but it is now applied only to `file.path`
+(`comparison.ts:309`), which git always reports with forward slashes, so that is correct. The other
+three, all handling filesystem repo paths, split on `/[/\\]/` and handle Windows. What remains is
+the duplication: consolidate into one shared helper for repo paths.
 
 ---
 
@@ -42,40 +65,49 @@ while the others handle them. Consolidate.
 
 ### A1. Gated large files are still fully transferred over IPC
 
-`electron/git/GitService.cjs:217` (`filePair`) returns the full `oldContent` and `newContent` even
+`electron/git/GitService.ts:251` (`filePair`) returns the full `oldContent` and `newContent` even
 when `tooLarge` is set; the renderer stores them in `selectedPair`. The "Load diff" gate only
 defers Monaco rendering, not the IPC serialization or the memory cost, so selecting a large file
-still pays the full transfer up front. The comment admits "the bytes are still returned." Consider
-withholding content until the gate is cleared, then fetching on demand.
+still pays the full transfer up front. Consider withholding content until the gate is cleared, then
+fetching on demand.
 
 ### A2. Monaco bundles every language grammar and all workers
 
-`src/components/diff/DiffViewer.vue:1` uses `import * as monaco from 'monaco-editor'`, which pulls
-the full editor. The last build emitted roughly 90 language files plus four workers (ts.worker
-about 5.9 MB, css.worker about 1 MB, html.worker about 720 KB, json.worker about 410 KB). The app
-supports about 13 languages. This inflates the packaged app significantly. Import from
+`src/components/diff/DiffViewer.vue:2` uses `import * as monaco from 'monaco-editor'`, which pulls
+the full editor: roughly 90 language files plus four workers (ts.worker about 5.9 MB, css.worker
+about 1 MB, html.worker about 720 KB, json.worker about 410 KB). The app supports about 13
+languages. This inflates the packaged app significantly. Import from
 `monaco-editor/esm/vs/editor/editor.api` with an explicit language allowlist, or use
 `vite-plugin-monaco-editor`.
 
 ### A3. The file tree is mouse-only (no keyboard access)
 
-`src/components/sidebar/FileTreeSidebar.vue`. Rows are `<div>`s with click and dblclick handlers,
-no `tabindex`, no `role`, and no key handlers. Selecting a file, toggling a folder, and marking
-viewed are all mouse-only. The comment explains why the rows are not `<button>`s (a button cannot
-contain the interactive checkbox), but that does not preclude adding `tabindex`, roles, and Enter or
-Space handling.
-
-### A4. A component prop is made reactive, triggering a Vue warning
-
-`src/components/diff/DiffPlaceholder.vue:7` takes `icon: Component`. Passing a component through a
-reactive prop makes Vue log "received a Component that was made a reactive object" (visible in the
-test run). Wrap the icons with `markRaw` at the call sites or otherwise keep them raw.
+`src/components/sidebar/FileTreeSidebar.vue`. Rows are `<div>`/`<span>` elements with `@click` and
+`@dblclick` handlers (for example lines 223 and 224), no `tabindex`, no `role`, and no key handlers.
+Selecting a file, toggling a folder, and marking viewed are all mouse-only. A `<button>` cannot wrap
+the interactive checkbox, but that does not preclude adding `tabindex`, roles, and Enter or Space
+handling.
 
 ### A5. `vueDevTools()` is registered unconditionally
 
 `vite.config.ts:14`. The plugin is not limited to `command === 'serve'`. Recent versions self-limit
 to dev, so the practical impact is probably nil, but relying on that is fragile. Guard it
 explicitly. (Low confidence; flagged for verification rather than as a confirmed defect.)
+
+### A6. `CompareMode` is defined in three places
+
+The `'merge-base' | 'direct'` union is declared independently in `electron/git/GitService.ts:22`,
+`electron/ipc/handlers.ts:20`, and `src/shared/types.ts:7`. A change to one will not propagate to
+the others. The renderer and preload already share `src/shared/types.ts`; have the backend import
+from a single source too.
+
+### A7. Minor type imprecisions in the converted backend
+
+Surfaced by the TypeScript conversion, all cosmetic (`type-check` passes):
+`coalesceReason` takes `Set<string>` where its caller and `pendingReasons` are `Set<ChangeReason>`
+(`electron/watcher/RepoWatcher.ts:107`); and `FilePair.image`, `oldImage`, `newImage` are marked
+optional though `imagePair` always assigns them (`electron/git/GitService.ts`). Tighten the types or
+leave as low priority.
 
 ---
 
@@ -88,16 +120,16 @@ ships with a matching test."
 
 ### Backend gaps
 
-- `electron/settings.cjs`: entirely untested. This holds the recent-repos dedup and cap
+- `electron/settings.ts`: entirely untested. This holds the recent-repos dedup and cap
   (`MAX_RECENT_REPOS`), per-repo branch-selection persistence, and the removal cascade
   (`removeRecentRepo` also deletes the repo's `branchSelections`). All of it is pure, testable logic
   with edge cases, and none of it is tested.
-- `electron/ipc/handlers.cjs`: only `isGitAvailable` is tested. `registerIpcHandlers`, `isGitRepo`,
-  `requireRepo` (the "No repository is open" guard), `getCurrentRepoPath`, and the `repo:open`
-  validation flow are untested.
-- `electron/logger.cjs`: only `formatValue` is tested. The log rotation and truncation at
-  `MAX_LOG_BYTES`, and stream initialization, are untested.
-- `electron/main.cjs`, `electron/preload.cjs`: untested. Bootstrap and bridge are harder to unit
+- `electron/ipc/handlers.ts`: only `isGitAvailable` is covered (`tests/git-availability.spec.ts`).
+  `registerIpcHandlers`, `isGitRepo`, `requireRepo` (the "No repository is open" guard),
+  `getCurrentRepoPath`, and the `repo:open` validation flow are untested.
+- `electron/logger.ts`: only `formatValue` is tested (`tests/logger.spec.ts`). The log rotation and
+  truncation at `MAX_LOG_BYTES`, and stream initialization, are untested.
+- `electron/main.ts`, `electron/preload.ts`: untested. Bootstrap and bridge are harder to unit
   test, but the preload is the security-critical surface and deserves at least a shape test.
 
 ### Frontend gaps (convention violations)
@@ -124,16 +156,17 @@ in the vitest config points at a directory that does not exist).
 
 ### L1. Git commands do not use `--` to separate options from refs and paths
 
-`electron/git/GitService.cjs`. Ranges and pathspecs are interpolated straight into the argument
-arrays (for example `` `${base}...${head}` `` and `` `${ref}:${filePath}` ``). Because everything
-runs through `execFile` and `simple-git` argument arrays there is no shell injection, and the inputs
-are git-derived (the branch list and the changed-file list), so exploitability is low. Still, a ref
-or path beginning with `-` could be interpreted as an option (argument injection). Inserting `--`
-before refs and pathspecs is cheap hardening.
+`electron/git/GitService.ts`. Ranges and pathspecs are interpolated straight into the argument
+arrays (for example `` `${ref}:${filePath}` `` at line 171 and the range spread into the `diff`
+arrays at lines 215 and 216). Because everything runs through `execFile` and `simple-git` argument
+arrays there is no shell injection, and the inputs are git-derived (the branch list and the
+changed-file list), so exploitability is low. Still, a ref or path beginning with a leading dash
+could be interpreted as an option (argument injection). Inserting `--` before refs and pathspecs is
+cheap hardening.
 
 ### L2. The repo watcher is never stopped on quit
 
-`electron/watcher/RepoWatcher.cjs` exposes `stopWatchingRepo`, but `electron/main.cjs` never calls
+`electron/watcher/RepoWatcher.ts:253` exposes `stopWatchingRepo`, but `electron/main.ts` never calls
 it on `before-quit`; the watcher is only ever replaced when a new repo opens. The OS reclaims the
 handles at exit, so this is harmless in practice, but the teardown path is incomplete.
 
@@ -141,6 +174,7 @@ handles at exit, so this is harmless in practice, but the teardown path is incom
 
 ## Suggested priority
 
-1. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
-2. The settings.cjs and handlers.cjs test gaps: the highest-value untested logic.
+1. A2 (Monaco bundle size): the largest efficiency win for the packaged app, and a prerequisite for
+   B3 (PHP highlighting) to land cleanly.
+2. The `settings.ts` and `handlers.ts` test gaps: the highest-value untested logic.
 3. Everything else as cleanup.
