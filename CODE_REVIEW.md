@@ -52,14 +52,6 @@ languages. This inflates the packaged app significantly. Import from
 `GitService.LANGUAGE_BY_EXTENSION` (typescript, javascript, html, xml, json, css, scss, less,
 markdown, yaml, shell, php, ini, dockerfile), or those file types silently fall back to plaintext.
 
-### A3. The file tree is mouse-only (no keyboard access)
-
-`src/components/sidebar/FileTreeSidebar.vue`. Rows are `<div>`/`<span>` elements with `@click` and
-`@dblclick` handlers (for example lines 223 and 224), no `tabindex`, no `role`, and no key handlers.
-Selecting a file, toggling a folder, and marking viewed are all mouse-only. A `<button>` cannot wrap
-the interactive checkbox, but that does not preclude adding `tabindex`, roles, and Enter or Space
-handling.
-
 ---
 
 ## Test coverage ("make sure every system is tested")

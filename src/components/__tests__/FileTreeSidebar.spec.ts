@@ -98,6 +98,41 @@ describe('FileTreeSidebar', () => {
         expect(store.selectedPath).toBe('shared/types.ts');
     });
 
+    it('selects a file when its row receives Enter (keyboard)', async () => {
+        const wrapper = mountTree();
+        await flushPromises();
+        const store = useComparisonStore();
+
+        await wrapper.find('div[title="shared/types.ts"]').trigger('keydown', { key: 'Enter' });
+        expect(store.selectedPath).toBe('shared/types.ts');
+    });
+
+    it('collapses a folder when its row receives Space (keyboard)', async () => {
+        const wrapper = mountTree();
+        await flushPromises();
+        expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(true);
+
+        const folderRow = wrapper
+            .findAll('[data-slot="tooltip-trigger"]')
+            .find((el) => el.text().includes('git'));
+        await folderRow?.trigger('keydown', { key: ' ' });
+        await flushPromises();
+
+        expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(false);
+    });
+
+    it('ignores key events that bubble up from the row checkbox', async () => {
+        const wrapper = mountTree();
+        await flushPromises();
+        const store = useComparisonStore();
+
+        // A key on a row's checkbox must not also fire the row's select action.
+        const checkbox = wrapper.find('div[title="shared/types.ts"]').find('button');
+        await checkbox.trigger('keydown', { key: 'Enter' });
+
+        expect(store.selectedPath).toBe('electron/git/parsers.ts'); // unchanged
+    });
+
     it('toggles viewed via the row checkbox without selecting the row', async () => {
         const wrapper = mountTree();
         await flushPromises();

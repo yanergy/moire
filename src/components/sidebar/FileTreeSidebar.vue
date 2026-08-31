@@ -106,6 +106,29 @@ function dirCheckState(node: DirNode): boolean | 'indeterminate' {
 
     return node.seen > 0 ? 'indeterminate' : false;
 }
+
+// Keyboard activation for the tree rows. The rows wrap an interactive Checkbox,
+// so they can't be <button>s (button-in-button is invalid); instead they are
+// focusable divs with role="button" and Enter/Space activation. The guard skips
+// key events that bubbled up from the checkbox, so toggling "viewed" with the
+// keyboard doesn't also fire the row's own action.
+function isActivation(event: KeyboardEvent): boolean {
+    return event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ');
+}
+
+function onDirKey(event: KeyboardEvent, node: DirNode): void {
+    if (isActivation(event)) {
+        event.preventDefault(); // Space would otherwise scroll the list
+        comparison.toggleDir(node.path);
+    }
+}
+
+function onFileKey(event: KeyboardEvent, node: FileNode): void {
+    if (isActivation(event)) {
+        event.preventDefault();
+        comparison.selectFile(node.path);
+    }
+}
 </script>
 
 <template>
@@ -170,9 +193,13 @@ function dirCheckState(node: DirNode): boolean | 'indeterminate' {
                         <!-- Click toggles the folder open; the checkbox marks every file
                              under it viewed. -->
                         <div
-                            class="group flex w-full cursor-pointer items-center gap-1.5 rounded-md pr-4 hover:bg-moire-hover"
+                            class="group flex w-full cursor-pointer items-center gap-1.5 rounded-md pr-4 hover:bg-moire-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moire-ring focus-visible:outline-none"
                             :style="{ paddingLeft: indent(node.depth), height: `${ROW_HEIGHT}px` }"
+                            role="button"
+                            tabindex="0"
+                            :aria-expanded="node.open"
                             @click="comparison.toggleDir(node.path)"
+                            @keydown="onDirKey($event, node)"
                         >
                             <ChevronDown
                                 v-if="node.open"
@@ -216,12 +243,16 @@ function dirCheckState(node: DirNode): boolean | 'indeterminate' {
                 <!-- Click selects; double-click marks viewed. -->
                 <div
                     v-else
-                    class="group flex w-full cursor-pointer items-center gap-2 rounded-md pr-4"
+                    class="group flex w-full cursor-pointer items-center gap-2 rounded-md pr-4 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moire-ring focus-visible:outline-none"
                     :class="rowClasses(node)"
                     :style="rowStyle(node)"
                     :title="node.oldPath ? `${node.oldPath} → ${node.path}` : node.path"
+                    role="button"
+                    tabindex="0"
+                    :aria-current="node.selected ? 'true' : undefined"
                     @click="comparison.selectFile(node.path)"
                     @dblclick="comparison.toggleViewed(node.path)"
+                    @keydown="onFileKey($event, node)"
                 >
                     <span
                         class="w-[13px] shrink-0 text-center font-mono text-[11px] font-bold"
