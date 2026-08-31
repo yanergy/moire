@@ -33,12 +33,6 @@ Resolved since the previous review:
 
 ## Inconsistencies (docs vs code)
 
-### I5. `@electron/osx-sign` is used but not declared as a dependency
-
-`build/afterPack.cjs:17` does `require('@electron/osx-sign')`. It resolves only because
-`electron-builder` pulls it in transitively. An electron-builder upgrade that restructures its
-dependencies would break macOS packaging with no warning. Add it as an explicit devDependency.
-
 ### I6. Three near-duplicate "last path segment" implementations
 
 `src/stores/comparison.ts:59` (`baseName`), `src/stores/comparison.ts:501` (inline in
