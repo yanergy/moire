@@ -1,6 +1,6 @@
 import { setActivePinia, createPinia } from 'pinia';
-import { beforeEach, describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+import { mount, flushPromises } from '@vue/test-utils';
 import DiffPane from '@/components/diff/DiffPane.vue';
 import LargeFileGate from '@/components/diff/LargeFileGate.vue';
 import BinaryFileNotice from '@/components/diff/BinaryFileNotice.vue';
@@ -35,6 +35,9 @@ const largePair: FilePair = {
 
 describe('DiffPane large-file gate', () => {
     beforeEach(() => setActivePinia(createPinia()));
+    afterEach(() => {
+        delete window.api;
+    });
 
     it('shows the gate instead of the diff viewer for a large file', () => {
         const store = useComparisonStore();
@@ -46,11 +49,22 @@ describe('DiffPane large-file gate', () => {
     });
 
     it('reveals the diff viewer once Load diff is clicked', async () => {
+        // Clearing the gate refetches the withheld content through the bridge, so
+        // the store needs a base, a selected file, and a getFilePair stub.
+        window.api = {
+            getFilePair: vi.fn<() => Promise<FilePair>>().mockResolvedValue({ ...largePair }),
+        } as unknown as Window['api'];
         const store = useComparisonStore();
-        store.selectedPair = { ...largePair };
+        store.base = 'main';
+        store.files = [{ path: 'big.txt', status: 'M', additions: 0, deletions: 0, binary: false }];
+        store.selectFile('big.txt');
+        await flushPromises();
 
         const wrapper = mount(DiffPane);
+        expect(store.showDiffGate).toBe(true);
+
         await wrapper.findComponent(LargeFileGate).find('button').trigger('click');
+        await flushPromises();
 
         expect(store.showDiffGate).toBe(false);
         expect(wrapper.findComponent(DiffViewer).exists()).toBe(true);

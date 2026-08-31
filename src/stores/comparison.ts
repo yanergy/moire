@@ -227,8 +227,33 @@ export const useComparisonStore = defineStore('comparison', () => {
         () => selectedPair.value.tooLarge && !selectedPair.value.binary && !largeDiffLoaded.value
     );
 
-    function loadLargeDiff() {
-        largeDiffLoaded.value = true;
+    // Clearing the gate fetches the large file's withheld content (the initial
+    // pair carried none, so selecting it shipped nothing over IPC) and then reveals
+    // the diff. Reuses loadFilePair's request token so a slow full-content response
+    // is dropped if the selection or range moved on; the gate stays up on failure.
+    async function loadLargeDiff() {
+        const api = window.api;
+        const path = selectedFile.value.path;
+        if (!api || !base.value || !path) {
+            return;
+        }
+
+        const token = ++pairRequest;
+        try {
+            const full = await api.getFilePair(
+                base.value,
+                head.value,
+                path,
+                compareMode.value,
+                true
+            );
+            if (token === pairRequest) {
+                selectedPair.value = full;
+                largeDiffLoaded.value = true;
+            }
+        } catch {
+            // Leave the gate in place so the user can retry.
+        }
     }
 
     // An image file is shown as a before/after preview rather than a text diff.

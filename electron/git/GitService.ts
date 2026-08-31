@@ -262,7 +262,8 @@ class GitService {
         base: string,
         head: string,
         filePath: string,
-        mode: CompareMode
+        mode: CompareMode,
+        full = false
     ): Promise<FilePair> {
         // The old side must match what the changed-file list diffed against. In
         // merge-base mode `base...head` diffs from the merge base, so read the old
@@ -286,16 +287,21 @@ class GitService {
 
         const binary = isBinary(oldContent) || isBinary(newContent);
         const size = Math.max(byteLength(oldContent), byteLength(newContent));
+        const tooLarge = size > MAX_RENDER_BYTES;
+
+        // Content is withheld when there is no text diff to render (binary), and
+        // when the file is over the render threshold: shipping it would pay the full
+        // IPC transfer up front for a diff that starts gated. The renderer refetches
+        // with full=true when the user clears the "Load diff" gate.
+        const withhold = binary || (tooLarge && !full);
 
         return {
             path: filePath,
-            // Binary content is withheld from the text diff; images get a preview
-            // (imagePair), other binaries a plain notice in the renderer.
-            oldContent: binary ? null : oldContent,
-            newContent: binary ? null : newContent,
+            oldContent: withhold ? null : oldContent,
+            newContent: withhold ? null : newContent,
             language: languageForPath(filePath),
             binary,
-            tooLarge: size > MAX_RENDER_BYTES,
+            tooLarge,
             sizeBytes: size,
         };
     }

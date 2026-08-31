@@ -527,7 +527,16 @@ describe('comparison store', () => {
 
             expect(store.showDiffGate).toBe(true);
 
-            store.loadLargeDiff();
+            // Clearing the gate refetches the withheld content (full=true), then reveals it.
+            await store.loadLargeDiff();
+            await flushPromises();
+            expect(api.getFilePair).toHaveBeenLastCalledWith(
+                'main',
+                'WORKING TREE',
+                'src/app.ts',
+                'merge-base',
+                true
+            );
             expect(store.showDiffGate).toBe(false);
         });
 
@@ -542,7 +551,8 @@ describe('comparison store', () => {
             await store.openRecent('/repos/moire');
             await flushPromises();
 
-            store.loadLargeDiff();
+            await store.loadLargeDiff();
+            await flushPromises();
             expect(store.showDiffGate).toBe(false);
 
             store.selectFile('src/lib/util.ts');

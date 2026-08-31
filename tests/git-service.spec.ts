@@ -164,20 +164,23 @@ describe('GitService.filePair', () => {
         expect(pair.newContent).toBe('added\n');
     });
 
-    it('flags a file over the render threshold and reports its size', async () => {
+    it('flags a large file and withholds its content until full is requested', async () => {
         const big = 'x'.repeat(512 * 1024 + 10);
         const show = vi.fn<(options: string[]) => Promise<string>>(async () => big);
-        const pair = await new GitService('/repo', { show }).filePair(
-            'main',
-            'feature',
-            'big.txt',
-            'direct'
-        );
+        const service = new GitService('/repo', { show });
 
-        expect(pair.tooLarge).toBe(true);
-        expect(pair.sizeBytes).toBe(big.length);
-        // Content is still returned; the renderer gates it behind "Load diff".
-        expect(pair.oldContent).toBe(big);
+        // The initial (gated) pair reports the size but ships no content, so
+        // selecting a large file does not pay the full IPC transfer up front.
+        const gated = await service.filePair('main', 'feature', 'big.txt', 'direct');
+        expect(gated.tooLarge).toBe(true);
+        expect(gated.sizeBytes).toBe(big.length);
+        expect(gated.oldContent).toBeNull();
+        expect(gated.newContent).toBeNull();
+
+        // Clearing the "Load diff" gate refetches with full=true to get the content.
+        const full = await service.filePair('main', 'feature', 'big.txt', 'direct', true);
+        expect(full.tooLarge).toBe(true);
+        expect(full.oldContent).toBe(big);
     });
 
     it('withholds binary content and flags it', async () => {

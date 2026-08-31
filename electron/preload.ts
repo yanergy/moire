@@ -16,8 +16,8 @@ contextBridge.exposeInMainWorld('api', {
     getBranches: () => ipcRenderer.invoke('git:branches'),
     getChangedFiles: (base: string, head: string, mode: string) =>
         ipcRenderer.invoke('git:changed-files', base, head, mode),
-    getFilePair: (base: string, head: string, filePath: string, mode: string) =>
-        ipcRenderer.invoke('git:file-pair', base, head, filePath, mode),
+    getFilePair: (base: string, head: string, filePath: string, mode: string, full = false) =>
+        ipcRenderer.invoke('git:file-pair', base, head, filePath, mode, full),
     // Theme is owned by main (nativeTheme). `getTheme` reads the resolved state;
     // `onThemeChanged` fires when the View → Theme selection or the OS theme
     // changes, returning an unsubscribe function so the caller can drop it.

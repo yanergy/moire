@@ -83,7 +83,16 @@ export interface MoireApi {
     setBranchSelection(path: string, base: string, head: string): Promise<void>;
     getBranches(): Promise<BranchInfo[]>;
     getChangedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]>;
-    getFilePair(base: string, head: string, path: string, mode: CompareMode): Promise<FilePair>;
+    // `full` refetches a large file's withheld content when the "Load diff" gate
+    // is cleared; the default (false) gates it, so selecting a large file ships no
+    // content over IPC.
+    getFilePair(
+        base: string,
+        head: string,
+        path: string,
+        mode: CompareMode,
+        full?: boolean
+    ): Promise<FilePair>;
     onRepoChanged(cb: (event: RepoChangeEvent) => void): () => void;
     // Theme is owned by the main process via nativeTheme. `getTheme` reads the
     // current resolved state; `onThemeChanged` fires when the native "View →

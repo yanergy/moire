@@ -33,14 +33,6 @@ Resolved since the previous review:
 
 ## Antipatterns and smells
 
-### A1. Gated large files are still fully transferred over IPC
-
-`electron/git/GitService.ts:251` (`filePair`) returns the full `oldContent` and `newContent` even
-when `tooLarge` is set; the renderer stores them in `selectedPair`. The "Load diff" gate only
-defers Monaco rendering, not the IPC serialization or the memory cost, so selecting a large file
-still pays the full transfer up front. Consider withholding content until the gate is cleared, then
-fetching on demand.
-
 ### A2. Monaco bundles every language grammar and all workers
 
 `src/components/diff/DiffViewer.vue:2` uses `import * as monaco from 'monaco-editor'`, which pulls
