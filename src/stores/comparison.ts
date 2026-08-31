@@ -2,6 +2,7 @@ import { computed, ref, watch } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import type { BranchInfo, ChangedFile, CompareMode, FilePair, FileStatus } from '@/shared/types';
 import { WORKING_TREE } from '@/shared/types';
+import { repoLabel } from '@/lib/repo-path';
 
 export interface DirNode {
     kind: 'dir';
@@ -498,8 +499,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             return;
         }
 
-        const parts = last.split(/[/\\]/).filter(Boolean);
-        repoName.value = parts[parts.length - 1] ?? last;
+        repoName.value = repoLabel(last);
         repoPath.value = last;
 
         if (!(await openRecent(last))) {

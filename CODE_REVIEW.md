@@ -31,20 +31,6 @@ Resolved since the previous review:
 
 ---
 
-## Inconsistencies (docs vs code)
-
-### I6. Three near-duplicate "last path segment" implementations
-
-`src/stores/comparison.ts:59` (`baseName`), `src/stores/comparison.ts:501` (inline in
-`restoreLastRepo`), `src/components/controls/RepoPicker.vue:28`, and `electron/menu.ts:36`
-(`repoLabel`) each reimplement "take the final path segment". The earlier correctness concern is
-gone: the store's `baseName` splits on `/` only, but it is now applied only to `file.path`
-(`comparison.ts:309`), which git always reports with forward slashes, so that is correct. The other
-three, all handling filesystem repo paths, split on `/[/\\]/` and handle Windows. What remains is
-the duplication: consolidate into one shared helper for repo paths.
-
----
-
 ## Antipatterns and smells
 
 ### A1. Gated large files are still fully transferred over IPC

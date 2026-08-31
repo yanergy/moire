@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { ChevronDown, FolderGit2, FolderOpen, X } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { repoLabel } from '@/lib/repo-path';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -22,11 +23,6 @@ function onOpenChange(value: boolean) {
     if (value) {
         comparison.loadRecentRepos();
     }
-}
-
-function baseName(path: string): string {
-    const parts = path.split(/[/\\]/).filter(Boolean);
-    return parts[parts.length - 1] ?? path;
 }
 
 async function pickFolder() {
@@ -76,7 +72,7 @@ async function openRecent(path: string) {
                             @select="openRecent(path)"
                         >
                             <FolderGit2 :size="14" class="shrink-0 text-moire-faint" />
-                            <span class="flex-1 truncate">{{ baseName(path) }}</span>
+                            <span class="flex-1 truncate">{{ repoLabel(path) }}</span>
                             <button
                                 type="button"
                                 aria-label="Remove from recents"

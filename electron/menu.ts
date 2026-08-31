@@ -31,7 +31,9 @@ export interface MenuOptions {
 }
 
 // The trailing path segment, for a readable "Open Recent" label (the full path
-// stays available on hover as the item's toolTip).
+// stays available on hover as the item's toolTip). Duplicated from the renderer's
+// `repoLabel` in src/lib/repo-path.ts: the strict process split means the main
+// process cannot import from src/, so this side keeps its own copy in sync.
 function repoLabel(repoPath: string): string {
     const parts = repoPath.split(/[/\\]/).filter(Boolean);
     return parts[parts.length - 1] || repoPath;
