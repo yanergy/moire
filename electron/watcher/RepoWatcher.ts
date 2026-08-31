@@ -104,7 +104,7 @@ export function worktreeIgnored(repoPath: string, fullPath: string): boolean {
 // refs outranks worktree: a checkout touches both, and the moved ref is the more
 // meaningful change to report. The event is informational for now (the renderer
 // re-reads everything on any change), but keeping it accurate future-proofs it.
-export function coalesceReason(reasons: Set<string>): ChangeReason {
+export function coalesceReason(reasons: Set<ChangeReason>): ChangeReason {
     return reasons.has('refs') ? 'refs' : 'worktree';
 }
 

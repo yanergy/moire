@@ -60,14 +60,6 @@ Selecting a file, toggling a folder, and marking viewed are all mouse-only. A `<
 the interactive checkbox, but that does not preclude adding `tabindex`, roles, and Enter or Space
 handling.
 
-### A7. Minor type imprecisions in the converted backend
-
-Surfaced by the TypeScript conversion, all cosmetic (`type-check` passes):
-`coalesceReason` takes `Set<string>` where its caller and `pendingReasons` are `Set<ChangeReason>`
-(`electron/watcher/RepoWatcher.ts:107`); and `FilePair.image`, `oldImage`, `newImage` are marked
-optional though `imagePair` always assigns them (`electron/git/GitService.ts`). Tighten the types or
-leave as low priority.
-
 ---
 
 ## Test coverage ("make sure every system is tested")
