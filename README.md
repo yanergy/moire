@@ -61,6 +61,10 @@ Track bugs and limitations here.
 - **Windows and Linux packaged builds are unverified.** The `electron-builder` config targets
   them, but the app has only been built and run on macOS so far.
 
+## Planned features
+
+- Add a viewer for the PR, so if a PR exists, a user can see all information related to it. Primarily the description
+
 ## Documentation
 
 - `documentation/code-conventions.md`: code conventions and project rules. Read this before
