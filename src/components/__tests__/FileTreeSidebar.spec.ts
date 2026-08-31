@@ -1,6 +1,7 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { CHANGED_FILES } from '@/components/__tests__/fixtures';
@@ -13,9 +14,15 @@ describe('FileTreeSidebar', () => {
         setActivePinia(pinia);
     });
 
-    // Tooltip content teleports to document.body; clear it between tests.
+    // Tooltip content teleports to document.body; clear it between tests. Also
+    // reset the persisted sidebar width so one test's resize can't leak into another.
     afterEach(() => {
         document.body.innerHTML = '';
+        try {
+            localStorage.clear();
+        } catch {
+            // ignore
+        }
     });
 
     // The store starts empty (no repo open), so seed the change set and a couple
@@ -119,6 +126,31 @@ describe('FileTreeSidebar', () => {
         await flushPromises();
 
         expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(false);
+    });
+
+    it('resizes the sidebar when its border handle is dragged, clamping to the max', async () => {
+        const wrapper = mountTree();
+        await flushPromises();
+
+        const handle = wrapper.find('[aria-label="Resize sidebar"]');
+        const sidebar = handle.element.parentElement as HTMLElement;
+        expect(sidebar.style.width).toBe('312px'); // default
+
+        // clientX is read-only on the event, so dispatch through the constructor
+        // rather than test-utils' trigger, which assigns props onto the event.
+        handle.element.dispatchEvent(
+            new MouseEvent('pointerdown', { clientX: 312, bubbles: true, cancelable: true })
+        );
+        window.dispatchEvent(new MouseEvent('pointermove', { clientX: 412 }));
+        await nextTick();
+        expect(sidebar.style.width).toBe('412px');
+
+        // Dragging past the maximum clamps rather than growing without bound.
+        window.dispatchEvent(new MouseEvent('pointermove', { clientX: 1200 }));
+        await nextTick();
+        expect(sidebar.style.width).toBe('640px');
+
+        window.dispatchEvent(new MouseEvent('pointerup'));
     });
 
     it('ignores key events that bubble up from the row checkbox', async () => {

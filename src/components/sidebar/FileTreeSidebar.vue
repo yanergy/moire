@@ -7,6 +7,7 @@ import {
     ChevronsUpDown,
     Minus,
 } from '@lucide/vue';
+import { onBeforeUnmount, ref } from 'vue';
 import { RecycleScroller } from 'vue-virtual-scroller';
 import { useComparisonStore } from '@/stores/comparison';
 import type { DirNode, FileNode } from '@/stores/comparison';
@@ -18,6 +19,67 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
+
+// The sidebar is resizable by dragging its right border. Width is clamped so the
+// panel can't collapse away or crowd out the diff, and is remembered per viewer
+// in localStorage (a convenience, so a missing/blocked store just uses the default).
+// Floor keeps the header (title, count, controls, "viewed" tally) on one line.
+const MIN_WIDTH = 260;
+const MAX_WIDTH = 640;
+const DEFAULT_WIDTH = 312;
+const WIDTH_KEY = 'moire:sidebar-width';
+
+function loadWidth(): number {
+    try {
+        const saved = Number(localStorage.getItem(WIDTH_KEY));
+        if (Number.isFinite(saved) && saved >= MIN_WIDTH && saved <= MAX_WIDTH) {
+            return saved;
+        }
+    } catch {
+        // localStorage unavailable (private mode, blocked); fall back to default.
+    }
+
+    return DEFAULT_WIDTH;
+}
+
+const sidebarWidth = ref(loadWidth());
+
+let dragStartX = 0;
+let dragStartWidth = 0;
+
+function onResizeMove(event: PointerEvent) {
+    const next = dragStartWidth + (event.clientX - dragStartX);
+    sidebarWidth.value = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, next));
+}
+
+function onResizeEnd() {
+    window.removeEventListener('pointermove', onResizeMove);
+    window.removeEventListener('pointerup', onResizeEnd);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    try {
+        localStorage.setItem(WIDTH_KEY, String(sidebarWidth.value));
+    } catch {
+        // Persistence is best-effort; ignore a blocked store.
+    }
+}
+
+// Track the drag on window so it keeps working when the pointer leaves the thin
+// handle, and force the resize cursor / disable text selection for the duration.
+function onResizeStart(event: PointerEvent) {
+    event.preventDefault();
+    dragStartX = event.clientX;
+    dragStartWidth = sidebarWidth.value;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', onResizeMove);
+    window.addEventListener('pointerup', onResizeEnd);
+}
+
+onBeforeUnmount(() => {
+    window.removeEventListener('pointermove', onResizeMove);
+    window.removeEventListener('pointerup', onResizeEnd);
+});
 
 // The folder tooltip is a slow, deliberate reveal (not the snappy default), shown
 // on every folder row so the full path is always reachable on hover.
@@ -133,9 +195,14 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
 
 <template>
     <TooltipProvider :delay-duration="300">
-        <div class="flex w-[312px] flex-none flex-col border-r border-moire-border bg-moire-chrome">
+        <div
+            class="relative flex flex-none flex-col border-r border-moire-border bg-moire-chrome"
+            :style="{ width: `${sidebarWidth}px` }"
+        >
             <div class="flex items-center gap-2 px-3 pt-3 pb-2">
-                <span class="text-xs font-semibold text-moire-fg">Changed files</span>
+                <span class="shrink-0 text-xs font-semibold whitespace-nowrap text-moire-fg">
+                    Changed files
+                </span>
                 <Badge
                     variant="outline"
                     class="border-moire-border px-[7px] text-[11px] font-medium text-moire-muted"
@@ -160,7 +227,9 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                         {{ comparison.allCollapsed ? 'Expand all' : 'Collapse all' }}
                     </TooltipContent>
                 </Tooltip>
-                <span class="flex items-center gap-1.5 text-[11px] text-moire-muted">
+                <span
+                    class="flex shrink-0 items-center gap-1.5 text-[11px] whitespace-nowrap text-moire-muted"
+                >
                     <span class="size-2 rounded-sm bg-moire-viewed-edge" />
                     {{ comparison.viewedCount }} viewed
                 </span>
@@ -282,6 +351,17 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                     </span>
                 </div>
             </recycle-scroller>
+
+            <!-- Drag the right border to resize the panel. Sits over the border so
+                 the whole edge is grabbable; tracking happens on window so the drag
+                 survives the pointer leaving this thin strip. -->
+            <div
+                class="absolute inset-y-0 -right-0.5 z-10 w-1 cursor-col-resize hover:bg-moire-ring active:bg-moire-ring"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize sidebar"
+                @pointerdown="onResizeStart"
+            />
         </div>
     </TooltipProvider>
 </template>
