@@ -1,6 +1,6 @@
 {
     "name": "moire",
-    "version": "0.0.0",
+    "version": "1.0.0",
     "private": true,
     "description": "Desktop app for viewing the diff between two branches of a local Git repository.",
     "author": "yanergy",
