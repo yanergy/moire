@@ -33,42 +33,26 @@ Resolved since the previous review:
 
 ## Test coverage ("make sure every system is tested")
 
-The suite is genuinely good: the parsers, the watcher, `GitService`, the menu builder, `theme`, and
-`window-state` are all well covered, and the comparison store has an extensive spec. The gaps below
-are real, and several violate the project's own rule that "every new frontend file under `src/`
-ships with a matching test."
+The suite covers the parsers, the watcher, `GitService`, the menu builder, `theme`, `window-state`,
+`settings` (dedup, cap, cascade, round-trips), the IPC handlers (registration, the "No repository is
+open" guard, the `repo:open` validation flow, `getCurrentRepoPath`), the preload bridge (surface,
+channel forwarding, subscribe/unsubscribe), the logger (rotation, truncation, `logError`), the
+comparison store, and the frontend components and lib modules. What remains uncovered:
 
-### Backend gaps
+### Excluded wiring
 
-- `electron/settings.ts`: entirely untested. This holds the recent-repos dedup and cap
-  (`MAX_RECENT_REPOS`), per-repo branch-selection persistence, and the removal cascade
-  (`removeRecentRepo` also deletes the repo's `branchSelections`). All of it is pure, testable logic
-  with edge cases, and none of it is tested.
-- `electron/ipc/handlers.ts`: only `isGitAvailable` is covered (`tests/git-availability.spec.ts`).
-  `registerIpcHandlers`, `isGitRepo`, `requireRepo` (the "No repository is open" guard),
-  `getCurrentRepoPath`, and the `repo:open` validation flow are untested.
-- `electron/logger.ts`: only `formatValue` is tested (`tests/logger.spec.ts`). The log rotation and
-  truncation at `MAX_LOG_BYTES`, and stream initialization, are untested.
-- `electron/main.ts`, `electron/preload.ts`: untested. Bootstrap and bridge are harder to unit
-  test, but the preload is the security-critical surface and deserves at least a shape test.
-
-### Frontend gaps (convention violations)
-
-- `src/App.vue`: no test, despite real logic (the `onMounted` IPC subscriptions, the
-  `document.title` watchEffect, the `onUnmounted` cleanup).
-- `src/components/pages/MoirePage.vue`: no test.
-- `src/lib/monaco-theme.ts`: no test, even though `monacoThemeFor` is a trivial pure function.
-- `src/lib/utils.ts`: no test (`cn`).
-- `src/lib/monaco-env.ts`, `src/main.ts`: no test (worker wiring and entry point; reasonable to
-  exclude in practice, but the convention as written allows no exception).
+- `electron/main.ts` (bootstrap), `src/lib/monaco-env.ts` (Monaco worker wiring), and `src/main.ts`
+  (renderer entry point) are not unit-tested: they are thin wiring over Electron/Vite that cannot
+  meaningfully load under vitest (monaco-env's `?worker` imports don't resolve there). They are
+  exercised by running the app.
 
 ### Depth caveat
 
-The DiffViewer spec runs against a Monaco stub (`vitest.config.ts` aliases `monaco-editor` to
-`src/components/__tests__/monaco-stub.ts`), so real diff behavior (change navigation, model
-disposal, theme switching) is never exercised against the actual library. That is a reasonable
-choice for unit tests, but there is no integration or end-to-end layer at all (the `e2e/**` exclude
-in the vitest config points at a directory that does not exist).
+The DiffViewer spec runs against a Monaco stub (`vitest.config.ts` aliases `monaco-editor` and
+`@/lib/monaco` to `src/components/__tests__/monaco-stub.ts`), so real diff behavior (change
+navigation, model disposal, theme switching) is never exercised against the actual library. That is
+a reasonable choice for unit tests, but there is no integration or end-to-end layer at all (the
+`e2e/**` exclude in the vitest config points at a directory that does not exist).
 
 ---
 
