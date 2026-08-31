@@ -7,7 +7,7 @@ import {
     ChevronsUpDown,
     Minus,
 } from '@lucide/vue';
-import { onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { RecycleScroller } from 'vue-virtual-scroller';
 import { useComparisonStore } from '@/stores/comparison';
 import type { DirNode, FileNode } from '@/stores/comparison';
@@ -17,8 +17,20 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { celebrate } from '@/lib/celebrate';
 
 const comparison = useComparisonStore();
+
+// A small flourish the moment every changed file has been marked viewed (only on
+// the transition, and only when there is a non-empty change set to finish).
+const allViewed = computed(
+    () => comparison.fileCount > 0 && comparison.viewedCount === comparison.fileCount
+);
+watch(allViewed, (done, wasDone) => {
+    if (done && !wasDone) {
+        celebrate();
+    }
+});
 
 // The sidebar is resizable by dragging its right border. Width is clamped so the
 // panel can't collapse away or crowd out the diff, and is remembered per viewer
