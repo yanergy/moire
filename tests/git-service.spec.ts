@@ -121,7 +121,7 @@ describe('GitService.filePair', () => {
         );
         const service = new GitService('/repo', { show });
 
-        const pair = await service.filePair('main', 'feature', 'src/a.ts');
+        const pair = await service.filePair('main', 'feature', 'src/a.ts', 'direct');
 
         expect(pair).toEqual({
             path: 'src/a.ts',
@@ -146,7 +146,8 @@ describe('GitService.filePair', () => {
         const pair = await new GitService('/repo', { show }).filePair(
             'main',
             'feature',
-            'src/b.ts'
+            'src/b.ts',
+            'direct'
         );
         expect(pair.oldContent).toBeNull();
         expect(pair.newContent).toBe('added\n');
@@ -155,7 +156,12 @@ describe('GitService.filePair', () => {
     it('flags a file over the render threshold and reports its size', async () => {
         const big = 'x'.repeat(512 * 1024 + 10);
         const show = vi.fn<(options: string[]) => Promise<string>>(async () => big);
-        const pair = await new GitService('/repo', { show }).filePair('main', 'feature', 'big.txt');
+        const pair = await new GitService('/repo', { show }).filePair(
+            'main',
+            'feature',
+            'big.txt',
+            'direct'
+        );
 
         expect(pair.tooLarge).toBe(true);
         expect(pair.sizeBytes).toBe(big.length);
@@ -165,11 +171,49 @@ describe('GitService.filePair', () => {
 
     it('withholds binary content and flags it', async () => {
         const show = vi.fn<(options: string[]) => Promise<string>>(async () => 'ELF\x00\x01binary');
-        const pair = await new GitService('/repo', { show }).filePair('main', 'feature', 'app.bin');
+        const pair = await new GitService('/repo', { show }).filePair(
+            'main',
+            'feature',
+            'app.bin',
+            'direct'
+        );
 
         expect(pair.binary).toBe(true);
         expect(pair.oldContent).toBeNull();
         expect(pair.newContent).toBeNull();
+    });
+
+    it('reads the old side at the merge base in merge-base mode', async () => {
+        const raw = vi.fn<(args: string[]) => Promise<string>>(async (args) =>
+            args[0] === 'merge-base' ? 'abc123\n' : ''
+        );
+        const show = vi.fn<(options: string[]) => Promise<string>>(async ([spec]) =>
+            spec.startsWith('abc123:') ? 'ancestor\n' : 'new\n'
+        );
+        const service = new GitService('/repo', { raw, show });
+
+        const pair = await service.filePair('main', 'feature', 'src/a.ts', 'merge-base');
+
+        // The old side is the file at the merge base commit, matching what the
+        // changed-file list diffed against (`base...head`), not the base tip.
+        expect(raw).toHaveBeenCalledWith(['merge-base', 'main', 'feature']);
+        expect(show).toHaveBeenCalledWith(['abc123:src/a.ts']);
+        expect(pair.oldContent).toBe('ancestor\n');
+        expect(pair.newContent).toBe('new\n');
+    });
+
+    it('reads the old side at the base tip in direct mode, without a merge-base lookup', async () => {
+        const raw = vi.fn<(args: string[]) => Promise<string>>(async () => '');
+        const show = vi.fn<(options: string[]) => Promise<string>>(async ([spec]) =>
+            spec.startsWith('main:') ? 'base\n' : 'new\n'
+        );
+        const service = new GitService('/repo', { raw, show });
+
+        const pair = await service.filePair('main', 'feature', 'src/a.ts', 'direct');
+
+        expect(raw).not.toHaveBeenCalled();
+        expect(show).toHaveBeenCalledWith(['main:src/a.ts']);
+        expect(pair.oldContent).toBe('base\n');
     });
 });
 
@@ -184,7 +228,7 @@ describe('GitService.filePair images', () => {
         const readBlobBytes = vi.fn<BlobReader>(async (ref) => (ref === 'main' ? oldPng : newPng));
         const service = new GitService('/repo', {}, { readBlobBytes });
 
-        const pair = await service.filePair('main', 'feature', 'assets/logo.png');
+        const pair = await service.filePair('main', 'feature', 'assets/logo.png', 'direct');
 
         expect(pair.image).toBe(true);
         expect(pair.binary).toBe(true);
@@ -199,7 +243,7 @@ describe('GitService.filePair images', () => {
         const readDiskBytes = vi.fn<DiskReader>(async () => newPng);
         const service = new GitService('/repo', {}, { readBlobBytes, readDiskBytes });
 
-        const pair = await service.filePair('main', WORKING_TREE, 'logo.png');
+        const pair = await service.filePair('main', WORKING_TREE, 'logo.png', 'merge-base');
 
         expect(readDiskBytes).toHaveBeenCalledWith('logo.png');
         expect(pair.newImage).toBe(`data:image/png;base64,${newPng.toString('base64')}`);
@@ -209,7 +253,7 @@ describe('GitService.filePair images', () => {
         const readBlobBytes = vi.fn<BlobReader>(async (ref) => (ref === 'main' ? null : newPng));
         const service = new GitService('/repo', {}, { readBlobBytes });
 
-        const pair = await service.filePair('main', 'feature', 'new.png');
+        const pair = await service.filePair('main', 'feature', 'new.png', 'direct');
 
         expect(pair.oldImage).toBeNull();
         expect(pair.newImage).toContain('base64,');
@@ -220,7 +264,7 @@ describe('GitService.filePair images', () => {
         const readBlobBytes = vi.fn<BlobReader>(async () => huge);
         const service = new GitService('/repo', {}, { readBlobBytes });
 
-        const pair = await service.filePair('main', 'feature', 'big.png');
+        const pair = await service.filePair('main', 'feature', 'big.png', 'direct');
 
         expect(pair.image).toBe(false);
         expect(pair.binary).toBe(true);

@@ -205,7 +205,7 @@ export const useComparisonStore = defineStore('comparison', () => {
 
         const token = ++pairRequest;
         try {
-            const result = await api.getFilePair(base.value, head.value, path);
+            const result = await api.getFilePair(base.value, head.value, path, compareMode.value);
             if (token === pairRequest) {
                 selectedPair.value = result;
             }

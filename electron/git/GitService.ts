@@ -248,13 +248,27 @@ class GitService {
         };
     }
 
-    async filePair(base: string, head: string, filePath: string): Promise<FilePair> {
+    async filePair(
+        base: string,
+        head: string,
+        filePath: string,
+        mode: CompareMode
+    ): Promise<FilePair> {
+        // The old side must match what the changed-file list diffed against. In
+        // merge-base mode `base...head` diffs from the merge base, so read the old
+        // side there rather than at the base tip. A working-tree head has no second
+        // ref (rangeArgs is just `[base]`), so it always reads the base tip.
+        const oldRef =
+            mode === 'merge-base' && head !== WORKING_TREE
+                ? await this.mergeBase(base, head)
+                : base;
+
         const imageMime = imageMimeForPath(filePath);
         if (imageMime) {
-            return this.imagePair(base, head, filePath, imageMime);
+            return this.imagePair(oldRef, head, filePath, imageMime);
         }
 
-        const oldContent = await this.contentAt(base, filePath);
+        const oldContent = await this.contentAt(oldRef, filePath);
         const newContent =
             head === WORKING_TREE
                 ? await this.diskContent(filePath)
@@ -280,8 +294,13 @@ class GitService {
     // instead. Both sides are inlined as base64 data URIs (a missing side is null,
     // for an add or a delete). An image past the size cap drops back to the plain
     // binary notice (image false, no data URIs) so a huge payload isn't shipped.
-    async imagePair(base: string, head: string, filePath: string, mime: string): Promise<FilePair> {
-        const oldBytes = await this.readBlobBytes(base, filePath);
+    async imagePair(
+        oldRef: string,
+        head: string,
+        filePath: string,
+        mime: string
+    ): Promise<FilePair> {
+        const oldBytes = await this.readBlobBytes(oldRef, filePath);
         const newBytes =
             head === WORKING_TREE
                 ? await this.readDiskBytes(filePath)
@@ -313,6 +332,19 @@ class GitService {
         }
 
         return [mode === 'direct' ? `${base}..${head}` : `${base}...${head}`];
+    }
+
+    // The commit where base and head last diverged, i.e. the old side of a
+    // three-dot (`base...head`) diff. Falls back to the base tip when there is no
+    // common ancestor (unrelated histories) so the diff still renders instead of
+    // throwing.
+    async mergeBase(base: string, head: string): Promise<string> {
+        try {
+            const out = await this.git.raw(['merge-base', base, head]);
+            return out.trim() || base;
+        } catch {
+            return base;
+        }
     }
 
     // File content at a committed ref, or null when the path does not exist there

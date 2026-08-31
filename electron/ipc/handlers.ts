@@ -140,8 +140,8 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
         requireRepo().changedFiles(base, head, mode)
     );
 
-    handle('git:file-pair', (base: string, head: string, filePath: string) =>
-        requireRepo().filePair(base, head, filePath)
+    handle('git:file-pair', (base: string, head: string, filePath: string, mode: CompareMode) =>
+        requireRepo().filePair(base, head, filePath, mode)
     );
 }
 

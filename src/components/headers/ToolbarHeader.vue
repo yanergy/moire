@@ -12,9 +12,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 const comparison = useComparisonStore();
 const ui = useUiStore();
 
-const compareOptions: { value: CompareMode; label: string }[] = [
-    { value: 'merge-base', label: 'merge-base' },
-    { value: 'direct', label: 'direct' },
+const compareOptions: { value: CompareMode; label: string; tooltip: string }[] = [
+    {
+        value: 'merge-base',
+        label: 'merge-base',
+        tooltip:
+            'Compare head to where it branched from base (the merge base), showing only the changes head introduces. Matches what a GitHub pull request shows.',
+    },
+    {
+        value: 'direct',
+        label: 'direct',
+        tooltip:
+            'Compare the base and head tips directly. Commits added to base after head branched off also appear as changes.',
+    },
 ];
 
 const viewOptions: { value: ViewMode; label: string }[] = [

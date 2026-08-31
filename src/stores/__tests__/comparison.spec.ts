@@ -338,9 +338,14 @@ describe('comparison store', () => {
                 getChangedFiles: vi
                     .fn<(base: string, head: string, mode: CompareMode) => Promise<ChangedFile[]>>()
                     .mockResolvedValue(CHANGED),
-                getFilePair: vi.fn<(base: string, head: string, path: string) => Promise<FilePair>>(
-                    (_base, _head, path) => Promise.resolve(pairFor(path))
-                ),
+                getFilePair: vi.fn<
+                    (
+                        base: string,
+                        head: string,
+                        path: string,
+                        mode: CompareMode
+                    ) => Promise<FilePair>
+                >((_base, _head, path) => Promise.resolve(pairFor(path))),
                 ...overrides,
             };
             window.api = api as unknown as Window['api'];
@@ -499,7 +504,12 @@ describe('comparison store', () => {
             await store.openRecent('/repos/moire');
             await flushPromises();
 
-            expect(api.getFilePair).toHaveBeenCalledWith('main', 'WORKING TREE', 'src/app.ts');
+            expect(api.getFilePair).toHaveBeenCalledWith(
+                'main',
+                'WORKING TREE',
+                'src/app.ts',
+                'merge-base'
+            );
             expect(store.selectedPair.path).toBe('src/app.ts');
             expect(store.selectedPair.newContent).toBe('new src/app.ts');
         });
@@ -587,7 +597,12 @@ describe('comparison store', () => {
             store.selectFile('src/lib/util.ts');
             await flushPromises();
 
-            expect(api.getFilePair).toHaveBeenCalledWith('main', 'WORKING TREE', 'src/lib/util.ts');
+            expect(api.getFilePair).toHaveBeenCalledWith(
+                'main',
+                'WORKING TREE',
+                'src/lib/util.ts',
+                'merge-base'
+            );
             expect(store.selectedPair.path).toBe('src/lib/util.ts');
         });
 
@@ -603,7 +618,12 @@ describe('comparison store', () => {
             store.setBase('develop');
             await flushPromises();
 
-            expect(api.getFilePair).toHaveBeenCalledWith('develop', 'WORKING TREE', 'src/app.ts');
+            expect(api.getFilePair).toHaveBeenCalledWith(
+                'develop',
+                'WORKING TREE',
+                'src/app.ts',
+                'merge-base'
+            );
         });
 
         it('drops a stale file-pair response so the latest selection wins', async () => {
