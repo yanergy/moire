@@ -17,10 +17,63 @@ interface Particle {
     color: string;
 }
 
+// A short synthesized party-horn toot: a reedy sawtooth that bends up on the
+// onset and wobbles, shaped by a quick envelope. Best-effort — no-ops without Web
+// Audio (e.g. under test) and stays silent if the context can't be resumed.
+function playPartyHorn(): void {
+    const Ctx = window.AudioContext;
+    if (!Ctx) {
+        return;
+    }
+
+    try {
+        const ctx = new Ctx();
+        void ctx.resume().catch(() => {});
+        const t = ctx.currentTime;
+        const dur = 0.5;
+
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(300, t);
+        osc.frequency.exponentialRampToValueAtTime(560, t + 0.1);
+        osc.frequency.linearRampToValueAtTime(500, t + dur);
+
+        // A little reed wobble on the pitch.
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 22;
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 18;
+        lfo.connect(lfoGain).connect(osc.frequency);
+
+        // Nasal, buzzy timbre.
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1100;
+        filter.Q.value = 0.9;
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
+        gain.gain.setValueAtTime(0.2, t + dur - 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+
+        osc.connect(filter).connect(gain).connect(ctx.destination);
+        osc.start(t);
+        lfo.start(t);
+        osc.stop(t + dur);
+        lfo.stop(t + dur);
+        osc.onended = () => void ctx.close();
+    } catch {
+        // Audio unavailable or blocked; the visual flourish still runs.
+    }
+}
+
 export function celebrate(): void {
     if (typeof document === 'undefined' || typeof requestAnimationFrame !== 'function') {
         return;
     }
+
+    playPartyHorn();
 
     const canvas = document.createElement('canvas');
     let context: CanvasRenderingContext2D | null = null;
