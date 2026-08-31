@@ -56,18 +56,8 @@ a reasonable choice for unit tests, but there is no integration or end-to-end la
 
 ---
 
-## Low severity and defensive
+## Status
 
-### L2. The repo watcher is never stopped on quit
-
-`electron/watcher/RepoWatcher.ts:253` exposes `stopWatchingRepo`, but `electron/main.ts` never calls
-it on `before-quit`; the watcher is only ever replaced when a new repo opens. The OS reclaims the
-handles at exit, so this is harmless in practice, but the teardown path is incomplete.
-
----
-
-## Suggested priority
-
-1. A2 (Monaco bundle size): the largest efficiency win for the packaged app.
-2. The `settings.ts` and `handlers.ts` test gaps: the highest-value untested logic.
-3. Everything else as cleanup.
+Every finding from this review has been actioned: the bugs, the inconsistencies, the antipatterns,
+the test-coverage gaps, and the low-severity hardening. What remains is deliberate and documented
+above: the excluded bootstrap/worker wiring, and the absence of an integration/end-to-end layer.

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, nativeImage, shell } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers, isGitAvailable, getCurrentRepoPath } from './ipc/handlers';
+import { stopWatchingRepo } from './watcher/RepoWatcher';
 import { installAppMenu } from './menu';
 import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
 import { restoreWindowState, trackWindowState } from './window-state';
@@ -120,3 +121,8 @@ app.on('activate', () => {
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 });
+
+// Close the repo watcher's file handles on the way out. It is otherwise only ever
+// replaced when a new repo opens, so a clean quit would leave the last one open
+// (the OS reclaims it anyway, but the teardown path should be complete).
+app.on('before-quit', () => stopWatchingRepo());
