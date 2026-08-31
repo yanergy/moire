@@ -31,21 +31,6 @@ Resolved since the previous review:
 
 ---
 
-## Antipatterns and smells
-
-### A2. Monaco bundles every language grammar and all workers
-
-`src/components/diff/DiffViewer.vue:2` uses `import * as monaco from 'monaco-editor'`, which pulls
-the full editor: roughly 90 language files plus four workers (ts.worker about 5.9 MB, css.worker
-about 1 MB, html.worker about 720 KB, json.worker about 410 KB). The app supports about 13
-languages. This inflates the packaged app significantly. Import from
-`monaco-editor/esm/vs/editor/editor.api` with an explicit language allowlist, or use
-`vite-plugin-monaco-editor`. When trimming, the allowlist must cover every id the app maps in
-`GitService.LANGUAGE_BY_EXTENSION` (typescript, javascript, html, xml, json, css, scss, less,
-markdown, yaml, shell, php, ini, dockerfile), or those file types silently fall back to plaintext.
-
----
-
 ## Test coverage ("make sure every system is tested")
 
 The suite is genuinely good: the parsers, the watcher, `GitService`, the menu builder, `theme`, and

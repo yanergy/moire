@@ -1,4 +1,4 @@
-import * as monaco from 'monaco-editor';
+import * as monaco from '@/lib/monaco';
 
 // Two Monaco themes tuned to the app palette so the editor doesn't clash with
 // the surrounding chrome. Both inherit token colors from Monaco's stock

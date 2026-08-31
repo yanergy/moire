@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import * as monaco from 'monaco-editor';
+import * as monaco from '@/lib/monaco';
 import { onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue';
 import { monacoThemeFor } from '@/lib/monaco-theme';
 import type { ViewMode } from '@/shared/types';
