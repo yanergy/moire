@@ -60,12 +60,6 @@ Selecting a file, toggling a folder, and marking viewed are all mouse-only. A `<
 the interactive checkbox, but that does not preclude adding `tabindex`, roles, and Enter or Space
 handling.
 
-### A5. `vueDevTools()` is registered unconditionally
-
-`vite.config.ts:14`. The plugin is not limited to `command === 'serve'`. Recent versions self-limit
-to dev, so the practical impact is probably nil, but relying on that is fragile. Guard it
-explicitly. (Low confidence; flagged for verification rather than as a confirmed defect.)
-
 ### A7. Minor type imprecisions in the converted backend
 
 Surfaced by the TypeScript conversion, all cosmetic (`type-check` passes):

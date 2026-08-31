@@ -7,11 +7,14 @@ import electron from 'vite-plugin-electron/simple';
 import tailwindcss from '@tailwindcss/vite';
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
     base: './',
     plugins: [
         vue(),
-        vueDevTools(),
+        // Dev-server only: the Vue DevTools plugin has no place in a production
+        // build. Recent versions self-limit, but gating it explicitly keeps that
+        // from being load-bearing.
+        ...(command === 'serve' ? [vueDevTools()] : []),
         tailwindcss(),
         electron({
             main: { entry: 'electron/main.ts' },
@@ -34,4 +37,4 @@ export default defineConfig({
             '@': fileURLToPath(new URL('./src', import.meta.url)),
         },
     },
-});
+}));
