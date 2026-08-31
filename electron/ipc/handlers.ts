@@ -5,7 +5,7 @@
 import path from 'node:path';
 import { ipcMain, dialog } from 'electron';
 import { simpleGit, CheckRepoActions } from 'simple-git';
-import { GitService } from '../git/GitService';
+import { GitService, type CompareMode } from '../git/GitService';
 import { watchRepo } from '../watcher/RepoWatcher';
 import {
     getRecentRepos,
@@ -16,8 +16,6 @@ import {
 } from '../settings';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
-
-type CompareMode = 'merge-base' | 'direct';
 
 // ipcMain.handle that logs a handler rejection before it propagates. A git
 // operation that fails (a bad ref, a repo that moved) otherwise surfaces only as

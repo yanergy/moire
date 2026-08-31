@@ -4,6 +4,9 @@
 // neither side redefines a shape.
 
 export type FileStatus = 'A' | 'M' | 'D' | 'R';
+// The renderer's copy of the compare-mode union. The backend keeps its own in
+// electron/git/GitService.ts (the process split forbids sharing across it); keep
+// the two in sync.
 export type CompareMode = 'merge-base' | 'direct';
 export type ViewMode = 'split' | 'unified';
 // The concrete theme the UI resolves to. `ThemePreference` is what the user

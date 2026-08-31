@@ -66,13 +66,6 @@ handling.
 to dev, so the practical impact is probably nil, but relying on that is fragile. Guard it
 explicitly. (Low confidence; flagged for verification rather than as a confirmed defect.)
 
-### A6. `CompareMode` is defined in three places
-
-The `'merge-base' | 'direct'` union is declared independently in `electron/git/GitService.ts:22`,
-`electron/ipc/handlers.ts:20`, and `src/shared/types.ts:7`. A change to one will not propagate to
-the others. The renderer and preload already share `src/shared/types.ts`; have the backend import
-from a single source too.
-
 ### A7. Minor type imprecisions in the converted backend
 
 Surfaced by the TypeScript conversion, all cosmetic (`type-check` passes):

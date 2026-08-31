@@ -19,6 +19,9 @@ import {
 
 const execFileAsync = promisify(execFile);
 
+// The backend's single source for the compare-mode union, imported by the IPC
+// handlers. It must match CompareMode in src/shared/types.ts (the renderer's
+// copy); the strict process split means that shared type cannot be imported here.
 type CompareMode = 'merge-base' | 'direct';
 
 interface BranchInfo {
@@ -374,3 +377,4 @@ class GitService {
 }
 
 export { GitService, WORKING_TREE };
+export type { CompareMode };
