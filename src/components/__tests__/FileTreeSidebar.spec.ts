@@ -1,6 +1,6 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import { useComparisonStore } from '@/stores/comparison';
@@ -8,15 +8,19 @@ import { CHANGED_FILES } from '@/components/__tests__/fixtures';
 
 describe('FileTreeSidebar', () => {
     let pinia: Pinia;
+    let wrapper: VueWrapper | null = null;
 
     beforeEach(() => {
         pinia = createPinia();
         setActivePinia(pinia);
     });
 
-    // Tooltip content teleports to document.body; clear it between tests. Also
-    // reset the persisted sidebar width so one test's resize can't leak into another.
+    // Unmount first so no pending scroller/tooltip re-render patches into a wiped
+    // DOM, then clear the teleported tooltip content and the persisted width so one
+    // test can't leak into the next.
     afterEach(() => {
+        wrapper?.unmount();
+        wrapper = null;
         document.body.innerHTML = '';
         try {
             localStorage.clear();
@@ -33,7 +37,8 @@ describe('FileTreeSidebar', () => {
         store.selectFile('electron/git/parsers.ts');
         store.toggleViewed('shared/types.ts');
         store.toggleViewed('src/stores/comparison.ts');
-        return mount(FileTreeSidebar, { global: { plugins: [pinia] } });
+        wrapper = mount(FileTreeSidebar, { global: { plugins: [pinia] } });
+        return wrapper;
     }
 
     it('renders the header with count and viewed tally', () => {
@@ -46,7 +51,7 @@ describe('FileTreeSidebar', () => {
     it('indents a file one level in from its parent folder', async () => {
         const wrapper = mountTree();
         await flushPromises();
-        const fileRow = wrapper.find('div[title="electron/git/parsers.ts"]');
+        const fileRow = wrapper.find('[data-path="electron/git/parsers.ts"]');
 
         expect(fileRow.exists()).toBe(true);
         // depth 2 → 16 + 2 * 15 = 46px
@@ -59,7 +64,7 @@ describe('FileTreeSidebar', () => {
             { path: 'root/one.txt', status: 'M', additions: 1, deletions: 0, binary: false },
             { path: 'root/a/b/c/file.txt', status: 'M', additions: 1, deletions: 0, binary: false },
         ];
-        const wrapper = mount(FileTreeSidebar, {
+        wrapper = mount(FileTreeSidebar, {
             attachTo: document.body,
             global: { plugins: [pinia] },
         });
@@ -78,7 +83,7 @@ describe('FileTreeSidebar', () => {
         expect(document.body.textContent).toContain('root/a/b/c');
     });
 
-    it('shows the rename as old → new in a file row title', async () => {
+    it('reveals a rename as old → new in the file row tooltip on hover', async () => {
         const store = useComparisonStore();
         store.files = [
             {
@@ -90,10 +95,20 @@ describe('FileTreeSidebar', () => {
                 binary: false,
             },
         ];
-        const wrapper = mount(FileTreeSidebar, { global: { plugins: [pinia] } });
+        wrapper = mount(FileTreeSidebar, {
+            attachTo: document.body,
+            global: { plugins: [pinia] },
+        });
         await flushPromises();
 
-        expect(wrapper.find('div[title="src/old.ts → src/new.ts"]').exists()).toBe(true);
+        // The row shows only the new basename; the full old → new path is in the
+        // tooltip, which becomes visible text only once it opens.
+        expect(document.body.textContent).not.toContain('src/old.ts → src/new.ts');
+
+        await wrapper.find('[data-path="src/new.ts"]').trigger('focus');
+        await flushPromises();
+
+        expect(document.body.textContent).toContain('src/old.ts → src/new.ts');
     });
 
     it('selects a file when its row is clicked', async () => {
@@ -101,7 +116,7 @@ describe('FileTreeSidebar', () => {
         await flushPromises();
         const store = useComparisonStore();
 
-        await wrapper.find('div[title="shared/types.ts"]').trigger('click');
+        await wrapper.find('[data-path="shared/types.ts"]').trigger('click');
         expect(store.selectedPath).toBe('shared/types.ts');
     });
 
@@ -110,14 +125,14 @@ describe('FileTreeSidebar', () => {
         await flushPromises();
         const store = useComparisonStore();
 
-        await wrapper.find('div[title="shared/types.ts"]').trigger('keydown', { key: 'Enter' });
+        await wrapper.find('[data-path="shared/types.ts"]').trigger('keydown', { key: 'Enter' });
         expect(store.selectedPath).toBe('shared/types.ts');
     });
 
     it('collapses a folder when its row receives Space (keyboard)', async () => {
         const wrapper = mountTree();
         await flushPromises();
-        expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(true);
+        expect(wrapper.find('[data-path="electron/git/parsers.ts"]').exists()).toBe(true);
 
         const folderRow = wrapper
             .findAll('[data-slot="tooltip-trigger"]')
@@ -125,7 +140,7 @@ describe('FileTreeSidebar', () => {
         await folderRow?.trigger('keydown', { key: ' ' });
         await flushPromises();
 
-        expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(false);
+        expect(wrapper.find('[data-path="electron/git/parsers.ts"]').exists()).toBe(false);
     });
 
     it('resizes the sidebar when its border handle is dragged, clamping to the max', async () => {
@@ -159,7 +174,7 @@ describe('FileTreeSidebar', () => {
         const store = useComparisonStore();
 
         // A key on a row's checkbox must not also fire the row's select action.
-        const checkbox = wrapper.find('div[title="shared/types.ts"]').find('button');
+        const checkbox = wrapper.find('[data-path="shared/types.ts"]').find('button');
         await checkbox.trigger('keydown', { key: 'Enter' });
 
         expect(store.selectedPath).toBe('electron/git/parsers.ts'); // unchanged
@@ -172,7 +187,7 @@ describe('FileTreeSidebar', () => {
         const target = 'electron/git/GitService.ts';
 
         expect(store.isViewed(target)).toBe(false);
-        await wrapper.find(`div[title="${target}"]`).find('button').trigger('click');
+        await wrapper.find(`[data-path="${target}"]`).find('button').trigger('click');
 
         expect(store.isViewed(target)).toBe(true);
         expect(store.selectedPath).toBe('electron/git/parsers.ts');
@@ -219,11 +234,11 @@ describe('FileTreeSidebar', () => {
         // Starts expanded, so the control collapses and its label flips.
         await wrapper.find('[aria-label="Collapse all"]').trigger('click');
         await flushPromises();
-        expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(false);
+        expect(wrapper.find('[data-path="electron/git/parsers.ts"]').exists()).toBe(false);
 
         // Now fully collapsed, so the same control expands.
         await wrapper.find('[aria-label="Expand all"]').trigger('click');
         await flushPromises();
-        expect(wrapper.find('div[title="electron/git/parsers.ts"]').exists()).toBe(true);
+        expect(wrapper.find('[data-path="electron/git/parsers.ts"]').exists()).toBe(true);
     });
 });

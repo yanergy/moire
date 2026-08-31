@@ -93,9 +93,9 @@ onBeforeUnmount(() => {
     window.removeEventListener('pointerup', onResizeEnd);
 });
 
-// The folder tooltip is a slow, deliberate reveal (not the snappy default), shown
-// on every folder row so the full path is always reachable on hover.
-const FOLDER_TOOLTIP_DELAY = 1500;
+// Row tooltips are a slow, deliberate reveal (not the snappy default), shown on
+// every folder and file row so the full path is always reachable on hover.
+const ROW_TOOLTIP_DELAY = 1500;
 
 // The tree is virtualized (vue-virtual-scroller), so every row is one fixed height
 // the scroller uses to place items. Dir and file rows both hold a single 16px line
@@ -269,7 +269,7 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                      button-in-button is invalid) and shadcn has no list-row primitive.
                      A div also has no transition, so the scroller repositioning a row on
                      recycle can't animate the paddingLeft change into a sideways slide. -->
-                <Tooltip v-if="node.kind === 'dir'" :delay-duration="FOLDER_TOOLTIP_DELAY">
+                <Tooltip v-if="node.kind === 'dir'" :delay-duration="ROW_TOOLTIP_DELAY">
                     <TooltipTrigger as-child>
                         <!-- Click toggles the folder open; the checkbox marks every file
                              under it viewed. -->
@@ -321,47 +321,57 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                     </TooltipContent>
                 </Tooltip>
 
-                <!-- Click selects; double-click marks viewed. -->
-                <div
-                    v-else
-                    class="group flex w-full cursor-pointer items-center gap-2 rounded-md pr-4 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moire-ring focus-visible:outline-none"
-                    :class="rowClasses(node)"
-                    :style="rowStyle(node)"
-                    :title="node.oldPath ? `${node.oldPath} → ${node.path}` : node.path"
-                    role="button"
-                    tabindex="0"
-                    :aria-current="node.selected ? 'true' : undefined"
-                    @click="comparison.selectFile(node.path)"
-                    @dblclick="comparison.toggleViewed(node.path)"
-                    @keydown="onFileKey($event, node)"
-                >
-                    <span
-                        class="w-[13px] shrink-0 text-center font-mono text-[11px] font-bold"
-                        :class="STATUS_CLASS[node.status]"
-                    >
-                        {{ node.status }}
-                    </span>
-                    <span class="flex-1 truncate font-mono text-xs" :class="nameClass(node)">
-                        {{ node.name }}
-                    </span>
-                    <span class="font-mono text-[11px] text-moire-add-fg">
-                        {{ node.additions ? '+' + node.additions : '' }}
-                    </span>
-                    <span class="font-mono text-[11px] text-moire-del-fg">
-                        {{ node.deletions ? '−' + node.deletions : '' }}
-                    </span>
-                    <span @click.stop>
-                        <Checkbox
-                            :model-value="node.viewed"
-                            :aria-label="node.viewed ? 'Marked viewed' : 'Mark as viewed'"
-                            class="size-[15px] rounded-sm shadow-none"
-                            :class="checkboxClass(node)"
-                            @update:model-value="comparison.toggleViewed(node.path)"
+                <!-- Click selects; double-click marks viewed. The full path (a rename
+                     shown as old → new) rides in a tooltip, matching the folder rows. -->
+                <Tooltip v-else :delay-duration="ROW_TOOLTIP_DELAY">
+                    <TooltipTrigger as-child>
+                        <div
+                            class="group flex w-full cursor-pointer items-center gap-2 rounded-md pr-4 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moire-ring focus-visible:outline-none"
+                            :class="rowClasses(node)"
+                            :style="rowStyle(node)"
+                            :data-path="node.path"
+                            role="button"
+                            tabindex="0"
+                            :aria-current="node.selected ? 'true' : undefined"
+                            @click="comparison.selectFile(node.path)"
+                            @dblclick="comparison.toggleViewed(node.path)"
+                            @keydown="onFileKey($event, node)"
                         >
-                            <Check :size="11" />
-                        </Checkbox>
-                    </span>
-                </div>
+                            <span
+                                class="w-[13px] shrink-0 text-center font-mono text-[11px] font-bold"
+                                :class="STATUS_CLASS[node.status]"
+                            >
+                                {{ node.status }}
+                            </span>
+                            <span
+                                class="flex-1 truncate font-mono text-xs"
+                                :class="nameClass(node)"
+                            >
+                                {{ node.name }}
+                            </span>
+                            <span class="font-mono text-[11px] text-moire-add-fg">
+                                {{ node.additions ? '+' + node.additions : '' }}
+                            </span>
+                            <span class="font-mono text-[11px] text-moire-del-fg">
+                                {{ node.deletions ? '−' + node.deletions : '' }}
+                            </span>
+                            <span @click.stop>
+                                <Checkbox
+                                    :model-value="node.viewed"
+                                    :aria-label="node.viewed ? 'Marked viewed' : 'Mark as viewed'"
+                                    class="size-[15px] rounded-sm shadow-none"
+                                    :class="checkboxClass(node)"
+                                    @update:model-value="comparison.toggleViewed(node.path)"
+                                >
+                                    <Check :size="11" />
+                                </Checkbox>
+                            </span>
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" class="font-mono">
+                        {{ node.oldPath ? `${node.oldPath} → ${node.path}` : node.path }}
+                    </TooltipContent>
+                </Tooltip>
             </recycle-scroller>
 
             <!-- Drag the right border to resize the panel. Sits over the border so
