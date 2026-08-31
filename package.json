@@ -2,6 +2,7 @@
     "name": "moire",
     "version": "1.0.0",
     "private": true,
+    "license": "MIT",
     "description": "Desktop app for viewing the diff between two branches of a local Git repository.",
     "author": "yanergy",
     "type": "module",
