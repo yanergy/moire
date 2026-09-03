@@ -8,6 +8,9 @@ function makeInnerEditor() {
         revealLineInCenter: vi.fn<(line: number) => void>(),
         revealLine: vi.fn<(line: number) => void>(),
         setPosition: vi.fn<(position: { lineNumber: number; column: number }) => void>(),
+        createDecorationsCollection: vi.fn<() => { set: (d: unknown) => void; clear: () => void }>(
+            () => ({ set: vi.fn<(decorations: unknown) => void>(), clear: vi.fn<() => void>() })
+        ),
     };
 }
 
@@ -47,3 +50,13 @@ export const languages = {
 export const Uri = {
     parse: vi.fn<(value: string) => unknown>(),
 };
+
+// Minimal Range stand-in; DiffViewer builds these for word-level decorations.
+export class Range {
+    constructor(
+        public startLineNumber: number,
+        public startColumn: number,
+        public endLineNumber: number,
+        public endColumn: number
+    ) {}
+}

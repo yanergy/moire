@@ -25,6 +25,8 @@ let modifiedModel: monaco.editor.ITextModel | null = null;
 let diffListener: monaco.IDisposable | null = null;
 let changes: readonly monaco.editor.ILineChange[] = [];
 let changeIndex = -1;
+let originalWordDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
+let modifiedWordDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
 
 function buildModels() {
     if (!editor) {
@@ -37,6 +39,64 @@ function buildModels() {
     modifiedModel = monaco.editor.createModel(props.modified ?? '', props.language);
     editor.setModel({ original: originalModel, modified: modifiedModel });
     changeIndex = -1;
+}
+
+// GitHub highlights only the changed words inside a modified line, never whole
+// added or removed lines. Monaco's own inserted/removed-text background instead
+// paints the full width of every changed line, so the GitHub theme leaves that
+// transparent (see monaco-themes/github.ts) and we draw our own word-level
+// decorations from the char-level diff. `charChanges` exist only for modified
+// lines; pure inserts and deletes have none, so they keep the plain line color,
+// exactly as on github.com. The VS Code style keeps Monaco's native highlight.
+function applyWordHighlights() {
+    if (!originalWordDecorations || !modifiedWordDecorations) {
+        return;
+    }
+
+    if (props.codeStyle !== 'github') {
+        originalWordDecorations.clear();
+        modifiedWordDecorations.clear();
+        return;
+    }
+
+    const original: monaco.editor.IModelDeltaDecoration[] = [];
+    const modified: monaco.editor.IModelDeltaDecoration[] = [];
+    for (const change of changes) {
+        for (const cc of change.charChanges ?? []) {
+            if (
+                cc.modifiedEndLineNumber > cc.modifiedStartLineNumber ||
+                cc.modifiedEndColumn > cc.modifiedStartColumn
+            ) {
+                modified.push({
+                    range: new monaco.Range(
+                        cc.modifiedStartLineNumber,
+                        cc.modifiedStartColumn,
+                        cc.modifiedEndLineNumber,
+                        cc.modifiedEndColumn
+                    ),
+                    options: { inlineClassName: 'moire-word-insert' },
+                });
+            }
+
+            if (
+                cc.originalEndLineNumber > cc.originalStartLineNumber ||
+                cc.originalEndColumn > cc.originalStartColumn
+            ) {
+                original.push({
+                    range: new monaco.Range(
+                        cc.originalStartLineNumber,
+                        cc.originalStartColumn,
+                        cc.originalEndLineNumber,
+                        cc.originalEndColumn
+                    ),
+                    options: { inlineClassName: 'moire-word-delete' },
+                });
+            }
+        }
+    }
+
+    originalWordDecorations.set(original);
+    modifiedWordDecorations.set(modified);
 }
 
 function goTo(direction: 'next' | 'prev') {
@@ -96,12 +156,15 @@ onMounted(() => {
 
     // Theme is a global Monaco setting rather than a per-editor option.
     monaco.editor.setTheme(monacoThemeFor(props.isDark, props.codeStyle));
+    originalWordDecorations = editor.getOriginalEditor().createDecorationsCollection();
+    modifiedWordDecorations = editor.getModifiedEditor().createDecorationsCollection();
     buildModels();
 
     diffListener = editor.onDidUpdateDiff(() => {
         changes = editor?.getLineChanges() ?? [];
         changeIndex = -1;
         emit('update:changeCount', changes.length);
+        applyWordHighlights();
     });
 });
 
@@ -117,7 +180,11 @@ watch(
 
 watch(
     () => [props.isDark, props.codeStyle] as const,
-    ([dark, style]) => monaco.editor.setTheme(monacoThemeFor(dark, style))
+    ([dark, style]) => {
+        monaco.editor.setTheme(monacoThemeFor(dark, style));
+        // Word highlights are GitHub-only, so re-run when the style toggles.
+        applyWordHighlights();
+    }
 );
 
 onBeforeUnmount(() => {
@@ -126,6 +193,9 @@ onBeforeUnmount(() => {
     modifiedModel?.dispose();
     editor?.dispose();
     editor = null;
+    // The collections belong to the now-disposed inner editors; drop the refs.
+    originalWordDecorations = null;
+    modifiedWordDecorations = null;
 });
 
 defineExpose({
@@ -146,5 +216,16 @@ defineExpose({
    VS Code style keeps Monaco's default hatch. */
 .code-style-github :deep(.diagonal-fill) {
     background-color: var(--moire-diff-filler);
+}
+
+/* Word-level highlights for the changed words on a modified line, applied as
+   decorations (see applyWordHighlights). GitHub-only; the classes exist only when
+   that style adds the decorations. */
+.code-style-github :deep(.moire-word-insert) {
+    background-color: var(--moire-word-insert);
+}
+
+.code-style-github :deep(.moire-word-delete) {
+    background-color: var(--moire-word-delete);
 }
 </style>

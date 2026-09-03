@@ -91,6 +91,9 @@
     /* Flat fill for the counterpart side of a change in the GitHub code style
        (DiffViewer replaces Monaco's diagonal hatch with this). GitHub's muted grey. */
     --moire-diff-filler: #f6f8fa;
+    /* Word-level highlight for the changed words on a modified line, GitHub style. */
+    --moire-word-insert: #abf2bc;
+    --moire-word-delete: #ffc9c9;
     --moire-add-fg: #397d43;
     --moire-del-fg: #b03a3a;
     --moire-viewed: rgba(60, 150, 75, 0.12);
@@ -278,6 +281,9 @@ body {
     /* Flat fill for the counterpart side of a change in the GitHub code style; the
        value GitHub renders there in dark mode. */
     --moire-diff-filler: #151a1f;
+    /* Word-level highlight for the changed words on a modified line; GitHub dark. */
+    --moire-word-insert: #254b2b;
+    --moire-word-delete: #682d2a;
     --moire-add-fg: #6a9955;
     --moire-del-fg: #c96a6a;
     --moire-viewed: rgba(80, 160, 90, 0.13);
