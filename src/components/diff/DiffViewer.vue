@@ -209,6 +209,19 @@ defineExpose({
 </template>
 
 <style scoped>
+/* Monaco draws the text selection and the diff line backgrounds as siblings in the
+   same overlay layer, so an opaque added/removed line background paints over the
+   selection and hides it on changed lines. Isolate the overlay into its own
+   stacking context, then lift the selection within it, above the line backgrounds
+   but still below the text (which lives in a separate layer). */
+:deep(.view-overlays) {
+    isolation: isolate;
+}
+
+:deep(.view-overlays .selected-text) {
+    z-index: 1;
+}
+
 /* GitHub renders the counterpart side of an added/removed block as a flat fill,
    not Monaco's diagonal hatch (the GitHub theme turns the hatch off via
    diffEditor.diagonalFill). Monaco's internal .diagonal-fill has no Tailwind hook,
