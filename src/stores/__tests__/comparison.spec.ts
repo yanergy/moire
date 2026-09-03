@@ -902,4 +902,89 @@ describe('comparison store', () => {
             expect(store.recentRepos).toEqual([]);
         });
     });
+
+    describe('cross-file change navigation', () => {
+        // The prototype set in sidebar display order: directories first, then
+        // files, matching the tree walk rather than git's raw path order.
+        const DISPLAY_ORDER = [
+            'electron/git/parsers.ts',
+            'electron/git/GitService.ts',
+            'electron/ipc/handlers.ts',
+            'electron/watcher/RepoWatcher.ts',
+            'shared/types.ts',
+            'src/components/DiffPane.vue',
+            'src/components/FileTree.vue',
+            'src/components/LegacyDiff.vue',
+            'src/stores/comparison.ts',
+            'tests/parsers.spec.ts',
+        ];
+
+        it('orders paths the way the tree renders them, not git path order', () => {
+            const store = seededStore();
+            expect(store.orderedPaths).toEqual(DISPLAY_ORDER);
+        });
+
+        it('narrows the order to the filter box', () => {
+            const store = seededStore();
+            store.setTreeFilter('electron');
+            expect(store.orderedPaths).toEqual([
+                'electron/git/parsers.ts',
+                'electron/git/GitService.ts',
+                'electron/ipc/handlers.ts',
+                'electron/watcher/RepoWatcher.ts',
+            ]);
+        });
+
+        it('moves to the next and previous file, recording the edge to land on', () => {
+            const store = seededStore();
+            store.selectFile('electron/ipc/handlers.ts');
+
+            expect(store.goToAdjacentFile('next')).toBe(true);
+            expect(store.selectedPath).toBe('electron/watcher/RepoWatcher.ts');
+            expect(store.pendingChangeEdge).toBe('first');
+
+            expect(store.goToAdjacentFile('prev')).toBe(true);
+            expect(store.selectedPath).toBe('electron/ipc/handlers.ts');
+            expect(store.pendingChangeEdge).toBe('last');
+        });
+
+        it('wraps around at both ends of the set', () => {
+            const store = seededStore();
+
+            store.selectFile('tests/parsers.spec.ts'); // last file
+            store.goToAdjacentFile('next');
+            expect(store.selectedPath).toBe('electron/git/parsers.ts'); // first file
+
+            store.goToAdjacentFile('prev');
+            expect(store.selectedPath).toBe('tests/parsers.spec.ts'); // back to last
+        });
+
+        it('reports no switch and sets no edge for a single-file set', () => {
+            const store = useComparisonStore();
+            store.files = [
+                { path: 'only.ts', status: 'M', additions: 1, deletions: 0, binary: false },
+            ];
+            store.selectFile('only.ts');
+
+            expect(store.goToAdjacentFile('next')).toBe(false);
+            expect(store.selectedPath).toBe('only.ts');
+            expect(store.pendingChangeEdge).toBeNull();
+        });
+
+        it('clears a pending edge when a file is picked manually', () => {
+            const store = seededStore();
+            store.goToAdjacentFile('next');
+            expect(store.pendingChangeEdge).not.toBeNull();
+
+            store.selectFile('shared/types.ts');
+            expect(store.pendingChangeEdge).toBeNull();
+        });
+
+        it('clears the pending edge on demand', () => {
+            const store = seededStore();
+            store.goToAdjacentFile('next');
+            store.clearChangeEdge();
+            expect(store.pendingChangeEdge).toBeNull();
+        });
+    });
 });

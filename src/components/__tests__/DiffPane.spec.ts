@@ -6,9 +6,10 @@ import LargeFileGate from '@/components/diff/LargeFileGate.vue';
 import BinaryFileNotice from '@/components/diff/BinaryFileNotice.vue';
 import ImagePreview from '@/components/diff/ImagePreview.vue';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
+import SelectionBanner from '@/components/diff/SelectionBanner.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import type { FilePair } from '@/shared/types';
+import type { ChangedFile, FilePair } from '@/shared/types';
 
 const imagePair: FilePair = {
     path: 'logo.png',
@@ -112,5 +113,88 @@ describe('DiffPane large-file gate', () => {
         expect(header).toContain('main');
         expect(header).toContain('feature');
         expect(header).not.toContain('main...feature');
+    });
+});
+
+const textFile = (path: string): ChangedFile => ({
+    path,
+    status: 'M',
+    additions: 1,
+    deletions: 0,
+    binary: false,
+});
+
+const textPair = (path: string): FilePair => ({
+    path,
+    oldContent: `old ${path}`,
+    newContent: `new ${path}`,
+    language: 'typescript',
+    binary: false,
+    tooLarge: false,
+    sizeBytes: 0,
+});
+
+// The Monaco stub never fires a diff update, so a mounted viewer holds no changes:
+// next()/prev() report the boundary right away and navigation crosses files, which
+// is exactly the case this feature (issue #2) targets.
+describe('DiffPane cross-file change navigation', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia());
+        window.api = {
+            getFilePair: vi
+                .fn<(b: string, h: string, path: string) => Promise<FilePair>>()
+                .mockImplementation((_b, _h, path) => Promise.resolve(textPair(path))),
+        } as unknown as Window['api'];
+    });
+    afterEach(() => {
+        delete window.api;
+    });
+
+    async function seededPane(selected: string) {
+        const store = useComparisonStore();
+        store.base = 'main';
+        store.files = [textFile('a.ts'), textFile('b.ts')];
+        store.selectFile(selected);
+        await flushPromises();
+        const wrapper = mount(DiffPane);
+        return { store, wrapper };
+    }
+
+    it('crosses to the next file when next is pressed at the end of the current file', async () => {
+        const { store, wrapper } = await seededPane('a.ts');
+        expect(wrapper.findComponent(DiffViewer).exists()).toBe(true);
+
+        wrapper.findComponent(SelectionBanner).vm.$emit('next');
+        await flushPromises();
+
+        expect(store.selectedPath).toBe('b.ts');
+        expect(store.pendingChangeEdge).toBe('first');
+    });
+
+    it('wraps to the last file when prev is pressed on the first file', async () => {
+        const { store, wrapper } = await seededPane('a.ts');
+
+        wrapper.findComponent(SelectionBanner).vm.$emit('prev');
+        await flushPromises();
+
+        expect(store.selectedPath).toBe('b.ts');
+        expect(store.pendingChangeEdge).toBe('last');
+    });
+
+    it('crosses files from a non-text pane, where there is no viewer to step through', async () => {
+        const store = useComparisonStore();
+        store.base = 'main';
+        store.files = [textFile('logo.png'), textFile('b.ts')];
+        store.selectFile('logo.png');
+        store.selectedPair = { ...imagePair, path: 'logo.png' };
+        const wrapper = mount(DiffPane);
+        // The image preview claims the pane, not the diff viewer.
+        expect(wrapper.findComponent(DiffViewer).exists()).toBe(false);
+
+        wrapper.findComponent(SelectionBanner).vm.$emit('next');
+        await flushPromises();
+
+        expect(store.selectedPath).toBe('b.ts');
+        expect(store.pendingChangeEdge).toBe('first');
     });
 });

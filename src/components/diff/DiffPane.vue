@@ -25,6 +25,29 @@ const showViewer = computed(
 // following the view toggle. An image preview is always split, so it keeps the
 // split header regardless of the toggle, which is then a no-op while on an image.
 const splitHeader = computed(() => ui.viewMode === 'split' || comparison.showImagePreview);
+
+// Change navigation walks the changes within the open file, then crosses into the
+// adjacent file at either boundary (issue #2).
+function navigate(direction: 'next' | 'prev') {
+    // With a text diff on screen, step through this file's changes first. The
+    // viewer returns false at the file boundary (or when it has no changes); only
+    // then do we cross into the next file. A non-text pane (image, binary, or the
+    // size gate) has no viewer to step through, so we cross straight away.
+    if (showViewer.value && diffRef.value) {
+        const moved = direction === 'next' ? diffRef.value.next() : diffRef.value.prev();
+        if (moved) {
+            return;
+        }
+    }
+
+    // A real switch reloads the pair, and the viewer lands on the near edge once
+    // its diff updates (driven by pendingChangeEdge). A single-file set wraps onto
+    // itself with no reload, so wrap within the mounted viewer directly.
+    const switched = comparison.goToAdjacentFile(direction);
+    if (!switched && diffRef.value) {
+        diffRef.value.goToEdge(direction === 'next' ? 'first' : 'last');
+    }
+}
 </script>
 
 <template>
@@ -33,8 +56,8 @@ const splitHeader = computed(() => ui.viewMode === 'split' || comparison.showIma
             :file="comparison.selectedFile"
             :viewed="comparison.isViewed(comparison.selectedFile.path)"
             :change-count="showViewer ? changeCount : 0"
-            @prev="diffRef?.prev()"
-            @next="diffRef?.next()"
+            @prev="navigate('prev')"
+            @next="navigate('next')"
             @toggle-viewed="comparison.toggleViewed(comparison.selectedFile.path)"
         />
 
@@ -82,7 +105,9 @@ const splitHeader = computed(() => ui.viewMode === 'split' || comparison.showIma
             :view-mode="ui.viewMode"
             :is-dark="ui.isDark"
             :code-style="ui.codeStyle"
+            :pending-edge="comparison.pendingChangeEdge"
             @update:change-count="changeCount = $event"
+            @edge-consumed="comparison.clearChangeEdge()"
         />
 
         <status-bar />

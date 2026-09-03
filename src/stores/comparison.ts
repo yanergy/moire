@@ -150,6 +150,12 @@ export const useComparisonStore = defineStore('comparison', () => {
     const treeFilter = ref('');
     const collapsed = ref<Record<string, boolean>>({});
 
+    // One-shot instruction for the diff viewer set when change navigation crosses
+    // into another file: which edge of the newly selected file to land on ('first'
+    // change when moving forward, 'last' when moving back). The viewer reads it
+    // once its diff is computed and then clears it; null the rest of the time.
+    const pendingChangeEdge = ref<'first' | 'last' | null>(null);
+
     // When the change set was last read from disk (epoch ms), or null when no
     // repo is loaded. Drives the status bar's "synced N ago"; the repo watcher
     // re-reads on change, so this doubles as a liveness signal.
@@ -348,8 +354,63 @@ export const useComparisonStore = defineStore('comparison', () => {
         return out;
     });
 
+    // Changed-file paths in the sidebar's display order (directories first, then
+    // files, matching the tree walk in treeNodes), narrowed to the filter box.
+    // Cross-file change navigation walks this so "next file" follows what the user
+    // sees rather than git's raw path order. Collapsed folders are still included:
+    // folding is a display convenience, and every file in the set stays reachable.
+    const orderedPaths = computed<string[]>(() => {
+        const root = buildTree(shownFiles.value);
+        const paths: string[] = [];
+        const walk = (node: RawDir) => {
+            for (const child of node.dirs.values()) {
+                walk(child);
+            }
+            for (const file of node.files) {
+                paths.push(file.path);
+            }
+        };
+
+        walk(root);
+        return paths;
+    });
+
     function selectFile(path: string) {
+        // A manual pick lands at the top of the file; drop any pending cross-file
+        // edge so it can't hijack this selection with an unexpected jump.
+        pendingChangeEdge.value = null;
         selectedPath.value = path;
+    }
+
+    // Move the selection to the next/previous file in display order, wrapping at
+    // the ends, and record which change edge the viewer should land on. Returns
+    // whether the selection actually changed: a single-file set wraps onto itself,
+    // so the caller wraps within the current viewer instead. The pending edge is
+    // set only on a real switch, since a no-op switch triggers no diff reload for
+    // the viewer to consume it on.
+    function goToAdjacentFile(direction: 'next' | 'prev'): boolean {
+        const paths = orderedPaths.value;
+        if (paths.length === 0) {
+            return false;
+        }
+
+        const current = paths.indexOf(selectedPath.value);
+        const step = direction === 'next' ? 1 : -1;
+        // With nothing selected, step forward onto the first file and back onto
+        // the last, treating the position as sitting before the list.
+        const from = current === -1 ? (direction === 'next' ? -1 : 0) : current;
+        const nextPath = paths[(from + step + paths.length) % paths.length]!;
+        if (nextPath === selectedPath.value) {
+            return false;
+        }
+
+        pendingChangeEdge.value = direction === 'next' ? 'first' : 'last';
+        selectedPath.value = nextPath;
+        return true;
+    }
+
+    function clearChangeEdge() {
+        pendingChangeEdge.value = null;
     }
 
     function toggleViewed(path: string) {
@@ -629,6 +690,10 @@ export const useComparisonStore = defineStore('comparison', () => {
     // repo is open, and swallows a bad range (e.g. an unresolvable ref) rather
     // than surfacing an unhandled rejection from a fire-and-forget setter.
     async function loadChangedFiles() {
+        // A fresh change set (range change, refresh, repo switch) invalidates any
+        // queued cross-file landing, so it can't fire on a file it wasn't set for.
+        pendingChangeEdge.value = null;
+
         const api = window.api;
         if (!api || !base.value) {
             files.value = [];
@@ -715,6 +780,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         viewed,
         treeFilter,
         collapsed,
+        pendingChangeEdge,
         lastSyncedAt,
         isViewed,
         localBranches,
@@ -731,8 +797,11 @@ export const useComparisonStore = defineStore('comparison', () => {
         showImagePreview,
         loadLargeDiff,
         treeNodes,
+        orderedPaths,
         allCollapsed,
         selectFile,
+        goToAdjacentFile,
+        clearChangeEdge,
         toggleViewed,
         toggleDirViewed,
         toggleDir,

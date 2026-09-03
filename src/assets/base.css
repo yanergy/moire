@@ -94,6 +94,11 @@
     /* Word-level highlight for the changed words on a modified line, GitHub style. */
     --moire-word-insert: #ade8b7;
     --moire-word-delete: #f9cac5;
+    /* Marks the change prev/next landed on, confined to the line-number margin so it
+       never touches the diff line backgrounds. Amber (apart from the green/red diff
+       colors): a solid left edge bar plus a soft tint behind the change's numbers. */
+    --moire-active-change: #d98324;
+    --moire-active-change-bg: rgba(217, 131, 36, 0.2);
     --moire-add-fg: #397d43;
     --moire-del-fg: #b03a3a;
     --moire-viewed: rgba(60, 150, 75, 0.12);
@@ -284,6 +289,9 @@ body {
     /* Word-level highlight for the changed words on a modified line; GitHub dark. */
     --moire-word-insert: #254b2b;
     --moire-word-delete: #682d2a;
+    /* Active-change gutter marker for prev/next navigation; amber, tuned for dark. */
+    --moire-active-change: #e0a53a;
+    --moire-active-change-bg: rgba(224, 165, 58, 0.2);
     --moire-add-fg: #6a9955;
     --moire-del-fg: #c96a6a;
     --moire-viewed: rgba(80, 160, 90, 0.13);

@@ -79,6 +79,8 @@ last branch range are remembered per repository.
 - Split and unified layouts, powered by the Monaco editor.
 - A virtualized file tree that stays smooth on large change sets, with per-file and per-folder
   "mark viewed" progress.
+- Next and previous change navigation that steps through the open file, then crosses into the
+  adjacent file (in sidebar order) once a boundary is reached, wrapping around the whole change set.
 - Rename detection, binary-file notices, and inline image previews.
 - A large-file gate so oversized files never freeze the UI.
 - Recent-repository list and a native folder picker.
@@ -127,7 +129,7 @@ Tracked as open issues on GitHub.
 
 - [x] Diff viewer colors that match GitHub's diff view. 
   ([#1](https://github.com/yanergy/moire/issues/1))
-- [ ] Next and previous change navigation that crosses into the next file once the end of the current
+- [x] Next and previous change navigation that crosses into the next file once the end of the current
   file is reached.
   ([#2](https://github.com/yanergy/moire/issues/2))
 - [ ] A PR viewer: when a PR exists for the selected branches, retrieve it and show its information
