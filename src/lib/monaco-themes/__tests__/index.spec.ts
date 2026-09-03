@@ -42,7 +42,7 @@ describe('defineMonacoThemes', () => {
         // The shared surface is the default (VS Code keeps it), while a style may
         // override surface keys: GitHub dark swaps in GitHub's near-black canvas.
         expect(registered['moire-vscode-dark']!.colors!['editor.background']).toBe('#1f1f22');
-        expect(registered['moire-github-dark']!.colors!['editor.background']).toBe('#0d1117');
+        expect(registered['moire-github-dark']!.colors!['editor.background']).toBe('#101216');
 
         // Each code style contributes its own diff colors.
         expect(registered['moire-github-light']!.colors!['diffEditor.insertedLineBackground']).toBe(

@@ -120,13 +120,14 @@ Track bugs and limitations here.
   certificate, which this project does not use.
 - **Windows and Linux packaged builds are unverified.** The `electron-builder` config targets
   them, but the app has only been built and run on macOS so far.
-- **The GitHub dark code style cannot perfectly match github.com's word highlights.** The
-  `View > Code Style > GitHub` line, gutter, and canvas colors are taken directly from github.com's
-  rendered diff, so they match. The one unavoidable difference: GitHub reserves its stronger
-  highlight for the changed words inside a modified line, but Monaco paints that word background
-  across the full width of every added or removed line. Using GitHub's real word color there would
-  over-saturate whole added blocks, so it is kept faint, which makes intraline word emphasis quieter
-  than on github.com. Tracked in issue [#1](https://github.com/yanergy/moire/issues/1).
+- **The GitHub dark code style has no intraline word highlight.** The `View > Code Style > GitHub`
+  row, gutter, and canvas colors are GitHub's exact rendered dark values, verified pixel for pixel
+  (added row `#15221c`, removed row `#20181a`, canvas `#101216`). The one thing it drops: GitHub
+  paints a brighter box on just the changed words inside a modified line, but Monaco paints that word
+  background across the full width of every added or removed line, so using GitHub's word color would
+  re-saturate whole blocks. It is therefore left transparent, which keeps full lines exact but means
+  changed words inside a modified line are not emphasized. Tracked in issue
+  [#1](https://github.com/yanergy/moire/issues/1).
 
 ## Planned features
 
