@@ -74,7 +74,10 @@ function applyWordHighlights() {
                         cc.modifiedEndLineNumber,
                         cc.modifiedEndColumn
                     ),
-                    options: { inlineClassName: 'moire-word-insert' },
+                    // `className` (not inlineClassName) renders the highlight in the
+                    // overlay layer, below the selection, so a selection over a
+                    // changed word shows above it rather than behind.
+                    options: { className: 'moire-word-insert' },
                 });
             }
 
@@ -89,7 +92,7 @@ function applyWordHighlights() {
                         cc.originalEndLineNumber,
                         cc.originalEndColumn
                     ),
-                    options: { inlineClassName: 'moire-word-delete' },
+                    options: { className: 'moire-word-delete' },
                 });
             }
         }
