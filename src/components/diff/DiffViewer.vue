@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import * as monaco from '@/lib/monaco';
 import { onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue';
-import { monacoThemeFor } from '@/lib/monaco-theme';
-import type { ViewMode } from '@/shared/types';
+import { monacoThemeFor } from '@/lib/monaco-themes';
+import type { CodeStyle, ViewMode } from '@/shared/types';
 
 const props = defineProps<{
     original: string | null;
@@ -10,6 +10,7 @@ const props = defineProps<{
     language: string;
     viewMode: ViewMode;
     isDark: boolean;
+    codeStyle: CodeStyle;
 }>();
 
 const emit = defineEmits<{
@@ -94,7 +95,7 @@ onMounted(() => {
     });
 
     // Theme is a global Monaco setting rather than a per-editor option.
-    monaco.editor.setTheme(monacoThemeFor(props.isDark));
+    monaco.editor.setTheme(monacoThemeFor(props.isDark, props.codeStyle));
     buildModels();
 
     diffListener = editor.onDidUpdateDiff(() => {
@@ -115,8 +116,8 @@ watch(
 );
 
 watch(
-    () => props.isDark,
-    (dark) => monaco.editor.setTheme(monacoThemeFor(dark))
+    () => [props.isDark, props.codeStyle] as const,
+    ([dark, style]) => monaco.editor.setTheme(monacoThemeFor(dark, style))
 );
 
 onBeforeUnmount(() => {

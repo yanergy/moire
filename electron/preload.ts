@@ -36,6 +36,15 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('flourishes:changed', listener);
         return () => ipcRenderer.removeListener('flourishes:changed', listener);
     },
+    // The diff-color palette, owned by main and set from the View → Code Style
+    // menu. `getCodeStyle` reads the stored value on launch; `onCodeStyleChanged`
+    // fires when the menu selection changes. Returns an unsubscribe function.
+    getCodeStyle: () => ipcRenderer.invoke('code-style:get'),
+    onCodeStyleChanged: (callback: (style: string) => void) => {
+        const listener = (_event: IpcRendererEvent, style: string) => callback(style);
+        ipcRenderer.on('code-style:changed', listener);
+        return () => ipcRenderer.removeListener('code-style:changed', listener);
+    },
     // Fired when the native View → Refresh item is chosen. Returns an unsubscribe
     // function so the caller can drop the listener.
     onMenuRefresh: (callback: () => void) => {

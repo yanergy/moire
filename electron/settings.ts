@@ -11,6 +11,11 @@ export interface BranchSelection {
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 
+// The diff-color palette the editor renders with. Mirrored on the renderer side
+// in src/shared/types.ts (the process split forbids sharing across it); keep the
+// two in sync.
+export type CodeStyle = 'github' | 'vscode';
+
 export interface WindowState {
     x?: number;
     y?: number;
@@ -38,6 +43,7 @@ function getStore(): Promise<SettingsStore> {
                     defaults: {
                         recentRepos: [],
                         theme: 'system',
+                        codeStyle: 'github',
                         branchSelections: {},
                         windowState: null,
                         flourishes: true,
@@ -111,6 +117,19 @@ export async function getThemePreference(): Promise<ThemePreference> {
 export async function setThemePreference(preference: ThemePreference): Promise<void> {
     const store = await getStore();
     store.set('theme', preference);
+}
+
+// The diff-color palette ('github' | 'vscode'). Read on launch to check the right
+// radio in the View → Code Style menu; persisted whenever the user changes it.
+// Defaults to 'github'.
+export async function getCodeStyle(): Promise<CodeStyle> {
+    const store = await getStore();
+    return store.get<CodeStyle>('codeStyle', 'github');
+}
+
+export async function setCodeStyle(style: CodeStyle): Promise<void> {
+    const store = await getStore();
+    store.set('codeStyle', style);
 }
 
 // Whether the review-complete flourishes play. Persisted so the (deliberately

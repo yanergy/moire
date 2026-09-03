@@ -2,7 +2,7 @@ import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import type { ThemeState } from '@/shared/types';
+import type { CodeStyle, ThemeState } from '@/shared/types';
 
 // monaco-env pulls Vite `?worker` modules that can't resolve under vitest (the
 // monaco-editor alias mangles their paths), so stub the worker wiring. The theme
@@ -25,6 +25,7 @@ function stubApi() {
         openRecent: vi.fn<Unsub>(),
         repoChanged: vi.fn<Unsub>(),
         flourishes: vi.fn<Unsub>(),
+        codeStyle: vi.fn<Unsub>(),
     };
     const api = {
         getTheme: vi.fn<() => Promise<ThemeState>>().mockResolvedValue({
@@ -40,6 +41,8 @@ function stubApi() {
         onFlourishesChanged: vi.fn<(cb: (enabled: boolean) => void) => Unsub>(
             () => unsub.flourishes
         ),
+        getCodeStyle: vi.fn<() => Promise<CodeStyle>>().mockResolvedValue('github'),
+        onCodeStyleChanged: vi.fn<(cb: (style: CodeStyle) => void) => Unsub>(() => unsub.codeStyle),
     };
     window.api = api as unknown as Window['api'];
     return { api, unsub };
@@ -68,6 +71,7 @@ describe('App', () => {
         const ui = useUiStore();
         const restore = vi.spyOn(comparison, 'restoreLastRepo').mockResolvedValue(undefined);
         const applyTheme = vi.spyOn(ui, 'applyThemeState');
+        const applyCodeStyle = vi.spyOn(ui, 'setCodeStyle');
 
         mountApp();
         await flushPromises();
@@ -75,6 +79,8 @@ describe('App', () => {
         expect(restore).toHaveBeenCalledTimes(1);
         expect(api.getTheme).toHaveBeenCalledTimes(1);
         expect(applyTheme).toHaveBeenCalledWith({ preference: 'system', isDark: true });
+        expect(api.getCodeStyle).toHaveBeenCalledTimes(1);
+        expect(applyCodeStyle).toHaveBeenCalledWith('github');
     });
 
     it('keeps document.title in sync with the open repo name', async () => {
@@ -127,6 +133,7 @@ describe('App', () => {
         expect(unsub.openRecent).toHaveBeenCalledTimes(1);
         expect(unsub.repoChanged).toHaveBeenCalledTimes(1);
         expect(unsub.flourishes).toHaveBeenCalledTimes(1);
+        expect(unsub.codeStyle).toHaveBeenCalledTimes(1);
     });
 
     it('does not touch the bridge when window.api is absent', async () => {

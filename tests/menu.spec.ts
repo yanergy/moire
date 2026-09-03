@@ -15,6 +15,10 @@ function themeSubmenu(currentTheme: string, onSelectTheme = () => {}) {
         ?.submenu;
 }
 
+function codeStyleSubmenu(extra = {}) {
+    return viewSubmenu('system', extra)?.find((entry) => entry.label === 'Code Style')?.submenu;
+}
+
 function fileSubmenu(extra = {}) {
     const template = buildMenuTemplate({ isMac: true, currentTheme: 'system', ...extra });
     return template.find((menu) => menu.label === 'File')?.submenu;
@@ -38,6 +42,27 @@ describe('application menu', () => {
 
         items?.find((item) => item.label === 'Dark')?.click();
         expect(onSelectTheme).toHaveBeenCalledWith('dark');
+    });
+
+    it('offers GitHub and VS Code as radio items in the View → Code Style menu', () => {
+        const items = codeStyleSubmenu();
+        expect(items?.map((item) => item.label)).toEqual(['GitHub', 'VS Code']);
+        expect(items?.every((item) => item.type === 'radio')).toBe(true);
+    });
+
+    it('defaults the checked code style to GitHub and checks the current one', () => {
+        expect(codeStyleSubmenu()?.find((item) => item.checked)?.label).toBe('GitHub');
+        expect(
+            codeStyleSubmenu({ currentCodeStyle: 'vscode' })?.find((item) => item.checked)?.label
+        ).toBe('VS Code');
+    });
+
+    it('reports the chosen code style through onSelectCodeStyle', () => {
+        const onSelectCodeStyle = vi.fn<(style: string) => void>();
+        const items = codeStyleSubmenu({ onSelectCodeStyle });
+
+        items?.find((item) => item.label === 'VS Code')?.click();
+        expect(onSelectCodeStyle).toHaveBeenCalledWith('vscode');
     });
 
     it('offers a Refresh item bound to Cmd/Ctrl+R in the View menu', () => {

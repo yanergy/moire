@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
     getBranchSelection: vi.fn<(repoPath: string) => Promise<unknown>>(),
     setBranchSelection: vi.fn<() => Promise<void>>(),
     getFlourishes: vi.fn<() => Promise<boolean>>(),
+    getCodeStyle: vi.fn<() => Promise<string>>(),
     currentThemeState: vi.fn<() => { preference: string; isDark: boolean }>(),
     logError: vi.fn<(context: string, error: unknown) => void>(),
     onRecentsChanged: vi.fn<() => void>(),
@@ -55,6 +56,7 @@ vi.mock('../electron/settings', () => ({
     getBranchSelection: state.getBranchSelection,
     setBranchSelection: state.setBranchSelection,
     getFlourishes: state.getFlourishes,
+    getCodeStyle: state.getCodeStyle,
 }));
 vi.mock('../electron/theme', () => ({ currentThemeState: state.currentThemeState }));
 vi.mock('../electron/logger', () => ({ logError: state.logError }));
@@ -83,6 +85,7 @@ describe('registerIpcHandlers', () => {
         state.getBranchSelection.mockResolvedValue(null);
         state.setBranchSelection.mockResolvedValue(undefined);
         state.getFlourishes.mockResolvedValue(true);
+        state.getCodeStyle.mockResolvedValue('github');
         state.currentThemeState.mockReturnValue({ preference: 'system', isDark: false });
 
         // Fresh module each test so the internal currentRepo starts unset.
@@ -101,6 +104,7 @@ describe('registerIpcHandlers', () => {
             'settings:branch-selection:set',
             'theme:get',
             'flourishes:get',
+            'code-style:get',
             'git:branches',
             'git:changed-files',
             'git:file-pair',
@@ -161,5 +165,9 @@ describe('registerIpcHandlers', () => {
 
     it('serves the flourishes setting', async () => {
         expect(await invoke('flourishes:get')).toBe(true);
+    });
+
+    it('serves the code style setting', async () => {
+        expect(await invoke('code-style:get')).toBe('github');
     });
 });

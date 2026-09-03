@@ -1,20 +1,26 @@
 import { ref, watch } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { ThemePreference, ThemeState, ViewMode } from '@/shared/types';
+import type { CodeStyle, ThemePreference, ThemeState, ViewMode } from '@/shared/types';
 
-// View-level preferences. The theme is owned by the Electron main process
-// (nativeTheme): `preference` is what the user picked in the View → Theme menu
-// ('system' follows the OS) and `isDark` is the resolved value main pushes over
-// IPC. This store only mirrors and applies that; it never decides the theme
-// itself. The split/unified diff layout is local renderer state.
+// View-level preferences. The theme and diff-color palette are owned by the
+// Electron main process: `preference` is what the user picked in the View → Theme
+// menu ('system' follows the OS), `isDark` is the resolved value main pushes over
+// IPC, and `codeStyle` is the View → Code Style selection. This store only mirrors
+// and applies those; it never decides them itself. The split/unified diff layout
+// is local renderer state.
 export const useUiStore = defineStore('ui', () => {
     const preference = ref<ThemePreference>('system');
     const isDark = ref(true);
+    const codeStyle = ref<CodeStyle>('github');
     const viewMode = ref<ViewMode>('split');
 
     function applyThemeState(state: ThemeState) {
         preference.value = state.preference;
         isDark.value = state.isDark;
+    }
+
+    function setCodeStyle(style: CodeStyle) {
+        codeStyle.value = style;
     }
 
     function setViewMode(mode: ViewMode) {
@@ -31,7 +37,15 @@ export const useUiStore = defineStore('ui', () => {
         { immediate: true }
     );
 
-    return { preference, isDark, viewMode, applyThemeState, setViewMode };
+    return {
+        preference,
+        isDark,
+        codeStyle,
+        viewMode,
+        applyThemeState,
+        setCodeStyle,
+        setViewMode,
+    };
 });
 
 if (import.meta.hot) {

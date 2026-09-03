@@ -14,6 +14,7 @@ import {
     getBranchSelection,
     setBranchSelection,
     getFlourishes,
+    getCodeStyle,
 } from '../settings';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
@@ -134,6 +135,10 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
     // Whether the review-complete flourishes are on. Read on launch; the menu
     // toggle pushes later changes via 'flourishes:changed'.
     handle('flourishes:get', () => getFlourishes());
+
+    // The diff-color palette. Read on launch; the View → Code Style menu pushes
+    // later changes via 'code-style:changed'.
+    handle('code-style:get', () => getCodeStyle());
 
     // Git-backed channels. Each operates on the currently open repo and has a
     // matching method in the preload bridge and an entry in MoireApi.

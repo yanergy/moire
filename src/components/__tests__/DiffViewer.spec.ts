@@ -12,6 +12,7 @@ describe('DiffViewer', () => {
                 language: 'typescript',
                 viewMode: 'split',
                 isDark: true,
+                codeStyle: 'github',
             },
         });
 

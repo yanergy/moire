@@ -104,4 +104,12 @@ describe('settings: theme and window state', () => {
         await setFlourishes(false);
         expect(await getFlourishes()).toBe(false);
     });
+
+    it('defaults the code style to github and persists a change', async () => {
+        const { getCodeStyle, setCodeStyle } = await loadSettings();
+        expect(await getCodeStyle()).toBe('github');
+
+        await setCodeStyle('vscode');
+        expect(await getCodeStyle()).toBe('vscode');
+    });
 });

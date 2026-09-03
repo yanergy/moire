@@ -13,6 +13,12 @@ export type ViewMode = 'split' | 'unified';
 // picks; `system` follows the OS and resolves to one of these.
 export type ThemeName = 'dark' | 'light';
 export type ThemePreference = 'system' | 'light' | 'dark';
+// The diff-color palette the editor renders with, picked in the View → Code Style
+// menu. 'github' mimics GitHub's diff colors (the default); 'vscode' keeps the
+// editor's original VS Code-flavored palette. The backend keeps its own copy in
+// electron/settings.ts (the process split forbids sharing across it); keep the
+// two in sync.
+export type CodeStyle = 'github' | 'vscode';
 
 // The theme state the main process owns (via nativeTheme) and pushes to the
 // renderer: the chosen preference plus the resolved dark/light it maps to.
@@ -105,6 +111,12 @@ export interface MoireApi {
     // flips it, and returns an unsubscribe function.
     getFlourishes(): Promise<boolean>;
     onFlourishesChanged(cb: (enabled: boolean) => void): () => void;
+    // The diff-color palette, owned by the main process and set from the View →
+    // Code Style menu. `getCodeStyle` reads the stored value on launch;
+    // `onCodeStyleChanged` fires when the menu selection changes, and returns an
+    // unsubscribe function.
+    getCodeStyle(): Promise<CodeStyle>;
+    onCodeStyleChanged(cb: (style: CodeStyle) => void): () => void;
     // Fired when the native View → Refresh item is chosen; the renderer re-reads
     // the repo for the current range. Returns an unsubscribe function.
     onMenuRefresh(cb: () => void): () => void;

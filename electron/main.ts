@@ -6,7 +6,13 @@ import { installAppMenu } from './menu';
 import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
 import { restoreWindowState, trackWindowState } from './window-state';
 import { initLogging, logError } from './logger';
-import { getRecentRepos, getFlourishes, setFlourishes } from './settings';
+import {
+    getRecentRepos,
+    getFlourishes,
+    setFlourishes,
+    getCodeStyle,
+    setCodeStyle,
+} from './settings';
 
 // Send a menu-triggered message to the window the user is in (or the only one).
 function sendToFocused(channel: string, ...args: unknown[]): void {
@@ -84,6 +90,14 @@ app.whenReady().then(async () => {
         installAppMenu({
             currentTheme: currentThemeState().preference,
             onSelectTheme: (preference) => setThemePreference(preference),
+            // Persist the diff palette and tell the renderer, which re-themes
+            // Monaco. Electron keeps the radio checkmark in sync on click; the
+            // stored value seeds it on the next menu rebuild.
+            currentCodeStyle: await getCodeStyle(),
+            onSelectCodeStyle: (style) => {
+                void setCodeStyle(style);
+                sendToFocused('code-style:changed', style);
+            },
             // The store owns the git re-read / the open flow, so these items just
             // poke the focused window; the renderer acts on the message.
             onRefresh: () => sendToFocused('menu:refresh'),

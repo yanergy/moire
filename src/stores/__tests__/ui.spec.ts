@@ -44,4 +44,12 @@ describe('ui store', () => {
         store.setViewMode('unified');
         expect(store.viewMode).toBe('unified');
     });
+
+    it('defaults the code style to github and applies a pushed value', () => {
+        const store = useUiStore();
+        expect(store.codeStyle).toBe('github');
+
+        store.setCodeStyle('vscode');
+        expect(store.codeStyle).toBe('vscode');
+    });
 });

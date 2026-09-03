@@ -81,6 +81,7 @@ const splitHeader = computed(() => ui.viewMode === 'split' || comparison.showIma
             :language="comparison.selectedPair.language"
             :view-mode="ui.viewMode"
             :is-dark="ui.isDark"
+            :code-style="ui.codeStyle"
             @update:change-count="changeCount = $event"
         />
 

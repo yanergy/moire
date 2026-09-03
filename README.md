@@ -11,8 +11,8 @@ superimposition.
 
 ![Overview of the Moiré window in split view](documentation/screenshots/overview.png)
 
-| Unified view | Image preview |
-| --- | --- |
+| Unified view                                                                       | Image preview                                                                             |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | ![The same diff in the unified layout](documentation/screenshots/unified-view.png) | ![Side by side image preview for a changed PNG](documentation/screenshots/image-view.png) |
 
 ## Requirements
@@ -57,10 +57,10 @@ confirm. After that it opens normally. (Windows and Linux targets are configured
    the branch you compare against (often `main`); head is the branch whose changes you want to see.
    The swap button between them flips the two.
 3. **Choose how to compare.** Toggle between:
-   - **merge-base**: compares head to the point where it branched off base, showing only the changes
-     head introduces. This matches what a GitHub pull request shows.
-   - **direct**: compares the base and head tips directly, so commits added to base after head
-     branched off also show up.
+    - **merge-base**: compares head to the point where it branched off base, showing only the changes
+      head introduces. This matches what a GitHub pull request shows.
+    - **direct**: compares the base and head tips directly, so commits added to base after head
+      branched off also show up.
 4. **Choose the layout.** Toggle between **split** (side by side) and **unified** (single column).
 5. **Browse the changes.** The sidebar lists every changed file as a tree. Click a file to open its
    diff. Mark a file or a whole folder as viewed to keep track of what you have already read.
@@ -69,7 +69,8 @@ confirm. After that it opens normally. (Windows and Linux targets are configured
 
 The diff refreshes on its own when the repository changes on disk. Use **View > Refresh**
 (`Cmd/Ctrl+R`) to re-scan manually. Set the appearance under **View > Theme** (System, Light, or
-Dark); your choice and the last branch range are remembered per repository.
+Dark) and the diff coloring under **View > Code Style** (GitHub or VS Code); your choices and the
+last branch range are remembered per repository.
 
 ## Features
 
@@ -83,6 +84,7 @@ Dark); your choice and the last branch range are remembered per repository.
 - Recent-repository list and a native folder picker.
 - Auto-refresh when the working tree changes, plus a manual refresh.
 - System, light, and dark themes, with theme and branch selections persisted per repository.
+- A selectable diff color style (GitHub or VS Code) under **View > Code Style**, persisted across launches.
 - A status bar reporting line-ending style and how long ago the diff was synced.
 
 ## Development
@@ -118,11 +120,31 @@ Track bugs and limitations here.
   certificate, which this project does not use.
 - **Windows and Linux packaged builds are unverified.** The `electron-builder` config targets
   them, but the app has only been built and run on macOS so far.
+- **The GitHub code style does not fully match github.com yet.** The `View > Code Style > GitHub`
+  palette is close but not exact. Monaco paints the word-level highlight across the full width of
+  every added or removed line (whole new lines included), whereas GitHub reserves that stronger
+  highlight for the changed words inside a modified line, so full-line saturation is hard to match
+  one to one. The colors were tuned by eye against a real GitHub diff and still need refinement.
+  Tracked in issue [#1](https://github.com/yanergy/moire/issues/1).
 
 ## Planned features
 
-- Add a viewer for the PR, so if a PR exists, a user can see all information related to it.
-  Primarily the description.
+Tracked as open issues on GitHub.
+
+- [ ] Diff viewer colors that match GitHub's diff view. 
+  ([#1](https://github.com/yanergy/moire/issues/1))
+- [ ] Next and previous change navigation that crosses into the next file once the end of the current
+  file is reached.
+  ([#2](https://github.com/yanergy/moire/issues/2))
+- [ ] A PR viewer: when a PR exists for the selected branches, retrieve it and show its information
+  (primarily the description) in a separate view.
+  ([#3](https://github.com/yanergy/moire/issues/3))
+- [ ] Search filters in the file tree, for example by filetype or mutation type.
+  ([#4](https://github.com/yanergy/moire/issues/4))
+- [ ] Click a filepath to open the file in the user's preferred editor. This probably needs a setting.
+  ([#5](https://github.com/yanergy/moire/issues/5))
+- [ ] Infinite scroll on the review page. Add setting to view files under each other, like GitHub does, instead of separated by file.
+  ([#6](https://github.com/yanergy/moire/issues/6))
 
 ## Documentation
 

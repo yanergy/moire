@@ -5,7 +5,7 @@
 // pushes the resolved theme to the renderer over the preload bridge.
 
 import { Menu, type MenuItemConstructorOptions } from 'electron';
-import type { ThemePreference } from './settings';
+import type { CodeStyle, ThemePreference } from './settings';
 
 interface ThemeOption {
     label: string;
@@ -18,10 +18,24 @@ export const THEME_OPTIONS: ThemeOption[] = [
     { label: 'Dark', preference: 'dark' },
 ];
 
+interface CodeStyleOption {
+    label: string;
+    style: CodeStyle;
+}
+
+export const CODE_STYLE_OPTIONS: CodeStyleOption[] = [
+    { label: 'GitHub', style: 'github' },
+    { label: 'VS Code', style: 'vscode' },
+];
+
 export interface MenuOptions {
     isMac: boolean;
     currentTheme: ThemePreference;
     onSelectTheme: (preference: ThemePreference) => void;
+    // The diff-color palette radio group. Optional so callers that don't care
+    // (and the menu tests) fall back to the 'github' default.
+    currentCodeStyle?: CodeStyle;
+    onSelectCodeStyle?: (style: CodeStyle) => void;
     onRefresh: () => void;
     onOpenLog?: () => void;
     onOpenRepo?: () => void;
@@ -53,6 +67,8 @@ export function buildMenuTemplate({
     isMac,
     currentTheme,
     onSelectTheme,
+    currentCodeStyle = 'github',
+    onSelectCodeStyle,
     onRefresh,
     onOpenLog,
     onOpenRepo,
@@ -115,6 +131,17 @@ export function buildMenuTemplate({
                             type: 'radio',
                             checked: currentTheme === preference,
                             click: () => onSelectTheme(preference),
+                        })
+                    ),
+                },
+                {
+                    label: 'Code Style',
+                    submenu: CODE_STYLE_OPTIONS.map(
+                        ({ label, style }): MenuItemConstructorOptions => ({
+                            label,
+                            type: 'radio',
+                            checked: currentCodeStyle === style,
+                            click: () => onSelectCodeStyle?.(style),
                         })
                     ),
                 },

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watchEffect } from 'vue';
 import { setupMonacoEnv } from '@/lib/monaco-env';
-import { defineMonacoThemes } from '@/lib/monaco-theme';
+import { defineMonacoThemes } from '@/lib/monaco-themes';
 import { windowTitle } from '@/lib/window-title';
 import { setFlourishesEnabled } from '@/lib/celebrate';
 import { useComparisonStore } from '@/stores/comparison';
@@ -20,6 +20,7 @@ let stopMenuOpenRepo: (() => void) | undefined;
 let stopMenuOpenRecent: (() => void) | undefined;
 let stopRepoChanged: (() => void) | undefined;
 let stopFlourishes: (() => void) | undefined;
+let stopCodeStyle: (() => void) | undefined;
 
 // Electron mirrors document.title into the native window title bar, so the open
 // repo shows there. This replaces the in-app title the removed fake title bar
@@ -41,6 +42,11 @@ onMounted(async () => {
 
     ui.applyThemeState(await api.getTheme());
     stopThemeSync = api.onThemeChanged((state) => ui.applyThemeState(state));
+
+    // The diff-color palette, owned by main and set from the View → Code Style
+    // menu. Pull the stored value, then stay in sync as the selection changes.
+    ui.setCodeStyle(await api.getCodeStyle());
+    stopCodeStyle = api.onCodeStyleChanged((style) => ui.setCodeStyle(style));
 
     // The review-complete flourishes, gated by the View menu toggle (persisted).
     setFlourishesEnabled(await api.getFlourishes());
@@ -66,6 +72,7 @@ onUnmounted(() => {
     stopMenuOpenRecent?.();
     stopRepoChanged?.();
     stopFlourishes?.();
+    stopCodeStyle?.();
 });
 </script>
 

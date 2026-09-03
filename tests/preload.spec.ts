@@ -55,6 +55,8 @@ describe('preload bridge', () => {
             'onThemeChanged',
             'getFlourishes',
             'onFlourishesChanged',
+            'getCodeStyle',
+            'onCodeStyleChanged',
             'onMenuRefresh',
             'onMenuOpenRepo',
             'onMenuOpenRecent',
