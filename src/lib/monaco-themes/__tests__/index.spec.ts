@@ -46,7 +46,7 @@ describe('defineMonacoThemes', () => {
 
         // Each code style contributes its own diff colors.
         expect(registered['moire-github-light']!.colors!['diffEditor.insertedLineBackground']).toBe(
-            '#e6ffec'
+            '#daf8df'
         );
         expect(registered['moire-vscode-light']!.colors!['diffEditor.insertedLineBackground']).toBe(
             '#9bb95538'

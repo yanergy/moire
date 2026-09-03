@@ -48,18 +48,25 @@ export const github: CodeStyleTheme = {
         'diffEditorOverview.removedForeground': '#f85149cc',
     },
     light: {
-        'diffEditor.insertedLineBackground': '#e6ffec',
-        'diffEditor.removedLineBackground': '#ffebe9',
-        // Semi-transparent so full added/removed lines stay pale (they composite to
-        // roughly the line color) while intraline words gain a touch more.
-        'diffEditor.insertedTextBackground': '#2da44e33',
-        'diffEditor.removedTextBackground': '#cf222e26',
+        // GitHub's light surface: white canvas, #1d2023 text.
+        'editor.background': '#ffffff',
+        'editor.foreground': '#1d2023',
+        'editorGutter.background': '#ffffff',
+        // Exact opaque diff colors from github.com's light diff: added row #daf8df,
+        // removed row #fde9e6, line-number gutters #ade8b7 / #f9cac5. As in dark, the
+        // word (text) backgrounds are left transparent and the changed-word highlight
+        // is drawn by DiffViewer (--moire-word-* tokens) so it lands only on the
+        // changed words, not whole added/removed lines.
+        'diffEditor.insertedLineBackground': '#daf8df',
+        'diffEditor.removedLineBackground': '#fde9e6',
+        'diffEditor.insertedTextBackground': '#00000000',
+        'diffEditor.removedTextBackground': '#00000000',
         // No diagonal hatch on the counterpart side, matching GitHub (see dark note).
         'diffEditor.diagonalFill': '#00000000',
         'diffEditor.unchangedRegionBackground': '#ddf4ff',
         'diffEditor.unchangedRegionForeground': '#0969da',
-        'diffEditorGutter.insertedLineBackground': '#ccffd8',
-        'diffEditorGutter.removedLineBackground': '#ffd7d5',
+        'diffEditorGutter.insertedLineBackground': '#ade8b7',
+        'diffEditorGutter.removedLineBackground': '#f9cac5',
         'diffEditorOverview.insertedForeground': '#2da44ecc',
         'diffEditorOverview.removedForeground': '#cf222ecc',
     },

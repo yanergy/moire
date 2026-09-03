@@ -125,7 +125,7 @@ Track bugs and limitations here.
 
 Tracked as open issues on GitHub.
 
-- [ ] Diff viewer colors that match GitHub's diff view. 
+- [x] Diff viewer colors that match GitHub's diff view. 
   ([#1](https://github.com/yanergy/moire/issues/1))
 - [ ] Next and previous change navigation that crosses into the next file once the end of the current
   file is reached.
