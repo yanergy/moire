@@ -135,5 +135,16 @@ defineExpose({
 </script>
 
 <template>
-    <div ref="container" class="size-full" />
+    <div ref="container" class="size-full" :class="`code-style-${codeStyle}`" />
 </template>
+
+<style scoped>
+/* GitHub renders the counterpart side of an added/removed block as a flat fill,
+   not Monaco's diagonal hatch (the GitHub theme turns the hatch off via
+   diffEditor.diagonalFill). Monaco's internal .diagonal-fill has no Tailwind hook,
+   so color it directly with the theme token. Scoped to the GitHub code style; the
+   VS Code style keeps Monaco's default hatch. */
+.code-style-github :deep(.diagonal-fill) {
+    background-color: var(--moire-diff-filler);
+}
+</style>

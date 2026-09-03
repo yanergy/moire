@@ -88,6 +88,9 @@
     --moire-faint: #a1a1aa;
     --moire-ring: #a1a1aa;
     --moire-code: #fffffe;
+    /* Flat fill for the counterpart side of a change in the GitHub code style
+       (DiffViewer replaces Monaco's diagonal hatch with this). GitHub's muted grey. */
+    --moire-diff-filler: #f6f8fa;
     --moire-add-fg: #397d43;
     --moire-del-fg: #b03a3a;
     --moire-viewed: rgba(60, 150, 75, 0.12);
@@ -272,6 +275,9 @@ body {
     --moire-faint: #71717a;
     --moire-ring: #52525b;
     --moire-code: #1f1f22;
+    /* Flat fill for the counterpart side of a change in the GitHub code style; the
+       value GitHub renders there in dark mode. */
+    --moire-diff-filler: #151a1f;
     --moire-add-fg: #6a9955;
     --moire-del-fg: #c96a6a;
     --moire-viewed: rgba(80, 160, 90, 0.13);
