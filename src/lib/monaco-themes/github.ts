@@ -36,6 +36,10 @@ export const github: CodeStyleTheme = {
         'diffEditor.removedLineBackground': '#20181a',
         'diffEditor.insertedTextBackground': '#00000000',
         'diffEditor.removedTextBackground': '#00000000',
+        // GitHub shows plain empty space on the counterpart side of an added or
+        // removed block; Monaco fills it with a diagonal hatch by default. Transparent
+        // removes the hatch to match GitHub.
+        'diffEditor.diagonalFill': '#00000000',
         'diffEditor.unchangedRegionBackground': '#388bfd1a',
         'diffEditor.unchangedRegionForeground': '#58a6ff',
         'diffEditorGutter.insertedLineBackground': '#203a26',
@@ -50,6 +54,8 @@ export const github: CodeStyleTheme = {
         // roughly the line color) while intraline words gain a touch more.
         'diffEditor.insertedTextBackground': '#2da44e33',
         'diffEditor.removedTextBackground': '#cf222e26',
+        // No diagonal hatch on the counterpart side, matching GitHub (see dark note).
+        'diffEditor.diagonalFill': '#00000000',
         'diffEditor.unchangedRegionBackground': '#ddf4ff',
         'diffEditor.unchangedRegionForeground': '#0969da',
         'diffEditorGutter.insertedLineBackground': '#ccffd8',
