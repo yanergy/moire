@@ -28,6 +28,26 @@ describe('renderMarkdown', () => {
         expect(html).not.toContain('href="javascript:alert(1)"');
     });
 
+    it('renders GitHub task lists as disabled checkboxes', () => {
+        const html = renderMarkdown('- [ ] todo\n- [x] done');
+        // An unchecked and a checked box, both read-only, with the marker stripped
+        // from the visible text.
+        expect(html).toContain('type="checkbox" disabled>');
+        expect(html).toContain('type="checkbox" disabled checked>');
+        expect(html).toContain('todo');
+        expect(html).toContain('done');
+        expect(html).not.toContain('[ ]');
+        expect(html).not.toContain('[x]');
+        // The item is tagged so CSS can drop the bullet.
+        expect(html).toContain('class="pr-task-item"');
+    });
+
+    it('leaves ordinary list items untouched', () => {
+        const html = renderMarkdown('- just an item');
+        expect(html).not.toContain('type="checkbox"');
+        expect(html).toContain('<li>just an item</li>');
+    });
+
     it('returns an empty string for empty or missing input', () => {
         expect(renderMarkdown('')).toBe('');
         expect(renderMarkdown(null)).toBe('');

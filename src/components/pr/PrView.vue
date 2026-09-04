@@ -376,6 +376,19 @@ function onBodyClick(event: MouseEvent) {
     margin: 3px 0;
 }
 
+/* GitHub-style task list: the [ ]/[x] marker becomes a checkbox in place of the
+   bullet, pulled left so it aligns where the bullet was (the ul pads 22px). */
+:deep(.pr-markdown li.pr-task-item) {
+    margin-left: -22px;
+    list-style: none;
+}
+
+:deep(.pr-markdown .pr-task-checkbox) {
+    margin: 0 0.5em 0 0;
+    vertical-align: middle;
+    accent-color: var(--moire-accent);
+}
+
 :deep(.pr-markdown li > ul),
 :deep(.pr-markdown li > ol) {
     margin: 3px 0;
