@@ -77,7 +77,7 @@ describe('ToolbarHeader', () => {
         expect(ui.mainView).toBe('diff');
     });
 
-    it('uses the draft icon for a draft PR', () => {
+    it('uses the draft icon and a dashed border for a draft PR', () => {
         const comparison = useComparisonStore();
         comparison.prStatus = 'ok';
         comparison.pullRequest = { ...PR, isDraft: true };
@@ -85,6 +85,19 @@ describe('ToolbarHeader', () => {
         const wrapper = mountToolbar();
         expect(wrapper.find('.lucide-git-pull-request-draft').exists()).toBe(true);
         expect(wrapper.find('.lucide-git-pull-request').exists()).toBe(false);
+
+        const prButton = wrapper.findAll('button').find((b) => b.text().includes('PR #'))!;
+        expect(prButton.classes()).toContain('border-dashed');
+    });
+
+    it('keeps a solid border for a non-draft PR', () => {
+        const comparison = useComparisonStore();
+        comparison.prStatus = 'ok';
+        comparison.pullRequest = { ...PR, isDraft: false };
+
+        const wrapper = mountToolbar();
+        const prButton = wrapper.findAll('button').find((b) => b.text().includes('PR #'))!;
+        expect(prButton.classes()).not.toContain('border-dashed');
     });
 
     it('shows a warning triangle in place of the PR button when the gh lookup fails', () => {

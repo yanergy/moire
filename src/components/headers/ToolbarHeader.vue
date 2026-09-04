@@ -77,7 +77,12 @@ function setPrView(on: boolean) {
                             variant="outline"
                             size="sm"
                             :model-value="ui.mainView === 'pr'"
-                            class="h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                            :class="[
+                                'h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg',
+                                // A draft PR reads as provisional: a dashed border, as
+                                // GitHub renders draft state.
+                                { 'border-dashed': comparison.pullRequest?.isDraft },
+                            ]"
                             @update:model-value="setPrView"
                         >
                             <GitPullRequestDraft
