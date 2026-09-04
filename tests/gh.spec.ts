@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getPullRequest, type GhRunner } from '../electron/github/gh';
+import { getPullRequest, getAccounts, switchAccount, type GhRunner } from '../electron/github/gh';
 
 // A gh PR record as `gh pr list --json` emits it (author is an object, and the
 // conversation arrives as separate comments and reviews arrays).
@@ -169,5 +169,78 @@ describe('getPullRequest', () => {
         const result = await getPullRequest('/repo', 'main', 'feature', run);
         expect(result.status).toBe('error');
         expect(result.pr).toBeNull();
+    });
+});
+
+// `gh auth status` output as gh prints it, with a token and detail lines between
+// the account lines the parser cares about.
+const authStatus = [
+    'github.com',
+    '  ✓ Logged in to github.com account yanergy (keyring)',
+    '  - Active account: true',
+    '  - Git operations protocol: ssh',
+    '  - Token scopes: gist, read:org, repo',
+    '  ✓ Logged in to github.com account octocat (keyring)',
+    '  - Active account: false',
+    '  - Git operations protocol: https',
+].join('\n');
+
+describe('getAccounts', () => {
+    it('lists the accounts and marks the active one', async () => {
+        const { run, calls } = okRunner(authStatus);
+        const result = await getAccounts(run);
+
+        expect(result.status).toBe('ok');
+        expect(result.accounts).toEqual([
+            { host: 'github.com', login: 'yanergy', active: true },
+            { host: 'github.com', login: 'octocat', active: false },
+        ]);
+        expect(calls[0]!.args).toEqual(['auth', 'status']);
+    });
+
+    it('reports not-installed when gh is not on PATH (ENOENT)', async () => {
+        const result = await getAccounts(failRunner({ code: 'ENOENT' }));
+        expect(result.status).toBe('not-installed');
+        expect(result.accounts).toEqual([]);
+    });
+
+    it('reports not-authenticated when no account is signed in', async () => {
+        const result = await getAccounts(
+            failRunner({ code: 1, stderr: 'You are not logged into any GitHub hosts.' })
+        );
+        expect(result.status).toBe('not-authenticated');
+        expect(result.accounts).toEqual([]);
+    });
+});
+
+describe('switchAccount', () => {
+    it('switches to the given account on the host', async () => {
+        const { run, calls } = okRunner('');
+        const result = await switchAccount('octocat', 'github.com', run);
+
+        expect(result.status).toBe('ok');
+        expect(calls[0]!.args).toEqual([
+            'auth',
+            'switch',
+            '--hostname',
+            'github.com',
+            '--user',
+            'octocat',
+        ]);
+    });
+
+    it('reports not-installed when gh is not on PATH (ENOENT)', async () => {
+        const result = await switchAccount('octocat', 'github.com', failRunner({ code: 'ENOENT' }));
+        expect(result.status).toBe('not-installed');
+    });
+
+    it('surfaces the stderr message on any other failure', async () => {
+        const result = await switchAccount(
+            'octocat',
+            'github.com',
+            failRunner({ code: 1, stderr: 'no such account' })
+        );
+        expect(result.status).toBe('error');
+        expect(result.message).toBe('no such account');
     });
 });

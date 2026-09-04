@@ -24,6 +24,16 @@ function fileSubmenu(extra = {}) {
     return template.find((menu) => menu.label === 'File')?.submenu;
 }
 
+function gitSubmenu(extra = {}) {
+    const template = buildMenuTemplate({ isMac: true, currentTheme: 'system', ...extra });
+    return template.find((menu) => menu.label === 'Git')?.submenu;
+}
+
+const accounts = [
+    { host: 'github.com', login: 'yanergy', active: true },
+    { host: 'github.com', login: 'octocat', active: false },
+];
+
 describe('application menu', () => {
     it('offers System, Light, and Dark as radio items in the View → Theme menu', () => {
         const items = themeSubmenu('system');
@@ -148,6 +158,36 @@ describe('application menu', () => {
 
         item?.click();
         expect(onOpenLog).toHaveBeenCalledTimes(1);
+    });
+
+    it('omits the Git menu when no gh accounts are connected', () => {
+        expect(gitSubmenu()).toBeUndefined();
+    });
+
+    it('lists gh accounts as radio items with the active one checked', () => {
+        const items = gitSubmenu({ accounts })?.filter((item) => item.type === 'radio');
+        expect(items?.map((item) => item.label)).toEqual(['yanergy', 'octocat']);
+        expect(items?.map((item) => item.checked)).toEqual([true, false]);
+    });
+
+    it('switches to a non-active account through onSelectAccount', () => {
+        const onSelectAccount = vi.fn<(login: string, host: string) => void>();
+        const items = gitSubmenu({ accounts, onSelectAccount })?.filter(
+            (item) => item.type === 'radio'
+        );
+
+        items?.find((item) => item.label === 'octocat')?.click();
+        expect(onSelectAccount).toHaveBeenCalledWith('octocat', 'github.com');
+    });
+
+    it('does not switch when the already-active account is chosen', () => {
+        const onSelectAccount = vi.fn<(login: string, host: string) => void>();
+        const items = gitSubmenu({ accounts, onSelectAccount })?.filter(
+            (item) => item.type === 'radio'
+        );
+
+        items?.find((item) => item.label === 'yanergy')?.click();
+        expect(onSelectAccount).not.toHaveBeenCalled();
     });
 
     it('omits the macOS app menu on other platforms', () => {

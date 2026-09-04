@@ -130,6 +130,9 @@ Track bugs and limitations here.
     - Posting a comment from the app (the conversation is read-only).
     - Inline review-thread comments and their resolved state, which need the GitHub GraphQL API,
       beyond what `gh pr view --json` exposes.
+- **The Git menu's account list refreshes only when the menu is rebuilt** (on launch, when a repo
+  opens, and right after switching accounts). Signing in or out with `gh auth login` / `gh auth
+  logout` while the app is running is not picked up until one of those happens (or a relaunch).
 
 ## Planned features
 

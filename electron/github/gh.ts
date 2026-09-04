@@ -291,3 +291,126 @@ export async function getPullRequest(
 
     return { status: 'ok', pr: toPullRequest(raw) };
 }
+
+// --- GitHub account switching (gh auth) ---
+//
+// gh can hold several authenticated accounts per host and keeps one active. The
+// app surfaces them in the Git menu so the active account is visible and can be
+// switched without leaving the app. These are host-level, not repo-level, so they
+// run without an open repository (the cwd is immaterial to `gh auth`).
+
+export type GhAccountStatus = 'ok' | 'not-installed' | 'not-authenticated' | 'error';
+
+// One authenticated gh account on a host. `active` marks the one gh currently
+// uses for that host.
+export interface GhAccount {
+    host: string;
+    login: string;
+    active: boolean;
+}
+
+export interface AccountsResult {
+    status: GhAccountStatus;
+    accounts: GhAccount[];
+    message?: string;
+}
+
+export interface SwitchAccountResult {
+    status: GhAccountStatus;
+    message?: string;
+}
+
+// Parse the human-readable `gh auth status` output into accounts. gh has no JSON
+// mode for this command, but the "Logged in to <host> account <login>" line and
+// the "Active account: true/false" line beneath each are stable, and this stays
+// robust to the detail lines (token, protocol, scopes) in between.
+function parseAuthStatus(text: string): GhAccount[] {
+    const accounts: GhAccount[] = [];
+    for (const line of text.split('\n')) {
+        const loggedIn = /Logged in to (\S+) account (\S+)/.exec(line);
+        if (loggedIn) {
+            accounts.push({ host: loggedIn[1]!, login: loggedIn[2]!, active: false });
+            continue;
+        }
+
+        const active = /Active account:\s*(true|false)/i.exec(line);
+        if (active && accounts.length > 0) {
+            accounts[accounts.length - 1]!.active = active[1]!.toLowerCase() === 'true';
+        }
+    }
+
+    return accounts;
+}
+
+// List the authenticated gh accounts and which is active. Never throws: a missing
+// gh, no authentication, or an unexpected failure comes back as a status the menu
+// acts on (it shows the Git menu only when this is 'ok').
+export async function getAccounts(run: GhRunner = defaultRunner): Promise<AccountsResult> {
+    try {
+        const { stdout, stderr } = await run(['auth', 'status'], process.cwd());
+        // gh has printed this status to stderr in some versions and stdout in
+        // others, so parse both streams to find the accounts regardless.
+        const accounts = parseAuthStatus(`${stdout}\n${stderr}`);
+        if (accounts.length === 0) {
+            return { status: 'not-authenticated', accounts: [] };
+        }
+
+        return { status: 'ok', accounts };
+    } catch (error) {
+        const err = error as {
+            code?: string | number;
+            stdout?: string | Buffer;
+            stderr?: string | Buffer;
+        };
+        if (err.code === 'ENOENT') {
+            return { status: 'not-installed', accounts: [] };
+        }
+
+        // gh exits non-zero when no account is logged in, yet may still print the
+        // section it does know about; parse it before falling back to a status.
+        const text = `${String(err.stdout ?? '')}\n${String(err.stderr ?? '')}`;
+        const accounts = parseAuthStatus(text);
+        if (accounts.length > 0) {
+            return { status: 'ok', accounts };
+        }
+
+        if (/not logged in|no accounts|not logged into/i.test(text)) {
+            return { status: 'not-authenticated', accounts: [] };
+        }
+
+        return {
+            status: 'error',
+            accounts: [],
+            message: String(err.stderr ?? '').trim() || 'gh auth status failed.',
+        };
+    }
+}
+
+// Switch the active gh account for a host. Returns a status rather than throwing
+// so the caller can show a native error box on failure.
+export async function switchAccount(
+    login: string,
+    host = 'github.com',
+    run: GhRunner = defaultRunner
+): Promise<SwitchAccountResult> {
+    if (!login) {
+        return { status: 'error', message: 'No account was specified.' };
+    }
+
+    try {
+        await run(['auth', 'switch', '--hostname', host, '--user', login], process.cwd());
+        return { status: 'ok' };
+    } catch (error) {
+        const err = error as { code?: string | number; stderr?: string | Buffer };
+        if (err.code === 'ENOENT') {
+            return { status: 'not-installed' };
+        }
+
+        const stderr = String(err.stderr ?? '');
+        if (/not logged in|no accounts/i.test(stderr)) {
+            return { status: 'not-authenticated' };
+        }
+
+        return { status: 'error', message: stderr.trim() || 'gh auth switch failed.' };
+    }
+}

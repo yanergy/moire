@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, nativeImage, shell } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers, isGitAvailable, getCurrentRepoPath } from './ipc/handlers';
+import { getAccounts, switchAccount } from './github/gh';
 import { stopWatchingRepo } from './watcher/RepoWatcher';
 import { installAppMenu } from './menu';
 import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
@@ -87,6 +88,9 @@ app.whenReady().then(async () => {
     // Rebuilt whenever the recent-repos list changes, so the File → Open Recent
     // submenu stays current. Reads the live theme so the right radio stays checked.
     const buildMenu = async () => {
+        // The gh accounts back the Git menu; an empty list (gh missing or signed
+        // out) hides the menu. This is a fast local `gh auth status`, no network.
+        const { accounts } = await getAccounts();
         installAppMenu({
             currentTheme: currentThemeState().preference,
             onSelectTheme: (preference) => setThemePreference(preference),
@@ -112,6 +116,24 @@ app.whenReady().then(async () => {
             onToggleFlourishes: (enabled) => {
                 void setFlourishes(enabled);
                 sendToFocused('flourishes:changed', enabled);
+            },
+            accounts,
+            // Switch gh's active account, then rebuild the menu (to move the
+            // checkmark) and refresh the renderer so the PR view reflects the
+            // newly active account. A failure surfaces as a native error box.
+            onSelectAccount: (login, host) => {
+                void (async () => {
+                    const result = await switchAccount(login, host);
+                    if (result.status !== 'ok') {
+                        dialog.showErrorBox(
+                            'Could not switch account',
+                            result.message || `Failed to switch to ${login}.`
+                        );
+                    }
+
+                    await buildMenu();
+                    sendToFocused('menu:refresh');
+                })();
             },
         });
     };

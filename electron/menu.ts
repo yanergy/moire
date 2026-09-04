@@ -6,6 +6,7 @@
 
 import { Menu, type MenuItemConstructorOptions } from 'electron';
 import type { CodeStyle, ThemePreference } from './settings';
+import type { GhAccount } from './github/gh';
 
 interface ThemeOption {
     label: string;
@@ -47,6 +48,11 @@ export interface MenuOptions {
     // actually gates.
     flourishes?: boolean;
     onToggleFlourishes?: (enabled: boolean) => void;
+    // The authenticated gh accounts, for the Git menu's account switcher. That
+    // menu appears only when at least one account is present (gh is connected);
+    // choosing a non-active one switches through onSelectAccount.
+    accounts?: GhAccount[];
+    onSelectAccount?: (login: string, host: string) => void;
 }
 
 // The trailing path segment, for a readable "Open Recent" label (the full path
@@ -77,6 +83,8 @@ export function buildMenuTemplate({
     activeRepo = null,
     flourishes = true,
     onToggleFlourishes,
+    accounts = [],
+    onSelectAccount,
 }: MenuOptions): MenuItemConstructorOptions[] {
     const recentItems: MenuItemConstructorOptions[] = recentRepos.length
         ? recentRepos.map((repoPath): MenuItemConstructorOptions => ({
@@ -90,6 +98,31 @@ export function buildMenuTemplate({
         : [{ label: 'No recent repositories', enabled: false }];
 
     const appMenu: MenuItemConstructorOptions[] = isMac ? [{ role: 'appMenu' }] : [];
+
+    // The Git menu carries the gh account switcher and appears only when gh is
+    // connected with at least one account. Each account is a radio item; the
+    // active one is checked, and choosing another switches gh's active account.
+    const gitMenu: MenuItemConstructorOptions[] = accounts.length
+        ? [
+              {
+                  label: 'Git',
+                  submenu: [
+                      { label: 'Accounts', enabled: false },
+                      { type: 'separator' },
+                      ...accounts.map((account): MenuItemConstructorOptions => ({
+                          label: account.login,
+                          type: 'radio',
+                          checked: account.active,
+                          click: () => {
+                              if (!account.active) {
+                                  onSelectAccount?.(account.login, account.host);
+                              }
+                          },
+                      })),
+                  ],
+              },
+          ]
+        : [];
 
     return [
         ...appMenu,
@@ -156,6 +189,7 @@ export function buildMenuTemplate({
                 },
             ],
         },
+        ...gitMenu,
         { role: 'windowMenu' },
         {
             role: 'help',
