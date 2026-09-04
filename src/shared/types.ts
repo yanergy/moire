@@ -9,6 +9,9 @@ export type FileStatus = 'A' | 'M' | 'D' | 'R';
 // the two in sync.
 export type CompareMode = 'merge-base' | 'direct';
 export type ViewMode = 'split' | 'unified';
+// Which pane fills the main area: the diff, or the pull-request view (reachable
+// only when a PR is detected for the compared branches). Renderer-only state.
+export type MainView = 'diff' | 'pr';
 // The concrete theme the UI resolves to. `ThemePreference` is what the user
 // picks; `system` follows the OS and resolves to one of these.
 export type ThemeName = 'dark' | 'light';

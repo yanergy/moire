@@ -45,6 +45,15 @@ describe('ui store', () => {
         expect(store.viewMode).toBe('unified');
     });
 
+    it('defaults the main view to the diff and switches it to the PR view', () => {
+        const store = useUiStore();
+        expect(store.mainView).toBe('diff');
+        store.setMainView('pr');
+        expect(store.mainView).toBe('pr');
+        store.setMainView('diff');
+        expect(store.mainView).toBe('diff');
+    });
+
     it('defaults the code style to github and applies a pushed value', () => {
         const store = useUiStore();
         expect(store.codeStyle).toBe('github');

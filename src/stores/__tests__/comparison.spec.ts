@@ -26,6 +26,20 @@ const pairFor = (path: string): FilePair => ({
 // way a repo open would, so the tree/viewed/filter getters have data to work on
 // without a repo open. Assigning refs skips the range setters, so nothing reaches
 // for window.api. The +/- totals (336/267) are asserted below.
+// Seed a main...feature range with a getPullRequest stub returning `result`, ready
+// for a direct loadPullRequest() call.
+function prStore(result: unknown) {
+    const getPullRequest = vi
+        .fn<(base: string, head: string) => Promise<unknown>>()
+        .mockResolvedValue(result);
+    window.api = { getPullRequest } as unknown as Window['api'];
+    const store = useComparisonStore();
+    store.repoPath = '/repo';
+    store.base = 'main';
+    store.head = 'feature';
+    return { store, getPullRequest };
+}
+
 function seededStore() {
     const store = useComparisonStore();
     store.branches = PROTOTYPE_BRANCHES;
@@ -985,6 +999,78 @@ describe('comparison store', () => {
             store.goToAdjacentFile('next');
             store.clearChangeEdge();
             expect(store.pendingChangeEdge).toBeNull();
+        });
+    });
+
+    describe('pull-request detection', () => {
+        const PR = {
+            number: 7,
+            title: 'Add PR viewer',
+            body: 'A description.',
+            state: 'OPEN',
+            isDraft: false,
+            author: 'yanergy',
+            url: 'https://github.com/o/r/pull/7',
+            baseRefName: 'main',
+            headRefName: 'feature',
+            createdAt: '2026-09-01T00:00:00Z',
+        };
+
+        afterEach(() => {
+            delete window.api;
+        });
+
+        it('detects a PR and flags hasPullRequest', async () => {
+            const { store } = prStore({ status: 'ok', pr: PR });
+            await store.loadPullRequest();
+
+            expect(store.pullRequest).toEqual(PR);
+            expect(store.prStatus).toBe('ok');
+            expect(store.hasPullRequest).toBe(true);
+        });
+
+        it('leaves hasPullRequest false and clears the PR when none is found', async () => {
+            const { store } = prStore({ status: 'no-pr', pr: null });
+            await store.loadPullRequest();
+
+            expect(store.pullRequest).toBeNull();
+            expect(store.prStatus).toBe('no-pr');
+            expect(store.hasPullRequest).toBe(false);
+        });
+
+        it('records a gh problem as its status without a PR', async () => {
+            const { store } = prStore({ status: 'not-installed', pr: null });
+            await store.loadPullRequest();
+
+            expect(store.prStatus).toBe('not-installed');
+            expect(store.hasPullRequest).toBe(false);
+        });
+
+        it('skips the lookup entirely for the working-tree head', async () => {
+            const getPullRequest = vi.fn<(base: string, head: string) => Promise<unknown>>();
+            window.api = { getPullRequest } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'WORKING TREE'; // the WORKING_TREE sentinel
+
+            await store.loadPullRequest();
+            expect(getPullRequest).not.toHaveBeenCalled();
+            expect(store.hasPullRequest).toBe(false);
+        });
+
+        it('re-detects when the head branch changes', async () => {
+            const getPullRequest = vi
+                .fn<(base: string, head: string) => Promise<unknown>>()
+                .mockResolvedValue({ status: 'ok', pr: PR });
+            window.api = { getPullRequest } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'feature'; // the [base, head] watch runs the lookup
+            await flushPromises();
+
+            expect(getPullRequest).toHaveBeenCalledWith('main', 'feature');
         });
     });
 });

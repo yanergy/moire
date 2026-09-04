@@ -1,6 +1,6 @@
 import { ref, watch } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { CodeStyle, ThemePreference, ThemeState, ViewMode } from '@/shared/types';
+import type { CodeStyle, MainView, ThemePreference, ThemeState, ViewMode } from '@/shared/types';
 
 // View-level preferences. The theme and diff-color palette are owned by the
 // Electron main process: `preference` is what the user picked in the View → Theme
@@ -13,6 +13,10 @@ export const useUiStore = defineStore('ui', () => {
     const isDark = ref(true);
     const codeStyle = ref<CodeStyle>('github');
     const viewMode = ref<ViewMode>('split');
+    // Which pane the main area shows: the diff (default) or the pull-request view.
+    // Local renderer state, like viewMode; the PR view is only reachable when a PR
+    // is detected for the selected branches (see the comparison store).
+    const mainView = ref<MainView>('diff');
 
     function applyThemeState(state: ThemeState) {
         preference.value = state.preference;
@@ -25,6 +29,10 @@ export const useUiStore = defineStore('ui', () => {
 
     function setViewMode(mode: ViewMode) {
         viewMode.value = mode;
+    }
+
+    function setMainView(view: MainView) {
+        mainView.value = view;
     }
 
     // The `.dark` class on <html> drives both the Tailwind dark variant and the
@@ -42,9 +50,11 @@ export const useUiStore = defineStore('ui', () => {
         isDark,
         codeStyle,
         viewMode,
+        mainView,
         applyThemeState,
         setCodeStyle,
         setViewMode,
+        setMainView,
     };
 });
 

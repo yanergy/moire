@@ -10,6 +10,7 @@ import {
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { RecycleScroller } from 'vue-virtual-scroller';
 import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
 import type { DirNode, FileNode } from '@/stores/comparison';
 import type { FileStatus } from '@/shared/types';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +21,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { celebrate } from '@/lib/celebrate';
 
 const comparison = useComparisonStore();
+const ui = useUiStore();
+
+// Picking a file means "show me this diff", so it also leaves the PR view if it
+// is open. The store selection alone would keep the PR pane up over the new file.
+function openFile(path: string): void {
+    comparison.selectFile(path);
+    ui.setMainView('diff');
+}
 
 // A small flourish the moment every changed file has been marked viewed (only on
 // the transition, and only when there is a non-empty change set to finish).
@@ -200,7 +209,7 @@ function onDirKey(event: KeyboardEvent, node: DirNode): void {
 function onFileKey(event: KeyboardEvent, node: FileNode): void {
     if (isActivation(event)) {
         event.preventDefault();
-        comparison.selectFile(node.path);
+        openFile(node.path);
     }
 }
 </script>
@@ -333,7 +342,7 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                             role="button"
                             tabindex="0"
                             :aria-current="node.selected ? 'true' : undefined"
-                            @click="comparison.selectFile(node.path)"
+                            @click="openFile(node.path)"
                             @dblclick="comparison.toggleViewed(node.path)"
                             @keydown="onFileKey($event, node)"
                         >

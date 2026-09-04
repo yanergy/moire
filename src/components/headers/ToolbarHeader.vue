@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRightLeft } from '@lucide/vue';
+import { ArrowRightLeft, GitPullRequest } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
@@ -7,6 +7,7 @@ import RefSelector from '@/components/controls/RefSelector.vue';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
 import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 import { Button } from '@/components/ui/button';
+import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
@@ -31,6 +32,12 @@ const viewOptions: { value: ViewMode; label: string }[] = [
     { value: 'split', label: 'split' },
     { value: 'unified', label: 'unified' },
 ];
+
+// The PR toggle sits by the branches and only appears once a PR is detected for
+// the range. Its pressed state maps straight to which pane fills the main area.
+function setPrView(on: boolean) {
+    ui.setMainView(on ? 'pr' : 'diff');
+}
 </script>
 
 <template>
@@ -59,6 +66,28 @@ const viewOptions: { value: ViewMode; label: string }[] = [
                 </Tooltip>
                 <ref-selector side="head" />
             </div>
+
+            <Tooltip v-if="comparison.hasPullRequest">
+                <TooltipTrigger as-child>
+                    <!-- The tooltip trigger wraps a span, not the Toggle: the trigger
+                         stamps its own data-state, which would otherwise clobber the
+                         toggle's data-state=on and drop the pressed styling. -->
+                    <span class="inline-flex">
+                        <Toggle
+                            size="sm"
+                            :model-value="ui.mainView === 'pr'"
+                            class="h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                            @update:model-value="setPrView"
+                        >
+                            <GitPullRequest :size="16" />
+                            PR #{{ comparison.pullRequest?.number }}
+                        </Toggle>
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                    {{ ui.mainView === 'pr' ? 'Back to the diff' : 'View the pull request' }}
+                </TooltipContent>
+            </Tooltip>
 
             <div class="flex-1" />
 

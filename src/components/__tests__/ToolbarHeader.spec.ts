@@ -3,6 +3,21 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
+import type { PullRequest } from '@/shared/types';
+
+const PR: PullRequest = {
+    number: 7,
+    title: 'Add PR viewer',
+    body: '',
+    state: 'OPEN',
+    isDraft: false,
+    author: 'yanergy',
+    url: 'https://github.com/o/r/pull/7',
+    baseRefName: 'main',
+    headRefName: 'feature',
+    createdAt: '',
+};
 
 // The toolbar composes controls (RepoPicker, RefSelector, SegmentedToggle) that
 // reach the electron bridge or teleport their content and carry their own tests.
@@ -31,5 +46,26 @@ describe('ToolbarHeader', () => {
         // button the toolbar owns.
         await wrapper.get('button').trigger('click');
         expect(swap).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides the PR button when no pull request is detected', () => {
+        const wrapper = mountToolbar();
+        expect(wrapper.text()).not.toContain('PR #');
+    });
+
+    it('shows the PR button once a PR is detected and toggles the main view', async () => {
+        const comparison = useComparisonStore();
+        comparison.prStatus = 'ok';
+        comparison.pullRequest = PR;
+        const ui = useUiStore();
+
+        const wrapper = mountToolbar();
+        expect(wrapper.text()).toContain('PR #7');
+
+        const prButton = wrapper.findAll('button').find((b) => b.text().includes('PR #'))!;
+        await prButton.trigger('click');
+        expect(ui.mainView).toBe('pr');
+        await prButton.trigger('click');
+        expect(ui.mainView).toBe('diff');
     });
 });

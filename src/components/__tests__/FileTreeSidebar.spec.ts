@@ -4,6 +4,7 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
 import { CHANGED_FILES } from '@/components/__tests__/fixtures';
 
 describe('FileTreeSidebar', () => {
@@ -118,6 +119,16 @@ describe('FileTreeSidebar', () => {
 
         await wrapper.find('[data-path="shared/types.ts"]').trigger('click');
         expect(store.selectedPath).toBe('shared/types.ts');
+    });
+
+    it('leaves the PR view for the diff when a file is clicked', async () => {
+        const wrapper = mountTree();
+        await flushPromises();
+        const ui = useUiStore();
+        ui.setMainView('pr');
+
+        await wrapper.find('[data-path="shared/types.ts"]').trigger('click');
+        expect(ui.mainView).toBe('diff');
     });
 
     it('selects a file when its row receives Enter (keyboard)', async () => {

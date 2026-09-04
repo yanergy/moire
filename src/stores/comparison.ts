@@ -1,6 +1,14 @@
 import { computed, ref, watch } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { BranchInfo, ChangedFile, CompareMode, FilePair, FileStatus } from '@/shared/types';
+import type {
+    BranchInfo,
+    ChangedFile,
+    CompareMode,
+    FilePair,
+    FileStatus,
+    PrStatus,
+    PullRequest,
+} from '@/shared/types';
 import { WORKING_TREE } from '@/shared/types';
 import { repoLabel } from '@/lib/repo-path';
 
@@ -161,6 +169,18 @@ export const useComparisonStore = defineStore('comparison', () => {
     // re-reads on change, so this doubles as a liveness signal.
     const lastSyncedAt = ref<number | null>(null);
 
+    // The pull request detected for the compared head branch (via the `gh` CLI),
+    // and the lookup's outcome. `prStatus` explains an absent PR (no gh, no auth,
+    // no PR, ...) so the PR view can show the right hint; `pullRequest` is set only
+    // when a PR is found. Re-detected whenever the branch range changes.
+    const pullRequest = ref<PullRequest | null>(null);
+    const prStatus = ref<PrStatus>('no-pr');
+    const prMessage = ref('');
+
+    // A PR exists for the current range: the only case that reveals the PR button
+    // and lets the main area switch to the PR view.
+    const hasPullRequest = computed(() => prStatus.value === 'ok' && pullRequest.value !== null);
+
     function isViewed(path: string): boolean {
         return !!viewed.value[path];
     }
@@ -224,6 +244,48 @@ export const useComparisonStore = defineStore('comparison', () => {
     }
 
     watch([() => selectedFile.value.path, base, head, compareMode], () => void loadFilePair());
+
+    // Monotonic token so an out-of-order PR lookup (the range moved before gh
+    // resolved) is dropped rather than overwriting a newer result.
+    let prRequest = 0;
+
+    // Detect the pull request for the compared head branch via the `gh` backend.
+    // Runs on repo open and whenever the base or head changes, since the PR is keyed
+    // on the head branch (and shown as base <- head). The working-tree head, an
+    // empty base, or no open repo can have no PR, so the lookup is skipped and the
+    // state cleared. gh being absent or unauthenticated comes back as a status,
+    // never a throw, so a fire-and-forget call is safe.
+    async function loadPullRequest() {
+        const api = window.api;
+        const token = ++prRequest;
+        if (!api || !repoPath.value || !base.value || !head.value || head.value === WORKING_TREE) {
+            pullRequest.value = null;
+            prStatus.value = 'no-pr';
+            prMessage.value = '';
+            return;
+        }
+
+        try {
+            const result = await api.getPullRequest(base.value, head.value);
+            if (token !== prRequest) {
+                return;
+            }
+
+            pullRequest.value = result.pr;
+            prStatus.value = result.status;
+            prMessage.value = result.message ?? '';
+        } catch {
+            if (token === prRequest) {
+                pullRequest.value = null;
+                prStatus.value = 'error';
+                prMessage.value = '';
+            }
+        }
+    }
+
+    // Re-detect the PR when the compared range changes. Compare mode does not affect
+    // which PR exists (that is the base<-head pairing), so it is not a trigger.
+    watch([base, head], () => void loadPullRequest());
 
     // The diff pane shows a "Load diff" gate in place of the editor when the
     // selected file is over the size threshold and has not been loaded yet. Binary
@@ -546,6 +608,9 @@ export const useComparisonStore = defineStore('comparison', () => {
         collapsed.value = {};
         treeFilter.value = '';
         selectedPath.value = '';
+        pullRequest.value = null;
+        prStatus.value = 'no-pr';
+        prMessage.value = '';
     }
 
     async function removeRecent(path: string) {
@@ -755,6 +820,9 @@ export const useComparisonStore = defineStore('comparison', () => {
         reconcileSelection();
         await loadChangedFiles();
         await loadFilePair();
+        // A refresh keeps the same range, so the [base, head] watch does not fire;
+        // re-detect the PR directly in case it opened, merged, or its body changed.
+        await loadPullRequest();
     }
 
     // Native folder picker -> openRecent, which names the repo and loads its real
@@ -782,6 +850,11 @@ export const useComparisonStore = defineStore('comparison', () => {
         collapsed,
         pendingChangeEdge,
         lastSyncedAt,
+        pullRequest,
+        prStatus,
+        prMessage,
+        hasPullRequest,
+        loadPullRequest,
         isViewed,
         localBranches,
         remoteBranches,
