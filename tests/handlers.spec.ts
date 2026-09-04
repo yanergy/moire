@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
     currentThemeState: vi.fn<() => { preference: string; isDark: boolean }>(),
     logError: vi.fn<(context: string, error: unknown) => void>(),
     onRecentsChanged: vi.fn<() => void>(),
+    getPullRequest: vi.fn<(repoPath: string, base: string, head: string) => Promise<unknown>>(),
+    openExternal: vi.fn<(url: string) => Promise<void>>(),
 }));
 
 vi.mock('electron', () => ({
@@ -29,6 +31,7 @@ vi.mock('electron', () => ({
             state.handlers.set(channel, fn),
     },
     dialog: { showOpenDialog: state.showOpenDialog, showErrorBox: state.showErrorBox },
+    shell: { openExternal: state.openExternal },
 }));
 
 vi.mock('simple-git', () => ({
@@ -48,6 +51,7 @@ vi.mock('../electron/git/GitService', () => ({
     },
 }));
 
+vi.mock('../electron/github/gh', () => ({ getPullRequest: state.getPullRequest }));
 vi.mock('../electron/watcher/RepoWatcher', () => ({ watchRepo: state.watchRepo }));
 vi.mock('../electron/settings', () => ({
     getRecentRepos: state.getRecentRepos,
@@ -108,6 +112,8 @@ describe('registerIpcHandlers', () => {
             'git:branches',
             'git:changed-files',
             'git:file-pair',
+            'gh:pull-request',
+            'shell:open-external',
         ]) {
             expect(state.handlers.has(channel)).toBe(true);
         }
@@ -169,5 +175,32 @@ describe('registerIpcHandlers', () => {
 
     it('serves the code style setting', async () => {
         expect(await invoke('code-style:get')).toBe('github');
+    });
+
+    it('looks up a PR against the open repo path, forwarding base and head', async () => {
+        await invoke('repo:open', '/repos/moire');
+        const prResult = { status: 'ok', pr: { number: 7 } };
+        state.getPullRequest.mockResolvedValue(prResult);
+
+        const result = await invoke('gh:pull-request', 'main', 'feature');
+
+        expect(state.getPullRequest).toHaveBeenCalledWith('/repos/moire', 'main', 'feature');
+        expect(result).toBe(prResult);
+    });
+
+    it('rejects the PR lookup before any repo is opened', async () => {
+        await expect(invoke('gh:pull-request', 'main', 'feature')).rejects.toThrow(
+            'No repository is open'
+        );
+    });
+
+    it('opens only http(s) URLs externally', async () => {
+        await invoke('shell:open-external', 'https://github.com/o/r/pull/1');
+        expect(state.openExternal).toHaveBeenCalledWith('https://github.com/o/r/pull/1');
+
+        state.openExternal.mockClear();
+        await invoke('shell:open-external', 'file:///etc/passwd');
+        await invoke('shell:open-external', 'javascript:alert(1)');
+        expect(state.openExternal).not.toHaveBeenCalled();
     });
 });

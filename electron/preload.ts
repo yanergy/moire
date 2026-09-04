@@ -18,6 +18,12 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.invoke('git:changed-files', base, head, mode),
     getFilePair: (base: string, head: string, filePath: string, mode: string, full = false) =>
         ipcRenderer.invoke('git:file-pair', base, head, filePath, mode, full),
+    // Pull-request lookup for the compared head branch via the `gh` CLI (main
+    // process). Resolves a status-bearing result rather than rejecting.
+    getPullRequest: (base: string, head: string) =>
+        ipcRenderer.invoke('gh:pull-request', base, head),
+    // Open a PR link in the default browser (main restricts it to http(s)).
+    openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
     // Theme is owned by main (nativeTheme). `getTheme` reads the resolved state;
     // `onThemeChanged` fires when the View → Theme selection or the OS theme
     // changes, returning an unsubscribe function so the caller can drop it.

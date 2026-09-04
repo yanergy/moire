@@ -79,6 +79,42 @@ export interface RepoChangeEvent {
     at: number;
 }
 
+// A pull request for the compared head branch, fetched via the `gh` CLI in the
+// main process (electron/github/gh.ts). `body` is the description in Markdown.
+// The backend keeps a matching copy of these shapes; the process split forbids
+// sharing across it, so keep the two in sync.
+export interface PullRequest {
+    number: number;
+    title: string;
+    body: string;
+    state: string; // OPEN | CLOSED | MERGED
+    isDraft: boolean;
+    author: string; // GitHub login
+    url: string;
+    baseRefName: string;
+    headRefName: string;
+    createdAt: string;
+}
+
+// Why a PR lookup produced no PR, so the renderer can show the right hint:
+// 'no-pr' (none for this branch, or the head is the working tree), 'not-installed'
+// (no `gh` on PATH), 'not-authenticated' (`gh auth login` needed),
+// 'not-a-github-repo' (no GitHub remote), or 'error' (anything else, with a
+// message). `pr` is set only when status is 'ok'.
+export type PrStatus =
+    | 'ok'
+    | 'no-pr'
+    | 'not-installed'
+    | 'not-authenticated'
+    | 'not-a-github-repo'
+    | 'error';
+
+export interface PullRequestResult {
+    status: PrStatus;
+    pr: PullRequest | null;
+    message?: string;
+}
+
 // Preload API surface, exposed on window.api once the git backend lands.
 export interface MoireApi {
     openRepoDialog(): Promise<string | null>;
@@ -100,6 +136,14 @@ export interface MoireApi {
         full?: boolean
     ): Promise<FilePair>;
     onRepoChanged(cb: (event: RepoChangeEvent) => void): () => void;
+    // The pull request for the compared head branch, fetched via the `gh` CLI.
+    // Resolves a result whose `status` explains an empty view (no gh, no auth, no
+    // PR, ...) rather than rejecting. `base` is passed for context; the lookup
+    // keys on the head branch.
+    getPullRequest(base: string, head: string): Promise<PullRequestResult>;
+    // Open a URL (a PR link) in the user's default browser, via the main process.
+    // Restricted to http(s) URLs on the main side.
+    openExternal(url: string): Promise<void>;
     // Theme is owned by the main process via nativeTheme. `getTheme` reads the
     // current resolved state; `onThemeChanged` fires when the native "View →
     // Theme" selection or the OS theme changes, and returns an unsubscribe

@@ -51,6 +51,8 @@ describe('preload bridge', () => {
             'getBranches',
             'getChangedFiles',
             'getFilePair',
+            'getPullRequest',
+            'openExternal',
             'getTheme',
             'onThemeChanged',
             'getFlourishes',
@@ -86,6 +88,15 @@ describe('preload bridge', () => {
             'src/a.ts',
             'merge-base',
             true
+        );
+
+        await api().getPullRequest!('main', 'feature');
+        expect(bridge.invoke).toHaveBeenCalledWith('gh:pull-request', 'main', 'feature');
+
+        await api().openExternal!('https://github.com/o/r/pull/1');
+        expect(bridge.invoke).toHaveBeenCalledWith(
+            'shell:open-external',
+            'https://github.com/o/r/pull/1'
         );
     });
 

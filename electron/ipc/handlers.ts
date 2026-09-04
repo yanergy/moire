@@ -3,9 +3,10 @@
 // entry in MoireApi (src/shared/types.ts). Keep the three in sync.
 
 import path from 'node:path';
-import { ipcMain, dialog } from 'electron';
+import { ipcMain, dialog, shell } from 'electron';
 import { simpleGit, CheckRepoActions } from 'simple-git';
 import { GitService, type CompareMode } from '../git/GitService';
+import { getPullRequest } from '../github/gh';
 import { watchRepo } from '../watcher/RepoWatcher';
 import {
     getRecentRepos,
@@ -153,6 +154,22 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
         (base: string, head: string, filePath: string, mode: CompareMode, full: boolean) =>
             requireRepo().filePair(base, head, filePath, mode, full)
     );
+
+    // Pull-request lookup via the `gh` CLI, isolated from the git-backed channels
+    // above (gh is optional). Operates on the open repo's directory so gh can
+    // resolve the GitHub remote itself. Returns a status-bearing result, never
+    // throwing for a missing gh / auth / PR, so the renderer can explain it.
+    handle('gh:pull-request', (base: string, head: string) =>
+        getPullRequest(requireRepo().repoPath, base, head)
+    );
+
+    // Open an external URL (a PR link) in the default browser. Restricted to
+    // http(s) so a crafted PR field can't launch another scheme or a local path.
+    handle('shell:open-external', async (url: string) => {
+        if (/^https?:\/\//i.test(url)) {
+            await shell.openExternal(url);
+        }
+    });
 }
 
 export { registerIpcHandlers, isGitAvailable, getCurrentRepoPath };
