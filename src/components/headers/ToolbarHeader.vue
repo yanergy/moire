@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRightLeft, GitPullRequest, GitPullRequestDraft } from '@lucide/vue';
+import { ArrowRightLeft, GitPullRequest, GitPullRequestDraft, TriangleAlert } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
@@ -91,6 +91,23 @@ function setPrView(on: boolean) {
                 </TooltipTrigger>
                 <TooltipContent>
                     {{ ui.mainView === 'pr' ? 'Back to the diff' : 'View the pull request' }}
+                </TooltipContent>
+            </Tooltip>
+
+            <!-- Shown in the PR button's place when the gh lookup failed (gh
+                 missing, signed out, or an access error), so a missing PR panel is
+                 explained rather than silently absent. The reason, and how to fix
+                 it, live in the tooltip. -->
+            <Tooltip v-else-if="comparison.prWarning">
+                <TooltipTrigger as-child>
+                    <span
+                        class="inline-flex size-7 cursor-pointer items-center justify-center text-moire-warn"
+                    >
+                        <TriangleAlert :size="18" />
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent class="flex max-w-xs flex-col gap-2">
+                    <span v-for="(line, i) in comparison.prWarning" :key="i">{{ line }}</span>
                 </TooltipContent>
             </Tooltip>
 

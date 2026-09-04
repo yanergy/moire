@@ -181,6 +181,36 @@ export const useComparisonStore = defineStore('comparison', () => {
     // and lets the main area switch to the PR view.
     const hasPullRequest = computed(() => prStatus.value === 'ok' && pullRequest.value !== null);
 
+    // The tooltip for the toolbar's warning triangle, shown when the PR lookup
+    // failed in a way worth surfacing: gh missing, signed out, or an access/network
+    // error (which includes being on the wrong account for a private repo). Returned
+    // as separate lines (the cause, then how to fix it, then any gh detail) so the
+    // tooltip stacks them rather than running them together. The plain absences (no
+    // PR for the branch, a non-GitHub repo, the working-tree head) return null so no
+    // triangle shows.
+    const prWarning = computed<string[] | null>(() => {
+        switch (prStatus.value) {
+            case 'not-installed':
+                return [
+                    'The GitHub CLI (gh) was not found, so pull requests cannot be detected.',
+                    'Install gh to enable this.',
+                ];
+            case 'not-authenticated':
+                return [
+                    'gh is not signed in to GitHub, so pull requests cannot be detected.',
+                    'Run gh auth login, or switch accounts from the Git menu.',
+                ];
+            case 'error':
+                return [
+                    'gh could not fetch the pull request for this branch.',
+                    'You might be signed in to the wrong account (switch it from the Git menu), or gh could not reach GitHub.',
+                    ...(prMessage.value ? [`Details: ${prMessage.value}`] : []),
+                ];
+            default:
+                return null;
+        }
+    });
+
     function isViewed(path: string): boolean {
         return !!viewed.value[path];
     }
@@ -854,6 +884,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         prStatus,
         prMessage,
         hasPullRequest,
+        prWarning,
         loadPullRequest,
         isViewed,
         localBranches,

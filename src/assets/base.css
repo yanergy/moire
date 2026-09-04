@@ -104,6 +104,9 @@
     --moire-avatar-bg: rgba(59, 125, 216, 0.15);
     --moire-danger-bg: rgba(176, 58, 58, 0.12);
     --moire-danger-edge: rgba(176, 58, 58, 0.4);
+    /* Warning amber for the toolbar's "PR lookup failed" triangle (gh missing,
+       signed out, or an access error). */
+    --moire-warn: #b45309;
     --moire-add-fg: #397d43;
     --moire-del-fg: #b03a3a;
     --moire-viewed: rgba(60, 150, 75, 0.12);
@@ -238,6 +241,7 @@ body {
     --color-moire-status-m: var(--moire-status-m);
     --color-moire-status-d: var(--moire-status-d);
     --color-moire-status-r: var(--moire-status-r);
+    --color-moire-warn: var(--moire-warn);
     --color-moire-accent: var(--moire-accent);
     --color-moire-check-fg: var(--moire-check-fg);
     --color-moire-seg-active: var(--moire-seg-active);
@@ -300,6 +304,8 @@ body {
     --moire-avatar-bg: rgba(59, 125, 216, 0.22);
     --moire-danger-bg: rgba(255, 0, 0, 0.14);
     --moire-danger-edge: rgba(255, 0, 0, 0.3);
+    /* Warning amber, tuned for dark. */
+    --moire-warn: #e0a53a;
     --moire-add-fg: #6a9955;
     --moire-del-fg: #c96a6a;
     --moire-viewed: rgba(80, 160, 90, 0.13);

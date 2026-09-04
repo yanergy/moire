@@ -86,4 +86,21 @@ describe('ToolbarHeader', () => {
         expect(wrapper.find('.lucide-git-pull-request-draft').exists()).toBe(true);
         expect(wrapper.find('.lucide-git-pull-request').exists()).toBe(false);
     });
+
+    it('shows a warning triangle in place of the PR button when the gh lookup fails', () => {
+        const comparison = useComparisonStore();
+        comparison.prStatus = 'not-installed';
+
+        const wrapper = mountToolbar();
+        expect(wrapper.find('.lucide-triangle-alert').exists()).toBe(true);
+        expect(wrapper.text()).not.toContain('PR #');
+    });
+
+    it('shows no warning for a normal absent PR', () => {
+        const comparison = useComparisonStore();
+        comparison.prStatus = 'no-pr';
+
+        const wrapper = mountToolbar();
+        expect(wrapper.find('.lucide-triangle-alert').exists()).toBe(false);
+    });
 });

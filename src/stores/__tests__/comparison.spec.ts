@@ -1046,6 +1046,25 @@ describe('comparison store', () => {
             expect(store.hasPullRequest).toBe(false);
         });
 
+        it('warns on a gh failure as stacked lines, ending with the gh detail', async () => {
+            const { store } = prStore({ status: 'error', pr: null, message: 'HTTP 404' });
+            await store.loadPullRequest();
+
+            const lines = store.prWarning ?? [];
+            expect(lines.some((line) => line.includes('wrong account'))).toBe(true);
+            expect(lines[lines.length - 1]).toBe('Details: HTTP 404');
+        });
+
+        it('shows no warning for a normal absent PR or a detected one', async () => {
+            const { store } = prStore({ status: 'no-pr', pr: null });
+            await store.loadPullRequest();
+            expect(store.prWarning).toBeNull();
+
+            const found = prStore({ status: 'ok', pr: PR });
+            await found.store.loadPullRequest();
+            expect(found.store.prWarning).toBeNull();
+        });
+
         it('skips the lookup entirely for the working-tree head', async () => {
             const getPullRequest = vi.fn<(base: string, head: string) => Promise<unknown>>();
             window.api = { getPullRequest } as unknown as Window['api'];
