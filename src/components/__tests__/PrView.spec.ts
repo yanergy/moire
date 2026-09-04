@@ -65,6 +65,17 @@ describe('PrView', () => {
         expect(text).toContain('wants to merge 2 commits into');
     });
 
+    it('shows the opened date ahead of the change stats', () => {
+        const text = mountWith({ ...PR, createdAt: '2026-08-28T12:00:00Z' }).text();
+        expect(text).toMatch(/Opened \w+ \d+/);
+        // The date reads before the additions.
+        expect(text.indexOf('Opened')).toBeLessThan(text.indexOf('+12'));
+    });
+
+    it('omits the opened date when the timestamp is missing', () => {
+        expect(mountWith({ ...PR, createdAt: '' }).text()).not.toMatch(/Opened \w+ \d+/);
+    });
+
     it('renders the conversation with comments and review verdicts', () => {
         const now = new Date().toISOString();
         const wrapper = mountWith({

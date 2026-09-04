@@ -28,6 +28,15 @@ const hasBody = computed(() => !!pr.value?.body.trim());
 
 const comments = computed(() => pr.value?.comments ?? []);
 
+// The PR's creation date, shown as "opened Aug 28" ahead of the change stats as
+// in the design. Empty when the timestamp is missing or unparseable.
+const openedOn = computed(() => {
+    const ms = Date.parse(pr.value?.createdAt ?? '');
+    return Number.isNaN(ms)
+        ? ''
+        : new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+});
+
 // A conversation entry's action verb and its color. Reviews read as a verdict
 // (approved green, changes red); plain comments read as "commented".
 function verb(comment: PrComment): { text: string; cls: string } {
@@ -203,6 +212,7 @@ function onBodyClick(event: MouseEvent) {
                         </div>
 
                         <div class="flex items-center gap-3 text-[11px] text-moire-faint">
+                            <span v-if="openedOn">Opened {{ openedOn }}</span>
                             <span class="text-moire-add-fg">+{{ pr.additions }}</span>
                             <span class="text-moire-del-fg">−{{ pr.deletions }}</span>
                             <span
@@ -237,11 +247,12 @@ function onBodyClick(event: MouseEvent) {
                         <div class="min-w-0 flex-1 pb-5">
                             <div class="rounded-lg border border-moire-border bg-moire-app">
                                 <div
-                                    class="border-b border-moire-border px-3.5 py-2.5 text-[11px] text-moire-faint"
+                                    class="flex flex-wrap items-center gap-1.5 border-b border-moire-border px-3.5 py-2.5 text-[11px] text-moire-faint"
                                 >
                                     <span class="text-[12px] font-medium text-moire-fg">
-                                        {{ pr.author }} </span
-                                    >opened the description
+                                        {{ pr.author }}
+                                    </span>
+                                    <span>opened the description</span>
                                 </div>
                                 <div class="px-3.5 py-3">
                                     <!-- v-html is safe here: renderMarkdown escapes raw HTML and
