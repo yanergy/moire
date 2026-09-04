@@ -173,7 +173,7 @@ function onBodyClick(event: MouseEvent) {
                 <div class="border-b border-moire-border px-4 pt-4 pb-4">
                     <div class="flex items-start gap-3">
                         <div
-                            class="min-w-0 flex-1 text-[16px] leading-[1.35] font-bold text-moire-fg"
+                            class="min-w-0 flex-1 text-[18px] leading-[1.35] font-bold text-moire-fg"
                         >
                             {{ pr.title }}
                             <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
@@ -191,7 +191,7 @@ function onBodyClick(event: MouseEvent) {
 
                     <!-- who / stats / labels, each on its own line. -->
                     <div class="mt-4 flex flex-col gap-2">
-                        <div class="flex flex-wrap items-center gap-2 text-[11px] text-moire-muted">
+                        <div class="flex flex-wrap items-center gap-2 text-[13px] text-moire-muted">
                             <user-avatar :login="pr.author" :size="20" />
                             <span class="text-moire-fg">{{ pr.author }}</span>
                             <span>
@@ -211,7 +211,7 @@ function onBodyClick(event: MouseEvent) {
                             </span>
                         </div>
 
-                        <div class="flex items-center gap-3 text-[11px] text-moire-faint">
+                        <div class="flex items-center gap-3 text-[13px] text-moire-faint">
                             <span v-if="openedOn">Opened {{ openedOn }}</span>
                             <span class="text-moire-add-fg">+{{ pr.additions }}</span>
                             <span class="text-moire-del-fg">−{{ pr.deletions }}</span>
@@ -226,7 +226,7 @@ function onBodyClick(event: MouseEvent) {
                                 v-for="label in pr.labels"
                                 :key="label.name"
                                 :title="label.description"
-                                class="rounded-full border px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap"
+                                class="rounded-full border px-2.5 py-0.5 text-[13px] font-medium whitespace-nowrap"
                                 :style="labelStyle(label.color)"
                             >
                                 {{ label.name }}
@@ -247,9 +247,9 @@ function onBodyClick(event: MouseEvent) {
                         <div class="min-w-0 flex-1 pb-5">
                             <div class="rounded-lg border border-moire-border bg-moire-app">
                                 <div
-                                    class="flex flex-wrap items-center gap-1.5 border-b border-moire-border px-3.5 py-2.5 text-[11px] text-moire-faint"
+                                    class="flex flex-wrap items-center gap-1.5 border-b border-moire-border px-3.5 py-2.5 text-[13px] text-moire-faint"
                                 >
-                                    <span class="text-[12px] font-medium text-moire-fg">
+                                    <span class="text-[14px] font-medium text-moire-fg">
                                         {{ pr.author }}
                                     </span>
                                     <span>opened the description</span>
@@ -259,11 +259,11 @@ function onBodyClick(event: MouseEvent) {
                                          rejects unsafe link schemes (see lib/markdown). -->
                                     <div
                                         v-if="hasBody"
-                                        class="pr-markdown text-[12.5px] leading-[1.6] text-moire-file-fg"
+                                        class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
                                         @click="onBodyClick"
                                         v-html="renderedBody"
                                     />
-                                    <div v-else class="text-[12.5px] text-moire-faint italic">
+                                    <div v-else class="text-[14px] text-moire-faint italic">
                                         No description provided.
                                     </div>
                                 </div>
@@ -282,9 +282,9 @@ function onBodyClick(event: MouseEvent) {
                         </div>
                         <div class="flex min-w-0 flex-1 flex-col gap-2 pb-5">
                             <div
-                                class="flex flex-wrap items-center gap-1.5 text-[11px] text-moire-faint"
+                                class="flex flex-wrap items-center gap-1.5 text-[13px] text-moire-faint"
                             >
-                                <span class="text-[12px] font-medium text-moire-fg">
+                                <span class="text-[14px] font-medium text-moire-fg">
                                     {{ comment.author }}
                                 </span>
                                 <span :class="verb(comment).cls">{{ verb(comment).text }}</span>
@@ -292,7 +292,7 @@ function onBodyClick(event: MouseEvent) {
                             </div>
                             <div
                                 v-if="comment.body.trim()"
-                                class="pr-markdown rounded-lg border border-moire-border bg-moire-app px-3.5 py-2.5 text-[12.5px] leading-[1.6] text-moire-file-fg"
+                                class="pr-markdown rounded-lg border border-moire-border bg-moire-app px-3.5 py-2.5 text-[14px] leading-[1.6] text-moire-file-fg"
                                 @click="onBodyClick"
                                 v-html="renderMarkdown(comment.body)"
                             />
@@ -307,12 +307,12 @@ function onBodyClick(event: MouseEvent) {
                     >
                         <component :is="mergeStatus.icon" :size="18" :class="mergeStatus.iconCls" />
                         <div class="min-w-0">
-                            <div class="text-[12.5px] font-medium text-moire-fg">
+                            <div class="text-[14px] font-medium text-moire-fg">
                                 {{ mergeStatus.title }}
                             </div>
                             <div
                                 v-if="mergeStatus.detail"
-                                class="mt-0.5 text-[11px] text-moire-muted"
+                                class="mt-0.5 text-[13px] text-moire-muted"
                             >
                                 {{ mergeStatus.detail }}
                             </div>
