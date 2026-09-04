@@ -26,6 +26,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "electron-store": "^11.0.2",
+        "markdown-it": "^15.0.1",
         "monaco-editor": "^0.53.0",
         "pinia": "^4.0.3",
         "reka-ui": "^2.10.4",

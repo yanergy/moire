@@ -55,6 +55,26 @@ describe('PrView', () => {
         expect(mountWith({ ...PR, state: 'MERGED' }).text()).toContain('Merged');
     });
 
+    it('renders the description as Markdown', () => {
+        const wrapper = mountWith({
+            ...PR,
+            body: '## Heading\n\nA **para** with [a link](https://x.dev).',
+        });
+        expect(wrapper.find('.pr-markdown h2').exists()).toBe(true);
+        expect(wrapper.find('.pr-markdown strong').text()).toBe('para');
+        expect(wrapper.find('.pr-markdown a').attributes('href')).toBe('https://x.dev');
+    });
+
+    it('opens a description link in the browser instead of navigating', async () => {
+        const openExternal = vi.fn<(url: string) => Promise<void>>();
+        window.api = { openExternal } as unknown as Window['api'];
+
+        const wrapper = mountWith({ ...PR, body: '[a link](https://x.dev)' });
+        await wrapper.find('.pr-markdown a').trigger('click');
+
+        expect(openExternal).toHaveBeenCalledWith('https://x.dev');
+    });
+
     it('notes when the PR has no description', () => {
         expect(mountWith({ ...PR, body: '   ' }).text()).toContain('No description provided');
     });

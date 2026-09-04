@@ -122,6 +122,12 @@ Track bugs and limitations here.
   certificate, which this project does not use.
 - **Windows and Linux packaged builds are unverified.** The `electron-builder` config targets
   them, but the app has only been built and run on macOS so far.
+- **The PR viewer (issue [#3](https://github.com/yanergy/moire/issues/3)) is a partial build.** It
+  detects a PR for the selected head branch and shows the title, number, state, author, base, head,
+  and description, but one piece is still outstanding:
+    - The extra PR data the design calls for (commit list, reviewers, and the conversation thread) is
+      not fetched yet. It needs retrieving (for example `gh pr view --json commits,reviews,comments`)
+      and showing.
 
 ## Planned features
 

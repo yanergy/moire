@@ -68,4 +68,14 @@ describe('ToolbarHeader', () => {
         await prButton.trigger('click');
         expect(ui.mainView).toBe('diff');
     });
+
+    it('uses the draft icon for a draft PR', () => {
+        const comparison = useComparisonStore();
+        comparison.prStatus = 'ok';
+        comparison.pullRequest = { ...PR, isDraft: true };
+
+        const wrapper = mountToolbar();
+        expect(wrapper.find('.lucide-git-pull-request-draft').exists()).toBe(true);
+        expect(wrapper.find('.lucide-git-pull-request').exists()).toBe(false);
+    });
 });

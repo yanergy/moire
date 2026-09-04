@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRightLeft, GitPullRequest } from '@lucide/vue';
+import { ArrowRightLeft, GitPullRequest, GitPullRequestDraft } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
@@ -74,12 +74,17 @@ function setPrView(on: boolean) {
                          toggle's data-state=on and drop the pressed styling. -->
                     <span class="inline-flex">
                         <Toggle
+                            variant="outline"
                             size="sm"
                             :model-value="ui.mainView === 'pr'"
                             class="h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                             @update:model-value="setPrView"
                         >
-                            <GitPullRequest :size="16" />
+                            <GitPullRequestDraft
+                                v-if="comparison.pullRequest?.isDraft"
+                                :size="16"
+                            />
+                            <GitPullRequest v-else :size="16" />
                             PR #{{ comparison.pullRequest?.number }}
                         </Toggle>
                     </span>
