@@ -34,6 +34,14 @@ const PR: PullRequest = {
     baseRefName: 'main',
     headRefName: 'feature',
     createdAt: '',
+    additions: 0,
+    deletions: 0,
+    changedFiles: 0,
+    commitCount: 0,
+    comments: [],
+    labels: [],
+    mergeable: 'MERGEABLE',
+    mergeStateStatus: 'CLEAN',
 };
 
 describe('MoirePage', () => {

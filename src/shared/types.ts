@@ -86,6 +86,25 @@ export interface RepoChangeEvent {
 // main process (electron/github/gh.ts). `body` is the description in Markdown.
 // The backend keeps a matching copy of these shapes; the process split forbids
 // sharing across it, so keep the two in sync.
+
+// One entry in the PR conversation: a general comment, or a submitted review
+// (which carries its `state`: APPROVED, CHANGES_REQUESTED, COMMENTED). `body` is
+// Markdown and may be empty for a bare approval.
+export interface PrComment {
+    author: string;
+    body: string;
+    createdAt: string;
+    kind: 'comment' | 'review';
+    state?: string;
+}
+
+// A PR label; `color` is a 6-digit hex without the leading '#', as GitHub returns.
+export interface PrLabel {
+    name: string;
+    color: string;
+    description: string;
+}
+
 export interface PullRequest {
     number: number;
     title: string;
@@ -97,6 +116,16 @@ export interface PullRequest {
     baseRefName: string;
     headRefName: string;
     createdAt: string;
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    commitCount: number;
+    comments: PrComment[];
+    labels: PrLabel[];
+    // Mergeability, for the merge-status box. `mergeable` is MERGEABLE, CONFLICTING,
+    // or UNKNOWN; `mergeStateStatus` refines it (CLEAN, BLOCKED, BEHIND, ...).
+    mergeable: string;
+    mergeStateStatus: string;
 }
 
 // Why a PR lookup produced no PR, so the renderer can show the right hint:

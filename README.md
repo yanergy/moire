@@ -122,12 +122,14 @@ Track bugs and limitations here.
   certificate, which this project does not use.
 - **Windows and Linux packaged builds are unverified.** The `electron-builder` config targets
   them, but the app has only been built and run on macOS so far.
-- **The PR viewer (issue [#3](https://github.com/yanergy/moire/issues/3)) is a partial build.** It
-  detects a PR for the selected head branch and shows the title, number, state, author, base, head,
-  and description, but one piece is still outstanding:
-    - The extra PR data the design calls for (commit list, reviewers, and the conversation thread) is
-      not fetched yet. It needs retrieving (for example `gh pr view --json commits,reviews,comments`)
-      and showing.
+- **The PR viewer (issue [#3](https://github.com/yanergy/moire/issues/3)) does not yet cover
+  everything the design shows.** It detects a PR for the selected head branch and shows the title,
+  number, status, change stats, commit count, labels, merge status, description (Markdown), and the
+  conversation (comments and review verdicts). Still missing:
+    - The Commits tab (the commit list).
+    - Posting a comment from the app (the conversation is read-only).
+    - Inline review-thread comments and their resolved state, which need the GitHub GraphQL API,
+      beyond what `gh pr view --json` exposes.
 
 ## Planned features
 

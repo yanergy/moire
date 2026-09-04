@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getPullRequest, type GhRunner } from '../electron/github/gh';
 
-// A gh PR record as `gh pr list --json` emits it (author is an object).
+// A gh PR record as `gh pr list --json` emits it (author is an object, and the
+// conversation arrives as separate comments and reviews arrays).
 const ghPr = {
     number: 42,
     title: 'Add cross-file navigation',
@@ -13,6 +14,28 @@ const ghPr = {
     baseRefName: 'main',
     headRefName: 'feature',
     createdAt: '2026-09-01T00:00:00Z',
+    additions: 10,
+    deletions: 3,
+    changedFiles: 2,
+    commits: [{}, {}, {}],
+    comments: [{ author: { login: 'bob' }, body: 'nice', createdAt: '2026-09-02T00:00:00Z' }],
+    reviews: [
+        {
+            author: { login: 'ann' },
+            body: 'looks good',
+            state: 'APPROVED',
+            submittedAt: '2026-09-03T00:00:00Z',
+        },
+        {
+            author: { login: 'x' },
+            body: '',
+            state: 'COMMENTED',
+            submittedAt: '2026-09-01T00:00:00Z',
+        },
+    ],
+    labels: [{ name: 'enhancement', color: 'a2eeef', description: 'New feature or request' }],
+    mergeable: 'MERGEABLE',
+    mergeStateStatus: 'CLEAN',
 };
 
 // A runner that resolves the given stdout, capturing the args/cwd it was called with.
@@ -45,12 +68,39 @@ describe('getPullRequest', () => {
             url: 'https://github.com/o/r/pull/42',
             baseRefName: 'main',
             headRefName: 'feature',
+            additions: 10,
+            deletions: 3,
+            changedFiles: 2,
+            commitCount: 3,
+            mergeable: 'MERGEABLE',
+            mergeStateStatus: 'CLEAN',
         });
+        expect(result.pr!.labels).toEqual([
+            { name: 'enhancement', color: 'a2eeef', description: 'New feature or request' },
+        ]);
 
         // Runs in the repo directory and filters by the head branch.
         expect(calls[0]!.cwd).toBe('/repo');
         expect(calls[0]!.args).toContain('--head');
         expect(calls[0]!.args).toContain('feature');
+    });
+
+    it('merges comments and reviews into one chronological conversation, dropping empty reviews', async () => {
+        const { run } = okRunner(JSON.stringify([ghPr]));
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+
+        // The bare COMMENTED review (empty body) is dropped; the comment and the
+        // approval remain, ordered by time.
+        expect(result.pr!.comments).toEqual([
+            { author: 'bob', body: 'nice', createdAt: '2026-09-02T00:00:00Z', kind: 'comment' },
+            {
+                author: 'ann',
+                body: 'looks good',
+                createdAt: '2026-09-03T00:00:00Z',
+                kind: 'review',
+                state: 'APPROVED',
+            },
+        ]);
     });
 
     it('reports no-pr for an empty gh result', async () => {

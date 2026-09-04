@@ -16,6 +16,14 @@ const PR: PullRequest = {
     baseRefName: 'main',
     headRefName: 'feature',
     createdAt: '',
+    additions: 12,
+    deletions: 4,
+    changedFiles: 3,
+    commitCount: 2,
+    comments: [],
+    labels: [],
+    mergeable: 'MERGEABLE',
+    mergeStateStatus: 'CLEAN',
 };
 
 // The reka-ui scroll area needs layout machinery jsdom lacks; a passthrough keeps
@@ -35,12 +43,12 @@ describe('PrView', () => {
         delete window.api;
     });
 
-    it('renders the PR header, refs, and description', () => {
+    it('renders the header, refs, and the description as the first entry', () => {
         const text = mountWith(PR).text();
         expect(text).toContain('Cross-file navigation');
         expect(text).toContain('#42');
-        expect(text).toContain('Open');
         expect(text).toContain('s.trivedi');
+        expect(text).toContain('opened the description');
         expect(text).toContain('main');
         expect(text).toContain('feature');
         expect(text).toContain('Does things.');
@@ -50,9 +58,54 @@ describe('PrView', () => {
         expect(mountWith(PR).text()).toContain('ST'); // s.trivedi -> ST
     });
 
-    it('labels a draft and a merged PR', () => {
-        expect(mountWith({ ...PR, isDraft: true }).text()).toContain('Draft');
+    it('shows the change stats and commit count', () => {
+        const text = mountWith(PR).text();
+        expect(text).toContain('+12');
+        expect(text).toContain('3 files');
+        expect(text).toContain('wants to merge 2 commits into');
+    });
+
+    it('renders the conversation with comments and review verdicts', () => {
+        const now = new Date().toISOString();
+        const wrapper = mountWith({
+            ...PR,
+            comments: [
+                { author: 'bob', body: 'Nice **work**.', createdAt: now, kind: 'comment' },
+                { author: 'ann', body: '', createdAt: now, kind: 'review', state: 'APPROVED' },
+            ],
+        });
+        const text = wrapper.text();
+        expect(text).toContain('bob');
+        expect(text).toContain('commented');
+        expect(text).toContain('ann');
+        expect(text).toContain('approved these changes');
+        // The comment body renders as Markdown.
+        expect(wrapper.find('.pr-markdown strong').exists()).toBe(true);
+    });
+
+    it('still shows the description when there are no comments', () => {
+        expect(mountWith({ ...PR, comments: [] }).text()).toContain('opened the description');
+    });
+
+    it('renders labels as colored pills', () => {
+        const wrapper = mountWith({
+            ...PR,
+            labels: [{ name: 'enhancement', color: 'a2eeef', description: 'New feature' }],
+        });
+        const pill = wrapper.findAll('span').find((s) => s.text() === 'enhancement');
+        expect(pill).toBeTruthy();
+        expect(pill!.attributes('style')).toMatch(/background-color/);
+    });
+
+    it('shows a merge-status box reflecting mergeability', () => {
+        expect(mountWith(PR).text()).toContain('no conflicts with the base branch');
+        expect(mountWith({ ...PR, mergeable: 'CONFLICTING' }).text()).toContain(
+            'conflicts that must be resolved'
+        );
+        expect(mountWith({ ...PR, isDraft: true }).text()).toContain('still a draft');
         expect(mountWith({ ...PR, state: 'MERGED' }).text()).toContain('Merged');
+        // Unknown mergeability shows no box.
+        expect(mountWith({ ...PR, mergeable: 'UNKNOWN' }).text()).not.toContain('no conflicts');
     });
 
     it('renders the description as Markdown', () => {

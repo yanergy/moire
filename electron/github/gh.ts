@@ -19,8 +19,11 @@ const execFileAsync = promisify(execFile);
 const WORKING_TREE = 'WORKING TREE';
 
 // The gh JSON fields requested; the shape below mirrors them. `body` is the PR
-// description in Markdown, which is the whole point of the feature.
-const PR_FIELDS = 'number,title,body,state,url,isDraft,author,baseRefName,headRefName,createdAt';
+// description in Markdown. The stats (additions/deletions/changedFiles), commit
+// list, and the comments/reviews feed the PR view's header and conversation.
+const PR_FIELDS =
+    'number,title,body,state,url,isDraft,author,baseRefName,headRefName,createdAt,' +
+    'additions,deletions,changedFiles,commits,comments,reviews,labels,mergeable,mergeStateStatus';
 
 // Why a PR view is empty, so the renderer can show the right hint instead of a
 // bare "nothing here". Mirrors PrStatus in src/shared/types.ts.
@@ -31,6 +34,24 @@ export type PrStatus =
     | 'not-authenticated'
     | 'not-a-github-repo'
     | 'error';
+
+// One entry in the PR conversation: a general PR comment, or a submitted review.
+// A review carries its `state` (APPROVED, CHANGES_REQUESTED, COMMENTED) so the
+// view can label it; `body` is Markdown and may be empty for a bare approval.
+export interface PrComment {
+    author: string;
+    body: string;
+    createdAt: string;
+    kind: 'comment' | 'review';
+    state?: string;
+}
+
+// A PR label; `color` is a 6-digit hex without the leading '#', as GitHub returns.
+export interface PrLabel {
+    name: string;
+    color: string;
+    description: string;
+}
 
 export interface PullRequest {
     number: number;
@@ -43,6 +64,16 @@ export interface PullRequest {
     baseRefName: string;
     headRefName: string;
     createdAt: string;
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    commitCount: number;
+    comments: PrComment[];
+    labels: PrLabel[];
+    // Mergeability, for the merge-status box. `mergeable` is MERGEABLE, CONFLICTING,
+    // or UNKNOWN; `mergeStateStatus` refines it (CLEAN, BLOCKED, BEHIND, ...).
+    mergeable: string;
+    mergeStateStatus: string;
 }
 
 export interface PullRequestResult {
@@ -51,8 +82,32 @@ export interface PullRequestResult {
     message?: string; // human-readable detail for the 'error' status
 }
 
-// The raw shape `gh pr list --json` emits for each PR. `author` is an object; the
-// rest map straight through.
+// The raw shape `gh pr list --json` emits for each PR. `author` is an object, and
+// the conversation arrives as separate `comments` and `reviews` arrays that
+// buildComments merges into one timeline.
+interface GhAuthor {
+    login?: string;
+}
+
+interface GhComment {
+    author: GhAuthor | null;
+    body: string;
+    createdAt: string;
+}
+
+interface GhReview {
+    author: GhAuthor | null;
+    body: string;
+    state: string;
+    submittedAt: string;
+}
+
+interface GhLabel {
+    name: string;
+    color: string;
+    description: string;
+}
+
 interface GhPr {
     number: number;
     title: string;
@@ -60,10 +115,19 @@ interface GhPr {
     state: string;
     url: string;
     isDraft: boolean;
-    author: { login?: string } | null;
+    author: GhAuthor | null;
     baseRefName: string;
     headRefName: string;
     createdAt: string;
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    commits: unknown[] | null;
+    comments: GhComment[] | null;
+    reviews: GhReview[] | null;
+    labels: GhLabel[] | null;
+    mergeable: string;
+    mergeStateStatus: string;
 }
 
 // Runs `gh` with the given args in the repo directory and resolves its stdout.
@@ -88,6 +152,41 @@ const defaultRunner: GhRunner = async (args, cwd) => {
     return { stdout: stdout.toString(), stderr: stderr.toString() };
 };
 
+// Merge the separate comment and review arrays into one chronological timeline.
+// A review with no body and a COMMENTED (or missing) state is just a container
+// for inline code comments, which are not fetched here, so it is dropped; an
+// approval or change request is kept even with an empty body so its state shows.
+function buildComments(pr: GhPr): PrComment[] {
+    const out: PrComment[] = [];
+    for (const c of pr.comments ?? []) {
+        out.push({
+            author: c.author?.login ?? '',
+            body: c.body ?? '',
+            createdAt: c.createdAt,
+            kind: 'comment',
+        });
+    }
+
+    for (const r of pr.reviews ?? []) {
+        const body = r.body ?? '';
+        if (!body && (r.state === 'COMMENTED' || !r.state)) {
+            continue;
+        }
+
+        out.push({
+            author: r.author?.login ?? '',
+            body,
+            createdAt: r.submittedAt,
+            kind: 'review',
+            state: r.state,
+        });
+    }
+
+    // ISO 8601 timestamps sort chronologically as plain strings.
+    out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return out;
+}
+
 function toPullRequest(pr: GhPr): PullRequest {
     return {
         number: pr.number,
@@ -100,6 +199,18 @@ function toPullRequest(pr: GhPr): PullRequest {
         baseRefName: pr.baseRefName,
         headRefName: pr.headRefName,
         createdAt: pr.createdAt,
+        additions: pr.additions ?? 0,
+        deletions: pr.deletions ?? 0,
+        changedFiles: pr.changedFiles ?? 0,
+        commitCount: pr.commits?.length ?? 0,
+        comments: buildComments(pr),
+        labels: (pr.labels ?? []).map((l) => ({
+            name: l.name,
+            color: l.color,
+            description: l.description,
+        })),
+        mergeable: pr.mergeable ?? 'UNKNOWN',
+        mergeStateStatus: pr.mergeStateStatus ?? '',
     };
 }
 

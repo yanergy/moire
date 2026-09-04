@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { ArrowRight, ExternalLink } from '@lucide/vue';
+import { computed, type Component } from 'vue';
+import {
+    ArrowRight,
+    CircleAlert,
+    CircleCheck,
+    ExternalLink,
+    GitMerge,
+    GitPullRequestClosed,
+    GitPullRequestDraft,
+} from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { renderMarkdown } from '@/lib/markdown';
-import { Badge } from '@/components/ui/badge';
+import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import UserAvatar from '@/components/pr/UserAvatar.vue';
+import type { PrComment } from '@/shared/types';
 
 const comparison = useComparisonStore();
 
@@ -14,49 +24,117 @@ const pr = computed(() => comparison.pullRequest);
 // The description is Markdown; renderMarkdown returns HTML that is safe to insert
 // with v-html (raw tags escaped, unsafe link schemes rejected). See lib/markdown.
 const renderedBody = computed(() => renderMarkdown(pr.value?.body));
-
-// State pill: a draft PR reads as such regardless of open/closed; otherwise the
-// GitHub state maps to the same status colors the file tree already uses (open is
-// green like an add, merged purple like a rename, closed red like a delete).
-const stateLabel = computed(() => {
-    if (!pr.value) {
-        return '';
-    }
-
-    if (pr.value.isDraft) {
-        return 'Draft';
-    }
-
-    const byState: Record<string, string> = { OPEN: 'Open', MERGED: 'Merged', CLOSED: 'Closed' };
-    return byState[pr.value.state] ?? pr.value.state;
-});
-
-const stateClass = computed(() => {
-    if (!pr.value || pr.value.isDraft) {
-        return 'border-moire-border text-moire-muted';
-    }
-
-    const byState: Record<string, string> = {
-        OPEN: 'border-moire-status-a text-moire-status-a',
-        MERGED: 'border-moire-status-r text-moire-status-r',
-        CLOSED: 'border-moire-status-d text-moire-status-d',
-    };
-    return byState[pr.value.state] ?? 'border-moire-border text-moire-muted';
-});
-
-// Up to two initials from the author login (e.g. "s.trivedi" -> "ST"), for the
-// avatar chip. A single-word login yields one initial.
-const initials = computed(() => {
-    const login = pr.value?.author ?? '';
-    return login
-        .split(/[.\s@_-]/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0]!.toUpperCase())
-        .join('');
-});
-
 const hasBody = computed(() => !!pr.value?.body.trim());
+
+const comments = computed(() => pr.value?.comments ?? []);
+
+// A conversation entry's action verb and its color. Reviews read as a verdict
+// (approved green, changes red); plain comments read as "commented".
+function verb(comment: PrComment): { text: string; cls: string } {
+    if (comment.kind !== 'review') {
+        return { text: 'commented', cls: 'text-moire-faint' };
+    }
+
+    switch (comment.state) {
+        case 'APPROVED':
+            return { text: 'approved these changes', cls: 'text-moire-status-a' };
+        case 'CHANGES_REQUESTED':
+            return { text: 'requested changes', cls: 'text-moire-status-d' };
+        default:
+            return { text: 'reviewed', cls: 'text-moire-faint' };
+    }
+}
+
+function relative(iso: string): string {
+    const ms = Date.parse(iso);
+    return Number.isNaN(ms) ? '' : timeSince(ms, Date.now());
+}
+
+// Lighten a channel so a dark label color stays legible as text on its own tint.
+const lighten = (c: number) => Math.min(c + 45, 235);
+
+// A label pill, tinted from its GitHub color the way the design tones labels: the
+// color drives a faint fill, a stronger border, and a lightened, legible text.
+// The per-label colors are data, not theme tokens, so they are applied inline.
+function labelStyle(color: string): Record<string, string> {
+    const hex = /^[0-9a-f]{6}$/i.test(color) ? color : '888888';
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return {
+        backgroundColor: `rgba(${r}, ${g}, ${b}, 0.14)`,
+        borderColor: `rgba(${r}, ${g}, ${b}, 0.45)`,
+        color: `rgb(${lighten(r)}, ${lighten(g)}, ${lighten(b)})`,
+    };
+}
+
+// The merge-status box at the foot of the conversation. Draft, closed, and merged
+// states read first; otherwise it reflects mergeability. UNKNOWN yields no box.
+// `cls` styles the box (tinted background + border); `icon` its colored glyph.
+const mergeStatus = computed<{
+    icon: Component;
+    iconCls: string;
+    title: string;
+    detail: string;
+    cls: string;
+} | null>(() => {
+    if (!pr.value) {
+        return null;
+    }
+
+    const p = pr.value;
+    const green = 'border-moire-viewed-edge bg-moire-viewed';
+    const red = 'border-moire-danger-edge bg-moire-danger';
+    const neutral = 'border-moire-border bg-moire-chrome';
+
+    if (p.state === 'MERGED') {
+        return {
+            icon: GitMerge,
+            iconCls: 'text-moire-status-r',
+            title: 'Merged',
+            detail: '',
+            cls: 'border-moire-border bg-moire-chrome',
+        };
+    }
+    if (p.state === 'CLOSED') {
+        return {
+            icon: GitPullRequestClosed,
+            iconCls: 'text-moire-status-d',
+            title: 'Closed without merging',
+            detail: '',
+            cls: red,
+        };
+    }
+    if (p.isDraft) {
+        return {
+            icon: GitPullRequestDraft,
+            iconCls: 'text-moire-muted',
+            title: 'This pull request is still a draft',
+            detail: 'Mark it ready for review to merge.',
+            cls: neutral,
+        };
+    }
+    if (p.mergeable === 'CONFLICTING') {
+        return {
+            icon: CircleAlert,
+            iconCls: 'text-moire-status-d',
+            title: 'This branch has conflicts that must be resolved',
+            detail: '',
+            cls: red,
+        };
+    }
+    if (p.mergeable === 'MERGEABLE') {
+        return {
+            icon: CircleCheck,
+            iconCls: 'text-moire-status-a',
+            title: 'This branch has no conflicts with the base branch',
+            detail: p.mergeStateStatus === 'BLOCKED' ? 'Review or checks are required.' : '',
+            cls: green,
+        };
+    }
+
+    return null;
+});
 
 function openOnGitHub() {
     if (pr.value?.url) {
@@ -64,8 +142,8 @@ function openOnGitHub() {
     }
 }
 
-// A link inside the rendered description opens in the browser rather than
-// navigating the app window. The main process only opens http(s).
+// A link inside any rendered Markdown opens in the browser rather than navigating
+// the app window. The main process only opens http(s).
 function onBodyClick(event: MouseEvent) {
     const anchor = (event.target as HTMLElement | null)?.closest('a');
     const href = anchor?.getAttribute('href');
@@ -81,28 +159,36 @@ function onBodyClick(event: MouseEvent) {
 <template>
     <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
         <ScrollArea v-if="pr" class="min-h-0 flex-1">
-            <div class="mx-auto max-w-[880px] px-5 py-4">
-                <div class="flex items-start gap-3 border-b border-moire-border pb-3.5">
-                    <div class="min-w-0 flex-1">
-                        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                            <span class="text-[16px] leading-[1.35] font-semibold text-moire-fg">
-                                {{ pr.title }}
-                            </span>
-                            <span class="text-[15px] font-normal text-moire-faint">
-                                #{{ pr.number }}
-                            </span>
-                        </div>
-
+            <div class="mx-auto max-w-[880px]">
+                <!-- Header -->
+                <div class="border-b border-moire-border px-4 pt-4 pb-4">
+                    <div class="flex items-start gap-3">
                         <div
-                            class="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-moire-muted"
+                            class="min-w-0 flex-1 text-[16px] leading-[1.35] font-bold text-moire-fg"
                         >
-                            <span
-                                class="flex size-[18px] items-center justify-center rounded-full bg-moire-hover text-[9px] font-semibold text-moire-muted"
-                            >
-                                {{ initials }}
+                            {{ pr.title }}
+                            <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            class="h-7 shrink-0 gap-1.5 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                            @click="openOnGitHub"
+                        >
+                            <ExternalLink :size="14" />
+                            GitHub
+                        </Button>
+                    </div>
+
+                    <!-- who / stats / labels, each on its own line. -->
+                    <div class="mt-4 flex flex-col gap-2">
+                        <div class="flex flex-wrap items-center gap-2 text-[11px] text-moire-muted">
+                            <user-avatar :login="pr.author" :size="20" />
+                            <span class="text-moire-fg">{{ pr.author }}</span>
+                            <span>
+                                wants to merge {{ pr.commitCount }}
+                                {{ pr.commitCount === 1 ? 'commit' : 'commits' }} into
                             </span>
-                            <span class="font-medium text-moire-fg">{{ pr.author }}</span>
-                            <span>wants to merge into</span>
                             <span
                                 class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
                             >
@@ -115,37 +201,112 @@ function onBodyClick(event: MouseEvent) {
                                 {{ pr.headRefName }}
                             </span>
                         </div>
-                    </div>
 
-                    <div class="flex shrink-0 items-center gap-2">
-                        <Badge
-                            variant="outline"
-                            :class="['px-2 py-0.5 text-[10px] font-semibold', stateClass]"
-                        >
-                            {{ stateLabel }}
-                        </Badge>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            class="h-7 gap-1.5 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                            @click="openOnGitHub"
-                        >
-                            <ExternalLink :size="14" />
-                            GitHub
-                        </Button>
+                        <div class="flex items-center gap-3 text-[11px] text-moire-faint">
+                            <span class="text-moire-add-fg">+{{ pr.additions }}</span>
+                            <span class="text-moire-del-fg">−{{ pr.deletions }}</span>
+                            <span
+                                >{{ pr.changedFiles }}
+                                {{ pr.changedFiles === 1 ? 'file' : 'files' }}</span
+                            >
+                        </div>
+
+                        <div v-if="pr.labels.length" class="flex flex-wrap gap-1.5">
+                            <span
+                                v-for="label in pr.labels"
+                                :key="label.name"
+                                :title="label.description"
+                                class="rounded-full border px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap"
+                                :style="labelStyle(label.color)"
+                            >
+                                {{ label.name }}
+                            </span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- v-html is safe here: renderMarkdown escapes raw HTML in the
-                     source and rejects unsafe link schemes (see lib/markdown). -->
-                <div
-                    v-if="hasBody"
-                    class="pr-markdown pt-4 text-[12.5px] leading-[1.6] text-moire-fg"
-                    @click="onBodyClick"
-                    v-html="renderedBody"
-                />
-                <div v-else class="pt-4 text-[12.5px] text-moire-faint italic">
-                    No description provided.
+                <!-- Conversation timeline. Each entry has an avatar column with a
+                     connector line linking it to the next, as in the design. -->
+                <div class="p-4">
+                    <!-- The description reads as the first entry. -->
+                    <div class="flex gap-3">
+                        <div class="flex w-6 shrink-0 flex-col items-center gap-1.5">
+                            <user-avatar :login="pr.author" :size="24" />
+                            <span v-if="comments.length" class="w-px flex-1 bg-moire-border" />
+                        </div>
+                        <div class="min-w-0 flex-1 pb-5">
+                            <div class="rounded-lg border border-moire-border bg-moire-app">
+                                <div
+                                    class="border-b border-moire-border px-3.5 py-2.5 text-[11px] text-moire-faint"
+                                >
+                                    <span class="text-[12px] font-medium text-moire-fg">
+                                        {{ pr.author }} </span
+                                    >opened the description
+                                </div>
+                                <div class="px-3.5 py-3">
+                                    <!-- v-html is safe here: renderMarkdown escapes raw HTML and
+                                         rejects unsafe link schemes (see lib/markdown). -->
+                                    <div
+                                        v-if="hasBody"
+                                        class="pr-markdown text-[12.5px] leading-[1.6] text-moire-file-fg"
+                                        @click="onBodyClick"
+                                        v-html="renderedBody"
+                                    />
+                                    <div v-else class="text-[12.5px] text-moire-faint italic">
+                                        No description provided.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Comments and review verdicts as timeline rows. -->
+                    <div v-for="(comment, i) in comments" :key="i" class="flex gap-3">
+                        <div class="flex w-6 shrink-0 flex-col items-center gap-1.5">
+                            <user-avatar :login="comment.author" :size="24" />
+                            <span
+                                v-if="i < comments.length - 1"
+                                class="w-px flex-1 bg-moire-border"
+                            />
+                        </div>
+                        <div class="flex min-w-0 flex-1 flex-col gap-2 pb-5">
+                            <div
+                                class="flex flex-wrap items-center gap-1.5 text-[11px] text-moire-faint"
+                            >
+                                <span class="text-[12px] font-medium text-moire-fg">
+                                    {{ comment.author }}
+                                </span>
+                                <span :class="verb(comment).cls">{{ verb(comment).text }}</span>
+                                <span>{{ relative(comment.createdAt) }}</span>
+                            </div>
+                            <div
+                                v-if="comment.body.trim()"
+                                class="pr-markdown rounded-lg border border-moire-border bg-moire-app px-3.5 py-2.5 text-[12.5px] leading-[1.6] text-moire-file-fg"
+                                @click="onBodyClick"
+                                v-html="renderMarkdown(comment.body)"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Merge-status box, like GitHub's "this branch has no conflicts". -->
+                    <div
+                        v-if="mergeStatus"
+                        class="flex items-center gap-2.5 rounded-lg border px-3.5 py-3"
+                        :class="mergeStatus.cls"
+                    >
+                        <component :is="mergeStatus.icon" :size="18" :class="mergeStatus.iconCls" />
+                        <div class="min-w-0">
+                            <div class="text-[12.5px] font-medium text-moire-fg">
+                                {{ mergeStatus.title }}
+                            </div>
+                            <div
+                                v-if="mergeStatus.detail"
+                                class="mt-0.5 text-[11px] text-moire-muted"
+                            >
+                                {{ mergeStatus.detail }}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </ScrollArea>
@@ -153,11 +314,15 @@ function onBodyClick(event: MouseEvent) {
 </template>
 
 <style scoped>
-/* The rendered Markdown body. Injected via v-html, so it carries no scope
-   attribute; :deep reaches it. Element styling leans on the --moire-* tokens so
-   it matches the app in both themes. */
+/* The rendered Markdown bodies (description and comments). Injected via v-html, so
+   they carry no scope attribute; :deep reaches them. Element styling leans on the
+   --moire-* tokens so it matches the app in both themes. */
 :deep(.pr-markdown > *:first-child) {
     margin-top: 0;
+}
+
+:deep(.pr-markdown > *:last-child) {
+    margin-bottom: 0;
 }
 
 :deep(.pr-markdown p) {
@@ -168,21 +333,22 @@ function onBodyClick(event: MouseEvent) {
 :deep(.pr-markdown h2),
 :deep(.pr-markdown h3),
 :deep(.pr-markdown h4) {
-    margin: 18px 0 8px;
+    margin: 16px 0 8px;
     font-weight: 600;
     line-height: 1.3;
+    color: var(--moire-fg);
 }
 
 :deep(.pr-markdown h1) {
-    font-size: 1.4em;
+    font-size: 1.35em;
 }
 
 :deep(.pr-markdown h2) {
-    font-size: 1.25em;
+    font-size: 1.2em;
 }
 
 :deep(.pr-markdown h3) {
-    font-size: 1.1em;
+    font-size: 1.08em;
 }
 
 :deep(.pr-markdown h4) {
