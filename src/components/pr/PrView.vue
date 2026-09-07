@@ -167,8 +167,8 @@ function onBodyClick(event: MouseEvent) {
 
 <template>
     <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
-        <ScrollArea v-if="pr" class="min-h-0 flex-1">
-            <div class="mx-auto max-w-[880px]">
+        <ScrollArea v-if="pr" class="pr-scroll-area min-h-0 flex-1">
+            <div class="w-full max-w-[1040px]">
                 <!-- Header -->
                 <div class="border-b border-moire-border px-4 pt-4 pb-4">
                     <div class="flex items-start gap-3">
@@ -323,6 +323,22 @@ function onBodyClick(event: MouseEvent) {
         </ScrollArea>
     </div>
 </template>
+
+<!-- Unscoped: reka's scroll viewport wraps the slot in a width-less block (only
+     min-width: fit-content), so it shrink-wraps to the content and leaves no room
+     to center within. Force that wrapper full width and center its child with
+     flexbox. (Tailwind's mx-auto can't do it here: the project's unlayered
+     `* { margin: 0 }` reset overrides the layered margin utility.) Content wider
+     than the pane still overflows and scrolls. Keyed to this view's scroll area
+     (.pr-scroll-area) so other ScrollAreas are untouched; unscoped because the
+     wrapper is reka-internal and carries no scope attribute for :deep to reach. -->
+<style>
+.pr-scroll-area [data-reka-scroll-area-viewport] > div {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+}
+</style>
 
 <style scoped>
 /* The rendered Markdown bodies (description and comments). Injected via v-html, so
