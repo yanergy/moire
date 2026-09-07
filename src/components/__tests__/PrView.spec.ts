@@ -278,6 +278,30 @@ describe('PrView', () => {
         expect(await summary(['failure', 'pending'])).toContain('1 check has failed');
     });
 
+    it('opens a check run on GitHub from its Details button', async () => {
+        const openExternal = vi.fn<(url: string) => Promise<void>>();
+        window.api = { openExternal } as unknown as Window['api'];
+
+        const wrapper = mountWith({
+            ...PR,
+            checks: [
+                { name: 'e2e', state: 'failure', detail: 'Failed', url: 'https://gh/runs/9' },
+                { name: 'local', state: 'success', detail: '', url: '' },
+            ],
+        });
+        await wrapper
+            .findAll('button')
+            .find((b) => b.text().startsWith('Checks'))!
+            .trigger('click');
+
+        const detailButtons = wrapper.findAll('button').filter((b) => b.text().includes('Details'));
+        // Only the check that has a run URL gets a Details button.
+        expect(detailButtons).toHaveLength(1);
+
+        await detailButtons[0]!.trigger('click');
+        expect(openExternal).toHaveBeenCalledWith('https://gh/runs/9');
+    });
+
     it('renders the description as Markdown', () => {
         const wrapper = mountWith({
             ...PR,

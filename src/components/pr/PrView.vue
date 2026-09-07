@@ -241,9 +241,11 @@ const mergeStatus = computed<StatusBox | null>(() => {
     return null;
 });
 
-function openOnGitHub() {
-    if (pr.value?.url) {
-        void window.api?.openExternal(pr.value.url);
+// Open a GitHub URL (the PR, or a check's run) in the user's browser through the
+// preload bridge. The main process only opens http(s).
+function openExternal(url: string) {
+    if (url) {
+        void window.api?.openExternal(url);
     }
 }
 
@@ -278,7 +280,7 @@ function onBodyClick(event: MouseEvent) {
                             variant="outline"
                             size="sm"
                             class="h-7 shrink-0 gap-1.5 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                            @click="openOnGitHub"
+                            @click="openExternal(pr.url)"
                         >
                             <ExternalLink :size="14" />
                             GitHub
@@ -400,8 +402,8 @@ function onBodyClick(event: MouseEvent) {
                                         <span>opened the description</span>
                                     </div>
                                     <div class="px-3.5 py-3">
-                                        <!-- v-html is safe here: renderMarkdown escapes raw HTML and
-                                         rejects unsafe link schemes (see lib/markdown). -->
+                                        <!-- v-html is safe here: renderMarkdown sanitizes the
+                                         output through DOMPurify (see lib/markdown). -->
                                         <div
                                             v-if="hasBody"
                                             class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
@@ -464,12 +466,30 @@ function onBodyClick(event: MouseEvent) {
                                 <span class="min-w-0 flex-1 truncate text-[12.5px] text-moire-fg">
                                     {{ check.name }}
                                 </span>
-                                <span
-                                    v-if="check.detail"
-                                    class="shrink-0 text-[11px] text-moire-faint"
+                                <!-- Detail and the Details button share a wider gap
+                                     so the duration reads apart from the button.
+                                     (gap, not a margin: the unlayered reset kills
+                                     margin utilities.) -->
+                                <div
+                                    v-if="check.detail || check.url"
+                                    class="flex shrink-0 items-center gap-4"
                                 >
-                                    {{ check.detail }}
-                                </span>
+                                    <span v-if="check.detail" class="text-[11px] text-moire-faint">
+                                        {{ check.detail }}
+                                    </span>
+                                    <!-- Opens this check's run on GitHub (the failing
+                                         one is where you go to read the logs). -->
+                                    <button
+                                        v-if="check.url"
+                                        type="button"
+                                        class="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                        title="View this check on GitHub"
+                                        @click="openExternal(check.url)"
+                                    >
+                                        <ExternalLink :size="12" />
+                                        Details
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div v-else class="text-[14px] text-moire-faint italic">
