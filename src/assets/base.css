@@ -242,6 +242,8 @@ body {
     --color-moire-status-d: var(--moire-status-d);
     --color-moire-status-r: var(--moire-status-r);
     --color-moire-warn: var(--moire-warn);
+    --color-moire-danger: var(--moire-danger-bg);
+    --color-moire-danger-edge: var(--moire-danger-edge);
     --color-moire-accent: var(--moire-accent);
     --color-moire-check-fg: var(--moire-check-fg);
     --color-moire-seg-active: var(--moire-seg-active);
