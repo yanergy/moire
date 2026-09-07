@@ -25,6 +25,7 @@ const PR: PullRequest = {
     labels: [],
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
+    reviewDecision: '',
 };
 
 // The toolbar composes controls (RepoPicker, RefSelector, SegmentedToggle) that
@@ -121,6 +122,28 @@ describe('ToolbarHeader', () => {
 
         comparison.pullRequest = { ...PR, state: 'OPEN', isDraft: true };
         expect(dotClass()).toContain('bg-moire-pr-draft');
+
+        // An open PR with changes requested turns the dot yellow.
+        comparison.pullRequest = {
+            ...PR,
+            state: 'OPEN',
+            isDraft: false,
+            reviewDecision: 'CHANGES_REQUESTED',
+        };
+        expect(dotClass()).toContain('bg-moire-changes-fg');
+    });
+
+    it('gives a draft with changes requested the yellow dot but keeps the dashed border', () => {
+        const comparison = useComparisonStore();
+        comparison.prStatus = 'ok';
+        comparison.pullRequest = { ...PR, isDraft: true, reviewDecision: 'CHANGES_REQUESTED' };
+
+        const wrapper = mountToolbar();
+        const prButton = wrapper.findAll('button').find((b) => b.text().includes('PR #'))!;
+        // Changes requested overrides the gray draft dot...
+        expect(prButton.find('span.rounded-full').classes()).toContain('bg-moire-changes-fg');
+        // ...but the dashed border still marks it as a draft.
+        expect(prButton.classes()).toContain('border-dashed');
     });
 
     it('shows a warning triangle in place of the PR button when the gh lookup fails', () => {

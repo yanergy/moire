@@ -24,6 +24,7 @@ const PR: PullRequest = {
     labels: [],
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
+    reviewDecision: '',
 };
 
 // The reka-ui scroll area needs layout machinery jsdom lacks; a passthrough keeps
@@ -117,6 +118,43 @@ describe('PrView', () => {
         expect(mountWith({ ...PR, state: 'MERGED' }).text()).toContain('Merged');
         // Unknown mergeability shows no box.
         expect(mountWith({ ...PR, mergeable: 'UNKNOWN' }).text()).not.toContain('no conflicts');
+    });
+
+    it('shows a changes-requested box, even when otherwise mergeable', () => {
+        const text = mountWith({ ...PR, reviewDecision: 'CHANGES_REQUESTED' }).text();
+        expect(text).toContain('Changes requested');
+        // It wins over the plain "no conflicts" box.
+        expect(text).not.toContain('no conflicts with the base branch');
+        // A hard conflict still takes precedence.
+        expect(
+            mountWith({
+                ...PR,
+                reviewDecision: 'CHANGES_REQUESTED',
+                mergeable: 'CONFLICTING',
+            }).text()
+        ).toContain('conflicts that must be resolved');
+    });
+
+    it('lets changes-requested override the draft box but keeps the dashed outline', () => {
+        const wrapper = mountWith({
+            ...PR,
+            isDraft: true,
+            reviewDecision: 'CHANGES_REQUESTED',
+        });
+        const text = wrapper.text();
+        // The yellow changes-requested box replaces the "still a draft" box.
+        expect(text).toContain('Changes requested');
+        expect(text).not.toContain('still a draft');
+        // The status box keeps the dashed outline that always marks a draft.
+        const box = wrapper.find('.border.rounded-lg');
+        expect(box.classes()).toContain('border-dashed');
+        expect(box.classes()).toContain('bg-moire-changes');
+    });
+
+    it('keeps the plain draft box when no changes are requested', () => {
+        const text = mountWith({ ...PR, isDraft: true, reviewDecision: '' }).text();
+        expect(text).toContain('still a draft');
+        expect(text).not.toContain('Changes requested');
     });
 
     it('renders the description as Markdown', () => {

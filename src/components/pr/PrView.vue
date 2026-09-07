@@ -113,7 +113,9 @@ const mergeStatus = computed<{
             cls: red,
         };
     }
-    if (p.isDraft) {
+    // A draft shows its own provisional box, unless a reviewer has requested
+    // changes: that takes over the styling below, which keeps the dashed outline.
+    if (p.isDraft && p.reviewDecision !== 'CHANGES_REQUESTED') {
         return {
             icon: GitPullRequestDraft,
             iconCls: 'text-moire-muted',
@@ -130,6 +132,20 @@ const mergeStatus = computed<{
             title: 'This branch has conflicts that must be resolved',
             detail: '',
             cls: red,
+        };
+    }
+    // Changes requested outranks the draft box and the plain "mergeable" state
+    // (and shows even when mergeability is unknown), but not a hard conflict above.
+    if (p.reviewDecision === 'CHANGES_REQUESTED') {
+        return {
+            icon: CircleAlert,
+            iconCls: 'text-moire-changes-fg',
+            title: 'Changes requested',
+            detail: 'A reviewer asked for changes before this can be merged.',
+            // A draft keeps its dashed outline; the rest takes the yellow tint.
+            cls: p.isDraft
+                ? 'border-dashed border-moire-changes-edge bg-moire-changes'
+                : 'border-moire-changes-edge bg-moire-changes',
         };
     }
     if (p.mergeable === 'MERGEABLE') {

@@ -23,7 +23,8 @@ const WORKING_TREE = 'WORKING TREE';
 // list, and the comments/reviews feed the PR view's header and conversation.
 const PR_FIELDS =
     'number,title,body,state,url,isDraft,author,baseRefName,headRefName,createdAt,' +
-    'additions,deletions,changedFiles,commits,comments,reviews,labels,mergeable,mergeStateStatus';
+    'additions,deletions,changedFiles,commits,comments,reviews,labels,mergeable,mergeStateStatus,' +
+    'reviewDecision';
 
 // Why a PR view is empty, so the renderer can show the right hint instead of a
 // bare "nothing here". Mirrors PrStatus in src/shared/types.ts.
@@ -74,6 +75,9 @@ export interface PullRequest {
     // or UNKNOWN; `mergeStateStatus` refines it (CLEAN, BLOCKED, BEHIND, ...).
     mergeable: string;
     mergeStateStatus: string;
+    // The effective code-review decision: '' | CHANGES_REQUESTED | APPROVED |
+    // REVIEW_REQUIRED. Drives the "changes requested" status.
+    reviewDecision: string;
 }
 
 export interface PullRequestResult {
@@ -128,6 +132,7 @@ interface GhPr {
     labels: GhLabel[] | null;
     mergeable: string;
     mergeStateStatus: string;
+    reviewDecision: string | null;
 }
 
 // Runs `gh` with the given args in the repo directory and resolves its stdout.
@@ -187,6 +192,39 @@ function buildComments(pr: GhPr): PrComment[] {
     return out;
 }
 
+// The effective review decision. gh fills `reviewDecision` only when the repo
+// requires reviews (branch protection); otherwise it is empty even after a
+// "changes requested" review. So when it is empty, derive the decision from the
+// latest review per author: changes requested outranks an approval, as on GitHub,
+// and COMMENTED/DISMISSED/PENDING states carry no decision.
+function reviewDecisionOf(pr: GhPr): string {
+    if (pr.reviewDecision) {
+        return pr.reviewDecision;
+    }
+
+    // Sort by time so the last entry per author is their current stance.
+    const reviews = (pr.reviews ?? []).toSorted((a, b) =>
+        (a.submittedAt ?? '').localeCompare(b.submittedAt ?? '')
+    );
+    const latest = new Map<string, string>();
+    for (const r of reviews) {
+        const login = r.author?.login ?? '';
+        if (login && r.state) {
+            latest.set(login, r.state);
+        }
+    }
+
+    const states = new Set(latest.values());
+    if (states.has('CHANGES_REQUESTED')) {
+        return 'CHANGES_REQUESTED';
+    }
+    if (states.has('APPROVED')) {
+        return 'APPROVED';
+    }
+
+    return '';
+}
+
 function toPullRequest(pr: GhPr): PullRequest {
     return {
         number: pr.number,
@@ -211,6 +249,7 @@ function toPullRequest(pr: GhPr): PullRequest {
         })),
         mergeable: pr.mergeable ?? 'UNKNOWN',
         mergeStateStatus: pr.mergeStateStatus ?? '',
+        reviewDecision: reviewDecisionOf(pr),
     };
 }
 

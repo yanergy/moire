@@ -172,6 +172,99 @@ describe('getPullRequest', () => {
     });
 });
 
+describe('getPullRequest review decision', () => {
+    // Resolve the mapped reviewDecision for a PR carrying the given fields.
+    async function decisionFor(overrides: Record<string, unknown>) {
+        const { run } = okRunner(JSON.stringify([{ ...ghPr, ...overrides }]));
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+        return result.pr!.reviewDecision;
+    }
+
+    it("prefers gh's own reviewDecision field when present", async () => {
+        // gh populates this on repos with required reviews; trust it verbatim.
+        expect(await decisionFor({ reviewDecision: 'CHANGES_REQUESTED' })).toBe(
+            'CHANGES_REQUESTED'
+        );
+        expect(await decisionFor({ reviewDecision: 'APPROVED' })).toBe('APPROVED');
+    });
+
+    it('derives CHANGES_REQUESTED from the reviews when gh leaves the field empty', async () => {
+        expect(
+            await decisionFor({
+                reviewDecision: '',
+                reviews: [
+                    {
+                        author: { login: 'ann' },
+                        body: 'please fix',
+                        state: 'CHANGES_REQUESTED',
+                        submittedAt: '2026-09-04T00:00:00Z',
+                    },
+                ],
+            })
+        ).toBe('CHANGES_REQUESTED');
+    });
+
+    it("counts only a reviewer's latest verdict, so a later approval clears the request", async () => {
+        expect(
+            await decisionFor({
+                reviewDecision: '',
+                reviews: [
+                    {
+                        author: { login: 'ann' },
+                        body: 'please fix',
+                        state: 'CHANGES_REQUESTED',
+                        submittedAt: '2026-09-04T00:00:00Z',
+                    },
+                    {
+                        author: { login: 'ann' },
+                        body: 'thanks',
+                        state: 'APPROVED',
+                        submittedAt: '2026-09-05T00:00:00Z',
+                    },
+                ],
+            })
+        ).toBe('APPROVED');
+    });
+
+    it('keeps CHANGES_REQUESTED when one reviewer still wants changes though another approved', async () => {
+        expect(
+            await decisionFor({
+                reviewDecision: '',
+                reviews: [
+                    {
+                        author: { login: 'ann' },
+                        body: 'lgtm',
+                        state: 'APPROVED',
+                        submittedAt: '2026-09-04T00:00:00Z',
+                    },
+                    {
+                        author: { login: 'bob' },
+                        body: 'no',
+                        state: 'CHANGES_REQUESTED',
+                        submittedAt: '2026-09-05T00:00:00Z',
+                    },
+                ],
+            })
+        ).toBe('CHANGES_REQUESTED');
+    });
+
+    it('leaves the decision empty when there are only plain comments', async () => {
+        expect(
+            await decisionFor({
+                reviewDecision: '',
+                reviews: [
+                    {
+                        author: { login: 'x' },
+                        body: 'a thought',
+                        state: 'COMMENTED',
+                        submittedAt: '2026-09-04T00:00:00Z',
+                    },
+                ],
+            })
+        ).toBe('');
+    });
+});
+
 // `gh auth status` output as gh prints it, with a token and detail lines between
 // the account lines the parser cares about.
 const authStatus = [

@@ -126,6 +126,9 @@ export interface PullRequest {
     // or UNKNOWN; `mergeStateStatus` refines it (CLEAN, BLOCKED, BEHIND, ...).
     mergeable: string;
     mergeStateStatus: string;
+    // The effective code-review decision: '' | CHANGES_REQUESTED | APPROVED |
+    // REVIEW_REQUIRED. Drives the yellow "changes requested" status.
+    reviewDecision: string;
 }
 
 // Why a PR lookup produced no PR, so the renderer can show the right hint:

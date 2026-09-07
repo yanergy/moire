@@ -41,14 +41,16 @@ function setPrView(on: boolean) {
 }
 
 // A status dot before the PR button label: vibrant green open, red closed,
-// purple merged, gray draft (a draft reads first, before its open/closed state).
-// Uses the dedicated --moire-pr-* tones so it stays bright and legible.
+// purple merged, gray draft, and yellow when a PR has changes requested. Changes
+// requested overrides the draft dot; the dashed toggle border (driven by isDraft
+// below) still marks it as a draft. Uses the dedicated --moire-pr-* /
+// --moire-changes-* tones so it stays bright.
 const statusDotClass = computed(() => {
     const pr = comparison.pullRequest;
     if (!pr) {
         return '';
     }
-    if (pr.isDraft) {
+    if (pr.isDraft && pr.reviewDecision !== 'CHANGES_REQUESTED') {
         return 'bg-moire-pr-draft';
     }
     if (pr.state === 'MERGED') {
@@ -56,6 +58,9 @@ const statusDotClass = computed(() => {
     }
     if (pr.state === 'CLOSED') {
         return 'bg-moire-pr-closed';
+    }
+    if (pr.reviewDecision === 'CHANGES_REQUESTED') {
+        return 'bg-moire-changes-fg';
     }
     return 'bg-moire-pr-open';
 });

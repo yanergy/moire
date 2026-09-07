@@ -42,6 +42,7 @@ const PR: PullRequest = {
     labels: [],
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
+    reviewDecision: '',
 };
 
 describe('MoirePage', () => {

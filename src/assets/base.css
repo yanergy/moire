@@ -108,6 +108,11 @@
        green tints (based on the --moire-status-r purple). */
     --moire-merged-bg: rgba(143, 95, 176, 0.12);
     --moire-merged-edge: rgba(143, 95, 176, 0.4);
+    /* Yellow "changes requested" status: a solid tone for the dot and box icon,
+       plus a faint fill and border, matching the other status tints. */
+    --moire-changes-fg: #bf8700;
+    --moire-changes-bg: rgba(191, 135, 0, 0.12);
+    --moire-changes-edge: rgba(191, 135, 0, 0.45);
     /* Warning amber for the toolbar's "PR lookup failed" triangle (gh missing,
        signed out, or an access error). */
     --moire-warn: #b45309;
@@ -257,6 +262,9 @@ body {
     --color-moire-danger-edge: var(--moire-danger-edge);
     --color-moire-merged: var(--moire-merged-bg);
     --color-moire-merged-edge: var(--moire-merged-edge);
+    --color-moire-changes: var(--moire-changes-bg);
+    --color-moire-changes-edge: var(--moire-changes-edge);
+    --color-moire-changes-fg: var(--moire-changes-fg);
     --color-moire-pr-open: var(--moire-pr-open);
     --color-moire-pr-closed: var(--moire-pr-closed);
     --color-moire-pr-merged: var(--moire-pr-merged);
@@ -326,6 +334,10 @@ body {
     /* Faint purple merged tint, tuned for dark (based on --moire-status-r). */
     --moire-merged-bg: rgba(169, 127, 192, 0.16);
     --moire-merged-edge: rgba(169, 127, 192, 0.4);
+    /* Yellow "changes requested" status, tuned for dark. */
+    --moire-changes-fg: #e3b341;
+    --moire-changes-bg: rgba(227, 179, 65, 0.16);
+    --moire-changes-edge: rgba(227, 179, 65, 0.4);
     /* Warning amber, tuned for dark. */
     --moire-warn: #e0a53a;
     --moire-add-fg: #6a9955;
