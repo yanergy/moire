@@ -104,6 +104,10 @@
     --moire-avatar-bg: rgba(59, 125, 216, 0.15);
     --moire-danger-bg: rgba(176, 58, 58, 0.12);
     --moire-danger-edge: rgba(176, 58, 58, 0.4);
+    /* Faint purple tint for the merged merge-status box, matching the red and
+       green tints (based on the --moire-status-r purple). */
+    --moire-merged-bg: rgba(143, 95, 176, 0.12);
+    --moire-merged-edge: rgba(143, 95, 176, 0.4);
     /* Warning amber for the toolbar's "PR lookup failed" triangle (gh missing,
        signed out, or an access error). */
     --moire-warn: #b45309;
@@ -124,6 +128,13 @@
     --moire-status-m: #3b7dd8;
     --moire-status-d: #b03a3a;
     --moire-status-r: #8f5fb0;
+    /* Vibrant PR-state dots for the toolbar toggle (GitHub Primer tones). Kept
+       separate from the muted --moire-status-* above, which the file badges and
+       merge box use, so the dots can read brighter without affecting those. */
+    --moire-pr-open: #2da44e;
+    --moire-pr-closed: #cf222e;
+    --moire-pr-merged: #8250df;
+    --moire-pr-draft: #6e7781;
     --moire-accent: #3b7dd8;
     --moire-check-fg: #ffffff;
     --moire-pop-shadow: 0 12px 34px rgba(0, 0, 0, 0.14);
@@ -244,6 +255,12 @@ body {
     --color-moire-warn: var(--moire-warn);
     --color-moire-danger: var(--moire-danger-bg);
     --color-moire-danger-edge: var(--moire-danger-edge);
+    --color-moire-merged: var(--moire-merged-bg);
+    --color-moire-merged-edge: var(--moire-merged-edge);
+    --color-moire-pr-open: var(--moire-pr-open);
+    --color-moire-pr-closed: var(--moire-pr-closed);
+    --color-moire-pr-merged: var(--moire-pr-merged);
+    --color-moire-pr-draft: var(--moire-pr-draft);
     --color-moire-accent: var(--moire-accent);
     --color-moire-check-fg: var(--moire-check-fg);
     --color-moire-seg-active: var(--moire-seg-active);
@@ -306,6 +323,9 @@ body {
     --moire-avatar-bg: rgba(59, 125, 216, 0.22);
     --moire-danger-bg: rgba(255, 0, 0, 0.14);
     --moire-danger-edge: rgba(255, 0, 0, 0.3);
+    /* Faint purple merged tint, tuned for dark (based on --moire-status-r). */
+    --moire-merged-bg: rgba(169, 127, 192, 0.16);
+    --moire-merged-edge: rgba(169, 127, 192, 0.4);
     /* Warning amber, tuned for dark. */
     --moire-warn: #e0a53a;
     --moire-add-fg: #6a9955;
@@ -322,6 +342,11 @@ body {
     --moire-status-m: #6ba5e7;
     --moire-status-d: #b46a6a;
     --moire-status-r: #a97fc0;
+    /* Vibrant PR-state dots, brighter for dark. */
+    --moire-pr-open: #3fb950;
+    --moire-pr-closed: #f85149;
+    --moire-pr-merged: #a371f7;
+    --moire-pr-draft: #8b949e;
     --moire-accent: #6ba5e7;
     --moire-check-fg: #09090b;
     --moire-pop-shadow: 0 12px 34px rgba(0, 0, 0, 0.6);

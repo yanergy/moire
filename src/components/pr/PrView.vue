@@ -94,7 +94,6 @@ const mergeStatus = computed<{
     const p = pr.value;
     const green = 'border-moire-viewed-edge bg-moire-viewed';
     const red = 'border-moire-danger-edge bg-moire-danger';
-    const neutral = 'border-moire-border bg-moire-chrome';
 
     if (p.state === 'MERGED') {
         return {
@@ -102,7 +101,7 @@ const mergeStatus = computed<{
             iconCls: 'text-moire-status-r',
             title: 'Merged',
             detail: '',
-            cls: 'border-moire-border bg-moire-chrome',
+            cls: 'border-moire-merged-edge bg-moire-merged',
         };
     }
     if (p.state === 'CLOSED') {
@@ -120,7 +119,8 @@ const mergeStatus = computed<{
             iconCls: 'text-moire-muted',
             title: 'This pull request is still a draft',
             detail: 'Mark it ready for review to merge.',
-            cls: neutral,
+            // Dashed outline with the same border tone as the draft PR toggle.
+            cls: 'border-dashed border-input bg-moire-chrome',
         };
     }
     if (p.mergeable === 'CONFLICTING') {
@@ -238,6 +238,35 @@ function onBodyClick(event: MouseEvent) {
                 <!-- Conversation timeline. Each entry has an avatar column with a
                      connector line linking it to the next, as in the design. -->
                 <div class="p-4">
+                    <!-- Merge-status box first, so the PR's state is visible without
+                         scrolling to the bottom of the conversation. (Deliberately
+                         above the conversation, unlike GitHub.) The gap below is
+                         padding on this wrapper, not a margin: the project's
+                         unlayered `* { margin: 0 }` reset kills margin utilities. -->
+                    <div v-if="mergeStatus" class="pb-4">
+                        <div
+                            class="flex items-center gap-2.5 rounded-lg border px-3.5 py-3"
+                            :class="mergeStatus.cls"
+                        >
+                            <component
+                                :is="mergeStatus.icon"
+                                :size="18"
+                                :class="mergeStatus.iconCls"
+                            />
+                            <div class="min-w-0">
+                                <div class="text-[14px] font-medium text-moire-fg">
+                                    {{ mergeStatus.title }}
+                                </div>
+                                <div
+                                    v-if="mergeStatus.detail"
+                                    class="mt-0.5 text-[13px] text-moire-muted"
+                                >
+                                    {{ mergeStatus.detail }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- The description reads as the first entry. -->
                     <div class="flex gap-3">
                         <div class="flex w-6 shrink-0 flex-col items-center gap-1.5">
@@ -296,26 +325,6 @@ function onBodyClick(event: MouseEvent) {
                                 @click="onBodyClick"
                                 v-html="renderMarkdown(comment.body)"
                             />
-                        </div>
-                    </div>
-
-                    <!-- Merge-status box, like GitHub's "this branch has no conflicts". -->
-                    <div
-                        v-if="mergeStatus"
-                        class="flex items-center gap-2.5 rounded-lg border px-3.5 py-3"
-                        :class="mergeStatus.cls"
-                    >
-                        <component :is="mergeStatus.icon" :size="18" :class="mergeStatus.iconCls" />
-                        <div class="min-w-0">
-                            <div class="text-[14px] font-medium text-moire-fg">
-                                {{ mergeStatus.title }}
-                            </div>
-                            <div
-                                v-if="mergeStatus.detail"
-                                class="mt-0.5 text-[13px] text-moire-muted"
-                            >
-                                {{ mergeStatus.detail }}
-                            </div>
                         </div>
                     </div>
                 </div>

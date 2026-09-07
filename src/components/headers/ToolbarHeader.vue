@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { ArrowRightLeft, GitPullRequest, GitPullRequestDraft, TriangleAlert } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
@@ -38,6 +39,26 @@ const viewOptions: { value: ViewMode; label: string }[] = [
 function setPrView(on: boolean) {
     ui.setMainView(on ? 'pr' : 'diff');
 }
+
+// A status dot before the PR button label: vibrant green open, red closed,
+// purple merged, gray draft (a draft reads first, before its open/closed state).
+// Uses the dedicated --moire-pr-* tones so it stays bright and legible.
+const statusDotClass = computed(() => {
+    const pr = comparison.pullRequest;
+    if (!pr) {
+        return '';
+    }
+    if (pr.isDraft) {
+        return 'bg-moire-pr-draft';
+    }
+    if (pr.state === 'MERGED') {
+        return 'bg-moire-pr-merged';
+    }
+    if (pr.state === 'CLOSED') {
+        return 'bg-moire-pr-closed';
+    }
+    return 'bg-moire-pr-open';
+});
 </script>
 
 <template>
@@ -85,6 +106,7 @@ function setPrView(on: boolean) {
                             ]"
                             @update:model-value="setPrView"
                         >
+                            <span class="size-2.5 shrink-0 rounded-full" :class="statusDotClass" />
                             <GitPullRequestDraft
                                 v-if="comparison.pullRequest?.isDraft"
                                 :size="16"

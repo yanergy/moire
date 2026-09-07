@@ -100,6 +100,29 @@ describe('ToolbarHeader', () => {
         expect(prButton.classes()).not.toContain('border-dashed');
     });
 
+    it('colors the status dot by the PR state', () => {
+        const comparison = useComparisonStore();
+        comparison.prStatus = 'ok';
+        const dotClass = () => {
+            const btn = mountToolbar()
+                .findAll('button')
+                .find((b) => b.text().includes('PR #'))!;
+            return btn.find('span.rounded-full').classes();
+        };
+
+        comparison.pullRequest = { ...PR, state: 'OPEN', isDraft: false };
+        expect(dotClass()).toContain('bg-moire-pr-open');
+
+        comparison.pullRequest = { ...PR, state: 'CLOSED', isDraft: false };
+        expect(dotClass()).toContain('bg-moire-pr-closed');
+
+        comparison.pullRequest = { ...PR, state: 'MERGED', isDraft: false };
+        expect(dotClass()).toContain('bg-moire-pr-merged');
+
+        comparison.pullRequest = { ...PR, state: 'OPEN', isDraft: true };
+        expect(dotClass()).toContain('bg-moire-pr-draft');
+    });
+
     it('shows a warning triangle in place of the PR button when the gh lookup fails', () => {
         const comparison = useComparisonStore();
         comparison.prStatus = 'not-installed';
