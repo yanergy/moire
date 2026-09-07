@@ -24,7 +24,7 @@ const WORKING_TREE = 'WORKING TREE';
 const PR_FIELDS =
     'number,title,body,state,url,isDraft,author,baseRefName,headRefName,createdAt,' +
     'additions,deletions,changedFiles,commits,comments,reviews,labels,mergeable,mergeStateStatus,' +
-    'reviewDecision';
+    'reviewDecision,statusCheckRollup';
 
 // Why a PR view is empty, so the renderer can show the right hint instead of a
 // bare "nothing here". Mirrors PrStatus in src/shared/types.ts.
@@ -54,6 +54,20 @@ export interface PrLabel {
     description: string;
 }
 
+// One CI check on the PR's head commit. `state` collapses GitHub's many
+// status/conclusion values into the buckets the view needs (the design colors
+// only success and failure, the rest faint, but the finer state drives the row's
+// icon). `detail` is a short human summary (a duration, "Running", "Skipped", ...)
+// and `url` opens the run on GitHub.
+export type PrCheckState = 'success' | 'failure' | 'pending' | 'skipped' | 'neutral';
+
+export interface PrCheck {
+    name: string;
+    state: PrCheckState;
+    detail: string;
+    url: string;
+}
+
 export interface PullRequest {
     number: number;
     title: string;
@@ -78,6 +92,8 @@ export interface PullRequest {
     // The effective code-review decision: '' | CHANGES_REQUESTED | APPROVED |
     // REVIEW_REQUIRED. Drives the "changes requested" status.
     reviewDecision: string;
+    // The CI checks on the head commit, for the Checks tab. Empty when none ran.
+    checks: PrCheck[];
 }
 
 export interface PullRequestResult {
@@ -112,6 +128,26 @@ interface GhLabel {
     description: string;
 }
 
+// A statusCheckRollup entry. gh returns a union: an Actions `CheckRun` (a
+// lifecycle `status` plus a `conclusion` once done) or a legacy `StatusContext`
+// (a flat `state`). Every field is optional so a node of either shape parses.
+interface GhCheckNode {
+    __typename?: string;
+    // CheckRun
+    name?: string;
+    status?: string;
+    conclusion?: string;
+    startedAt?: string;
+    completedAt?: string;
+    detailsUrl?: string;
+    workflowName?: string;
+    // StatusContext
+    context?: string;
+    state?: string;
+    targetUrl?: string;
+    description?: string;
+}
+
 interface GhPr {
     number: number;
     title: string;
@@ -133,6 +169,7 @@ interface GhPr {
     mergeable: string;
     mergeStateStatus: string;
     reviewDecision: string | null;
+    statusCheckRollup: GhCheckNode[] | null;
 }
 
 // Runs `gh` with the given args in the repo directory and resolves its stdout.
@@ -225,6 +262,90 @@ function reviewDecisionOf(pr: GhPr): string {
     return '';
 }
 
+// Format an elapsed run time the way GitHub's check summaries do: "48s", "1m 12s".
+// Returns '' when either timestamp is missing or unparseable.
+function formatDuration(startIso?: string, endIso?: string): string {
+    const start = Date.parse(startIso ?? '');
+    const end = Date.parse(endIso ?? '');
+    if (Number.isNaN(start) || Number.isNaN(end) || end < start) {
+        return '';
+    }
+
+    const secs = Math.round((end - start) / 1000);
+    const mins = Math.floor(secs / 60);
+    const rem = secs % 60;
+    return mins ? `${mins}m ${rem.toString().padStart(2, '0')}s` : `${secs}s`;
+}
+
+// Map one rollup node onto the view's shape. A legacy StatusContext carries a flat
+// `state`; a CheckRun carries a `status` (lifecycle) and, once COMPLETED, a
+// `conclusion` (result). GitHub's many values collapse into five buckets.
+function toCheck(node: GhCheckNode): PrCheck {
+    if (node.__typename === 'StatusContext') {
+        const st = (node.state ?? '').toUpperCase();
+        let state: PrCheckState = 'pending';
+        if (st === 'SUCCESS') {
+            state = 'success';
+        } else if (st === 'FAILURE' || st === 'ERROR') {
+            state = 'failure';
+        }
+        return {
+            name: node.context ?? '',
+            state,
+            detail: node.description ?? '',
+            url: node.targetUrl ?? '',
+        };
+    }
+
+    // A CheckRun that has not finished: still queued or in progress.
+    const status = (node.status ?? '').toUpperCase();
+    if (status !== 'COMPLETED') {
+        let detail = 'Pending';
+        if (status === 'IN_PROGRESS') {
+            detail = 'Running';
+        } else if (status === 'QUEUED') {
+            detail = 'Queued';
+        }
+        return { name: node.name ?? '', state: 'pending', detail, url: node.detailsUrl ?? '' };
+    }
+
+    // A finished CheckRun: bucket by conclusion. Anything unrecognised (FAILURE,
+    // TIMED_OUT, STARTUP_FAILURE, ACTION_REQUIRED, ...) reads as a failure.
+    const duration = formatDuration(node.startedAt, node.completedAt);
+    let state: PrCheckState = 'failure';
+    let detail = duration ? `Failed in ${duration}` : 'Failed';
+    switch ((node.conclusion ?? '').toUpperCase()) {
+        case 'SUCCESS':
+            state = 'success';
+            detail = duration;
+            break;
+        case 'SKIPPED':
+            state = 'skipped';
+            detail = 'Skipped';
+            break;
+        case 'NEUTRAL':
+            state = 'neutral';
+            detail = 'Neutral';
+            break;
+        case 'CANCELLED':
+            state = 'neutral';
+            detail = 'Cancelled';
+            break;
+        case 'STALE':
+            state = 'neutral';
+            detail = 'Stale';
+            break;
+        default:
+            break;
+    }
+    return { name: node.name ?? '', state, detail, url: node.detailsUrl ?? '' };
+}
+
+// The head commit's checks for the Checks tab, dropping any nameless node.
+function buildChecks(pr: GhPr): PrCheck[] {
+    return (pr.statusCheckRollup ?? []).map(toCheck).filter((c) => c.name);
+}
+
 function toPullRequest(pr: GhPr): PullRequest {
     return {
         number: pr.number,
@@ -250,6 +371,7 @@ function toPullRequest(pr: GhPr): PullRequest {
         mergeable: pr.mergeable ?? 'UNKNOWN',
         mergeStateStatus: pr.mergeStateStatus ?? '',
         reviewDecision: reviewDecisionOf(pr),
+        checks: buildChecks(pr),
     };
 }
 

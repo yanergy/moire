@@ -172,6 +172,89 @@ describe('getPullRequest', () => {
     });
 });
 
+describe('getPullRequest checks', () => {
+    // Resolve the mapped checks for a PR carrying the given statusCheckRollup.
+    async function checksFor(rollup: unknown[]) {
+        const { run } = okRunner(JSON.stringify([{ ...ghPr, statusCheckRollup: rollup }]));
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+        return result.pr!.checks;
+    }
+
+    it('maps a completed CheckRun by its conclusion, with an elapsed duration', async () => {
+        const checks = await checksFor([
+            {
+                __typename: 'CheckRun',
+                name: 'lint',
+                status: 'COMPLETED',
+                conclusion: 'SUCCESS',
+                startedAt: '2026-09-06T16:00:00Z',
+                completedAt: '2026-09-06T16:00:32Z',
+                detailsUrl: 'https://x/lint',
+            },
+            {
+                __typename: 'CheckRun',
+                name: 'e2e',
+                status: 'COMPLETED',
+                conclusion: 'FAILURE',
+                startedAt: '2026-09-06T16:00:00Z',
+                completedAt: '2026-09-06T16:04:06Z',
+                detailsUrl: 'https://x/e2e',
+            },
+        ]);
+        expect(checks).toEqual([
+            { name: 'lint', state: 'success', detail: '32s', url: 'https://x/lint' },
+            { name: 'e2e', state: 'failure', detail: 'Failed in 4m 06s', url: 'https://x/e2e' },
+        ]);
+    });
+
+    it('reports an unfinished CheckRun as pending with a lifecycle detail', async () => {
+        const checks = await checksFor([
+            { __typename: 'CheckRun', name: 'build', status: 'IN_PROGRESS' },
+            { __typename: 'CheckRun', name: 'deploy', status: 'QUEUED' },
+        ]);
+        expect(checks).toEqual([
+            { name: 'build', state: 'pending', detail: 'Running', url: '' },
+            { name: 'deploy', state: 'pending', detail: 'Queued', url: '' },
+        ]);
+    });
+
+    it('buckets skipped, neutral, and cancelled conclusions away from failure', async () => {
+        const checks = await checksFor([
+            { __typename: 'CheckRun', name: 's', status: 'COMPLETED', conclusion: 'SKIPPED' },
+            { __typename: 'CheckRun', name: 'n', status: 'COMPLETED', conclusion: 'NEUTRAL' },
+            { __typename: 'CheckRun', name: 'c', status: 'COMPLETED', conclusion: 'CANCELLED' },
+        ]);
+        expect(checks.map((c) => c.state)).toEqual(['skipped', 'neutral', 'neutral']);
+    });
+
+    it('maps a legacy StatusContext by its flat state', async () => {
+        const checks = await checksFor([
+            {
+                __typename: 'StatusContext',
+                context: 'ci/circleci',
+                state: 'SUCCESS',
+                description: 'Your tests passed',
+                targetUrl: 'https://x/ci',
+            },
+        ]);
+        expect(checks).toEqual([
+            {
+                name: 'ci/circleci',
+                state: 'success',
+                detail: 'Your tests passed',
+                url: 'https://x/ci',
+            },
+        ]);
+    });
+
+    it('drops nameless nodes and yields an empty list when nothing ran', async () => {
+        expect(await checksFor([{ __typename: 'CheckRun', status: 'COMPLETED' }])).toEqual([]);
+        const { run } = okRunner(JSON.stringify([{ ...ghPr, statusCheckRollup: null }]));
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+        expect(result.pr!.checks).toEqual([]);
+    });
+});
+
 describe('getPullRequest review decision', () => {
     // Resolve the mapped reviewDecision for a PR carrying the given fields.
     async function decisionFor(overrides: Record<string, unknown>) {

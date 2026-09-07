@@ -25,6 +25,7 @@ const PR: PullRequest = {
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
     reviewDecision: '',
+    checks: [],
 };
 
 // The reka-ui scroll area needs layout machinery jsdom lacks; a passthrough keeps
@@ -37,6 +38,10 @@ function mountWith(pr: PullRequest | null, status: PrStatus = 'ok') {
     store.prStatus = status;
     return mount(PrView, { global: { stubs } });
 }
+
+// A minimal check fixture in the given state.
+type CheckState = 'success' | 'failure' | 'pending';
+const check = (state: CheckState) => ({ name: state, state, detail: '', url: '' });
 
 describe('PrView', () => {
     beforeEach(() => setActivePinia(createPinia()));
@@ -146,15 +151,131 @@ describe('PrView', () => {
         expect(text).toContain('Changes requested');
         expect(text).not.toContain('still a draft');
         // The status box keeps the dashed outline that always marks a draft.
-        const box = wrapper.find('.border.rounded-lg');
+        const box = wrapper.find('.bg-moire-changes');
+        expect(box.exists()).toBe(true);
         expect(box.classes()).toContain('border-dashed');
-        expect(box.classes()).toContain('bg-moire-changes');
     });
 
     it('keeps the plain draft box when no changes are requested', () => {
         const text = mountWith({ ...PR, isDraft: true, reviewDecision: '' }).text();
         expect(text).toContain('still a draft');
         expect(text).not.toContain('Changes requested');
+    });
+
+    it('opens on the Conversation tab and switches to Checks', async () => {
+        const wrapper = mountWith({
+            ...PR,
+            checks: [
+                { name: 'lint', state: 'success', detail: '32s', url: 'https://x/1' },
+                {
+                    name: 'e2e / macos',
+                    state: 'failure',
+                    detail: 'Failed in 4m 06s',
+                    url: 'https://x/2',
+                },
+            ],
+        });
+        // Conversation is the default; the checks are not shown yet.
+        expect(wrapper.text()).toContain('opened the description');
+        expect(wrapper.text()).not.toContain('lint');
+
+        const checksTab = wrapper.findAll('button').find((b) => b.text().startsWith('Checks'))!;
+        await checksTab.trigger('click');
+
+        const text = wrapper.text();
+        expect(text).toContain('lint');
+        expect(text).toContain('32s');
+        expect(text).toContain('e2e / macos');
+        expect(text).toContain('Failed in 4m 06s');
+        // The conversation is swapped out, not stacked below.
+        expect(text).not.toContain('opened the description');
+    });
+
+    it('shows the passed/total summary on the Checks tab label', () => {
+        const wrapper = mountWith({
+            ...PR,
+            checks: [
+                { name: 'a', state: 'success', detail: '', url: '' },
+                { name: 'b', state: 'failure', detail: '', url: '' },
+                { name: 'c', state: 'success', detail: '', url: '' },
+            ],
+        });
+        const checksTab = wrapper.findAll('button').find((b) => b.text().startsWith('Checks'))!;
+        expect(checksTab.text()).toContain('2/3');
+    });
+
+    it('shows an empty state on the Checks tab when nothing has run', async () => {
+        const wrapper = mountWith({ ...PR, checks: [] });
+        const checksTab = wrapper.findAll('button').find((b) => b.text().startsWith('Checks'))!;
+        await checksTab.trigger('click');
+        expect(wrapper.text()).toContain('No checks have run');
+    });
+
+    it('gives each tab its own status box: PR state on Conversation, CI state on Checks', async () => {
+        const wrapper = mountWith({
+            ...PR,
+            checks: [
+                { name: 'lint', state: 'success', detail: '32s', url: '' },
+                { name: 'e2e', state: 'failure', detail: 'Failed', url: '' },
+            ],
+        });
+        // Conversation shows the PR's merge state, not the checks summary.
+        expect(wrapper.text()).toContain('no conflicts with the base branch');
+        expect(wrapper.text()).not.toContain('failed');
+
+        const checksTab = wrapper.findAll('button').find((b) => b.text().startsWith('Checks'))!;
+        await checksTab.trigger('click');
+        const text = wrapper.text();
+        // Checks shows the CI summary, not the PR merge box.
+        expect(text).toContain('1 check has failed');
+        expect(text).not.toContain('no conflicts with the base branch');
+    });
+
+    it('marks the Checks tab with a roll-up icon of the checks state', () => {
+        const checksTab = (pr: PullRequest) =>
+            mountWith(pr)
+                .findAll('button')
+                .find((b) => b.text().startsWith('Checks'))!;
+
+        // A failure shows the red cross on the tab, even while it is not active.
+        const failing = checksTab({
+            ...PR,
+            checks: [
+                { name: 'a', state: 'success', detail: '', url: '' },
+                { name: 'b', state: 'failure', detail: '', url: '' },
+            ],
+        });
+        expect(failing.find('svg.lucide-circle-x').exists()).toBe(true);
+
+        // All passing shows the green check.
+        const passing = checksTab({
+            ...PR,
+            checks: [{ name: 'a', state: 'success', detail: '', url: '' }],
+        });
+        expect(passing.find('svg.lucide-circle-check').exists()).toBe(true);
+
+        // No checks: no icon on the tab.
+        expect(
+            checksTab({ ...PR, checks: [] })
+                .find('svg')
+                .exists()
+        ).toBe(false);
+    });
+
+    it('summarises the checks state: all passed, failing, or still running', async () => {
+        const summary = async (states: CheckState[]) => {
+            const wrapper = mountWith({ ...PR, checks: states.map(check) });
+            await wrapper
+                .findAll('button')
+                .find((b) => b.text().startsWith('Checks'))!
+                .trigger('click');
+            return wrapper.text();
+        };
+        expect(await summary(['success', 'success'])).toContain('All checks have passed');
+        expect(await summary(['success', 'failure'])).toContain('1 check has failed');
+        expect(await summary(['success', 'pending'])).toContain('1 check is still running');
+        // A failure outranks a still-running check.
+        expect(await summary(['failure', 'pending'])).toContain('1 check has failed');
     });
 
     it('renders the description as Markdown', () => {

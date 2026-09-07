@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, type Component } from 'vue';
+import { computed, ref, type Component } from 'vue';
 import {
     ArrowRight,
+    Circle,
     CircleAlert,
     CircleCheck,
+    CircleDot,
+    CircleSlash,
+    CircleX,
     ExternalLink,
     GitMerge,
     GitPullRequestClosed,
@@ -15,11 +19,93 @@ import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
-import type { PrComment } from '@/shared/types';
+import PrStatusBox from '@/components/pr/PrStatusBox.vue';
+import type { PrCheckState, PrComment } from '@/shared/types';
+
+// The shape both status boxes share: the Conversation tab's merge state and the
+// Checks tab's CI summary. `icon` is a lucide component, `cls` tints the box.
+interface StatusBox {
+    icon: Component;
+    iconCls: string;
+    title: string;
+    detail: string;
+    cls: string;
+}
 
 const comparison = useComparisonStore();
 
 const pr = computed(() => comparison.pullRequest);
+
+// The PR view is tabbed, as in the design: the description and conversation under
+// "Conversation", the CI checks under "Checks". Commits are a planned third tab.
+const activeTab = ref<'conversation' | 'checks'>('conversation');
+
+const checks = computed(() => pr.value?.checks ?? []);
+
+// The Checks tab label shows a passed/total summary (only successes count as
+// passed, matching the design), e.g. "3/5".
+const checksSummary = computed(() => {
+    const passed = checks.value.filter((c) => c.state === 'success').length;
+    return `${passed}/${checks.value.length}`;
+});
+
+// A check row's icon and color. The design colors only success (green) and
+// failure (red); the rest stay faint, distinguished by their icon.
+function checkVisual(state: PrCheckState): { icon: Component; cls: string } {
+    switch (state) {
+        case 'success':
+            return { icon: CircleCheck, cls: 'text-moire-status-a' };
+        case 'failure':
+            return { icon: CircleX, cls: 'text-moire-status-d' };
+        case 'skipped':
+            return { icon: CircleSlash, cls: 'text-moire-faint' };
+        case 'neutral':
+            return { icon: Circle, cls: 'text-moire-faint' };
+        default:
+            return { icon: CircleDot, cls: 'text-moire-faint' };
+    }
+}
+
+// The Checks tab's own status box, summarising the CI run: red when any check
+// failed, a neutral note while some are still running, green once all have
+// passed. Null when no checks ran (the tab shows its empty state instead).
+const checksStatus = computed<StatusBox | null>(() => {
+    const list = checks.value;
+    if (!list.length) {
+        return null;
+    }
+
+    const failing = list.filter((c) => c.state === 'failure').length;
+    const pending = list.filter((c) => c.state === 'pending').length;
+    const passed = list.filter((c) => c.state === 'success').length;
+    const passedDetail = `${passed} of ${list.length} passed.`;
+
+    if (failing > 0) {
+        return {
+            icon: CircleX,
+            iconCls: 'text-moire-status-d',
+            title: `${failing} ${failing === 1 ? 'check has' : 'checks have'} failed`,
+            detail: passedDetail,
+            cls: 'border-moire-danger-edge bg-moire-danger',
+        };
+    }
+    if (pending > 0) {
+        return {
+            icon: CircleDot,
+            iconCls: 'text-moire-faint',
+            title: `${pending} ${pending === 1 ? 'check is' : 'checks are'} still running`,
+            detail: passedDetail,
+            cls: 'border-moire-border bg-moire-chrome',
+        };
+    }
+    return {
+        icon: CircleCheck,
+        iconCls: 'text-moire-status-a',
+        title: 'All checks have passed',
+        detail: `${list.length} ${list.length === 1 ? 'check' : 'checks'} passed.`,
+        cls: 'border-moire-viewed-edge bg-moire-viewed',
+    };
+});
 
 // The description is Markdown; renderMarkdown returns HTML that is safe to insert
 // with v-html (raw tags escaped, unsafe link schemes rejected). See lib/markdown.
@@ -77,16 +163,10 @@ function labelStyle(color: string): Record<string, string> {
     };
 }
 
-// The merge-status box at the foot of the conversation. Draft, closed, and merged
-// states read first; otherwise it reflects mergeability. UNKNOWN yields no box.
-// `cls` styles the box (tinted background + border); `icon` its colored glyph.
-const mergeStatus = computed<{
-    icon: Component;
-    iconCls: string;
-    title: string;
-    detail: string;
-    cls: string;
-} | null>(() => {
+// The Conversation tab's status box, describing the PR's merge state. Draft,
+// closed, and merged states read first; otherwise it reflects mergeability.
+// UNKNOWN yields no box. `cls` tints the box; `icon` is its colored glyph.
+const mergeStatus = computed<StatusBox | null>(() => {
     if (!pr.value) {
         return null;
     }
@@ -251,96 +331,149 @@ function onBodyClick(event: MouseEvent) {
                     </div>
                 </div>
 
-                <!-- Conversation timeline. Each entry has an avatar column with a
-                     connector line linking it to the next, as in the design. -->
-                <div class="p-4">
-                    <!-- Merge-status box first, so the PR's state is visible without
-                         scrolling to the bottom of the conversation. (Deliberately
-                         above the conversation, unlike GitHub.) The gap below is
-                         padding on this wrapper, not a margin: the project's
-                         unlayered `* { margin: 0 }` reset kills margin utilities. -->
-                    <div v-if="mergeStatus" class="pb-4">
-                        <div
-                            class="flex items-center gap-2.5 rounded-lg border px-3.5 py-3"
-                            :class="mergeStatus.cls"
-                        >
-                            <component
-                                :is="mergeStatus.icon"
-                                :size="18"
-                                :class="mergeStatus.iconCls"
-                            />
-                            <div class="min-w-0">
-                                <div class="text-[14px] font-medium text-moire-fg">
-                                    {{ mergeStatus.title }}
-                                </div>
-                                <div
-                                    v-if="mergeStatus.detail"
-                                    class="mt-0.5 text-[13px] text-moire-muted"
-                                >
-                                    {{ mergeStatus.detail }}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Tabs: the description and conversation, or the CI checks. The
+                     counts (comments, passed/total checks) sit faint beside the
+                     label, as in the design. -->
+                <div class="flex flex-none gap-0.5 border-b border-moire-border px-3 py-2">
+                    <button
+                        type="button"
+                        class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                        :class="
+                            activeTab === 'conversation'
+                                ? 'bg-moire-hover text-moire-fg'
+                                : 'text-moire-muted hover:text-moire-fg'
+                        "
+                        @click="activeTab = 'conversation'"
+                    >
+                        Conversation
+                        <span v-if="comments.length" class="text-moire-faint">
+                            {{ comments.length }}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                        :class="
+                            activeTab === 'checks'
+                                ? 'bg-moire-hover text-moire-fg'
+                                : 'text-moire-muted hover:text-moire-fg'
+                        "
+                        @click="activeTab = 'checks'"
+                    >
+                        <!-- A glance-able roll-up of the checks (same glyphs as the
+                             rows and the summary box), colored even when the tab is
+                             inactive so a failure stands out without opening it. -->
+                        <component
+                            :is="checksStatus.icon"
+                            v-if="checksStatus"
+                            :size="13"
+                            :class="checksStatus.iconCls"
+                        />
+                        Checks
+                        <span v-if="checks.length" class="text-moire-faint">
+                            {{ checksSummary }}
+                        </span>
+                    </button>
+                </div>
 
-                    <!-- The description reads as the first entry. -->
-                    <div class="flex gap-3">
-                        <div class="flex w-6 shrink-0 flex-col items-center gap-1.5">
-                            <user-avatar :login="pr.author" :size="24" />
-                            <span v-if="comments.length" class="w-px flex-1 bg-moire-border" />
-                        </div>
-                        <div class="min-w-0 flex-1 pb-5">
-                            <div class="rounded-lg border border-moire-border bg-moire-app">
-                                <div
-                                    class="flex flex-wrap items-center gap-1.5 border-b border-moire-border px-3.5 py-2.5 text-[13px] text-moire-faint"
-                                >
-                                    <span class="text-[14px] font-medium text-moire-fg">
-                                        {{ pr.author }}
-                                    </span>
-                                    <span>opened the description</span>
-                                </div>
-                                <div class="px-3.5 py-3">
-                                    <!-- v-html is safe here: renderMarkdown escapes raw HTML and
-                                         rejects unsafe link schemes (see lib/markdown). -->
+                <div class="p-4">
+                    <!-- Conversation timeline. Each entry has an avatar column with a
+                         connector line linking it to the next, as in the design. -->
+                    <div v-if="activeTab === 'conversation'">
+                        <!-- The PR's merge state leads the tab. -->
+                        <pr-status-box :status="mergeStatus" />
+
+                        <!-- The description reads as the first entry. -->
+                        <div class="flex gap-3">
+                            <div class="flex w-6 shrink-0 flex-col items-center gap-1.5">
+                                <user-avatar :login="pr.author" :size="24" />
+                                <span v-if="comments.length" class="w-px flex-1 bg-moire-border" />
+                            </div>
+                            <div class="min-w-0 flex-1 pb-5">
+                                <div class="rounded-lg border border-moire-border bg-moire-app">
                                     <div
-                                        v-if="hasBody"
-                                        class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
-                                        @click="onBodyClick"
-                                        v-html="renderedBody"
-                                    />
-                                    <div v-else class="text-[14px] text-moire-faint italic">
-                                        No description provided.
+                                        class="flex flex-wrap items-center gap-1.5 border-b border-moire-border px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                    >
+                                        <span class="text-[14px] font-medium text-moire-fg">
+                                            {{ pr.author }}
+                                        </span>
+                                        <span>opened the description</span>
+                                    </div>
+                                    <div class="px-3.5 py-3">
+                                        <!-- v-html is safe here: renderMarkdown escapes raw HTML and
+                                         rejects unsafe link schemes (see lib/markdown). -->
+                                        <div
+                                            v-if="hasBody"
+                                            class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
+                                            @click="onBodyClick"
+                                            v-html="renderedBody"
+                                        />
+                                        <div v-else class="text-[14px] text-moire-faint italic">
+                                            No description provided.
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Comments and review verdicts as timeline rows. -->
+                        <div v-for="(comment, i) in comments" :key="i" class="flex gap-3">
+                            <div class="flex w-6 shrink-0 flex-col items-center gap-1.5">
+                                <user-avatar :login="comment.author" :size="24" />
+                                <span
+                                    v-if="i < comments.length - 1"
+                                    class="w-px flex-1 bg-moire-border"
+                                />
+                            </div>
+                            <div class="flex min-w-0 flex-1 flex-col gap-2 pb-5">
+                                <div
+                                    class="flex flex-wrap items-center gap-1.5 text-[13px] text-moire-faint"
+                                >
+                                    <span class="text-[14px] font-medium text-moire-fg">
+                                        {{ comment.author }}
+                                    </span>
+                                    <span :class="verb(comment).cls">{{ verb(comment).text }}</span>
+                                    <span>{{ relative(comment.createdAt) }}</span>
+                                </div>
+                                <div
+                                    v-if="comment.body.trim()"
+                                    class="pr-markdown rounded-lg border border-moire-border bg-moire-app px-3.5 py-2.5 text-[14px] leading-[1.6] text-moire-file-fg"
+                                    @click="onBodyClick"
+                                    v-html="renderMarkdown(comment.body)"
+                                />
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Comments and review verdicts as timeline rows. -->
-                    <div v-for="(comment, i) in comments" :key="i" class="flex gap-3">
-                        <div class="flex w-6 shrink-0 flex-col items-center gap-1.5">
-                            <user-avatar :login="comment.author" :size="24" />
-                            <span
-                                v-if="i < comments.length - 1"
-                                class="w-px flex-1 bg-moire-border"
-                            />
-                        </div>
-                        <div class="flex min-w-0 flex-1 flex-col gap-2 pb-5">
+                    <!-- Checks: a summary of the CI run, then one row per check
+                         (status glyph, name, faint detail), or an empty state. -->
+                    <div v-else-if="activeTab === 'checks'">
+                        <div v-if="checks.length">
+                            <pr-status-box :status="checksStatus" />
                             <div
-                                class="flex flex-wrap items-center gap-1.5 text-[13px] text-moire-faint"
+                                v-for="(check, i) in checks"
+                                :key="i"
+                                class="flex items-center gap-2.5 border-b border-moire-border py-[11px]"
                             >
-                                <span class="text-[14px] font-medium text-moire-fg">
-                                    {{ comment.author }}
+                                <component
+                                    :is="checkVisual(check.state).icon"
+                                    :size="14"
+                                    class="shrink-0"
+                                    :class="checkVisual(check.state).cls"
+                                />
+                                <span class="min-w-0 flex-1 truncate text-[12.5px] text-moire-fg">
+                                    {{ check.name }}
                                 </span>
-                                <span :class="verb(comment).cls">{{ verb(comment).text }}</span>
-                                <span>{{ relative(comment.createdAt) }}</span>
+                                <span
+                                    v-if="check.detail"
+                                    class="shrink-0 text-[11px] text-moire-faint"
+                                >
+                                    {{ check.detail }}
+                                </span>
                             </div>
-                            <div
-                                v-if="comment.body.trim()"
-                                class="pr-markdown rounded-lg border border-moire-border bg-moire-app px-3.5 py-2.5 text-[14px] leading-[1.6] text-moire-file-fg"
-                                @click="onBodyClick"
-                                v-html="renderMarkdown(comment.body)"
-                            />
+                        </div>
+                        <div v-else class="text-[14px] text-moire-faint italic">
+                            No checks have run for this pull request.
                         </div>
                     </div>
                 </div>

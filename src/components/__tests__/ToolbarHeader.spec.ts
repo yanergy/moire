@@ -26,6 +26,7 @@ const PR: PullRequest = {
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
     reviewDecision: '',
+    checks: [],
 };
 
 // The toolbar composes controls (RepoPicker, RefSelector, SegmentedToggle) that

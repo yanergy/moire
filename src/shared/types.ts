@@ -105,6 +105,18 @@ export interface PrLabel {
     description: string;
 }
 
+// One CI check on the PR's head commit, for the Checks tab. `state` buckets
+// GitHub's many status/conclusion values; `detail` is a short human summary (a
+// duration, "Running", "Skipped", ...) and `url` opens the run on GitHub.
+export type PrCheckState = 'success' | 'failure' | 'pending' | 'skipped' | 'neutral';
+
+export interface PrCheck {
+    name: string;
+    state: PrCheckState;
+    detail: string;
+    url: string;
+}
+
 export interface PullRequest {
     number: number;
     title: string;
@@ -129,6 +141,8 @@ export interface PullRequest {
     // The effective code-review decision: '' | CHANGES_REQUESTED | APPROVED |
     // REVIEW_REQUIRED. Drives the yellow "changes requested" status.
     reviewDecision: string;
+    // The CI checks on the head commit, for the Checks tab. Empty when none ran.
+    checks: PrCheck[];
 }
 
 // Why a PR lookup produced no PR, so the renderer can show the right hint:

@@ -13,7 +13,8 @@
     "ignorePatterns": ["dist/**", "dist-electron/**", "release/**", "coverage/**"],
     "rules": {
         "typescript/no-explicit-any": "warn",
-        "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }]
+        "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }],
+        "no-underscore-dangle": ["warn", { "allow": ["__typename"] }]
     },
     "overrides": [
         {
