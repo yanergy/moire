@@ -133,6 +133,9 @@ Track bugs and limitations here.
 - **The Git menu's account list refreshes only when the menu is rebuilt** (on launch, when a repo
   opens, and right after switching accounts). Signing in or out with `gh auth login` / `gh auth
   logout` while the app is running is not picked up until one of those happens (or a relaunch).
+- **A stray `(M)` status badge shows above an empty diff view.** When no file is open (an empty
+  diff pane), a Modified status badge still renders at the top. Nothing should show there when no
+  file is selected.
 
 ## Planned features
 
