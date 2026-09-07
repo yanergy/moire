@@ -1,23 +1,115 @@
 import MarkdownIt from 'markdown-it';
+import DOMPurify from 'dompurify';
 
-// One configured Markdown renderer for pull-request descriptions.
+// One configured Markdown renderer for pull-request descriptions and comments.
 //
-// PR bodies are untrusted, so the output must be safe to insert with v-html:
-//   - `html: false` makes markdown-it escape any raw HTML tags in the source
-//     (they render as text) rather than pass them through, so an embedded
-//     <script> or <img onerror> can never reach the DOM.
-//   - markdown-it's default link validation rejects javascript:, vbscript:,
-//     file:, and non-image data: URLs, so a crafted link cannot run code.
-// Together these mean no separate sanitizer (DOMPurify, etc.) is needed.
+// GitHub renders a subset of raw HTML in comments (bot output leans on it heavily:
+// <details>/<summary>, tables, <sub>, <b>, ...), so `html: true` passes it through
+// rather than dumping the tags as literal text. That HTML is untrusted, so the
+// rendered output is run through DOMPurify before any v-html insertion: DOMPurify
+// keeps only the allow-listed tags and attributes below and drops everything else
+// (script/style/iframe, event handlers, javascript: URLs), which is what makes the
+// result safe to insert into the Electron renderer.
 //
 // `linkify` turns bare URLs into links (common in PR bodies) and `breaks`
 // renders single newlines as line breaks, matching how GitHub shows PR text.
 const md = new MarkdownIt({
-    html: false,
+    html: true,
     linkify: true,
     breaks: true,
     typographer: false,
 });
+
+// The HTML the viewer keeps after sanitizing: GitHub's comment formatting set
+// (text, lists, tables, collapsible <details>, the usual inline tags) plus the
+// disabled <input> the task-list plugin emits. Anything not here is dropped, its
+// text kept. Deliberately excludes script/style/iframe/form and svg/math.
+const ALLOWED_TAGS = [
+    'p',
+    'br',
+    'hr',
+    'div',
+    'span',
+    'blockquote',
+    'pre',
+    'code',
+    'kbd',
+    'samp',
+    'var',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'b',
+    'strong',
+    'i',
+    'em',
+    'u',
+    's',
+    'strike',
+    'del',
+    'ins',
+    'mark',
+    'small',
+    'sub',
+    'sup',
+    'abbr',
+    'cite',
+    'dfn',
+    'q',
+    'ul',
+    'ol',
+    'li',
+    'dl',
+    'dt',
+    'dd',
+    'a',
+    'img',
+    'table',
+    'thead',
+    'tbody',
+    'tfoot',
+    'tr',
+    'th',
+    'td',
+    'caption',
+    'colgroup',
+    'col',
+    'details',
+    'summary',
+    'input',
+];
+
+// Attributes kept on the tags above. Links and images carry href/src/title/alt;
+// tables use align/colspan/rowspan; the task-list checkbox needs type/checked/
+// disabled/class; <details> may be open. DOMPurify still validates href/src URLs
+// (javascript:/vbscript: are rejected) and strips every on* event handler.
+const ALLOWED_ATTR = [
+    'href',
+    'title',
+    'src',
+    'alt',
+    'align',
+    'colspan',
+    'rowspan',
+    'span',
+    'class',
+    'type',
+    'checked',
+    'disabled',
+    'open',
+    'start',
+    'width',
+    'height',
+];
+
+// Sanitize rendered HTML down to the allow-list. Kept in one place so every
+// v-html string in the PR view goes through the same policy.
+function sanitize(html: string): string {
+    return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR });
+}
 
 // GitHub task-list support: render "- [ ] item" and "- [x] item" as a checkbox
 // plus the item text, the way GitHub shows PR checklists. markdown-it has no
@@ -26,8 +118,8 @@ const md = new MarkdownIt({
 // a checkbox token; the <li> is tagged so the bullet can be dropped in CSS.
 //
 // The checkbox is always `disabled`, so it is display-only: it cannot be toggled
-// or submit anything (the PR view is read-only). Its HTML is fixed here and never
-// built from the source, so this adds no injection surface over `html: false`.
+// or submit anything (the PR view is read-only). Its <input> is on the allow-list
+// above, so it survives sanitizing along with the rest of the rendered HTML.
 md.use((markdown) => {
     markdown.core.ruler.after('inline', 'task-lists', (state) => {
         const { tokens } = state;
@@ -69,8 +161,8 @@ md.use((markdown) => {
         }> `;
 });
 
-// Render Markdown source to an HTML string. Empty or missing input yields an
-// empty string so callers can treat "no description" uniformly.
+// Render Markdown source to a sanitized HTML string. Empty or missing input
+// yields an empty string so callers can treat "no description" uniformly.
 export function renderMarkdown(source: string | null | undefined): string {
-    return source ? md.render(source) : '';
+    return source ? sanitize(md.render(source)) : '';
 }

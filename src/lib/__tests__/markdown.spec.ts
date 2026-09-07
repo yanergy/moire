@@ -17,23 +17,52 @@ describe('renderMarkdown', () => {
         );
     });
 
-    it('escapes raw HTML in the source rather than passing it through', () => {
-        const html = renderMarkdown('<script>alert(1)</script>');
-        expect(html).not.toContain('<script>');
-        expect(html).toContain('&lt;script&gt;');
+    it('renders the safe subset of raw HTML that GitHub allows', () => {
+        // Collapsible sections, tables, and inline tags common in bot comments.
+        expect(renderMarkdown('<details><summary>More</summary>body</details>')).toContain(
+            '<summary>More</summary>'
+        );
+        expect(renderMarkdown('<sub>note</sub>')).toContain('<sub>note</sub>');
+        expect(renderMarkdown('<b>Lines:</b>')).toContain('<b>Lines:</b>');
+        // Table cell attributes the layout relies on are kept.
+        expect(renderMarkdown('<table><tr><td align="right">1</td></tr></table>')).toContain(
+            'align="right"'
+        );
     });
 
-    it('does not emit a javascript: link href', () => {
-        const html = renderMarkdown('[click](javascript:alert(1))');
-        expect(html).not.toContain('href="javascript:alert(1)"');
+    it('strips dangerous raw HTML: scripts, event handlers, and frames', () => {
+        const script = renderMarkdown('<script>alert(1)</script>');
+        expect(script).not.toContain('<script');
+        expect(script).not.toContain('alert(1)');
+
+        const onerror = renderMarkdown('<img src="x" onerror="alert(1)">');
+        expect(onerror).toContain('<img');
+        expect(onerror).not.toContain('onerror');
+
+        expect(renderMarkdown('<iframe src="https://evil.test"></iframe>')).not.toContain(
+            '<iframe'
+        );
+    });
+
+    it('drops javascript: URLs from links', () => {
+        // A Markdown link with a javascript: target is not turned into a link at
+        // all; the text stays inert, so no anchor is emitted.
+        expect(renderMarkdown('[click](javascript:alert(1))')).not.toContain('<a ');
+        // A raw HTML anchor keeps the element but loses the unsafe href.
+        const raw = renderMarkdown('<a href="javascript:alert(1)">x</a>');
+        expect(raw).toContain('x');
+        expect(raw).not.toContain('javascript:');
     });
 
     it('renders GitHub task lists as disabled checkboxes', () => {
         const html = renderMarkdown('- [ ] todo\n- [x] done');
-        // An unchecked and a checked box, both read-only, with the marker stripped
-        // from the visible text.
-        expect(html).toContain('type="checkbox" disabled>');
-        expect(html).toContain('type="checkbox" disabled checked>');
+        // Two read-only checkboxes survive sanitizing (DOMPurify serializes the
+        // boolean attributes as disabled="" / checked="").
+        expect(html.match(/class="pr-task-checkbox"/g)).toHaveLength(2);
+        expect(html).toContain('type="checkbox"');
+        expect(html).toContain('disabled');
+        expect(html).toContain('checked');
+        // The marker is stripped from the visible text.
         expect(html).toContain('todo');
         expect(html).toContain('done');
         expect(html).not.toContain('[ ]');

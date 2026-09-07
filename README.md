@@ -134,10 +134,8 @@ Track bugs and limitations here.
       headers and skimmed (the entries are always expanded today).
     - A Commits tab (the commit list). Lower priority: editors such as PhpStorm already show a
       branch's commits well, so this duplicates tooling the user likely already has.
-    - Raw HTML in descriptions and comments. Markdown renders, but embedded HTML (for example
-      `<details>`, `<img>`, `<sub>`) is stripped because the renderer runs with HTML disabled.
-      Rendering it needs a sanitizer first, since the content comes from GitHub and would
-      otherwise be an injection risk in the Electron renderer.
+    - GitHub emoji shortcodes (`:arrow_up_small:`, `:robot:`, and so on) render as literal
+      text, since the Markdown renderer has no emoji step. Common in bot comments.
     - Inline review-thread comments and their resolved state, which need the GitHub GraphQL API,
       beyond what `gh pr view --json` exposes.
 - **The Git menu's account list refreshes only when the menu is rebuilt** (on launch, when a repo
