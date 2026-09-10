@@ -22,6 +22,13 @@ contextBridge.exposeInMainWorld('api', {
     // process). Resolves a status-bearing result rather than rejecting.
     getPullRequest: (base: string, head: string) =>
         ipcRenderer.invoke('gh:pull-request', base, head),
+    // Conversation writes (edit mode only): post a new comment, or edit one of the
+    // signed-in account's own comments by node id. Both resolve an ok/message result.
+    postComment: (prNumber: number, body: string) =>
+        ipcRenderer.invoke('gh:post-comment', prNumber, body),
+    editComment: (commentId: string, body: string) =>
+        ipcRenderer.invoke('gh:edit-comment', commentId, body),
+    deleteComment: (commentId: string) => ipcRenderer.invoke('gh:delete-comment', commentId),
     // Open a PR link in the default browser (main restricts it to http(s)).
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
     // Theme is owned by main (nativeTheme). `getTheme` reads the resolved state;

@@ -1,9 +1,9 @@
 import { setActivePinia, createPinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import PrView from '@/components/pr/PrView.vue';
 import { useComparisonStore } from '@/stores/comparison';
-import type { PrStatus, PullRequest } from '@/shared/types';
+import type { PrComment, PrStatus, PullRequest } from '@/shared/types';
 
 const PR: PullRequest = {
     number: 42,
@@ -32,21 +32,48 @@ const PR: PullRequest = {
 // the content assertions readable without it.
 const stubs = { ScrollArea: { template: '<div><slot /></div>' } };
 
-function mountWith(pr: PullRequest | null, status: PrStatus = 'ok') {
+// `attach` mounts into document.body so the Popover menus (Refresh/GitHub and the
+// per-comment Edit/Delete), which teleport their content there, can be opened and
+// their items queried, as in RepoPicker's tests.
+function mountWith(pr: PullRequest | null, status: PrStatus = 'ok', attach = false) {
     const store = useComparisonStore();
     store.pullRequest = pr;
     store.prStatus = status;
-    return mount(PrView, { global: { stubs } });
+    return mount(PrView, { attachTo: attach ? document.body : undefined, global: { stubs } });
+}
+
+// The menu items are teleported to document.body, so they are found there, not in
+// the wrapper. Match on the visible label (or the item's aria-label).
+const menuItems = () =>
+    [...document.querySelectorAll('[data-slot="command-item"]')] as HTMLElement[];
+function clickMenuItem(label: string) {
+    menuItems()
+        .find((el) => el.getAttribute('aria-label') === label || el.textContent?.trim() === label)
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
 // A minimal check fixture in the given state.
 type CheckState = 'success' | 'failure' | 'pending';
 const check = (state: CheckState) => ({ name: state, state, detail: '', url: '' });
 
+// A conversation entry with the required id/canEdit defaults filled in; override
+// any field (e.g. canEdit/id for the edit-mode tests) via the partial.
+const comment = (over: Partial<PrComment> = {}): PrComment => ({
+    author: 'bob',
+    body: 'Nice work.',
+    createdAt: new Date().toISOString(),
+    kind: 'comment',
+    id: '',
+    canEdit: false,
+    ...over,
+});
+
 describe('PrView', () => {
     beforeEach(() => setActivePinia(createPinia()));
     afterEach(() => {
         delete window.api;
+        // Clear any menu content teleported to the body between tests.
+        document.body.innerHTML = '';
     });
 
     it('renders the header, refs, and the description as the first entry', () => {
@@ -87,8 +114,14 @@ describe('PrView', () => {
         const wrapper = mountWith({
             ...PR,
             comments: [
-                { author: 'bob', body: 'Nice **work**.', createdAt: now, kind: 'comment' },
-                { author: 'ann', body: '', createdAt: now, kind: 'review', state: 'APPROVED' },
+                comment({ author: 'bob', body: 'Nice **work**.', createdAt: now }),
+                comment({
+                    author: 'ann',
+                    body: '',
+                    createdAt: now,
+                    kind: 'review',
+                    state: 'APPROVED',
+                }),
             ],
         });
         const text = wrapper.text();
@@ -130,7 +163,7 @@ describe('PrView', () => {
         const now = new Date().toISOString();
         const wrapper = mountWith({
             ...PR,
-            comments: [{ author: 'bob', body: 'Nice **work**.', createdAt: now, kind: 'comment' }],
+            comments: [comment({ author: 'bob', body: 'Nice **work**.', createdAt: now })],
         });
 
         // The body shows to begin with; the toggle reads as expanded.
@@ -151,7 +184,13 @@ describe('PrView', () => {
         const wrapper = mountWith({
             ...PR,
             comments: [
-                { author: 'ann', body: '', createdAt: now, kind: 'review', state: 'APPROVED' },
+                comment({
+                    author: 'ann',
+                    body: '',
+                    createdAt: now,
+                    kind: 'review',
+                    state: 'APPROVED',
+                }),
             ],
         });
 
@@ -163,8 +202,8 @@ describe('PrView', () => {
         const wrapper = mountWith({
             ...PR,
             comments: [
-                { author: 'bob', body: 'First **point**.', createdAt: now, kind: 'comment' },
-                { author: 'cat', body: 'Second _point_.', createdAt: now, kind: 'comment' },
+                comment({ author: 'bob', body: 'First **point**.', createdAt: now }),
+                comment({ author: 'cat', body: 'Second _point_.', createdAt: now }),
             ],
         });
 
@@ -190,7 +229,13 @@ describe('PrView', () => {
             ...PR,
             body: '',
             comments: [
-                { author: 'ann', body: '', createdAt: now, kind: 'review', state: 'APPROVED' },
+                comment({
+                    author: 'ann',
+                    body: '',
+                    createdAt: now,
+                    kind: 'review',
+                    state: 'APPROVED',
+                }),
             ],
         });
 
@@ -427,24 +472,28 @@ describe('PrView', () => {
         expect(mountWith({ ...PR, body: '   ' }).text()).toContain('No description provided');
     });
 
-    it('opens the PR on GitHub through the bridge', async () => {
+    it('opens the PR on GitHub from the overflow menu', async () => {
         const openExternal = vi.fn<(url: string) => Promise<void>>();
         window.api = { openExternal } as unknown as Window['api'];
 
-        const wrapper = mountWith(PR);
-        const ghButton = wrapper.findAll('button').find((b) => b.text().includes('GitHub'))!;
-        await ghButton.trigger('click');
+        const wrapper = mountWith(PR, 'ok', true);
+        await wrapper.get('button[aria-label="More actions"]').trigger('click');
+        await flushPromises();
+        clickMenuItem('Open on GitHub');
+        await flushPromises();
 
         expect(openExternal).toHaveBeenCalledWith('https://github.com/o/r/pull/42');
     });
 
-    it('re-fetches the PR when the refresh button is clicked', async () => {
-        const wrapper = mountWith(PR);
+    it('re-fetches the PR from the overflow menu', async () => {
+        const wrapper = mountWith(PR, 'ok', true);
         const store = useComparisonStore();
         const load = vi.spyOn(store, 'loadPullRequest').mockResolvedValue();
 
-        const refresh = wrapper.get('button[aria-label="Refresh pull request"]');
-        await refresh.trigger('click');
+        await wrapper.get('button[aria-label="More actions"]').trigger('click');
+        await flushPromises();
+        clickMenuItem('Refresh');
+        await flushPromises();
 
         // Called with no argument, so the toolbar's PR button keeps its status
         // rather than flashing to a spinner (the range did not change).
@@ -454,5 +503,110 @@ describe('PrView', () => {
 
     it('renders nothing when there is no PR', () => {
         expect(mountWith(null, 'no-pr').text()).toBe('');
+    });
+
+    describe('edit mode', () => {
+        // Turn on edit mode via the header toggle, returning the mounted wrapper.
+        // Attaches to the body so the per-comment "..." menu can be opened.
+        async function enableEditing(pr: PullRequest) {
+            const wrapper = mountWith(pr, 'ok', true);
+            await wrapper.get('button[aria-label="Toggle edit mode"]').trigger('click');
+            return wrapper;
+        }
+
+        it('is read-only by default: no composer, no comment actions', () => {
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true })],
+            });
+
+            expect(wrapper.find('textarea').exists()).toBe(false);
+            expect(wrapper.find('button[aria-label="Comment actions"]').exists()).toBe(false);
+        });
+
+        it('reveals the composer once edit mode is on', async () => {
+            const wrapper = await enableEditing({ ...PR, comments: [] });
+            expect(wrapper.find('textarea[aria-label="Add a comment"]').exists()).toBe(true);
+        });
+
+        it('posts a new comment through the store', async () => {
+            const store = useComparisonStore();
+            const post = vi.spyOn(store, 'postComment').mockResolvedValue({ ok: true });
+
+            const wrapper = mountWith({ ...PR, comments: [] });
+            await wrapper.get('button[aria-label="Toggle edit mode"]').trigger('click');
+            await wrapper.get('textarea[aria-label="Add a comment"]').setValue('Looks good');
+            const commentBtn = wrapper.findAll('button').find((b) => b.text() === 'Comment')!;
+            await commentBtn.trigger('click');
+            await flushPromises();
+
+            expect(post).toHaveBeenCalledWith('Looks good');
+        });
+
+        it('shows the actions menu only on the viewer’s own comments', async () => {
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [
+                    comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true }),
+                    comment({ author: 'other', body: 'Theirs.', id: 'IC_2', canEdit: false }),
+                ],
+            });
+
+            expect(wrapper.findAll('button[aria-label="Comment actions"]').length).toBe(1);
+        });
+
+        it('edits an own comment through the store', async () => {
+            const store = useComparisonStore();
+            const edit = vi.spyOn(store, 'editComment').mockResolvedValue({ ok: true });
+
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ author: 'me', body: 'Original.', id: 'IC_1', canEdit: true })],
+            });
+
+            await wrapper.get('button[aria-label="Comment actions"]').trigger('click');
+            await flushPromises();
+            clickMenuItem('Edit comment');
+            await flushPromises();
+
+            const editBox = wrapper.get('textarea[aria-label="Edit comment body"]');
+            // The editor is seeded with the current body.
+            expect((editBox.element as HTMLTextAreaElement).value).toBe('Original.');
+
+            await editBox.setValue('Edited.');
+            const saveBtn = wrapper.findAll('button').find((b) => b.text() === 'Save')!;
+            await saveBtn.trigger('click');
+            await flushPromises();
+
+            expect(edit).toHaveBeenCalledWith('IC_1', 'Edited.');
+        });
+
+        it('deletes an own comment through the store, after confirming', async () => {
+            const store = useComparisonStore();
+            const del = vi.spyOn(store, 'deleteComment').mockResolvedValue({ ok: true });
+
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true })],
+            });
+
+            await wrapper.get('button[aria-label="Comment actions"]').trigger('click');
+            await flushPromises();
+            clickMenuItem('Delete comment');
+            await flushPromises();
+
+            // The menu click only opens the confirmation modal (teleported to the
+            // body, outside the comment); nothing is deleted until it is confirmed.
+            expect(document.body.textContent).toContain('This permanently deletes');
+            expect(del).not.toHaveBeenCalled();
+
+            const confirmBtn = [...document.querySelectorAll('button')].find(
+                (b) => b.textContent?.trim() === 'Delete comment'
+            );
+            confirmBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await flushPromises();
+
+            expect(del).toHaveBeenCalledWith('IC_1');
+        });
     });
 });

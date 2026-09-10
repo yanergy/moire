@@ -96,6 +96,10 @@ export interface PrComment {
     createdAt: string;
     kind: 'comment' | 'review';
     state?: string;
+    // The GraphQL node id used to edit the comment (empty for reviews), and whether
+    // the signed-in gh account authored it, so the PR view can offer an Edit action.
+    id: string;
+    canEdit: boolean;
 }
 
 // A PR label; `color` is a 6-digit hex without the leading '#', as GitHub returns.
@@ -164,6 +168,14 @@ export interface PullRequestResult {
     message?: string;
 }
 
+// The outcome of a conversation write (posting or editing a comment). `ok` is
+// whether gh accepted it; `message` carries a short reason to show inline on
+// failure (no gh, not signed in, a permission denial, ...).
+export interface CommentMutationResult {
+    ok: boolean;
+    message?: string;
+}
+
 // Preload API surface, exposed on window.api once the git backend lands.
 export interface MoireApi {
     openRepoDialog(): Promise<string | null>;
@@ -190,6 +202,15 @@ export interface MoireApi {
     // PR, ...) rather than rejecting. `base` is passed for context; the lookup
     // keys on the head branch.
     getPullRequest(base: string, head: string): Promise<PullRequestResult>;
+    // Conversation writes, allowed only while the PR view is in edit mode.
+    // `postComment` adds a new comment to the PR (addressed by its number);
+    // `editComment` rewrites an existing comment by its node id, and
+    // `deleteComment` removes one by its node id (the signed-in account must be
+    // its author for both). All resolve an ok/message result rather than
+    // rejecting, so the view can show an inline error.
+    postComment(prNumber: number, body: string): Promise<CommentMutationResult>;
+    editComment(commentId: string, body: string): Promise<CommentMutationResult>;
+    deleteComment(commentId: string): Promise<CommentMutationResult>;
     // Open a URL (a PR link) in the user's default browser, via the main process.
     // Restricted to http(s) URLs on the main side.
     openExternal(url: string): Promise<void>;

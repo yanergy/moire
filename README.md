@@ -126,10 +126,11 @@ Track bugs and limitations here.
   everything the design shows.** It detects a PR for the selected head branch and shows the title,
   number, status, change stats, commit count, labels, merge status, description (Markdown), the
   conversation (comments and review verdicts), and a Checks tab with the head commit's CI runs.
-  Still missing:
-    - Posting a comment from the app (the conversation is read-only). Ticking a task-list
-      checkbox belongs with this: the checkboxes render but are disabled, since checking one
-      writes the new state back to the PR body or comment on GitHub.
+  An edit mode (off by default, toggled from the PR header) adds posting new comments and editing
+  or deleting your own (edit and delete sit behind a per-comment menu). Still missing:
+    - Editing the PR description, and ticking task-list checkboxes. Edit mode covers comments,
+      but the description stays read-only and the task-list checkboxes remain disabled (checking
+      one would write the new state back to the PR body or comment on GitHub).
     - A Commits tab (the commit list). Lower priority: editors such as PhpStorm already show a
       branch's commits well, so this duplicates tooling the user likely already has.
     - Inline review-thread comments and their resolved state, which need the GitHub GraphQL API,

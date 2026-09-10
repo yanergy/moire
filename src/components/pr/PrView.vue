@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, type Component } from 'vue';
+import { computed, ref, watch, type Component } from 'vue';
 import {
     ArrowRight,
+    Check,
     ChevronDown,
     ChevronRight,
     ChevronsDownUp,
@@ -16,13 +17,28 @@ import {
     GitMerge,
     GitPullRequestClosed,
     GitPullRequestDraft,
+    LoaderCircle,
+    MoreHorizontal,
+    Pencil,
     RefreshCw,
+    Trash2,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { renderMarkdown } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
+import { Toggle } from '@/components/ui/toggle';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import type { PrCheckState, PrComment } from '@/shared/types';
@@ -46,8 +62,14 @@ const pr = computed(() => comparison.pullRequest);
 // range is unchanged, so this uses loadPullRequest without the toolbar spinner
 // (which is reserved for range changes); a local `refreshing` flag spins just
 // this button and guards against overlapping clicks.
+// The header's overflow ("...") menu, holding Refresh and Open on GitHub.
+const topMenuOpen = ref(false);
+
 const refreshing = ref(false);
 async function refreshPr() {
+    // Invoked from the header overflow menu; close it so the spinner on the
+    // trigger is what reports progress.
+    topMenuOpen.value = false;
     if (refreshing.value) {
         return;
     }
@@ -202,6 +224,157 @@ function toggleAll() {
     descriptionCollapsed.value = hasBody.value;
 }
 
+// --- Edit mode ---
+//
+// The conversation is read-only until the user turns on edit mode from the header.
+// Only then does the composer at the bottom appear and each of the user's own
+// comments gain an Edit action. Posting and editing go through the store, which
+// writes via gh and re-fetches the PR so the change shows.
+const editing = ref(false);
+
+// New-comment composer.
+const draft = ref('');
+const posting = ref(false);
+const postError = ref('');
+
+// The comment currently being edited (its node id), plus its working copy.
+const editingId = ref<string | null>(null);
+const editDraft = ref('');
+const savingEdit = ref(false);
+const editError = ref('');
+
+// Per-comment actions ("...") menu: the id of the comment whose menu is open (one
+// at a time). The Edit and Delete actions live behind it.
+const openMenuId = ref<string | null>(null);
+
+// The comment awaiting a delete confirmation (its node id): its body swaps for an
+// inline "Delete this comment?" prompt, so a stray click can't remove it.
+const confirmingDeleteId = ref<string | null>(null);
+const deletingId = ref<string | null>(null);
+const deleteError = ref('');
+
+// Leaving edit mode drops any in-progress draft, open editor, delete prompt, menu,
+// and error so the view returns cleanly to read-only.
+watch(editing, (on) => {
+    if (!on) {
+        editingId.value = null;
+        draft.value = '';
+        editDraft.value = '';
+        postError.value = '';
+        editError.value = '';
+        openMenuId.value = null;
+        confirmingDeleteId.value = null;
+        deleteError.value = '';
+    }
+});
+
+// A different PR (a branch switch) resets to read-only; its own edit state means
+// nothing here.
+watch(
+    () => pr.value?.number,
+    () => {
+        editing.value = false;
+        topMenuOpen.value = false;
+        openMenuId.value = null;
+        confirmingDeleteId.value = null;
+    }
+);
+
+async function submitComment() {
+    if (!draft.value.trim() || posting.value) {
+        return;
+    }
+
+    posting.value = true;
+    postError.value = '';
+    const result = await comparison.postComment(draft.value);
+    posting.value = false;
+    if (result.ok) {
+        draft.value = '';
+        return;
+    }
+
+    postError.value = result.message ?? 'Could not post the comment.';
+}
+
+// Reveal a folded comment (index i) so an inline editor or delete prompt shows.
+function expandComment(index: number) {
+    if (collapsedComments.value.has(index)) {
+        const next = new Set(collapsedComments.value);
+        next.delete(index);
+        collapsedComments.value = next;
+    }
+}
+
+function startEdit(comment: PrComment, index: number) {
+    openMenuId.value = null;
+    confirmingDeleteId.value = null;
+    editingId.value = comment.id;
+    editDraft.value = comment.body;
+    editError.value = '';
+    expandComment(index);
+}
+
+function cancelEdit() {
+    editingId.value = null;
+    editError.value = '';
+}
+
+// The comment awaiting deletion, resolved from its id, so the confirmation dialog
+// can name and preview it.
+const commentPendingDelete = computed(() =>
+    comments.value.find((c) => c.id === confirmingDeleteId.value)
+);
+
+// Ask before deleting: a menu click only opens the confirmation dialog; nothing is
+// removed until it is confirmed.
+function startDelete(comment: PrComment) {
+    openMenuId.value = null;
+    editingId.value = null;
+    deleteError.value = '';
+    confirmingDeleteId.value = comment.id;
+}
+
+function cancelDelete() {
+    confirmingDeleteId.value = null;
+    deleteError.value = '';
+}
+
+async function confirmDelete(commentId: string) {
+    if (!commentId || deletingId.value) {
+        return;
+    }
+
+    deletingId.value = commentId;
+    deleteError.value = '';
+    const result = await comparison.deleteComment(commentId);
+    deletingId.value = null;
+    if (result.ok) {
+        confirmingDeleteId.value = null;
+        return;
+    }
+
+    deleteError.value = result.message ?? 'Could not delete the comment.';
+}
+
+async function saveEdit() {
+    const id = editingId.value;
+    if (!id || !editDraft.value.trim() || savingEdit.value) {
+        return;
+    }
+
+    savingEdit.value = true;
+    editError.value = '';
+    const result = await comparison.editComment(id, editDraft.value);
+    savingEdit.value = false;
+    if (result.ok) {
+        editingId.value = null;
+        return;
+    }
+
+    editError.value = result.message ?? 'Could not save the edit.';
+}
+
 // The PR's creation date, shown as "opened Aug 28" ahead of the change stats as
 // in the design. Empty when the timestamp is missing or unparseable.
 const openedOn = computed(() => {
@@ -337,6 +510,12 @@ function openExternal(url: string) {
     }
 }
 
+// Open the PR on GitHub from the header overflow menu, closing it first.
+function openPrOnGitHub() {
+    topMenuOpen.value = false;
+    openExternal(pr.value?.url ?? '');
+}
+
 // A link inside any rendered Markdown opens in the browser rather than navigating
 // the app window. The main process only opens http(s).
 function onBodyClick(event: MouseEvent) {
@@ -365,26 +544,94 @@ function onBodyClick(event: MouseEvent) {
                             <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
                         </div>
                         <div class="flex shrink-0 items-center gap-1.5">
-                            <Button
-                                variant="outline"
-                                size="icon-sm"
-                                class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                                :disabled="refreshing"
-                                aria-label="Refresh pull request"
-                                title="Re-fetch this pull request from GitHub"
-                                @click="refreshPr"
-                            >
-                                <RefreshCw :size="16" :class="{ 'animate-spin': refreshing }" />
-                            </Button>
-                            <Button
+                            <!-- The conversation is read-only until this is on; then the
+                                 composer and per-comment Edit actions appear. -->
+                            <Toggle
                                 variant="outline"
                                 size="sm"
-                                class="h-7 gap-1.5 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                                @click="openExternal(pr.url)"
+                                :model-value="editing"
+                                class="h-7 gap-1.5 border border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=on]:bg-moire-hover data-[state=on]:text-moire-fg"
+                                aria-label="Toggle edit mode"
+                                title="Edit mode: post and edit comments"
+                                @update:model-value="editing = $event"
                             >
-                                <ExternalLink :size="14" />
-                                GitHub
-                            </Button>
+                                <!-- Checkbox look borrowed from the diff viewer's "Mark
+                                     viewed" button: a bordered square that fills with a
+                                     check when on, so the state is unmistakable. Kept
+                                     neutral (filled with the foreground, not an accent),
+                                     matching this toggle's neutral pressed state. Not the
+                                     real Checkbox primitive: it renders a button, and a
+                                     button inside this Toggle would be invalid. -->
+                                <span
+                                    class="flex size-[15px] shrink-0 items-center justify-center rounded-sm border"
+                                    :class="
+                                        editing
+                                            ? 'border-moire-fg bg-moire-fg text-moire-check-fg'
+                                            : 'border-current'
+                                    "
+                                >
+                                    <Check v-if="editing" class="size-[11px]" />
+                                </span>
+                                Edit mode
+                            </Toggle>
+                            <!-- Secondary actions (refresh, open on GitHub) tuck into an
+                                 overflow menu so the header stays uncluttered. While a
+                                 refresh runs, the trigger shows the spinner in place of
+                                 the "..." glyph. -->
+                            <Popover :open="topMenuOpen" @update:open="topMenuOpen = $event">
+                                <PopoverTrigger as-child>
+                                    <Button
+                                        variant="outline"
+                                        size="icon-sm"
+                                        class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                        aria-label="More actions"
+                                        title="More actions"
+                                    >
+                                        <RefreshCw
+                                            v-if="refreshing"
+                                            :size="16"
+                                            class="animate-spin"
+                                        />
+                                        <MoreHorizontal v-else :size="16" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    align="end"
+                                    :side-offset="6"
+                                    class="w-48 overflow-hidden border-moire-border bg-moire-pop p-0"
+                                    :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
+                                >
+                                    <Command class="bg-transparent">
+                                        <CommandList>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="refresh"
+                                                    aria-label="Refresh pull request"
+                                                    class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                                    @select="refreshPr"
+                                                >
+                                                    <RefreshCw
+                                                        :size="14"
+                                                        class="shrink-0 text-moire-faint"
+                                                    />
+                                                    <span class="flex-1">Refresh</span>
+                                                </CommandItem>
+                                                <CommandItem
+                                                    value="github"
+                                                    class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                                    @select="openPrOnGitHub"
+                                                >
+                                                    <ExternalLink
+                                                        :size="14"
+                                                        class="shrink-0 text-moire-faint"
+                                                    />
+                                                    <span class="flex-1">Open on GitHub</span>
+                                                </CommandItem>
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </div>
                     </div>
 
@@ -438,53 +685,13 @@ function onBodyClick(event: MouseEvent) {
                      counts (comments, passed/total checks) sit faint beside the
                      label, as in the design. -->
                 <div
-                    class="flex flex-none items-center gap-0.5 border-b border-moire-border px-3 py-2"
+                    class="flex flex-none items-center gap-1.5 border-b border-moire-border px-3 py-2"
                 >
-                    <button
-                        type="button"
-                        class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
-                        :class="
-                            activeTab === 'conversation'
-                                ? 'bg-moire-hover text-moire-fg'
-                                : 'text-moire-muted hover:text-moire-fg'
-                        "
-                        @click="activeTab = 'conversation'"
-                    >
-                        Conversation
-                        <span v-if="comments.length" class="text-moire-faint">
-                            {{ comments.length }}
-                        </span>
-                    </button>
-                    <button
-                        type="button"
-                        class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
-                        :class="
-                            activeTab === 'checks'
-                                ? 'bg-moire-hover text-moire-fg'
-                                : 'text-moire-muted hover:text-moire-fg'
-                        "
-                        @click="activeTab = 'checks'"
-                    >
-                        <!-- A glance-able roll-up of the checks (same glyphs as the
-                             rows and the summary box), colored even when the tab is
-                             inactive so a failure stands out without opening it. -->
-                        <component
-                            :is="checksStatus.icon"
-                            v-if="checksStatus"
-                            :size="13"
-                            :class="checksStatus.iconCls"
-                        />
-                        Checks
-                        <span v-if="checks.length" class="text-moire-faint">
-                            {{ checksSummary }}
-                        </span>
-                    </button>
-
-                    <div class="flex-1" />
-
                     <!-- Fold or unfold the whole conversation (description and
-                         comments) at once, mirroring the file tree's collapse-all.
-                         Only on the conversation tab, and only when something can fold. -->
+                         comments) at once, mirroring the file tree's collapse-all. It
+                         sits to the left of the tabs, not floating alone at the far
+                         right where a lone icon reads as an options menu. Only on the
+                         conversation tab, and only when something can fold. -->
                     <Button
                         v-if="activeTab === 'conversation' && hasCollapsible"
                         variant="ghost"
@@ -497,6 +704,48 @@ function onBodyClick(event: MouseEvent) {
                         <ChevronsUpDown v-if="allCollapsed" :size="16" />
                         <ChevronsDownUp v-else :size="16" />
                     </Button>
+
+                    <div class="flex items-center gap-0.5">
+                        <button
+                            type="button"
+                            class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                            :class="
+                                activeTab === 'conversation'
+                                    ? 'bg-moire-hover text-moire-fg'
+                                    : 'text-moire-muted hover:text-moire-fg'
+                            "
+                            @click="activeTab = 'conversation'"
+                        >
+                            Conversation
+                            <span v-if="comments.length" class="text-moire-faint">
+                                {{ comments.length }}
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                            :class="
+                                activeTab === 'checks'
+                                    ? 'bg-moire-hover text-moire-fg'
+                                    : 'text-moire-muted hover:text-moire-fg'
+                            "
+                            @click="activeTab = 'checks'"
+                        >
+                            <!-- A glance-able roll-up of the checks (same glyphs as the
+                                 rows and the summary box), colored even when the tab is
+                                 inactive so a failure stands out without opening it. -->
+                            <component
+                                :is="checksStatus.icon"
+                                v-if="checksStatus"
+                                :size="13"
+                                :class="checksStatus.iconCls"
+                            />
+                            Checks
+                            <span v-if="checks.length" class="text-moire-faint">
+                                {{ checksSummary }}
+                            </span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="p-4">
@@ -625,28 +874,139 @@ function onBodyClick(event: MouseEvent) {
                                             </span>
                                             <span>{{ relative(comment.createdAt) }}</span>
                                         </div>
-                                        <!-- Fold this comment down to its header. Pinned to
-                                             the card's right edge; points down to expand, up
-                                             to collapse. -->
-                                        <button
-                                            type="button"
-                                            class="-mr-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                            :aria-expanded="!isCollapsed(i)"
-                                            :aria-label="
-                                                isCollapsed(i)
-                                                    ? 'Expand comment'
-                                                    : 'Collapse comment'
-                                            "
-                                            @click="toggleCollapsed(i)"
-                                        >
-                                            <!-- Same disclosure as the file tree: down when
-                                                 open, right when collapsed. -->
-                                            <ChevronDown v-if="!isCollapsed(i)" :size="14" />
-                                            <ChevronRight v-else :size="14" />
-                                        </button>
+                                        <div class="flex shrink-0 items-center gap-0.5">
+                                            <!-- Edit and delete for your own comments, tucked
+                                                 behind a "..." menu, and only in edit mode.
+                                                 Hidden while this comment is already being
+                                                 edited or is awaiting a delete confirmation. -->
+                                            <Popover
+                                                v-if="
+                                                    editing &&
+                                                    comment.canEdit &&
+                                                    editingId !== comment.id &&
+                                                    confirmingDeleteId !== comment.id
+                                                "
+                                                :open="openMenuId === comment.id"
+                                                @update:open="
+                                                    openMenuId = $event ? comment.id : null
+                                                "
+                                            >
+                                                <PopoverTrigger as-child>
+                                                    <button
+                                                        type="button"
+                                                        class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                        aria-label="Comment actions"
+                                                        title="Comment actions"
+                                                    >
+                                                        <MoreHorizontal :size="14" />
+                                                    </button>
+                                                </PopoverTrigger>
+                                                <PopoverContent
+                                                    align="end"
+                                                    :side-offset="6"
+                                                    class="w-44 overflow-hidden border-moire-border bg-moire-pop p-0"
+                                                    :style="{
+                                                        boxShadow: 'var(--moire-pop-shadow)',
+                                                    }"
+                                                >
+                                                    <Command class="bg-transparent">
+                                                        <CommandList>
+                                                            <CommandGroup>
+                                                                <CommandItem
+                                                                    value="edit"
+                                                                    aria-label="Edit comment"
+                                                                    class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                                                    @select="startEdit(comment, i)"
+                                                                >
+                                                                    <Pencil
+                                                                        :size="14"
+                                                                        class="shrink-0 text-moire-faint"
+                                                                    />
+                                                                    <span class="flex-1">Edit</span>
+                                                                </CommandItem>
+                                                                <CommandItem
+                                                                    value="delete"
+                                                                    aria-label="Delete comment"
+                                                                    class="gap-2 text-xs text-moire-status-d data-[highlighted]:bg-moire-danger data-[highlighted]:text-moire-status-d"
+                                                                    @select="startDelete(comment)"
+                                                                >
+                                                                    <Trash2
+                                                                        :size="14"
+                                                                        class="shrink-0"
+                                                                    />
+                                                                    <span class="flex-1">
+                                                                        Delete
+                                                                    </span>
+                                                                </CommandItem>
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                            <!-- Fold this comment down to its header; points
+                                                 down to expand, up to collapse (as the file
+                                                 tree does). -->
+                                            <button
+                                                type="button"
+                                                class="-mr-1 inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                :aria-expanded="!isCollapsed(i)"
+                                                :aria-label="
+                                                    isCollapsed(i)
+                                                        ? 'Expand comment'
+                                                        : 'Collapse comment'
+                                                "
+                                                @click="toggleCollapsed(i)"
+                                            >
+                                                <ChevronDown v-if="!isCollapsed(i)" :size="14" />
+                                                <ChevronRight v-else :size="14" />
+                                            </button>
+                                        </div>
                                     </div>
                                     <div v-if="!isCollapsed(i)" class="px-3.5 py-3">
+                                        <!-- Editing this comment: an inline editor in place of
+                                             the rendered body. -->
                                         <div
+                                            v-if="editingId === comment.id"
+                                            class="flex flex-col gap-2"
+                                        >
+                                            <Textarea
+                                                v-model="editDraft"
+                                                aria-label="Edit comment body"
+                                                class="min-h-24 border-moire-border bg-transparent text-[14px] leading-[1.6] text-moire-file-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                                            />
+                                            <span
+                                                v-if="editError"
+                                                class="text-[12px] text-moire-status-d"
+                                            >
+                                                {{ editError }}
+                                            </span>
+                                            <div class="flex justify-end gap-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="h-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                                    :disabled="savingEdit"
+                                                    @click="cancelEdit"
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
+                                                    :disabled="!editDraft.trim() || savingEdit"
+                                                    @click="saveEdit"
+                                                >
+                                                    <LoaderCircle
+                                                        v-if="savingEdit"
+                                                        :size="14"
+                                                        class="animate-spin"
+                                                    />
+                                                    Save
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <div
+                                            v-else
                                             class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
                                             @click="onBodyClick"
                                             v-html="renderMarkdown(comment.body)"
@@ -665,6 +1025,40 @@ function onBodyClick(event: MouseEvent) {
                                     </span>
                                     <span :class="verb(comment).cls">{{ verb(comment).text }}</span>
                                     <span>{{ relative(comment.createdAt) }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- New-comment composer, shown only in edit mode. Indented to the
+                             cards' left edge. Posts through the store, which re-fetches so
+                             the comment appears. gap, not margin (the unlayered reset). -->
+                        <div v-if="editing" class="pl-9">
+                            <div class="rounded-lg border border-moire-border bg-moire-app p-3.5">
+                                <div class="flex flex-col gap-2.5">
+                                    <Textarea
+                                        v-model="draft"
+                                        placeholder="Add a comment…"
+                                        aria-label="Add a comment"
+                                        class="min-h-20 border-moire-border bg-transparent text-[14px] leading-[1.6] text-moire-file-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                                    />
+                                    <span v-if="postError" class="text-[12px] text-moire-status-d">
+                                        {{ postError }}
+                                    </span>
+                                    <div class="flex justify-end">
+                                        <Button
+                                            size="sm"
+                                            class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
+                                            :disabled="!draft.trim() || posting"
+                                            @click="submitComment"
+                                        >
+                                            <LoaderCircle
+                                                v-if="posting"
+                                                :size="14"
+                                                class="animate-spin"
+                                            />
+                                            Comment
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -722,6 +1116,72 @@ function onBodyClick(event: MouseEvent) {
                 </div>
             </div>
         </ScrollArea>
+
+        <!-- Delete confirmation. A modal, deliberately outside the comment card, so
+             the destructive action reads clearly and is not mistaken for part of the
+             thread. Closing it (Cancel, Esc, or the backdrop) leaves the comment be. -->
+        <Dialog
+            :open="confirmingDeleteId !== null"
+            @update:open="
+                (open) => {
+                    if (!open) cancelDelete();
+                }
+            "
+        >
+            <DialogContent
+                :show-close-button="false"
+                class="gap-0 border-moire-border bg-moire-pop p-0 text-moire-fg sm:max-w-md"
+                :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
+            >
+                <div class="flex flex-col gap-3 p-5">
+                    <div class="flex items-center gap-2.5">
+                        <span
+                            class="flex size-8 shrink-0 items-center justify-center rounded-full bg-moire-danger text-moire-status-d"
+                        >
+                            <Trash2 :size="16" />
+                        </span>
+                        <DialogTitle class="text-[15px] font-semibold text-moire-fg">
+                            Delete comment
+                        </DialogTitle>
+                    </div>
+                    <DialogDescription class="text-[13px] leading-[1.5] text-moire-muted">
+                        This permanently deletes your comment on GitHub. It cannot be undone.
+                    </DialogDescription>
+                    <!-- A preview of the comment being deleted, so it is clear which one. -->
+                    <div
+                        v-if="commentPendingDelete"
+                        class="overflow-hidden rounded-md border border-moire-border bg-moire-app px-3 py-2 text-[13px] leading-[1.5] text-moire-file-fg"
+                    >
+                        <span class="line-clamp-3 whitespace-pre-wrap">
+                            {{ commentPendingDelete.body }}
+                        </span>
+                    </div>
+                    <span v-if="deleteError" class="text-[12px] text-moire-status-d">
+                        {{ deleteError }}
+                    </span>
+                </div>
+                <DialogFooter class="gap-2 border-t border-moire-border px-5 py-3.5">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-8 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                        :disabled="deletingId !== null"
+                        @click="cancelDelete"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        size="sm"
+                        class="h-8 gap-1.5 bg-moire-status-d text-white hover:bg-moire-status-d/90"
+                        :disabled="deletingId !== null"
+                        @click="confirmDelete(confirmingDeleteId ?? '')"
+                    >
+                        <LoaderCircle v-if="deletingId !== null" :size="14" class="animate-spin" />
+                        Delete comment
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>
 

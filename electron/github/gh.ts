@@ -45,6 +45,11 @@ export interface PrComment {
     createdAt: string;
     kind: 'comment' | 'review';
     state?: string;
+    // The GraphQL node id, used to edit the comment (empty for reviews, which this
+    // path does not edit). `canEdit` is gh's viewerDidAuthor: the signed-in account
+    // wrote it, so it may edit it.
+    id: string;
+    canEdit: boolean;
 }
 
 // A PR label; `color` is a 6-digit hex without the leading '#', as GitHub returns.
@@ -110,9 +115,11 @@ interface GhAuthor {
 }
 
 interface GhComment {
+    id?: string;
     author: GhAuthor | null;
     body: string;
     createdAt: string;
+    viewerDidAuthor?: boolean;
 }
 
 interface GhReview {
@@ -206,6 +213,8 @@ function buildComments(pr: GhPr): PrComment[] {
             body: c.body ?? '',
             createdAt: c.createdAt,
             kind: 'comment',
+            id: c.id ?? '',
+            canEdit: !!c.viewerDidAuthor,
         });
     }
 
@@ -221,6 +230,10 @@ function buildComments(pr: GhPr): PrComment[] {
             createdAt: r.submittedAt,
             kind: 'review',
             state: r.state,
+            // Reviews are not editable through this path (a different mutation), so
+            // they carry no id and are never marked editable.
+            id: '',
+            canEdit: false,
         });
     }
 
@@ -451,6 +464,111 @@ export async function getPullRequest(
     }
 
     return { status: 'ok', pr: toPullRequest(raw) };
+}
+
+// --- Writing to the conversation (gh pr comment / GraphQL) ---
+//
+// The PR view is read-only until the user turns on edit mode; these back the two
+// writes it then allows. Both return a plain ok/message result rather than
+// throwing, so the renderer can show an inline error instead of a crash.
+
+export interface CommentMutationResult {
+    ok: boolean;
+    message?: string;
+}
+
+// Turn a gh failure into a short message for the inline error. A missing gh or an
+// auth problem is named; otherwise the gh stderr (often a clear GitHub error like
+// a permission denial) is surfaced as-is.
+function mutationError(error: unknown): string {
+    const err = error as { code?: string | number; stderr?: string | Buffer };
+    if (err.code === 'ENOENT') {
+        return 'The GitHub CLI (gh) was not found.';
+    }
+
+    const stderr = String(err.stderr ?? '').trim();
+    if (/auth login|not logged in|authentication|requires authentication/i.test(stderr)) {
+        return 'gh is not signed in to GitHub.';
+    }
+
+    return stderr || 'gh could not complete the request.';
+}
+
+// Post a new comment on the PR via `gh pr comment`, addressing it by number (the
+// renderer holds it from the fetched PR). A blank body is rejected before gh runs.
+// The body is passed as a single argv value, so no shell quoting is involved.
+export async function postComment(
+    repoPath: string,
+    prNumber: number,
+    body: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !prNumber || !body.trim()) {
+        return { ok: false, message: 'Nothing to post.' };
+    }
+
+    try {
+        await run(['pr', 'comment', String(prNumber), '--body', body], repoPath);
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// Edit an existing PR comment via the GraphQL updateIssueComment mutation, keyed on
+// the comment's node id (the fetched comment's `id`). GitHub allows only the
+// comment's author to edit it; a forbidden or failed edit comes back as a message.
+export async function editComment(
+    repoPath: string,
+    commentId: string,
+    body: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !commentId || !body.trim()) {
+        return { ok: false, message: 'Nothing to save.' };
+    }
+
+    const query =
+        'mutation($id:ID!,$body:String!){updateIssueComment(input:{id:$id,body:$body}){issueComment{id}}}';
+    try {
+        await run(
+            [
+                'api',
+                'graphql',
+                '-f',
+                `query=${query}`,
+                '-f',
+                `id=${commentId}`,
+                '-f',
+                `body=${body}`,
+            ],
+            repoPath
+        );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// Delete an existing PR comment via the GraphQL deleteIssueComment mutation, keyed
+// on the comment's node id. As with editing, GitHub permits only the comment's
+// author (or a maintainer); a forbidden or failed delete comes back as a message.
+export async function deleteComment(
+    repoPath: string,
+    commentId: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !commentId) {
+        return { ok: false, message: 'Nothing to delete.' };
+    }
+
+    const query = 'mutation($id:ID!){deleteIssueComment(input:{id:$id}){clientMutationId}}';
+    try {
+        await run(['api', 'graphql', '-f', `query=${query}`, '-f', `id=${commentId}`], repoPath);
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
 }
 
 // --- GitHub account switching (gh auth) ---

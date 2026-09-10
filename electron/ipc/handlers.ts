@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ipcMain, dialog, shell } from 'electron';
 import { simpleGit, CheckRepoActions } from 'simple-git';
 import { GitService, type CompareMode } from '../git/GitService';
-import { getPullRequest } from '../github/gh';
+import { getPullRequest, postComment, editComment, deleteComment } from '../github/gh';
 import { watchRepo } from '../watcher/RepoWatcher';
 import {
     getRecentRepos,
@@ -161,6 +161,22 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
     // throwing for a missing gh / auth / PR, so the renderer can explain it.
     handle('gh:pull-request', (base: string, head: string) =>
         getPullRequest(requireRepo().repoPath, base, head)
+    );
+
+    // Conversation writes, used only while the PR view is in edit mode. Both operate
+    // on the open repo's directory (gh resolves the GitHub remote there) and return
+    // an ok/message result rather than throwing, so the renderer shows an inline
+    // error. GitHub itself enforces that only a comment's author can edit it.
+    handle('gh:post-comment', (prNumber: number, body: string) =>
+        postComment(requireRepo().repoPath, prNumber, body)
+    );
+
+    handle('gh:edit-comment', (commentId: string, body: string) =>
+        editComment(requireRepo().repoPath, commentId, body)
+    );
+
+    handle('gh:delete-comment', (commentId: string) =>
+        deleteComment(requireRepo().repoPath, commentId)
     );
 
     // Open an external URL (a PR link) in the default browser. Restricted to

@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getPullRequest, getAccounts, switchAccount, type GhRunner } from '../electron/github/gh';
+import {
+    getPullRequest,
+    getAccounts,
+    switchAccount,
+    postComment,
+    editComment,
+    deleteComment,
+    type GhRunner,
+} from '../electron/github/gh';
 
 // A gh PR record as `gh pr list --json` emits it (author is an object, and the
 // conversation arrives as separate comments and reviews arrays).
@@ -18,7 +26,15 @@ const ghPr = {
     deletions: 3,
     changedFiles: 2,
     commits: [{}, {}, {}],
-    comments: [{ author: { login: 'bob' }, body: 'nice', createdAt: '2026-09-02T00:00:00Z' }],
+    comments: [
+        {
+            id: 'IC_1',
+            author: { login: 'bob' },
+            body: 'nice',
+            createdAt: '2026-09-02T00:00:00Z',
+            viewerDidAuthor: true,
+        },
+    ],
     reviews: [
         {
             author: { login: 'ann' },
@@ -92,13 +108,24 @@ describe('getPullRequest', () => {
         // The bare COMMENTED review (empty body) is dropped; the comment and the
         // approval remain, ordered by time.
         expect(result.pr!.comments).toEqual([
-            { author: 'bob', body: 'nice', createdAt: '2026-09-02T00:00:00Z', kind: 'comment' },
+            {
+                author: 'bob',
+                body: 'nice',
+                createdAt: '2026-09-02T00:00:00Z',
+                kind: 'comment',
+                // The comment carries its node id, and viewerDidAuthor marks it editable.
+                id: 'IC_1',
+                canEdit: true,
+            },
             {
                 author: 'ann',
                 body: 'looks good',
                 createdAt: '2026-09-03T00:00:00Z',
                 kind: 'review',
                 state: 'APPROVED',
+                // Reviews are not editable through this path.
+                id: '',
+                canEdit: false,
             },
         ]);
     });
@@ -418,5 +445,89 @@ describe('switchAccount', () => {
         );
         expect(result.status).toBe('error');
         expect(result.message).toBe('no such account');
+    });
+});
+
+describe('postComment', () => {
+    it('posts via gh pr comment in the repo directory', async () => {
+        const { run, calls } = okRunner('');
+        const result = await postComment('/repo', 42, 'looks good', run);
+
+        expect(result).toEqual({ ok: true });
+        expect(calls[0]!.cwd).toBe('/repo');
+        expect(calls[0]!.args).toEqual(['pr', 'comment', '42', '--body', 'looks good']);
+    });
+
+    it('rejects a blank body without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+        const result = await postComment('/repo', 42, '   ', run);
+
+        expect(result.ok).toBe(false);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('reports a gh failure as an ok:false message', async () => {
+        const run = failRunner({ stderr: 'GraphQL: could not resolve' });
+        const result = await postComment('/repo', 42, 'hi', run);
+
+        expect(result.ok).toBe(false);
+        expect(result.message).toContain('could not resolve');
+    });
+});
+
+describe('editComment', () => {
+    it('edits via the updateIssueComment mutation keyed on the node id', async () => {
+        const { run, calls } = okRunner('');
+        const result = await editComment('/repo', 'IC_1', 'fixed', run);
+
+        expect(result).toEqual({ ok: true });
+        expect(calls[0]!.cwd).toBe('/repo');
+        expect(calls[0]!.args[0]).toBe('api');
+        expect(calls[0]!.args).toContain('graphql');
+        expect(calls[0]!.args).toContain('id=IC_1');
+        expect(calls[0]!.args).toContain('body=fixed');
+    });
+
+    it('rejects a blank id or body without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+        expect((await editComment('/repo', '', 'x', run)).ok).toBe(false);
+        expect((await editComment('/repo', 'IC_1', '  ', run)).ok).toBe(false);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('names a missing gh from an ENOENT', async () => {
+        const run = failRunner({ code: 'ENOENT' });
+        const result = await editComment('/repo', 'IC_1', 'x', run);
+
+        expect(result.ok).toBe(false);
+        expect(result.message).toContain('not found');
+    });
+});
+
+describe('deleteComment', () => {
+    it('deletes via the deleteIssueComment mutation keyed on the node id', async () => {
+        const { run, calls } = okRunner('');
+        const result = await deleteComment('/repo', 'IC_1', run);
+
+        expect(result).toEqual({ ok: true });
+        expect(calls[0]!.cwd).toBe('/repo');
+        expect(calls[0]!.args[0]).toBe('api');
+        expect(calls[0]!.args).toContain('graphql');
+        expect(calls[0]!.args).toContain('id=IC_1');
+        expect(calls[0]!.args.some((a) => a.includes('deleteIssueComment'))).toBe(true);
+    });
+
+    it('rejects a blank id without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+        expect((await deleteComment('/repo', '', run)).ok).toBe(false);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('reports a gh failure as an ok:false message', async () => {
+        const run = failRunner({ stderr: 'GraphQL: must have admin' });
+        const result = await deleteComment('/repo', 'IC_1', run);
+
+        expect(result.ok).toBe(false);
+        expect(result.message).toContain('must have admin');
     });
 });

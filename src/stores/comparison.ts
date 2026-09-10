@@ -3,6 +3,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 import type {
     BranchInfo,
     ChangedFile,
+    CommentMutationResult,
     CompareMode,
     FilePair,
     FileStatus,
@@ -335,6 +336,57 @@ export const useComparisonStore = defineStore('comparison', () => {
     // which PR exists (that is the base<-head pairing), so it is not a trigger. The
     // range change swaps the PR, so this run drives the spinner.
     watch([base, head], () => void loadPullRequest(true));
+
+    // Post a new comment on the current PR (edit mode only), then re-fetch so it
+    // shows. Returns gh's ok/message result for the view to surface an inline error.
+    async function postComment(body: string): Promise<CommentMutationResult> {
+        const api = window.api;
+        const pr = pullRequest.value;
+        if (!api || !pr || !body.trim()) {
+            return { ok: false, message: 'Nothing to post.' };
+        }
+
+        const result = await api.postComment(pr.number, body);
+        if (result.ok) {
+            await loadPullRequest();
+        }
+
+        return result;
+    }
+
+    // Edit one of the user's own comments by its node id, then re-fetch so the
+    // change shows. GitHub rejects editing another author's comment; that failure
+    // comes back in the result.
+    async function editComment(commentId: string, body: string): Promise<CommentMutationResult> {
+        const api = window.api;
+        if (!api || !commentId || !body.trim()) {
+            return { ok: false, message: 'Nothing to save.' };
+        }
+
+        const result = await api.editComment(commentId, body);
+        if (result.ok) {
+            await loadPullRequest();
+        }
+
+        return result;
+    }
+
+    // Delete one of the user's own comments by its node id, then re-fetch so it
+    // drops from the conversation. GitHub rejects deleting another author's
+    // comment; that failure comes back in the result.
+    async function deleteComment(commentId: string): Promise<CommentMutationResult> {
+        const api = window.api;
+        if (!api || !commentId) {
+            return { ok: false, message: 'Nothing to delete.' };
+        }
+
+        const result = await api.deleteComment(commentId);
+        if (result.ok) {
+            await loadPullRequest();
+        }
+
+        return result;
+    }
 
     // The diff pane shows a "Load diff" gate in place of the editor when the
     // selected file is over the size threshold and has not been loaded yet. Binary
@@ -907,6 +959,9 @@ export const useComparisonStore = defineStore('comparison', () => {
         hasPullRequest,
         prWarning,
         loadPullRequest,
+        postComment,
+        editComment,
+        deleteComment,
         isViewed,
         localBranches,
         remoteBranches,
