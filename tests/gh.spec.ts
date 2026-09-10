@@ -6,6 +6,7 @@ import {
     postComment,
     editComment,
     deleteComment,
+    editDescription,
     type GhRunner,
 } from '../electron/github/gh';
 
@@ -529,5 +530,38 @@ describe('deleteComment', () => {
 
         expect(result.ok).toBe(false);
         expect(result.message).toContain('must have admin');
+    });
+});
+
+describe('editDescription', () => {
+    it('edits the body via gh pr edit, keyed on the PR number', async () => {
+        const { run, calls } = okRunner('');
+        const result = await editDescription('/repo', 42, 'New body.', run);
+
+        expect(result).toEqual({ ok: true });
+        expect(calls[0]!.cwd).toBe('/repo');
+        expect(calls[0]!.args).toEqual(['pr', 'edit', '42', '--body', 'New body.']);
+    });
+
+    it('allows an empty body (clearing the description)', async () => {
+        const { run, calls } = okRunner('');
+        const result = await editDescription('/repo', 42, '', run);
+
+        expect(result.ok).toBe(true);
+        expect(calls[0]!.args).toEqual(['pr', 'edit', '42', '--body', '']);
+    });
+
+    it('rejects a missing PR number without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+        expect((await editDescription('/repo', 0, 'x', run)).ok).toBe(false);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('reports a gh failure as an ok:false message', async () => {
+        const run = failRunner({ stderr: 'GraphQL: must have write access' });
+        const result = await editDescription('/repo', 42, 'x', run);
+
+        expect(result.ok).toBe(false);
+        expect(result.message).toContain('write access');
     });
 });

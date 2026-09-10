@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld('api', {
     editComment: (commentId: string, body: string) =>
         ipcRenderer.invoke('gh:edit-comment', commentId, body),
     deleteComment: (commentId: string) => ipcRenderer.invoke('gh:delete-comment', commentId),
+    editDescription: (prNumber: number, body: string) =>
+        ipcRenderer.invoke('gh:edit-description', prNumber, body),
     // Open a PR link in the default browser (main restricts it to http(s)).
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
     // Theme is owned by main (nativeTheme). `getTheme` reads the resolved state;

@@ -253,6 +253,13 @@ const confirmingDeleteId = ref<string | null>(null);
 const deletingId = ref<string | null>(null);
 const deleteError = ref('');
 
+// Editing the PR's own description (body). Its rendered Markdown swaps for an inline
+// editor, mirroring a comment's editor.
+const editingDescription = ref(false);
+const descriptionDraft = ref('');
+const savingDescription = ref(false);
+const descriptionError = ref('');
+
 // Leaving edit mode drops any in-progress draft, open editor, delete prompt, menu,
 // and error so the view returns cleanly to read-only.
 watch(editing, (on) => {
@@ -265,6 +272,8 @@ watch(editing, (on) => {
         openMenuId.value = null;
         confirmingDeleteId.value = null;
         deleteError.value = '';
+        editingDescription.value = false;
+        descriptionError.value = '';
     }
 });
 
@@ -277,6 +286,7 @@ watch(
         topMenuOpen.value = false;
         openMenuId.value = null;
         confirmingDeleteId.value = null;
+        editingDescription.value = false;
     }
 );
 
@@ -373,6 +383,38 @@ async function saveEdit() {
     }
 
     editError.value = result.message ?? 'Could not save the edit.';
+}
+
+// --- Editing the PR description ---
+
+function startEditDescription() {
+    descriptionDraft.value = pr.value?.body ?? '';
+    descriptionError.value = '';
+    editingDescription.value = true;
+    // An edit is only offered on an expanded description, but guard anyway.
+    descriptionCollapsed.value = false;
+}
+
+function cancelEditDescription() {
+    editingDescription.value = false;
+    descriptionError.value = '';
+}
+
+async function saveDescription() {
+    if (savingDescription.value) {
+        return;
+    }
+
+    savingDescription.value = true;
+    descriptionError.value = '';
+    const result = await comparison.editDescription(descriptionDraft.value);
+    savingDescription.value = false;
+    if (result.ok) {
+        editingDescription.value = false;
+        return;
+    }
+
+    descriptionError.value = result.message ?? 'Could not save the description.';
 }
 
 // The PR's creation date, shown as "opened Aug 28" ahead of the change stats as
@@ -781,32 +823,91 @@ function onBodyClick(event: MouseEvent) {
                                             </span>
                                             <span>opened this pull request</span>
                                         </div>
-                                        <!-- Fold the description down to its header. Pinned to
-                                             the card's right edge; points down to expand, up to
-                                             collapse. Only shown when there is a description. -->
-                                        <button
-                                            v-if="hasBody"
-                                            type="button"
-                                            class="-mr-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                            :aria-expanded="!descriptionCollapsed"
-                                            :aria-label="
-                                                descriptionCollapsed
-                                                    ? 'Expand description'
-                                                    : 'Collapse description'
-                                            "
-                                            @click="descriptionCollapsed = !descriptionCollapsed"
-                                        >
-                                            <!-- Same disclosure as the file tree: down when
-                                                 open, right when collapsed. -->
-                                            <ChevronDown v-if="!descriptionCollapsed" :size="14" />
-                                            <ChevronRight v-else :size="14" />
-                                        </button>
+                                        <div class="flex shrink-0 items-center gap-0.5">
+                                            <!-- Edit the description, in edit mode. Shown even
+                                                 with no body yet, so one can be added. Swaps
+                                                 the body for an editor. -->
+                                            <button
+                                                v-if="editing && !editingDescription"
+                                                type="button"
+                                                class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                aria-label="Edit description"
+                                                title="Edit the description"
+                                                @click="startEditDescription"
+                                            >
+                                                <Pencil :size="13" />
+                                            </button>
+                                            <!-- Fold the description down to its header. Points
+                                                 down to expand, up to collapse. Only when there
+                                                 is a description. -->
+                                            <button
+                                                v-if="hasBody"
+                                                type="button"
+                                                class="-mr-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                :aria-expanded="!descriptionCollapsed"
+                                                :aria-label="
+                                                    descriptionCollapsed
+                                                        ? 'Expand description'
+                                                        : 'Collapse description'
+                                                "
+                                                @click="
+                                                    descriptionCollapsed = !descriptionCollapsed
+                                                "
+                                            >
+                                                <!-- Same disclosure as the file tree: down when
+                                                     open, right when collapsed. -->
+                                                <ChevronDown
+                                                    v-if="!descriptionCollapsed"
+                                                    :size="14"
+                                                />
+                                                <ChevronRight v-else :size="14" />
+                                            </button>
+                                        </div>
                                     </div>
                                     <div v-if="!descriptionCollapsed" class="px-3.5 py-3">
+                                        <!-- Editing the description: an inline editor in place
+                                             of the rendered body. An empty body is allowed. -->
+                                        <div v-if="editingDescription" class="flex flex-col gap-2">
+                                            <Textarea
+                                                v-model="descriptionDraft"
+                                                aria-label="Edit description body"
+                                                class="min-h-32 border-moire-border bg-transparent text-[14px] leading-[1.6] text-moire-file-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                                            />
+                                            <span
+                                                v-if="descriptionError"
+                                                class="text-[12px] text-moire-status-d"
+                                            >
+                                                {{ descriptionError }}
+                                            </span>
+                                            <div class="flex justify-end gap-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="h-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                                    :disabled="savingDescription"
+                                                    @click="cancelEditDescription"
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
+                                                    :disabled="savingDescription"
+                                                    @click="saveDescription"
+                                                >
+                                                    <LoaderCircle
+                                                        v-if="savingDescription"
+                                                        :size="14"
+                                                        class="animate-spin"
+                                                    />
+                                                    Save
+                                                </Button>
+                                            </div>
+                                        </div>
                                         <!-- v-html is safe here: renderMarkdown sanitizes the
                                          output through DOMPurify (see lib/markdown). -->
                                         <div
-                                            v-if="hasBody"
+                                            v-else-if="hasBody"
                                             class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
                                             @click="onBodyClick"
                                             v-html="renderedBody"

@@ -571,6 +571,28 @@ export async function deleteComment(
     }
 }
 
+// Edit the PR's own description (body) via `gh pr edit`, addressed by number. An
+// empty body is allowed (a PR can have no description); GitHub permits only the
+// PR's author or a maintainer, and a forbidden or failed edit comes back as a
+// message. The body is a single argv value, so no shell quoting is involved.
+export async function editDescription(
+    repoPath: string,
+    prNumber: number,
+    body: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !prNumber) {
+        return { ok: false, message: 'Nothing to save.' };
+    }
+
+    try {
+        await run(['pr', 'edit', String(prNumber), '--body', body], repoPath);
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
 // --- GitHub account switching (gh auth) ---
 //
 // gh can hold several authenticated accounts per host and keeps one active. The

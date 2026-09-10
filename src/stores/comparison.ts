@@ -388,6 +388,24 @@ export const useComparisonStore = defineStore('comparison', () => {
         return result;
     }
 
+    // Edit the PR's own description (body), then re-fetch so the rendered Markdown
+    // updates. An empty body is allowed. GitHub rejects editing a PR the viewer
+    // cannot update; that failure comes back in the result.
+    async function editDescription(body: string): Promise<CommentMutationResult> {
+        const api = window.api;
+        const pr = pullRequest.value;
+        if (!api || !pr) {
+            return { ok: false, message: 'Nothing to save.' };
+        }
+
+        const result = await api.editDescription(pr.number, body);
+        if (result.ok) {
+            await loadPullRequest();
+        }
+
+        return result;
+    }
+
     // The diff pane shows a "Load diff" gate in place of the editor when the
     // selected file is over the size threshold and has not been loaded yet. Binary
     // files are excluded: their content is already withheld, so there is nothing to
@@ -962,6 +980,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         postComment,
         editComment,
         deleteComment,
+        editDescription,
         isViewed,
         localBranches,
         remoteBranches,

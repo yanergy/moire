@@ -211,6 +211,8 @@ export interface MoireApi {
     postComment(prNumber: number, body: string): Promise<CommentMutationResult>;
     editComment(commentId: string, body: string): Promise<CommentMutationResult>;
     deleteComment(commentId: string): Promise<CommentMutationResult>;
+    // `editDescription` rewrites the PR's own body (Markdown), addressed by number.
+    editDescription(prNumber: number, body: string): Promise<CommentMutationResult>;
     // Open a URL (a PR link) in the user's default browser, via the main process.
     // Restricted to http(s) URLs on the main side.
     openExternal(url: string): Promise<void>;

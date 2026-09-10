@@ -608,5 +608,29 @@ describe('PrView', () => {
 
             expect(del).toHaveBeenCalledWith('IC_1');
         });
+
+        it('has no description edit action until edit mode is on', () => {
+            const wrapper = mountWith(PR);
+            expect(wrapper.find('button[aria-label="Edit description"]').exists()).toBe(false);
+        });
+
+        it('edits the description through the store', async () => {
+            const store = useComparisonStore();
+            const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
+
+            const wrapper = await enableEditing({ ...PR, body: 'Original body.' });
+
+            await wrapper.get('button[aria-label="Edit description"]').trigger('click');
+            const editBox = wrapper.get('textarea[aria-label="Edit description body"]');
+            // The editor is seeded with the current body.
+            expect((editBox.element as HTMLTextAreaElement).value).toBe('Original body.');
+
+            await editBox.setValue('Rewritten body.');
+            const saveBtn = wrapper.findAll('button').find((b) => b.text() === 'Save')!;
+            await saveBtn.trigger('click');
+            await flushPromises();
+
+            expect(edit).toHaveBeenCalledWith('Rewritten body.');
+        });
     });
 });

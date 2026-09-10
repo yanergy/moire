@@ -6,7 +6,13 @@ import path from 'node:path';
 import { ipcMain, dialog, shell } from 'electron';
 import { simpleGit, CheckRepoActions } from 'simple-git';
 import { GitService, type CompareMode } from '../git/GitService';
-import { getPullRequest, postComment, editComment, deleteComment } from '../github/gh';
+import {
+    getPullRequest,
+    postComment,
+    editComment,
+    deleteComment,
+    editDescription,
+} from '../github/gh';
 import { watchRepo } from '../watcher/RepoWatcher';
 import {
     getRecentRepos,
@@ -177,6 +183,10 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
 
     handle('gh:delete-comment', (commentId: string) =>
         deleteComment(requireRepo().repoPath, commentId)
+    );
+
+    handle('gh:edit-description', (prNumber: number, body: string) =>
+        editDescription(requireRepo().repoPath, prNumber, body)
     );
 
     // Open an external URL (a PR link) in the default browser. Restricted to
