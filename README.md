@@ -130,8 +130,6 @@ Track bugs and limitations here.
     - Posting a comment from the app (the conversation is read-only). Ticking a task-list
       checkbox belongs with this: the checkboxes render but are disabled, since checking one
       writes the new state back to the PR body or comment on GitHub.
-    - Collapsing a comment in the conversation, so long threads can be folded down to their
-      headers and skimmed (the entries are always expanded today).
     - A Commits tab (the commit list). Lower priority: editors such as PhpStorm already show a
       branch's commits well, so this duplicates tooling the user likely already has.
     - Inline review-thread comments and their resolved state, which need the GitHub GraphQL API,

@@ -2,6 +2,10 @@
 import { computed, ref, type Component } from 'vue';
 import {
     ArrowRight,
+    ChevronDown,
+    ChevronRight,
+    ChevronsDownUp,
+    ChevronsUpDown,
     Circle,
     CircleAlert,
     CircleCheck,
@@ -132,7 +136,71 @@ const checksStatus = computed<StatusBox | null>(() => {
 const renderedBody = computed(() => renderMarkdown(pr.value?.body));
 const hasBody = computed(() => !!pr.value?.body.trim());
 
+// The description folds on its own toggle, and the collapse-all control folds it
+// together with the comments.
+const descriptionCollapsed = ref(false);
+
 const comments = computed(() => pr.value?.comments ?? []);
+
+// Comments the user has folded down to just their header, keyed by index. The
+// conversation is stable within a view and new comments append, so indices stay
+// put across a refresh. Folding lets a long thread be skimmed by its headers;
+// only comments with a body can fold.
+const collapsedComments = ref<Set<number>>(new Set());
+function isCollapsed(index: number): boolean {
+    return collapsedComments.value.has(index);
+}
+function toggleCollapsed(index: number) {
+    const next = new Set(collapsedComments.value);
+    // Set.delete returns false when the index was absent, so add it instead.
+    if (!next.delete(index)) {
+        next.add(index);
+    }
+
+    collapsedComments.value = next;
+}
+
+// Indices of comments that have a body, and so can be folded. The collapse/expand-
+// all control and its state derive from these.
+const collapsibleIndexes = computed(() => {
+    const out: number[] = [];
+    comments.value.forEach((comment, i) => {
+        if (comment.body.trim()) {
+            out.push(i);
+        }
+    });
+
+    return out;
+});
+
+// Everything foldable in the conversation: the description (when it has a body)
+// plus any comment with a body. Drives whether the collapse-all control shows.
+const hasCollapsible = computed(() => hasBody.value || collapsibleIndexes.value.length > 0);
+
+// True only when the description (if foldable) and every foldable comment are
+// folded, mirroring the file tree's allCollapsed: it drives the control's icon,
+// label, and direction.
+const allCollapsed = computed(() => {
+    const descriptionFolded = !hasBody.value || descriptionCollapsed.value;
+    return (
+        hasCollapsible.value &&
+        descriptionFolded &&
+        collapsibleIndexes.value.every((i) => collapsedComments.value.has(i))
+    );
+});
+
+// Fold or unfold the whole conversation (the description and every comment) in one
+// go. Expands only when it is already all folded, like the file tree's collapse-all.
+function toggleAll() {
+    if (allCollapsed.value) {
+        collapsedComments.value = new Set();
+        descriptionCollapsed.value = false;
+        return;
+    }
+
+    collapsedComments.value = new Set(collapsibleIndexes.value);
+    descriptionCollapsed.value = hasBody.value;
+}
 
 // The PR's creation date, shown as "opened Aug 28" ahead of the change stats as
 // in the design. Empty when the timestamp is missing or unparseable.
@@ -369,7 +437,9 @@ function onBodyClick(event: MouseEvent) {
                 <!-- Tabs: the description and conversation, or the CI checks. The
                      counts (comments, passed/total checks) sit faint beside the
                      label, as in the design. -->
-                <div class="flex flex-none gap-0.5 border-b border-moire-border px-3 py-2">
+                <div
+                    class="flex flex-none items-center gap-0.5 border-b border-moire-border px-3 py-2"
+                >
                     <button
                         type="button"
                         class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
@@ -409,6 +479,24 @@ function onBodyClick(event: MouseEvent) {
                             {{ checksSummary }}
                         </span>
                     </button>
+
+                    <div class="flex-1" />
+
+                    <!-- Fold or unfold the whole conversation (description and
+                         comments) at once, mirroring the file tree's collapse-all.
+                         Only on the conversation tab, and only when something can fold. -->
+                    <Button
+                        v-if="activeTab === 'conversation' && hasCollapsible"
+                        variant="ghost"
+                        size="icon-xs"
+                        class="text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                        :aria-label="allCollapsed ? 'Expand all' : 'Collapse all'"
+                        :title="allCollapsed ? 'Expand all' : 'Collapse all'"
+                        @click="toggleAll"
+                    >
+                        <ChevronsUpDown v-if="allCollapsed" :size="16" />
+                        <ChevronsDownUp v-else :size="16" />
+                    </Button>
                 </div>
 
                 <div class="p-4">
@@ -420,21 +508,52 @@ function onBodyClick(event: MouseEvent) {
 
                         <!-- The description reads as the first entry. -->
                         <div class="flex gap-3">
-                            <div class="flex w-6 shrink-0 flex-col items-center gap-1.5">
-                                <user-avatar :login="pr.author" :size="24" />
-                                <span v-if="comments.length" class="w-px flex-1 bg-moire-border" />
+                            <div class="flex w-6 shrink-0 flex-col items-center">
+                                <!-- Center the avatar within the header band (h-10, the
+                                     header's height) so it lines up with the header's
+                                     middle, which reads best when the card is collapsed.
+                                     The description has no connector below it; a divider
+                                     separates it from the conversation instead. -->
+                                <div class="flex h-10 shrink-0 items-center">
+                                    <user-avatar :login="pr.author" :size="24" />
+                                </div>
                             </div>
                             <div class="min-w-0 flex-1 pb-5">
                                 <div class="rounded-lg border border-moire-border bg-moire-app">
                                     <div
-                                        class="flex flex-wrap items-center gap-1.5 border-b border-moire-border px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                        class="flex items-center justify-between gap-1.5 px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                        :class="{
+                                            'border-b border-moire-border': !descriptionCollapsed,
+                                        }"
                                     >
-                                        <span class="text-[14px] font-medium text-moire-fg">
-                                            {{ pr.author }}
-                                        </span>
-                                        <span>opened the description</span>
+                                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                                            <span class="text-[14px] font-medium text-moire-fg">
+                                                {{ pr.author }}
+                                            </span>
+                                            <span>opened this pull request</span>
+                                        </div>
+                                        <!-- Fold the description down to its header. Pinned to
+                                             the card's right edge; points down to expand, up to
+                                             collapse. Only shown when there is a description. -->
+                                        <button
+                                            v-if="hasBody"
+                                            type="button"
+                                            class="-mr-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                            :aria-expanded="!descriptionCollapsed"
+                                            :aria-label="
+                                                descriptionCollapsed
+                                                    ? 'Expand description'
+                                                    : 'Collapse description'
+                                            "
+                                            @click="descriptionCollapsed = !descriptionCollapsed"
+                                        >
+                                            <!-- Same disclosure as the file tree: down when
+                                                 open, right when collapsed. -->
+                                            <ChevronDown v-if="!descriptionCollapsed" :size="14" />
+                                            <ChevronRight v-else :size="14" />
+                                        </button>
                                     </div>
-                                    <div class="px-3.5 py-3">
+                                    <div v-if="!descriptionCollapsed" class="px-3.5 py-3">
                                         <!-- v-html is safe here: renderMarkdown sanitizes the
                                          output through DOMPurify (see lib/markdown). -->
                                         <div
@@ -451,17 +570,94 @@ function onBodyClick(event: MouseEvent) {
                             </div>
                         </div>
 
-                        <!-- Comments and review verdicts as timeline rows. -->
+                        <!-- Separate the description from the conversation below it with a
+                             labelled rule spanning the full conversation width. Padding, not
+                             margin, for the gap below: the project's unlayered
+                             `* { margin: 0 }` reset zeroes margin utilities. The flanking
+                             spans are the rule, split around the centred label. -->
+                        <div
+                            v-if="comments.length"
+                            class="flex items-center gap-2.5 pb-5 text-[11px] font-medium tracking-wide text-moire-faint uppercase"
+                        >
+                            <span class="h-px flex-1 bg-moire-border" />
+                            Comments
+                            <span class="h-px flex-1 bg-moire-border" />
+                        </div>
+
+                        <!-- Conversation entries. One with a body renders as a card
+                             matching the description (header bar, then body); a bare
+                             review verdict stays a compact one-line row, as on GitHub. -->
                         <div v-for="(comment, i) in comments" :key="i" class="flex gap-3">
-                            <div class="flex w-6 shrink-0 flex-col items-center gap-1.5">
-                                <user-avatar :login="comment.author" :size="24" />
+                            <div class="flex w-6 shrink-0 flex-col items-center">
+                                <!-- Center the avatar in the header band so it lines up
+                                     with the header's middle, with an equal margin above
+                                     and below (no extra gap before the connector line). A
+                                     card header is h-10; a bare verdict is a single h-6
+                                     line. -->
+                                <div
+                                    class="flex shrink-0 items-center"
+                                    :class="comment.body.trim() ? 'h-10' : 'h-6'"
+                                >
+                                    <user-avatar :login="comment.author" :size="24" />
+                                </div>
                                 <span
                                     v-if="i < comments.length - 1"
                                     class="w-px flex-1 bg-moire-border"
                                 />
                             </div>
-                            <div class="flex min-w-0 flex-1 flex-col gap-2 pb-5">
+                            <div class="min-w-0 flex-1 pb-5">
                                 <div
+                                    v-if="comment.body.trim()"
+                                    class="rounded-lg border border-moire-border bg-moire-app"
+                                >
+                                    <div
+                                        class="flex items-center justify-between gap-1.5 px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                        :class="{
+                                            'border-b border-moire-border': !isCollapsed(i),
+                                        }"
+                                    >
+                                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                                            <span class="text-[14px] font-medium text-moire-fg">
+                                                {{ comment.author }}
+                                            </span>
+                                            <span :class="verb(comment).cls">
+                                                {{ verb(comment).text }}
+                                            </span>
+                                            <span>{{ relative(comment.createdAt) }}</span>
+                                        </div>
+                                        <!-- Fold this comment down to its header. Pinned to
+                                             the card's right edge; points down to expand, up
+                                             to collapse. -->
+                                        <button
+                                            type="button"
+                                            class="-mr-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                            :aria-expanded="!isCollapsed(i)"
+                                            :aria-label="
+                                                isCollapsed(i)
+                                                    ? 'Expand comment'
+                                                    : 'Collapse comment'
+                                            "
+                                            @click="toggleCollapsed(i)"
+                                        >
+                                            <!-- Same disclosure as the file tree: down when
+                                                 open, right when collapsed. -->
+                                            <ChevronDown v-if="!isCollapsed(i)" :size="14" />
+                                            <ChevronRight v-else :size="14" />
+                                        </button>
+                                    </div>
+                                    <div v-if="!isCollapsed(i)" class="px-3.5 py-3">
+                                        <div
+                                            class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
+                                            @click="onBodyClick"
+                                            v-html="renderMarkdown(comment.body)"
+                                        />
+                                    </div>
+                                </div>
+
+                                <!-- A bare review verdict has nothing to fold, so no card
+                                     and no chevron. -->
+                                <div
+                                    v-else
                                     class="flex flex-wrap items-center gap-1.5 text-[13px] text-moire-faint"
                                 >
                                     <span class="text-[14px] font-medium text-moire-fg">
@@ -470,12 +666,6 @@ function onBodyClick(event: MouseEvent) {
                                     <span :class="verb(comment).cls">{{ verb(comment).text }}</span>
                                     <span>{{ relative(comment.createdAt) }}</span>
                                 </div>
-                                <div
-                                    v-if="comment.body.trim()"
-                                    class="pr-markdown rounded-lg border border-moire-border bg-moire-app px-3.5 py-2.5 text-[14px] leading-[1.6] text-moire-file-fg"
-                                    @click="onBodyClick"
-                                    v-html="renderMarkdown(comment.body)"
-                                />
                             </div>
                         </div>
                     </div>

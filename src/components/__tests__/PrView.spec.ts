@@ -54,7 +54,7 @@ describe('PrView', () => {
         expect(text).toContain('Cross-file navigation');
         expect(text).toContain('#42');
         expect(text).toContain('s.trivedi');
-        expect(text).toContain('opened the description');
+        expect(text).toContain('opened this pull request');
         expect(text).toContain('main');
         expect(text).toContain('feature');
         expect(text).toContain('Does things.');
@@ -101,7 +101,108 @@ describe('PrView', () => {
     });
 
     it('still shows the description when there are no comments', () => {
-        expect(mountWith({ ...PR, comments: [] }).text()).toContain('opened the description');
+        expect(mountWith({ ...PR, comments: [] }).text()).toContain('opened this pull request');
+    });
+
+    it('collapses the description to its header when its toggle is clicked', async () => {
+        const wrapper = mountWith(PR);
+
+        // The body shows to begin with; the toggle reads as expanded.
+        expect(wrapper.text()).toContain('Does things.');
+        const toggle = wrapper.get('button[aria-label="Collapse description"]');
+        expect(toggle.attributes('aria-expanded')).toBe('true');
+
+        await toggle.trigger('click');
+
+        // Folded: the body is gone and the toggle now offers to expand.
+        const expand = wrapper.get('button[aria-label="Expand description"]');
+        expect(expand.attributes('aria-expanded')).toBe('false');
+        expect(wrapper.text()).not.toContain('Does things.');
+    });
+
+    it('offers no description toggle when there is no description', () => {
+        const wrapper = mountWith({ ...PR, body: '' });
+        expect(wrapper.find('button[aria-label="Collapse description"]').exists()).toBe(false);
+        expect(wrapper.text()).toContain('No description provided');
+    });
+
+    it('collapses a comment to its header when its toggle is clicked', async () => {
+        const now = new Date().toISOString();
+        const wrapper = mountWith({
+            ...PR,
+            comments: [{ author: 'bob', body: 'Nice **work**.', createdAt: now, kind: 'comment' }],
+        });
+
+        // The body shows to begin with; the toggle reads as expanded.
+        expect(wrapper.find('.pr-markdown strong').exists()).toBe(true);
+        const toggle = wrapper.get('button[aria-label="Collapse comment"]');
+        expect(toggle.attributes('aria-expanded')).toBe('true');
+
+        await toggle.trigger('click');
+
+        // Folded: the body is gone and the toggle now offers to expand.
+        const expand = wrapper.get('button[aria-label="Expand comment"]');
+        expect(expand.attributes('aria-expanded')).toBe('false');
+        expect(wrapper.find('.pr-markdown strong').exists()).toBe(false);
+    });
+
+    it('offers no collapse toggle for a comment with no body', () => {
+        const now = new Date().toISOString();
+        const wrapper = mountWith({
+            ...PR,
+            comments: [
+                { author: 'ann', body: '', createdAt: now, kind: 'review', state: 'APPROVED' },
+            ],
+        });
+
+        expect(wrapper.find('button[aria-label="Collapse comment"]').exists()).toBe(false);
+    });
+
+    it('collapses and expands the whole conversation with the tab-bar toggle', async () => {
+        const now = new Date().toISOString();
+        const wrapper = mountWith({
+            ...PR,
+            comments: [
+                { author: 'bob', body: 'First **point**.', createdAt: now, kind: 'comment' },
+                { author: 'cat', body: 'Second _point_.', createdAt: now, kind: 'comment' },
+            ],
+        });
+
+        // The description and both comment bodies render (3 Markdown blocks).
+        expect(wrapper.findAll('.pr-markdown').length).toBe(3);
+
+        await wrapper.get('button[aria-label="Collapse all"]').trigger('click');
+
+        // The description folds together with the comments: no bodies remain.
+        expect(wrapper.findAll('.pr-markdown').length).toBe(0);
+        expect(wrapper.findAll('button[aria-label="Expand comment"]').length).toBe(2);
+        expect(wrapper.find('button[aria-label="Expand description"]').exists()).toBe(true);
+
+        // The control flips to expand-all and restores every body.
+        await wrapper.get('button[aria-label="Expand all"]').trigger('click');
+        expect(wrapper.findAll('.pr-markdown').length).toBe(3);
+    });
+
+    it('hides the collapse-all control when nothing can fold', () => {
+        const now = new Date().toISOString();
+        // No description body and only a body-less review: nothing to fold.
+        const wrapper = mountWith({
+            ...PR,
+            body: '',
+            comments: [
+                { author: 'ann', body: '', createdAt: now, kind: 'review', state: 'APPROVED' },
+            ],
+        });
+
+        expect(wrapper.find('button[aria-label="Collapse all"]').exists()).toBe(false);
+    });
+
+    it('folds the description via collapse-all even with no comments', async () => {
+        const wrapper = mountWith({ ...PR, comments: [] }); // PR carries a body
+        expect(wrapper.text()).toContain('Does things.');
+
+        await wrapper.get('button[aria-label="Collapse all"]').trigger('click');
+        expect(wrapper.text()).not.toContain('Does things.');
     });
 
     it('renders labels as colored pills', () => {
@@ -176,7 +277,7 @@ describe('PrView', () => {
             ],
         });
         // Conversation is the default; the checks are not shown yet.
-        expect(wrapper.text()).toContain('opened the description');
+        expect(wrapper.text()).toContain('opened this pull request');
         expect(wrapper.text()).not.toContain('lint');
 
         const checksTab = wrapper.findAll('button').find((b) => b.text().startsWith('Checks'))!;
@@ -188,7 +289,7 @@ describe('PrView', () => {
         expect(text).toContain('e2e / macos');
         expect(text).toContain('Failed in 4m 06s');
         // The conversation is swapped out, not stacked below.
-        expect(text).not.toContain('opened the description');
+        expect(text).not.toContain('opened this pull request');
     });
 
     it('shows the passed/total summary on the Checks tab label', () => {
