@@ -684,27 +684,7 @@ function onBodyClick(event: MouseEvent) {
                 <!-- Tabs: the description and conversation, or the CI checks. The
                      counts (comments, passed/total checks) sit faint beside the
                      label, as in the design. -->
-                <div
-                    class="flex flex-none items-center gap-1.5 border-b border-moire-border px-3 py-2"
-                >
-                    <!-- Fold or unfold the whole conversation (description and
-                         comments) at once, mirroring the file tree's collapse-all. It
-                         sits to the left of the tabs, not floating alone at the far
-                         right where a lone icon reads as an options menu. Only on the
-                         conversation tab, and only when something can fold. -->
-                    <Button
-                        v-if="activeTab === 'conversation' && hasCollapsible"
-                        variant="ghost"
-                        size="icon-xs"
-                        class="text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                        :aria-label="allCollapsed ? 'Expand all' : 'Collapse all'"
-                        :title="allCollapsed ? 'Expand all' : 'Collapse all'"
-                        @click="toggleAll"
-                    >
-                        <ChevronsUpDown v-if="allCollapsed" :size="16" />
-                        <ChevronsDownUp v-else :size="16" />
-                    </Button>
-
+                <div class="flex flex-none items-center border-b border-moire-border px-3 py-2">
                     <div class="flex items-center gap-0.5">
                         <button
                             type="button"
@@ -746,6 +726,26 @@ function onBodyClick(event: MouseEvent) {
                             </span>
                         </button>
                     </div>
+
+                    <div class="flex-1" />
+
+                    <!-- Fold or unfold the whole conversation (description and
+                         comments) at once, mirroring the file tree's collapse-all. Kept
+                         on the right, in the empty space past the tabs, so it can appear
+                         and disappear (it shows only on the conversation tab) without
+                         shifting the tabs. Only when something can fold. -->
+                    <Button
+                        v-if="activeTab === 'conversation' && hasCollapsible"
+                        variant="ghost"
+                        size="icon-xs"
+                        class="text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                        :aria-label="allCollapsed ? 'Expand all' : 'Collapse all'"
+                        :title="allCollapsed ? 'Expand all' : 'Collapse all'"
+                        @click="toggleAll"
+                    >
+                        <ChevronsUpDown v-if="allCollapsed" :size="16" />
+                        <ChevronsDownUp v-else :size="16" />
+                    </Button>
                 </div>
 
                 <div class="p-4">
