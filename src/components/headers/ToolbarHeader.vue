@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ArrowRightLeft, GitPullRequest, GitPullRequestDraft, TriangleAlert } from '@lucide/vue';
+import {
+    ArrowRightLeft,
+    GitPullRequest,
+    GitPullRequestDraft,
+    LoaderCircle,
+    TriangleAlert,
+} from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { CompareMode, ViewMode } from '@/shared/types';
@@ -93,7 +99,20 @@ const statusDotClass = computed(() => {
                 <ref-selector side="head" />
             </div>
 
-            <Tooltip v-if="comparison.hasPullRequest">
+            <!-- While a lookup for a newly selected range is in flight, a spinner
+                 stands in for the PR button so the previous branch's
+                 open/merged/closed status isn't misread as the new one's before gh
+                 returns (it can take a moment). -->
+            <Tooltip v-if="comparison.prLoading">
+                <TooltipTrigger as-child>
+                    <span class="inline-flex size-7 items-center justify-center text-moire-muted">
+                        <LoaderCircle :size="16" class="animate-spin" />
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent>Checking for a pull request…</TooltipContent>
+            </Tooltip>
+
+            <Tooltip v-else-if="comparison.hasPullRequest">
                 <TooltipTrigger as-child>
                     <!-- The tooltip trigger wraps a span, not the Toggle: the trigger
                          stamps its own data-state, which would otherwise clobber the

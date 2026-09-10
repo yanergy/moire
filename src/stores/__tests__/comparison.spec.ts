@@ -1091,5 +1091,65 @@ describe('comparison store', () => {
 
             expect(getPullRequest).toHaveBeenCalledWith('main', 'feature');
         });
+
+        it('spins while a range-change lookup runs, then clears it when no PR is found', async () => {
+            // A deferred promise holds the lookup open so the in-flight state is
+            // observable before gh answers.
+            let settle!: (value: unknown) => void;
+            const getPullRequest = vi.fn<(base: string, head: string) => Promise<unknown>>(
+                () =>
+                    new Promise((resolve) => {
+                        settle = resolve;
+                    })
+            );
+            window.api = { getPullRequest } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'feature'; // the [base, head] watch runs the lookup with the spinner
+            await flushPromises();
+
+            // gh is still running: the spinner stands in for the button.
+            expect(store.prLoading).toBe(true);
+
+            settle({ status: 'no-pr', pr: null });
+            await flushPromises();
+
+            // No PR for the new branch: the spinner clears and nothing lingers from
+            // the previous branch (no button, and 'no-pr' shows no warning either).
+            expect(store.prLoading).toBe(false);
+            expect(store.hasPullRequest).toBe(false);
+            expect(store.prWarning).toBeNull();
+        });
+
+        it('does not spin on a same-range refresh, so the button stays put', async () => {
+            const getPullRequest = vi
+                .fn<(base: string, head: string) => Promise<unknown>>()
+                .mockResolvedValue({ status: 'ok', pr: PR });
+            window.api = { getPullRequest } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'feature';
+            await flushPromises(); // the range-change lookup runs and settles first
+            expect(store.prLoading).toBe(false);
+
+            // The refresh path keeps the same range and calls the lookup with no
+            // spinner argument. A deferred promise catches it mid-flight to prove the
+            // button is never swapped for a spinner.
+            let settle!: (value: unknown) => void;
+            getPullRequest.mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        settle = resolve;
+                    })
+            );
+            const done = store.loadPullRequest();
+            expect(store.prLoading).toBe(false);
+
+            settle({ status: 'ok', pr: PR });
+            await done;
+            expect(store.prLoading).toBe(false);
+        });
     });
 });

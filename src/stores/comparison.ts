@@ -177,6 +177,11 @@ export const useComparisonStore = defineStore('comparison', () => {
     const prStatus = ref<PrStatus>('no-pr');
     const prMessage = ref('');
 
+    // True while a lookup triggered by a range change is in flight, so the toolbar
+    // can show a spinner instead of the previous branch's PR status (which would
+    // otherwise linger and read as the new branch's until gh returns).
+    const prLoading = ref(false);
+
     // A PR exists for the current range: the only case that reveals the PR button
     // and lets the main area switch to the PR view.
     const hasPullRequest = computed(() => prStatus.value === 'ok' && pullRequest.value !== null);
@@ -285,14 +290,25 @@ export const useComparisonStore = defineStore('comparison', () => {
     // empty base, or no open repo can have no PR, so the lookup is skipped and the
     // state cleared. gh being absent or unauthenticated comes back as a status,
     // never a throw, so a fire-and-forget call is safe.
-    async function loadPullRequest() {
+    //
+    // `showSpinner` gates the toolbar's PR spinner. A range change swaps the PR
+    // identity, so the previous branch's status is hidden behind a spinner until the
+    // new lookup lands and can't be misread. A watcher-driven refresh keeps the same
+    // range (same PR), so it updates the status in place rather than flashing the
+    // button away on every on-disk change.
+    async function loadPullRequest(showSpinner = false) {
         const api = window.api;
         const token = ++prRequest;
         if (!api || !repoPath.value || !base.value || !head.value || head.value === WORKING_TREE) {
             pullRequest.value = null;
             prStatus.value = 'no-pr';
             prMessage.value = '';
+            prLoading.value = false;
             return;
+        }
+
+        if (showSpinner) {
+            prLoading.value = true;
         }
 
         try {
@@ -304,18 +320,21 @@ export const useComparisonStore = defineStore('comparison', () => {
             pullRequest.value = result.pr;
             prStatus.value = result.status;
             prMessage.value = result.message ?? '';
+            prLoading.value = false;
         } catch {
             if (token === prRequest) {
                 pullRequest.value = null;
                 prStatus.value = 'error';
                 prMessage.value = '';
+                prLoading.value = false;
             }
         }
     }
 
     // Re-detect the PR when the compared range changes. Compare mode does not affect
-    // which PR exists (that is the base<-head pairing), so it is not a trigger.
-    watch([base, head], () => void loadPullRequest());
+    // which PR exists (that is the base<-head pairing), so it is not a trigger. The
+    // range change swaps the PR, so this run drives the spinner.
+    watch([base, head], () => void loadPullRequest(true));
 
     // The diff pane shows a "Load diff" gate in place of the editor when the
     // selected file is over the size threshold and has not been loaded yet. Binary
@@ -641,6 +660,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         pullRequest.value = null;
         prStatus.value = 'no-pr';
         prMessage.value = '';
+        prLoading.value = false;
     }
 
     async function removeRecent(path: string) {
@@ -883,6 +903,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         pullRequest,
         prStatus,
         prMessage,
+        prLoading,
         hasPullRequest,
         prWarning,
         loadPullRequest,

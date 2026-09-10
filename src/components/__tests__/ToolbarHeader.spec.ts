@@ -147,6 +147,19 @@ describe('ToolbarHeader', () => {
         expect(prButton.classes()).toContain('border-dashed');
     });
 
+    it('shows a spinner in the PR slot while a range-change lookup runs, hiding stale status', () => {
+        const comparison = useComparisonStore();
+        // A leftover PR from the previous branch must not show through while the new
+        // branch's lookup is in flight.
+        comparison.prStatus = 'ok';
+        comparison.pullRequest = PR;
+        comparison.prLoading = true;
+
+        const wrapper = mountToolbar();
+        expect(wrapper.find('.lucide-loader-circle').exists()).toBe(true);
+        expect(wrapper.text()).not.toContain('PR #');
+    });
+
     it('shows a warning triangle in place of the PR button when the gh lookup fails', () => {
         const comparison = useComparisonStore();
         comparison.prStatus = 'not-installed';
