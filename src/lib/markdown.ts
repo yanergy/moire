@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it';
+import { full as emojiPlugin } from 'markdown-it-emoji';
 import DOMPurify from 'dompurify';
 
 // One configured Markdown renderer for pull-request descriptions and comments.
@@ -19,6 +20,14 @@ const md = new MarkdownIt({
     breaks: true,
     typographer: false,
 });
+
+// GitHub renders emoji shortcodes (:white_check_mark:, :robot:, :tada:, ...) as
+// their emoji, and bot comments lean on them heavily. markdown-it-emoji's `full`
+// dataset mirrors GitHub's gemoji set. As an inline rule it only rewrites plain
+// text, so a shortcode inside a code span or fenced block stays literal, matching
+// GitHub; an unknown shortcode is left untouched. It emits Unicode characters, not
+// tags, so the sanitizer allow-list below is unaffected.
+md.use(emojiPlugin);
 
 // The HTML the viewer keeps after sanitizing: GitHub's comment formatting set
 // (text, lists, tables, collapsible <details>, the usual inline tags) plus the

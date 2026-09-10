@@ -71,6 +71,21 @@ describe('renderMarkdown', () => {
         expect(html).toContain('class="pr-task-item"');
     });
 
+    it('renders GitHub emoji shortcodes as emoji', () => {
+        expect(renderMarkdown(':white_check_mark: passing')).toContain('✅');
+        expect(renderMarkdown(':robot:')).toContain('🤖');
+        expect(renderMarkdown(':arrow_up_small:')).toContain('🔼');
+    });
+
+    it('leaves unknown shortcodes and code-span shortcodes as literal text', () => {
+        // A name outside the gemoji set is passed through unchanged.
+        expect(renderMarkdown(':not_a_real_emoji:')).toContain(':not_a_real_emoji:');
+        // Inside a code span the shortcode is code, not an emoji, as on GitHub.
+        const code = renderMarkdown('`:white_check_mark:`');
+        expect(code).toContain(':white_check_mark:');
+        expect(code).not.toContain('✅');
+    });
+
     it('leaves ordinary list items untouched', () => {
         const html = renderMarkdown('- just an item');
         expect(html).not.toContain('type="checkbox"');
