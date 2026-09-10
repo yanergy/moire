@@ -12,6 +12,7 @@ import {
     GitMerge,
     GitPullRequestClosed,
     GitPullRequestDraft,
+    RefreshCw,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { renderMarkdown } from '@/lib/markdown';
@@ -35,6 +36,25 @@ interface StatusBox {
 const comparison = useComparisonStore();
 
 const pr = computed(() => comparison.pullRequest);
+
+// Re-fetch the open PR (status, description, conversation, checks) from gh on
+// demand, for when it changed on GitHub since the range was last loaded. The
+// range is unchanged, so this uses loadPullRequest without the toolbar spinner
+// (which is reserved for range changes); a local `refreshing` flag spins just
+// this button and guards against overlapping clicks.
+const refreshing = ref(false);
+async function refreshPr() {
+    if (refreshing.value) {
+        return;
+    }
+
+    refreshing.value = true;
+    try {
+        await comparison.loadPullRequest();
+    } finally {
+        refreshing.value = false;
+    }
+}
 
 // The PR view is tabbed, as in the design: the description and conversation under
 // "Conversation", the CI checks under "Checks". Commits are a planned third tab.
@@ -276,15 +296,28 @@ function onBodyClick(event: MouseEvent) {
                             {{ pr.title }}
                             <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
                         </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            class="h-7 shrink-0 gap-1.5 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                            @click="openExternal(pr.url)"
-                        >
-                            <ExternalLink :size="14" />
-                            GitHub
-                        </Button>
+                        <div class="flex shrink-0 items-center gap-1.5">
+                            <Button
+                                variant="outline"
+                                size="icon-sm"
+                                class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                :disabled="refreshing"
+                                aria-label="Refresh pull request"
+                                title="Re-fetch this pull request from GitHub"
+                                @click="refreshPr"
+                            >
+                                <RefreshCw :size="16" :class="{ 'animate-spin': refreshing }" />
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                class="h-7 gap-1.5 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                @click="openExternal(pr.url)"
+                            >
+                                <ExternalLink :size="14" />
+                                GitHub
+                            </Button>
+                        </div>
                     </div>
 
                     <!-- who / stats / labels, each on its own line. -->

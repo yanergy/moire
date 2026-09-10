@@ -337,6 +337,20 @@ describe('PrView', () => {
         expect(openExternal).toHaveBeenCalledWith('https://github.com/o/r/pull/42');
     });
 
+    it('re-fetches the PR when the refresh button is clicked', async () => {
+        const wrapper = mountWith(PR);
+        const store = useComparisonStore();
+        const load = vi.spyOn(store, 'loadPullRequest').mockResolvedValue();
+
+        const refresh = wrapper.get('button[aria-label="Refresh pull request"]');
+        await refresh.trigger('click');
+
+        // Called with no argument, so the toolbar's PR button keeps its status
+        // rather than flashing to a spinner (the range did not change).
+        expect(load).toHaveBeenCalledTimes(1);
+        expect(load).toHaveBeenCalledWith();
+    });
+
     it('renders nothing when there is no PR', () => {
         expect(mountWith(null, 'no-pr').text()).toBe('');
     });
