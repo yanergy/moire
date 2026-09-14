@@ -128,11 +128,18 @@ Track bugs and limitations here.
   conversation (comments and review verdicts), and a Checks tab with the head commit's CI runs.
   An edit mode (off by default, toggled from the PR header) adds posting new comments, editing or
   deleting your own (behind a per-comment menu), editing the PR description, and ticking task-list
-  checkboxes in the description or your own comments (each writes back via gh). Still missing:
+  checkboxes in the description or your own comments. A tick shows at once and the new body is
+  written back via gh on a short debounce, so a burst of ticks on one target saves in a single
+  call. Still missing:
     - A Commits tab (the commit list). Lower priority: editors such as PhpStorm already show a
       branch's commits well, so this duplicates tooling the user likely already has.
     - Inline review-thread comments and their resolved state, which need the GitHub GraphQL API,
       beyond what `gh pr view --json` exposes.
+- **A task-list tick can be lost if you leave within the debounce window.** Ticking a checkbox
+  writes back after a short quiet period (about two seconds), batching a burst into one save.
+  Pending ticks are flushed on the usual exits (leaving edit mode, refreshing, switching tab, the
+  window losing focus). They are not flushed when the branch or PR is switched or the app quits
+  within that window, so a tick made in the last couple of seconds before either can be dropped.
 - **The Git menu's account list refreshes only when the menu is rebuilt** (on launch, when a repo
   opens, and right after switching accounts). Signing in or out with `gh auth login` / `gh auth
   logout` while the app is running is not picked up until one of those happens (or a relaunch).

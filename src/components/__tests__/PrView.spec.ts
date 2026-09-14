@@ -74,6 +74,8 @@ describe('PrView', () => {
         delete window.api;
         // Clear any menu content teleported to the body between tests.
         document.body.innerHTML = '';
+        // Some task-list tests drive the debounce with fake timers; never leak them.
+        vi.useRealTimers();
     });
 
     it('renders the header, refs, and the description as the first entry', () => {
@@ -621,6 +623,8 @@ describe('PrView', () => {
             const wrapper = await enableEditing({ ...PR, body: 'Original body.' });
 
             await wrapper.get('button[aria-label="Edit description"]').trigger('click');
+            // Opening the editor first flushes any pending task-list edit, so it is async.
+            await flushPromises();
             const editBox = wrapper.get('textarea[aria-label="Edit description body"]');
             // The editor is seeded with the current body.
             expect((editBox.element as HTMLTextAreaElement).value).toBe('Original body.');
@@ -638,7 +642,8 @@ describe('PrView', () => {
             expect(wrapper.get('input.pr-task-checkbox').attributes('disabled')).toBeDefined();
         });
 
-        it('ticks a description task-list checkbox through the store', async () => {
+        it('ticks a description checkbox at once and writes it back after the debounce', async () => {
+            vi.useFakeTimers();
             const store = useComparisonStore();
             const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
 
@@ -647,13 +652,47 @@ describe('PrView', () => {
             const box = wrapper.get('input.pr-task-checkbox');
             expect(box.attributes('disabled')).toBeUndefined();
             await box.trigger('click');
-            await flushPromises();
 
-            // Only the clicked marker flips, written back as the whole body.
+            // The tick shows at once, before any write: the box re-renders checked
+            // and nothing has gone to the store yet.
+            expect(
+                (wrapper.get('input.pr-task-checkbox').element as HTMLInputElement).checked
+            ).toBe(true);
+            expect(edit).not.toHaveBeenCalled();
+
+            // After the debounce it writes once, with only the clicked marker flipped.
+            await vi.advanceTimersByTimeAsync(2000);
+            await flushPromises();
+            expect(edit).toHaveBeenCalledTimes(1);
             expect(edit).toHaveBeenCalledWith('- [x] todo\n- [ ] done');
         });
 
-        it('ticks a task-list checkbox in the viewer’s own comment through the store', async () => {
+        it('coalesces several quick ticks into a single write', async () => {
+            vi.useFakeTimers();
+            const store = useComparisonStore();
+            const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
+
+            const wrapper = await enableEditing({ ...PR, body: '- [ ] a\n- [ ] b' });
+
+            // Tick both boxes in quick succession (each re-renders, so re-query).
+            await wrapper.findAll('input.pr-task-checkbox')[0]!.trigger('click');
+            await wrapper.findAll('input.pr-task-checkbox')[1]!.trigger('click');
+
+            // Both show ticked, and nothing is written until it settles.
+            const boxes = wrapper.findAll('input.pr-task-checkbox');
+            expect((boxes[0]!.element as HTMLInputElement).checked).toBe(true);
+            expect((boxes[1]!.element as HTMLInputElement).checked).toBe(true);
+            expect(edit).not.toHaveBeenCalled();
+
+            await vi.advanceTimersByTimeAsync(2000);
+            await flushPromises();
+            // One write, carrying both flips.
+            expect(edit).toHaveBeenCalledTimes(1);
+            expect(edit).toHaveBeenCalledWith('- [x] a\n- [x] b');
+        });
+
+        it('ticks a checkbox in the viewer’s own comment after the debounce', async () => {
+            vi.useFakeTimers();
             const store = useComparisonStore();
             const edit = vi.spyOn(store, 'editComment').mockResolvedValue({ ok: true });
 
@@ -665,38 +704,64 @@ describe('PrView', () => {
                 ],
             });
 
-            const box = wrapper.get('input.pr-task-checkbox');
-            await box.trigger('click');
+            await wrapper.get('input.pr-task-checkbox').trigger('click');
+            await vi.advanceTimersByTimeAsync(2000);
             await flushPromises();
 
             expect(edit).toHaveBeenCalledWith('IC_9', '- [x] task');
         });
 
-        it('locks further checkbox toggles while a write is in flight', async () => {
+        it('walks the note from unsaved to saving to saved, then clears it', async () => {
+            vi.useFakeTimers();
             const store = useComparisonStore();
             let resolveEdit!: (r: { ok: boolean }) => void;
-            const edit = vi.spyOn(store, 'editDescription').mockReturnValue(
+            vi.spyOn(store, 'editDescription').mockReturnValue(
                 new Promise((res) => {
                     resolveEdit = res;
                 })
             );
 
-            const wrapper = await enableEditing({ ...PR, body: '- [ ] a\n- [ ] b' });
-            const boxes = wrapper.findAll('input.pr-task-checkbox');
-            await boxes[0]!.trigger('click');
-            // The card overlays with a spinner while the write is in flight.
-            expect(wrapper.find('[aria-label="Saving change"]').exists()).toBe(true);
-            // A second click while the first write is pending is swallowed.
-            await boxes[1]!.trigger('click');
-            expect(edit).toHaveBeenCalledTimes(1);
+            const wrapper = await enableEditing({ ...PR, body: '- [ ] a' });
+            await wrapper.get('input.pr-task-checkbox').trigger('click');
 
+            // Pending: the edit is queued but not yet written.
+            expect(wrapper.text()).toContain('Unsaved changes');
+
+            // The debounce elapses and the write is in flight.
+            await vi.advanceTimersByTimeAsync(2000);
+            await flushPromises();
+            expect(wrapper.text()).not.toContain('Unsaved changes');
+            expect(wrapper.text()).toContain('Saving');
+
+            // The write lands: the note flips to "Saved".
             resolveEdit({ ok: true });
             await flushPromises();
-            // The overlay clears once the write settles.
-            expect(wrapper.find('[aria-label="Saving change"]').exists()).toBe(false);
+            expect(wrapper.text()).not.toContain('Saving');
+            expect(wrapper.text()).toContain('Saved');
+
+            // The "Saved" note clears on its own after a moment.
+            await vi.advanceTimersByTimeAsync(2000);
+            await flushPromises();
+            expect(wrapper.text()).not.toContain('Saved');
+        });
+
+        it('flushes a pending tick immediately when edit mode is turned off', async () => {
+            const store = useComparisonStore();
+            const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
+
+            const wrapper = await enableEditing({ ...PR, body: '- [ ] a' });
+            await wrapper.get('input.pr-task-checkbox').trigger('click');
+            // Still within the debounce window: nothing written yet.
+            expect(edit).not.toHaveBeenCalled();
+
+            // Leaving edit mode must not lose the tick: it is saved at once.
+            await wrapper.get('button[aria-label="Toggle edit mode"]').trigger('click');
+            await flushPromises();
+            expect(edit).toHaveBeenCalledWith('- [x] a');
         });
 
         it('reverts the checkbox and shows an error when the write fails', async () => {
+            vi.useFakeTimers();
             const store = useComparisonStore();
             vi.spyOn(store, 'editDescription').mockResolvedValue({
                 ok: false,
@@ -704,12 +769,19 @@ describe('PrView', () => {
             });
 
             const wrapper = await enableEditing({ ...PR, body: '- [ ] a' });
-            const box = wrapper.get('input.pr-task-checkbox');
-            await box.trigger('click');
+            await wrapper.get('input.pr-task-checkbox').trigger('click');
+            // The optimistic tick shows first.
+            expect(
+                (wrapper.get('input.pr-task-checkbox').element as HTMLInputElement).checked
+            ).toBe(true);
+
+            await vi.advanceTimersByTimeAsync(2000);
             await flushPromises();
 
-            // The optimistic tick is rolled back, and the failure is surfaced.
-            expect((box.element as HTMLInputElement).checked).toBe(false);
+            // The write failed, so the tick is rolled back and the error is surfaced.
+            expect(
+                (wrapper.get('input.pr-task-checkbox').element as HTMLInputElement).checked
+            ).toBe(false);
             expect(wrapper.text()).toContain('No permission.');
         });
     });

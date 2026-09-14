@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, type Component } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import {
     ArrowRight,
     Check,
@@ -61,6 +61,15 @@ const pr = computed(() => comparison.pullRequest);
 // because the rendered Markdown and several actions below read it.
 const editing = ref(false);
 
+// Local, unsaved task-list checkbox edits, keyed by target ('description' or a
+// comment's node id), holding that body's edited Markdown source. A tick updates
+// the draft at once and the rendered body reads from it, so the box flips
+// immediately; a debounced writer (see the task-list section) saves it to GitHub.
+// Declared here because the rendered Markdown reads the drafts. `taskError` shows
+// a failed write, in a banner atop the conversation.
+const taskDrafts = ref(new Map<string, string>());
+const taskError = ref('');
+
 // Re-fetch the open PR (status, description, conversation, checks) from gh on
 // demand, for when it changed on GitHub since the range was last loaded. The
 // range is unchanged, so this uses loadPullRequest without the toolbar spinner
@@ -80,6 +89,9 @@ async function refreshPr() {
 
     refreshing.value = true;
     try {
+        // Persist pending task-list ticks first, so the reload does not pull the
+        // old server state back over them.
+        await flushTasks();
         await comparison.loadPullRequest();
     } finally {
         refreshing.value = false;
@@ -160,7 +172,13 @@ const checksStatus = computed<StatusBox | null>(() => {
 // The description is Markdown; renderMarkdown returns HTML that is safe to insert
 // with v-html (raw tags escaped, unsafe link schemes rejected). See lib/markdown.
 // In edit mode its task-list checkboxes render interactive (onBodyClick flips them).
-const renderedBody = computed(() => renderMarkdown(pr.value?.body, { interactive: editing.value }));
+// While a task-list edit is pending (see the task-list section), render from the
+// local draft so ticks show at once, before the debounced write reaches GitHub.
+const renderedBody = computed(() =>
+    renderMarkdown(taskDrafts.value.get('description') ?? pr.value?.body, {
+        interactive: editing.value,
+    })
+);
 const hasBody = computed(() => !!pr.value?.body.trim());
 
 // The description folds on its own toggle, and the collapse-all control folds it
@@ -265,20 +283,13 @@ const descriptionDraft = ref('');
 const savingDescription = ref(false);
 const descriptionError = ref('');
 
-// A failed task-list checkbox write (see the task-list section). Shown as a small
-// banner atop the conversation, since the checkbox lives in read-only rendered HTML.
-const taskError = ref('');
-
-// Which card has a task-list checkbox write in flight: 'description' or a comment's
-// node id, or null when none. It overlays that card with a spinner and, being
-// non-null, locks the conversation to one toggle at a time so concurrent clicks
-// can't race the source body.
-const taskPendingKey = ref<string | null>(null);
-
 // Leaving edit mode drops any in-progress draft, open editor, delete prompt, menu,
-// and error so the view returns cleanly to read-only.
+// and error so the view returns cleanly to read-only. Any pending task-list edits
+// are flushed first (saved now, not dropped) so turning the mode off never loses a
+// tick.
 watch(editing, (on) => {
     if (!on) {
+        void flushTasks();
         editingId.value = null;
         draft.value = '';
         editDraft.value = '';
@@ -289,16 +300,16 @@ watch(editing, (on) => {
         deleteError.value = '';
         editingDescription.value = false;
         descriptionError.value = '';
-        taskError.value = '';
-        taskPendingKey.value = null;
     }
 });
 
 // A different PR (a branch switch) resets to read-only; its own edit state means
-// nothing here.
+// nothing here. Pending task-list drafts belonged to the old PR and cannot be
+// written to the new one, so they are dropped.
 watch(
     () => pr.value?.number,
     () => {
+        cancelTaskSaves();
         editing.value = false;
         topMenuOpen.value = false;
         openMenuId.value = null;
@@ -306,6 +317,26 @@ watch(
         editingDescription.value = false;
     }
 );
+
+// Leaving the Conversation tab hides the checkboxes, so flush any pending edits.
+watch(activeTab, (tab) => {
+    if (tab !== 'conversation') {
+        void flushTasks();
+    }
+});
+
+// Save pending edits when the window loses focus (switching to the browser to look
+// at the PR, say) and when the view is torn down, so ticks are not left unwritten.
+function flushOnBlur() {
+    void flushTasks();
+}
+onMounted(() => {
+    window.addEventListener('blur', flushOnBlur);
+});
+onBeforeUnmount(() => {
+    window.removeEventListener('blur', flushOnBlur);
+    void flushTasks();
+});
 
 async function submitComment() {
     if (!draft.value.trim() || posting.value) {
@@ -333,11 +364,14 @@ function expandComment(index: number) {
     }
 }
 
-function startEdit(comment: PrComment, index: number) {
+async function startEdit(comment: PrComment, index: number) {
+    // Persist any pending task-list ticks first, so the editor opens on the saved
+    // body (and the toggles are not lost when the editor overwrites it).
+    await flushTask(comment.id);
     openMenuId.value = null;
     confirmingDeleteId.value = null;
     editingId.value = comment.id;
-    editDraft.value = comment.body;
+    editDraft.value = comments.value.find((c) => c.id === comment.id)?.body ?? comment.body;
     editError.value = '';
     expandComment(index);
 }
@@ -377,6 +411,8 @@ async function confirmDelete(commentId: string) {
     const result = await comparison.deleteComment(commentId);
     deletingId.value = null;
     if (result.ok) {
+        // The comment is gone; drop any pending task draft that targeted it.
+        cancelTask(commentId);
         confirmingDeleteId.value = null;
         return;
     }
@@ -404,7 +440,10 @@ async function saveEdit() {
 
 // --- Editing the PR description ---
 
-function startEditDescription() {
+async function startEditDescription() {
+    // Persist any pending task-list ticks first, so the editor opens on the saved
+    // body (and the toggles are not lost when the editor overwrites it).
+    await flushTask('description');
     descriptionDraft.value = pr.value?.body ?? '';
     descriptionError.value = '';
     editingDescription.value = true;
@@ -590,53 +629,281 @@ function onBodyClick(event: MouseEvent) {
 
 // --- Task-list checkboxes ---
 //
-// In edit mode a task checkbox is clickable: the click flips the matching marker
-// in the raw source (by its data-task-index) and writes the new body back. The box
-// toggles optimistically (the native toggle is allowed to happen) and its card is
-// overlaid with a spinner while the write is in flight; being keyed to that card,
-// the overlay also locks the conversation to one toggle at a time so concurrent
-// clicks can't race the source. On success the re-fetch re-renders the body from
-// the true state; on failure the optimistic flip is reverted and an error shows.
-async function toggleTaskInBody(
-    box: HTMLInputElement,
-    key: string,
-    source: string,
-    save: (body: string) => Promise<CommentMutationResult>
-) {
-    const index = Number(box.dataset.taskIndex);
-    const next = Number.isNaN(index) ? null : toggleTask(source, index);
+// In edit mode a task checkbox is clickable. A click flips the matching marker (by
+// its data-task-index) in the body's Markdown source, held as a local draft in
+// `taskDrafts`, and the rendered body reads from that draft, so the box flips at
+// once and more can be ticked without waiting. The write to GitHub is debounced:
+// once a target (the description, or one comment) goes quiet for the delay below,
+// its accumulated draft is written in one call, then the re-fetch confirms it and
+// the draft is dropped. On failure the draft is dropped (reverting to the server
+// state) and an error banner shows. Pending drafts are flushed on the exits that
+// would otherwise lose them (leaving edit mode, refreshing, switching tab, the
+// window losing focus, unmount); a branch/PR switch drops them (see the watchers).
+const TASK_SAVE_DEBOUNCE_MS = 2000;
+// How long the "Saved" confirmation lingers after a write lands.
+const TASK_SAVED_HINT_MS = 2000;
+
+// Per-target debounce timers and the currently running save loop, both keyed like
+// `taskDrafts`. Kept outside reactivity: they drive scheduling, not rendering.
+const taskTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const taskSaveLoops = new Map<string, Promise<void>>();
+
+// Targets with a write in flight ("Saving…"), and targets whose write just landed
+// ("Saved", cleared on its own timer below). Both reactive so the header reflects
+// them.
+const taskWriting = ref(new Set<string>());
+const taskSaved = ref(new Set<string>());
+const taskSavedTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+// The header note for a target: "Unsaved changes" while an edit is pending, "Saving…"
+// while it is being written, then "Saved" briefly once it lands, then nothing.
+function taskStatus(key: string): 'unsaved' | 'saving' | 'saved' | null {
+    if (taskWriting.value.has(key)) {
+        return 'saving';
+    }
+    if (taskDrafts.value.has(key)) {
+        return 'unsaved';
+    }
+    if (taskSaved.value.has(key)) {
+        return 'saved';
+    }
+
+    return null;
+}
+
+// Flag (or unflag) a target as having a write in flight.
+function setTaskWriting(key: string, on: boolean) {
+    const next = new Set(taskWriting.value);
+    if (on) {
+        next.add(key);
+    } else {
+        next.delete(key);
+    }
+
+    taskWriting.value = next;
+}
+
+// Show, then auto-clear, the "Saved" note for a target.
+function markTaskSaved(key: string) {
+    const next = new Set(taskSaved.value);
+    next.add(key);
+    taskSaved.value = next;
+
+    const existing = taskSavedTimers.get(key);
+    if (existing !== undefined) {
+        clearTimeout(existing);
+    }
+
+    taskSavedTimers.set(
+        key,
+        setTimeout(() => {
+            clearTaskSaved(key);
+        }, TASK_SAVED_HINT_MS)
+    );
+}
+
+// Drop a target's "Saved" note (its hint elapsed, a new edit supersedes it, or its
+// target is gone).
+function clearTaskSaved(key: string) {
+    const timer = taskSavedTimers.get(key);
+    if (timer !== undefined) {
+        clearTimeout(timer);
+        taskSavedTimers.delete(key);
+    }
+
+    if (!taskSaved.value.has(key)) {
+        return;
+    }
+
+    const next = new Set(taskSaved.value);
+    next.delete(key);
+    taskSaved.value = next;
+}
+
+// The server-side Markdown source for a target, the base a draft builds on.
+function taskStoreSource(key: string): string {
+    if (key === 'description') {
+        return pr.value?.body ?? '';
+    }
+
+    return comments.value.find((c) => c.id === key)?.body ?? '';
+}
+
+// Write a target's body back through the store, which re-fetches on success.
+function saveTask(key: string, body: string): Promise<CommentMutationResult> {
+    return key === 'description'
+        ? comparison.editDescription(body)
+        : comparison.editComment(key, body);
+}
+
+// The reactive draft map is replaced (not mutated) on each change so computeds that
+// render from it re-run.
+function setTaskDraft(key: string, body: string) {
+    const next = new Map(taskDrafts.value);
+    next.set(key, body);
+    taskDrafts.value = next;
+}
+function clearTaskDraft(key: string) {
+    if (!taskDrafts.value.has(key)) {
+        return;
+    }
+
+    const next = new Map(taskDrafts.value);
+    next.delete(key);
+    taskDrafts.value = next;
+}
+
+// Toggle the checkbox at `index` in a target's body: flip its marker in the draft
+// (built on any existing draft, else the server source) and arm the debounced save.
+function queueTaskToggle(key: string, index: number) {
+    const current = taskDrafts.value.get(key) ?? taskStoreSource(key);
+    const next = toggleTask(current, index);
     if (next === null) {
         return;
     }
 
-    taskPendingKey.value = key;
+    setTaskDraft(key, next);
     taskError.value = '';
-    try {
-        const result = await save(next);
-        if (!result.ok) {
-            // Undo the optimistic flip; the source and server never changed.
-            box.checked = !box.checked;
-            taskError.value = result.message ?? 'Could not update the checkbox.';
-        }
-    } finally {
-        taskPendingKey.value = null;
-    }
+    // A fresh edit supersedes any lingering "Saved" note for this target.
+    clearTaskSaved(key);
+    scheduleTaskSave(key);
 }
 
-// A click in the description body: a task checkbox flips (edit mode only), else a
-// link opens externally. While a write is pending, further checkbox clicks are
-// swallowed so only one toggle is in flight at a time.
-function onDescriptionBodyClick(event: MouseEvent) {
-    const box = (event.target as HTMLElement).closest<HTMLInputElement>('input.pr-task-checkbox');
-    if (editing.value && box) {
-        if (taskPendingKey.value !== null) {
-            event.preventDefault();
+// (Re)start a target's debounce timer; each further tick pushes the save out again,
+// so a burst of ticks writes once, when it settles.
+function scheduleTaskSave(key: string) {
+    const existing = taskTimers.get(key);
+    if (existing !== undefined) {
+        clearTimeout(existing);
+    }
+
+    taskTimers.set(
+        key,
+        setTimeout(() => {
+            taskTimers.delete(key);
+            void flushTask(key);
+        }, TASK_SAVE_DEBOUNCE_MS)
+    );
+}
+
+// Save a target's pending draft now, cancelling its debounce timer. Returns the
+// running save loop so callers can await the write settling. One loop runs per
+// target at a time; while it runs, new ticks update the draft and the loop picks
+// them up on its next turn.
+function flushTask(key: string): Promise<void> {
+    const timer = taskTimers.get(key);
+    if (timer !== undefined) {
+        clearTimeout(timer);
+        taskTimers.delete(key);
+    }
+
+    let loop = taskSaveLoops.get(key);
+    if (loop === undefined) {
+        loop = runTaskSaveLoop(key).finally(() => {
+            taskSaveLoops.delete(key);
+        });
+        taskSaveLoops.set(key, loop);
+    }
+
+    return loop;
+}
+
+// Drain a target's draft: write it, and if newer ticks arrived while writing, write
+// those too, until the draft matches the server state (then drop it) or a write
+// fails (then drop it and surface the error).
+async function runTaskSaveLoop(key: string) {
+    for (;;) {
+        const pending = taskDrafts.value.get(key);
+        if (pending === undefined) {
             return;
         }
 
-        void toggleTaskInBody(box, 'description', pr.value?.body ?? '', (body) =>
-            comparison.editDescription(body)
-        );
+        // Ticked and ticked back to the server state: nothing to write.
+        if (pending === taskStoreSource(key)) {
+            clearTaskDraft(key);
+            return;
+        }
+
+        // Sequential by design: each write depends on the previous one landing (and
+        // its re-fetch) before we compare against the newest draft.
+        setTaskWriting(key, true);
+        let result: CommentMutationResult;
+        try {
+            // oxlint-disable-next-line no-await-in-loop
+            result = await saveTask(key, pending);
+        } finally {
+            setTaskWriting(key, false);
+        }
+
+        if (!result.ok) {
+            clearTaskDraft(key);
+            taskError.value = result.message ?? 'Could not update the checkbox.';
+            return;
+        }
+
+        // Saved and the re-fetch confirmed it; unless the user ticked again while
+        // the write was in flight, in which case loop to save the newer draft.
+        if (taskDrafts.value.get(key) === pending) {
+            clearTaskDraft(key);
+            markTaskSaved(key);
+            return;
+        }
+    }
+}
+
+// Flush every target's pending draft and resolve once all have settled. Used on the
+// exits that must not lose a tick.
+function flushTasks(): Promise<void> {
+    return Promise.all([...taskDrafts.value.keys()].map((key) => flushTask(key))).then(
+        () => undefined
+    );
+}
+
+// Drop one target's pending task-list state without saving. Used when its target
+// is gone (a deleted comment).
+function cancelTask(key: string) {
+    const timer = taskTimers.get(key);
+    if (timer !== undefined) {
+        clearTimeout(timer);
+        taskTimers.delete(key);
+    }
+
+    clearTaskDraft(key);
+    clearTaskSaved(key);
+}
+
+// Drop all pending task-list state without saving. Used when the drafts no longer
+// have a valid target (a branch/PR switch).
+function cancelTaskSaves() {
+    for (const timer of taskTimers.values()) {
+        clearTimeout(timer);
+    }
+
+    taskTimers.clear();
+    taskDrafts.value = new Map();
+    taskWriting.value = new Set();
+    taskError.value = '';
+
+    for (const timer of taskSavedTimers.values()) {
+        clearTimeout(timer);
+    }
+
+    taskSavedTimers.clear();
+    taskSaved.value = new Set();
+}
+
+// A click in the description body: a task checkbox flips (edit mode only), else a
+// link opens externally. The native toggle is prevented; the flip comes from the
+// re-render off the updated draft, so the box always mirrors the source.
+function onDescriptionBodyClick(event: MouseEvent) {
+    const box = (event.target as HTMLElement).closest<HTMLInputElement>('input.pr-task-checkbox');
+    if (editing.value && box) {
+        event.preventDefault();
+        const index = Number(box.dataset.taskIndex);
+        if (!Number.isNaN(index)) {
+            queueTaskToggle('description', index);
+        }
+
         return;
     }
 
@@ -648,18 +915,24 @@ function onDescriptionBodyClick(event: MouseEvent) {
 function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
     const box = (event.target as HTMLElement).closest<HTMLInputElement>('input.pr-task-checkbox');
     if (editing.value && comment.canEdit && box) {
-        if (taskPendingKey.value !== null) {
-            event.preventDefault();
-            return;
+        event.preventDefault();
+        const index = Number(box.dataset.taskIndex);
+        if (!Number.isNaN(index)) {
+            queueTaskToggle(comment.id, index);
         }
 
-        void toggleTaskInBody(box, comment.id, comment.body, (body) =>
-            comparison.editComment(comment.id, body)
-        );
         return;
     }
 
     onBodyClick(event);
+}
+
+// Render a comment's body, reading from its pending task-list draft when one exists
+// so ticks show before the debounced write lands (mirrors renderedBody).
+function renderComment(comment: PrComment): string {
+    return renderMarkdown(taskDrafts.value.get(comment.id) ?? comment.body, {
+        interactive: editing.value && comment.canEdit,
+    });
 }
 </script>
 
@@ -934,6 +1207,33 @@ function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
                                                 {{ pr.author }}
                                             </span>
                                             <span>opened this pull request</span>
+                                            <!-- Task-list edits apply at once and save on a
+                                                 debounce; note the pending, then saving, then
+                                                 saved state. Padded off the header text so it
+                                                 reads as a separate status, not the sentence. -->
+                                            <span
+                                                v-if="taskStatus('description') === 'unsaved'"
+                                                class="pl-3 text-moire-faint italic"
+                                                role="status"
+                                            >
+                                                Unsaved changes
+                                            </span>
+                                            <span
+                                                v-else-if="taskStatus('description') === 'saving'"
+                                                class="flex items-center gap-1 pl-3 text-moire-faint italic"
+                                                role="status"
+                                            >
+                                                <LoaderCircle :size="12" class="animate-spin" />
+                                                Saving…
+                                            </span>
+                                            <span
+                                                v-else-if="taskStatus('description') === 'saved'"
+                                                class="flex items-center gap-1 pl-3 text-moire-status-a italic"
+                                                role="status"
+                                            >
+                                                <Check :size="12" />
+                                                Saved
+                                            </span>
                                         </div>
                                         <div class="flex shrink-0 items-center gap-0.5">
                                             <!-- Edit the description, in edit mode. Shown even
@@ -976,20 +1276,7 @@ function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
                                             </button>
                                         </div>
                                     </div>
-                                    <div v-if="!descriptionCollapsed" class="relative px-3.5 py-3">
-                                        <!-- Overlay while a task-list checkbox write is in
-                                             flight, so the body reads as busy. -->
-                                        <div
-                                            v-if="taskPendingKey === 'description'"
-                                            class="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg bg-moire-app/70"
-                                            role="status"
-                                            aria-label="Saving change"
-                                        >
-                                            <LoaderCircle
-                                                :size="20"
-                                                class="animate-spin text-moire-muted"
-                                            />
-                                        </div>
+                                    <div v-if="!descriptionCollapsed" class="px-3.5 py-3">
                                         <!-- Editing the description: an inline editor in place
                                              of the rendered body. An empty body is allowed. -->
                                         <div v-if="editingDescription" class="flex flex-col gap-2">
@@ -1099,6 +1386,33 @@ function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
                                                 {{ verb(comment).text }}
                                             </span>
                                             <span>{{ relative(comment.createdAt) }}</span>
+                                            <!-- Task-list edits apply at once and save on a
+                                                 debounce; note the pending, then saving, then
+                                                 saved state. Padded off the header text so it
+                                                 reads as a separate status, not the sentence. -->
+                                            <span
+                                                v-if="taskStatus(comment.id) === 'unsaved'"
+                                                class="pl-3 text-moire-faint italic"
+                                                role="status"
+                                            >
+                                                Unsaved changes
+                                            </span>
+                                            <span
+                                                v-else-if="taskStatus(comment.id) === 'saving'"
+                                                class="flex items-center gap-1 pl-3 text-moire-faint italic"
+                                                role="status"
+                                            >
+                                                <LoaderCircle :size="12" class="animate-spin" />
+                                                Saving…
+                                            </span>
+                                            <span
+                                                v-else-if="taskStatus(comment.id) === 'saved'"
+                                                class="flex items-center gap-1 pl-3 text-moire-status-a italic"
+                                                role="status"
+                                            >
+                                                <Check :size="12" />
+                                                Saved
+                                            </span>
                                         </div>
                                         <div class="flex shrink-0 items-center gap-0.5">
                                             <!-- Edit and delete for your own comments, tucked
@@ -1188,20 +1502,7 @@ function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
                                             </button>
                                         </div>
                                     </div>
-                                    <div v-if="!isCollapsed(i)" class="relative px-3.5 py-3">
-                                        <!-- Overlay while a task-list checkbox write on this
-                                             comment is in flight. -->
-                                        <div
-                                            v-if="taskPendingKey === comment.id"
-                                            class="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg bg-moire-app/70"
-                                            role="status"
-                                            aria-label="Saving change"
-                                        >
-                                            <LoaderCircle
-                                                :size="20"
-                                                class="animate-spin text-moire-muted"
-                                            />
-                                        </div>
+                                    <div v-if="!isCollapsed(i)" class="px-3.5 py-3">
                                         <!-- Editing this comment: an inline editor in place of
                                              the rendered body. -->
                                         <div
@@ -1248,11 +1549,7 @@ function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
                                             v-else
                                             class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
                                             @click="onCommentBodyClick($event, comment)"
-                                            v-html="
-                                                renderMarkdown(comment.body, {
-                                                    interactive: editing && comment.canEdit,
-                                                })
-                                            "
+                                            v-html="renderComment(comment)"
                                         />
                                     </div>
                                 </div>
