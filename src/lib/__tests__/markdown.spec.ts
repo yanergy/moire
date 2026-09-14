@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderMarkdown } from '@/lib/markdown';
+import { renderMarkdown, toggleTask } from '@/lib/markdown';
 
 describe('renderMarkdown', () => {
     it('renders common Markdown constructs', () => {
@@ -71,6 +71,19 @@ describe('renderMarkdown', () => {
         expect(html).toContain('class="pr-task-item"');
     });
 
+    it('numbers task checkboxes by source order and renders them interactive on request', () => {
+        // Read-only: every checkbox is disabled, and each carries its 0-based index.
+        const readOnly = renderMarkdown('- [ ] a\n- [x] b');
+        expect(readOnly).toContain('data-task-index="0"');
+        expect(readOnly).toContain('data-task-index="1"');
+        expect(readOnly).toContain('disabled');
+
+        // Interactive: the disabled attribute is dropped so the box can be clicked.
+        const interactive = renderMarkdown('- [ ] a\n- [x] b', { interactive: true });
+        expect(interactive).toContain('data-task-index="0"');
+        expect(interactive).not.toContain('disabled');
+    });
+
     it('renders GitHub emoji shortcodes as emoji', () => {
         expect(renderMarkdown(':white_check_mark: passing')).toContain('✅');
         expect(renderMarkdown(':robot:')).toContain('🤖');
@@ -96,5 +109,23 @@ describe('renderMarkdown', () => {
         expect(renderMarkdown('')).toBe('');
         expect(renderMarkdown(null)).toBe('');
         expect(renderMarkdown(undefined)).toBe('');
+    });
+});
+
+describe('toggleTask', () => {
+    it('flips the nth marker (0-based, source order) both ways', () => {
+        const src = '- [ ] a\n- [x] b';
+        expect(toggleTask(src, 0)).toBe('- [x] a\n- [x] b');
+        expect(toggleTask(src, 1)).toBe('- [ ] a\n- [ ] b');
+    });
+
+    it('counts markers across bullet styles and indentation, leaving the rest intact', () => {
+        const src = 'intro\n* [ ] one\n    1. [x] two\n+ [ ] three';
+        expect(toggleTask(src, 1)).toBe('intro\n* [ ] one\n    1. [ ] two\n+ [ ] three');
+    });
+
+    it('returns null when there is no marker at that index', () => {
+        expect(toggleTask('- [ ] only', 1)).toBeNull();
+        expect(toggleTask('plain text', 0)).toBeNull();
     });
 });

@@ -127,9 +127,8 @@ Track bugs and limitations here.
   number, status, change stats, commit count, labels, merge status, description (Markdown), the
   conversation (comments and review verdicts), and a Checks tab with the head commit's CI runs.
   An edit mode (off by default, toggled from the PR header) adds posting new comments, editing or
-  deleting your own (behind a per-comment menu), and editing the PR description. Still missing:
-    - Ticking task-list checkboxes in the description or a comment. They render but stay disabled
-      (checking one would write the new state back to the PR body or comment on GitHub).
+  deleting your own (behind a per-comment menu), editing the PR description, and ticking task-list
+  checkboxes in the description or your own comments (each writes back via gh). Still missing:
     - A Commits tab (the commit list). Lower priority: editors such as PhpStorm already show a
       branch's commits well, so this duplicates tooling the user likely already has.
     - Inline review-thread comments and their resolved state, which need the GitHub GraphQL API,

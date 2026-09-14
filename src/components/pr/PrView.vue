@@ -24,7 +24,7 @@ import {
     Trash2,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
-import { renderMarkdown } from '@/lib/markdown';
+import { renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -41,7 +41,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Toggle } from '@/components/ui/toggle';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
-import type { PrCheckState, PrComment } from '@/shared/types';
+import type { CommentMutationResult, PrCheckState, PrComment } from '@/shared/types';
 
 // The shape both status boxes share: the Conversation tab's merge state and the
 // Checks tab's CI summary. `icon` is a lucide component, `cls` tints the box.
@@ -56,6 +56,10 @@ interface StatusBox {
 const comparison = useComparisonStore();
 
 const pr = computed(() => comparison.pullRequest);
+
+// Whether the PR view is in edit mode (toggled from the header). Declared here
+// because the rendered Markdown and several actions below read it.
+const editing = ref(false);
 
 // Re-fetch the open PR (status, description, conversation, checks) from gh on
 // demand, for when it changed on GitHub since the range was last loaded. The
@@ -155,7 +159,8 @@ const checksStatus = computed<StatusBox | null>(() => {
 
 // The description is Markdown; renderMarkdown returns HTML that is safe to insert
 // with v-html (raw tags escaped, unsafe link schemes rejected). See lib/markdown.
-const renderedBody = computed(() => renderMarkdown(pr.value?.body));
+// In edit mode its task-list checkboxes render interactive (onBodyClick flips them).
+const renderedBody = computed(() => renderMarkdown(pr.value?.body, { interactive: editing.value }));
 const hasBody = computed(() => !!pr.value?.body.trim());
 
 // The description folds on its own toggle, and the collapse-all control folds it
@@ -226,11 +231,11 @@ function toggleAll() {
 
 // --- Edit mode ---
 //
-// The conversation is read-only until the user turns on edit mode from the header.
-// Only then does the composer at the bottom appear and each of the user's own
-// comments gain an Edit action. Posting and editing go through the store, which
-// writes via gh and re-fetches the PR so the change shows.
-const editing = ref(false);
+// The conversation is read-only until the user turns on edit mode from the header
+// (`editing`, declared up top since the rendered Markdown reads it). Only then does
+// the composer at the bottom appear and each of the user's own comments gain an
+// Edit action, and task-list checkboxes become tickable. Posting, editing, and
+// deleting go through the store, which writes via gh and re-fetches so it shows.
 
 // New-comment composer.
 const draft = ref('');
@@ -260,6 +265,16 @@ const descriptionDraft = ref('');
 const savingDescription = ref(false);
 const descriptionError = ref('');
 
+// A failed task-list checkbox write (see the task-list section). Shown as a small
+// banner atop the conversation, since the checkbox lives in read-only rendered HTML.
+const taskError = ref('');
+
+// Which card has a task-list checkbox write in flight: 'description' or a comment's
+// node id, or null when none. It overlays that card with a spinner and, being
+// non-null, locks the conversation to one toggle at a time so concurrent clicks
+// can't race the source body.
+const taskPendingKey = ref<string | null>(null);
+
 // Leaving edit mode drops any in-progress draft, open editor, delete prompt, menu,
 // and error so the view returns cleanly to read-only.
 watch(editing, (on) => {
@@ -274,6 +289,8 @@ watch(editing, (on) => {
         deleteError.value = '';
         editingDescription.value = false;
         descriptionError.value = '';
+        taskError.value = '';
+        taskPendingKey.value = null;
     }
 });
 
@@ -570,6 +587,80 @@ function onBodyClick(event: MouseEvent) {
     event.preventDefault();
     void window.api?.openExternal(href);
 }
+
+// --- Task-list checkboxes ---
+//
+// In edit mode a task checkbox is clickable: the click flips the matching marker
+// in the raw source (by its data-task-index) and writes the new body back. The box
+// toggles optimistically (the native toggle is allowed to happen) and its card is
+// overlaid with a spinner while the write is in flight; being keyed to that card,
+// the overlay also locks the conversation to one toggle at a time so concurrent
+// clicks can't race the source. On success the re-fetch re-renders the body from
+// the true state; on failure the optimistic flip is reverted and an error shows.
+async function toggleTaskInBody(
+    box: HTMLInputElement,
+    key: string,
+    source: string,
+    save: (body: string) => Promise<CommentMutationResult>
+) {
+    const index = Number(box.dataset.taskIndex);
+    const next = Number.isNaN(index) ? null : toggleTask(source, index);
+    if (next === null) {
+        return;
+    }
+
+    taskPendingKey.value = key;
+    taskError.value = '';
+    try {
+        const result = await save(next);
+        if (!result.ok) {
+            // Undo the optimistic flip; the source and server never changed.
+            box.checked = !box.checked;
+            taskError.value = result.message ?? 'Could not update the checkbox.';
+        }
+    } finally {
+        taskPendingKey.value = null;
+    }
+}
+
+// A click in the description body: a task checkbox flips (edit mode only), else a
+// link opens externally. While a write is pending, further checkbox clicks are
+// swallowed so only one toggle is in flight at a time.
+function onDescriptionBodyClick(event: MouseEvent) {
+    const box = (event.target as HTMLElement).closest<HTMLInputElement>('input.pr-task-checkbox');
+    if (editing.value && box) {
+        if (taskPendingKey.value !== null) {
+            event.preventDefault();
+            return;
+        }
+
+        void toggleTaskInBody(box, 'description', pr.value?.body ?? '', (body) =>
+            comparison.editDescription(body)
+        );
+        return;
+    }
+
+    onBodyClick(event);
+}
+
+// The same, for a comment body: only the viewer's own comments (canEdit) toggle,
+// since GitHub allows editing only those.
+function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
+    const box = (event.target as HTMLElement).closest<HTMLInputElement>('input.pr-task-checkbox');
+    if (editing.value && comment.canEdit && box) {
+        if (taskPendingKey.value !== null) {
+            event.preventDefault();
+            return;
+        }
+
+        void toggleTaskInBody(box, comment.id, comment.body, (body) =>
+            comparison.editComment(comment.id, body)
+        );
+        return;
+    }
+
+    onBodyClick(event);
+}
 </script>
 
 <template>
@@ -797,6 +888,27 @@ function onBodyClick(event: MouseEvent) {
                         <!-- The PR's merge state leads the tab. -->
                         <pr-status-box :status="mergeStatus" />
 
+                        <!-- A task-list checkbox write that failed (e.g. no permission).
+                             It lives here because the checkbox is inside read-only
+                             rendered HTML with nowhere of its own to report. Padding,
+                             not margin, for the gap below (the unlayered reset zeroes
+                             margin utilities). -->
+                        <div v-if="taskError" class="pb-4">
+                            <div
+                                class="flex items-center justify-between gap-2 rounded-md border border-moire-danger-edge bg-moire-danger px-3 py-2 text-[12px] text-moire-status-d"
+                            >
+                                <span>{{ taskError }}</span>
+                                <button
+                                    type="button"
+                                    class="shrink-0 cursor-pointer rounded p-0.5 text-moire-status-d hover:bg-moire-danger-edge"
+                                    aria-label="Dismiss"
+                                    @click="taskError = ''"
+                                >
+                                    <CircleX :size="14" />
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- The description reads as the first entry. -->
                         <div class="flex gap-3">
                             <div class="flex w-6 shrink-0 flex-col items-center">
@@ -864,7 +976,20 @@ function onBodyClick(event: MouseEvent) {
                                             </button>
                                         </div>
                                     </div>
-                                    <div v-if="!descriptionCollapsed" class="px-3.5 py-3">
+                                    <div v-if="!descriptionCollapsed" class="relative px-3.5 py-3">
+                                        <!-- Overlay while a task-list checkbox write is in
+                                             flight, so the body reads as busy. -->
+                                        <div
+                                            v-if="taskPendingKey === 'description'"
+                                            class="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg bg-moire-app/70"
+                                            role="status"
+                                            aria-label="Saving change"
+                                        >
+                                            <LoaderCircle
+                                                :size="20"
+                                                class="animate-spin text-moire-muted"
+                                            />
+                                        </div>
                                         <!-- Editing the description: an inline editor in place
                                              of the rendered body. An empty body is allowed. -->
                                         <div v-if="editingDescription" class="flex flex-col gap-2">
@@ -909,7 +1034,7 @@ function onBodyClick(event: MouseEvent) {
                                         <div
                                             v-else-if="hasBody"
                                             class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
-                                            @click="onBodyClick"
+                                            @click="onDescriptionBodyClick"
                                             v-html="renderedBody"
                                         />
                                         <div v-else class="text-[14px] text-moire-faint italic">
@@ -1063,7 +1188,20 @@ function onBodyClick(event: MouseEvent) {
                                             </button>
                                         </div>
                                     </div>
-                                    <div v-if="!isCollapsed(i)" class="px-3.5 py-3">
+                                    <div v-if="!isCollapsed(i)" class="relative px-3.5 py-3">
+                                        <!-- Overlay while a task-list checkbox write on this
+                                             comment is in flight. -->
+                                        <div
+                                            v-if="taskPendingKey === comment.id"
+                                            class="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg bg-moire-app/70"
+                                            role="status"
+                                            aria-label="Saving change"
+                                        >
+                                            <LoaderCircle
+                                                :size="20"
+                                                class="animate-spin text-moire-muted"
+                                            />
+                                        </div>
                                         <!-- Editing this comment: an inline editor in place of
                                              the rendered body. -->
                                         <div
@@ -1109,8 +1247,12 @@ function onBodyClick(event: MouseEvent) {
                                         <div
                                             v-else
                                             class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
-                                            @click="onBodyClick"
-                                            v-html="renderMarkdown(comment.body)"
+                                            @click="onCommentBodyClick($event, comment)"
+                                            v-html="
+                                                renderMarkdown(comment.body, {
+                                                    interactive: editing && comment.canEdit,
+                                                })
+                                            "
                                         />
                                     </div>
                                 </div>
@@ -1365,6 +1507,11 @@ function onBodyClick(event: MouseEvent) {
     margin: 0 0.5em 0 0;
     vertical-align: middle;
     accent-color: var(--moire-accent);
+}
+
+/* Interactive (edit-mode) checkboxes read as clickable; disabled ones do not. */
+:deep(.pr-markdown .pr-task-checkbox:not([disabled])) {
+    cursor: pointer;
 }
 
 :deep(.pr-markdown li > ul),

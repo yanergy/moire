@@ -108,6 +108,8 @@ const ALLOWED_ATTR = [
     'type',
     'checked',
     'disabled',
+    // Maps an interactive task checkbox back to its marker in the source.
+    'data-task-index',
     'open',
     'start',
     'width',
@@ -126,12 +128,15 @@ function sanitize(html: string): string {
 // item whose text begins with the [ ]/[x] marker, strips the marker and prepends
 // a checkbox token; the <li> is tagged so the bullet can be dropped in CSS.
 //
-// The checkbox is always `disabled`, so it is display-only: it cannot be toggled
-// or submit anything (the PR view is read-only). Its <input> is on the allow-list
+// The checkbox carries a `data-task-index`: the 0-based position of its marker in
+// the source, in document order, so a click can flip the right `[ ]`/`[x]` (see
+// toggleTask). It is `disabled` unless the caller renders interactively (edit
+// mode), which is when the click handler is wired. Its <input> is on the allow-list
 // above, so it survives sanitizing along with the rest of the rendered HTML.
 md.use((markdown) => {
     markdown.core.ruler.after('inline', 'task-lists', (state) => {
         const { tokens } = state;
+        let taskIndex = 0;
         for (let i = 0; i < tokens.length; i++) {
             const inline = tokens[i]!;
             if (
@@ -155,7 +160,7 @@ md.use((markdown) => {
             first.content = first.content.slice(marker[0].length);
 
             const checkbox = new state.Token('task_checkbox', '', 0);
-            checkbox.meta = { checked: marker[1]!.toLowerCase() === 'x' };
+            checkbox.meta = { checked: marker[1]!.toLowerCase() === 'x', index: taskIndex++ };
             inline.children!.unshift(checkbox);
 
             tokens[i - 2]!.attrJoin('class', 'pr-task-item');
@@ -164,14 +169,51 @@ md.use((markdown) => {
         return true;
     });
 
-    markdown.renderer.rules.task_checkbox = (tokens, idx) =>
-        `<input class="pr-task-checkbox" type="checkbox" disabled${
-            tokens[idx]!.meta?.checked ? ' checked' : ''
-        }> `;
+    markdown.renderer.rules.task_checkbox = (tokens, idx, _options, env) => {
+        const meta = tokens[idx]!.meta as { checked?: boolean; index?: number } | undefined;
+        const checked = meta?.checked ? ' checked' : '';
+        // Interactive only when the caller asks (edit mode); otherwise display-only.
+        const disabled = (env as { interactive?: boolean } | undefined)?.interactive
+            ? ''
+            : ' disabled';
+        return `<input class="pr-task-checkbox" type="checkbox" data-task-index="${meta?.index ?? 0}"${disabled}${checked}> `;
+    };
 });
 
 // Render Markdown source to a sanitized HTML string. Empty or missing input
-// yields an empty string so callers can treat "no description" uniformly.
-export function renderMarkdown(source: string | null | undefined): string {
-    return source ? sanitize(md.render(source)) : '';
+// yields an empty string so callers can treat "no description" uniformly. When
+// `interactive` is set, task-list checkboxes render enabled (for edit mode); the
+// caller wires the click handler that flips the source via toggleTask.
+export function renderMarkdown(
+    source: string | null | undefined,
+    options: { interactive?: boolean } = {}
+): string {
+    return source ? sanitize(md.render(source, { interactive: options.interactive })) : '';
+}
+
+// Flip the nth (0-based, document order) task-list marker in the Markdown source,
+// returning the new source, or null if there is no such marker. Matches a list
+// item line whose bullet is immediately followed by a `[ ]`/`[x]` marker, the same
+// shape the renderer turns into a checkbox, so the index lines up with the rendered
+// checkbox's data-task-index.
+export function toggleTask(source: string, index: number): string | null {
+    const marker = /^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]/;
+    const lines = source.split('\n');
+    let seen = 0;
+    for (let i = 0; i < lines.length; i++) {
+        const match = marker.exec(lines[i]!);
+        if (!match) {
+            continue;
+        }
+
+        if (seen === index) {
+            const next = match[2] === ' ' ? 'x' : ' ';
+            lines[i] = lines[i]!.replace(marker, `$1[${next}]`);
+            return lines.join('\n');
+        }
+
+        seen++;
+    }
+
+    return null;
 }

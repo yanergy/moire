@@ -632,5 +632,85 @@ describe('PrView', () => {
 
             expect(edit).toHaveBeenCalledWith('Rewritten body.');
         });
+
+        it('keeps task checkboxes read-only until edit mode is on', () => {
+            const wrapper = mountWith({ ...PR, body: '- [ ] todo' });
+            expect(wrapper.get('input.pr-task-checkbox').attributes('disabled')).toBeDefined();
+        });
+
+        it('ticks a description task-list checkbox through the store', async () => {
+            const store = useComparisonStore();
+            const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
+
+            const wrapper = await enableEditing({ ...PR, body: '- [ ] todo\n- [ ] done' });
+
+            const box = wrapper.get('input.pr-task-checkbox');
+            expect(box.attributes('disabled')).toBeUndefined();
+            await box.trigger('click');
+            await flushPromises();
+
+            // Only the clicked marker flips, written back as the whole body.
+            expect(edit).toHaveBeenCalledWith('- [x] todo\n- [ ] done');
+        });
+
+        it('ticks a task-list checkbox in the viewer’s own comment through the store', async () => {
+            const store = useComparisonStore();
+            const edit = vi.spyOn(store, 'editComment').mockResolvedValue({ ok: true });
+
+            const wrapper = await enableEditing({
+                ...PR,
+                body: 'No tasks here.',
+                comments: [
+                    comment({ author: 'me', body: '- [ ] task', id: 'IC_9', canEdit: true }),
+                ],
+            });
+
+            const box = wrapper.get('input.pr-task-checkbox');
+            await box.trigger('click');
+            await flushPromises();
+
+            expect(edit).toHaveBeenCalledWith('IC_9', '- [x] task');
+        });
+
+        it('locks further checkbox toggles while a write is in flight', async () => {
+            const store = useComparisonStore();
+            let resolveEdit!: (r: { ok: boolean }) => void;
+            const edit = vi.spyOn(store, 'editDescription').mockReturnValue(
+                new Promise((res) => {
+                    resolveEdit = res;
+                })
+            );
+
+            const wrapper = await enableEditing({ ...PR, body: '- [ ] a\n- [ ] b' });
+            const boxes = wrapper.findAll('input.pr-task-checkbox');
+            await boxes[0]!.trigger('click');
+            // The card overlays with a spinner while the write is in flight.
+            expect(wrapper.find('[aria-label="Saving change"]').exists()).toBe(true);
+            // A second click while the first write is pending is swallowed.
+            await boxes[1]!.trigger('click');
+            expect(edit).toHaveBeenCalledTimes(1);
+
+            resolveEdit({ ok: true });
+            await flushPromises();
+            // The overlay clears once the write settles.
+            expect(wrapper.find('[aria-label="Saving change"]').exists()).toBe(false);
+        });
+
+        it('reverts the checkbox and shows an error when the write fails', async () => {
+            const store = useComparisonStore();
+            vi.spyOn(store, 'editDescription').mockResolvedValue({
+                ok: false,
+                message: 'No permission.',
+            });
+
+            const wrapper = await enableEditing({ ...PR, body: '- [ ] a' });
+            const box = wrapper.get('input.pr-task-checkbox');
+            await box.trigger('click');
+            await flushPromises();
+
+            // The optimistic tick is rolled back, and the failure is surfaced.
+            expect((box.element as HTMLInputElement).checked).toBe(false);
+            expect(wrapper.text()).toContain('No permission.');
+        });
     });
 });
