@@ -136,7 +136,9 @@ Track bugs and limitations here.
   note a workflow such as a linter posts on the head commit, fetched over the Checks REST API) show
   the same way, as a warning or error marker on the flagged head line that opens the finding in the
   same popover, with a link out to the producing check. They are matched to the head commit, so a
-  repo whose checks post no annotations simply shows no markers. Still missing:
+  repo whose checks post no annotations simply shows no markers. The file tree also flags each file
+  that carries an annotation with a small triangle next to its name (red for an error, amber for a
+  warning). Still missing:
     - Replying to or resolving a review thread from the popover, or dismissing a check annotation.
       Both are read-only for now; use GitHub for those.
     - A Commits tab (the commit list) is deliberately not built: an IDE already shows a branch's
