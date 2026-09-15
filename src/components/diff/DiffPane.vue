@@ -108,6 +108,8 @@ function navigate(direction: 'next' | 'prev') {
             :pending-edge="comparison.pendingChangeEdge"
             :review-threads="comparison.threadsForFile(comparison.selectedFile.path)"
             :check-annotations="comparison.annotationsForFile(comparison.selectedFile.path)"
+            :reply-to-thread="comparison.replyToReviewThread"
+            :set-thread-resolved="comparison.setReviewThreadResolved"
             @update:change-count="changeCount = $event"
             @edge-consumed="comparison.clearChangeEdge()"
         />

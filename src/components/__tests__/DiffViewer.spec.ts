@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
 import { editor } from './monaco-stub';
@@ -60,6 +60,7 @@ function lastActiveModified(diff: StubDiffEditor): StubDecoration[] {
 
 // A RIGHT-side review thread on line 12 of the open file.
 const thread = (over: Partial<PrReviewThread> = {}): PrReviewThread => ({
+    id: 'RT_1',
     path: 'src/a.ts',
     line: 12,
     originalLine: null,
@@ -113,6 +114,19 @@ const lineMouseDown = (lineNumber: number, type = 2) => ({
 });
 const glyphClick = (lineNumber: number) => lineMouseDown(lineNumber, 2);
 const contentClick = (lineNumber: number) => lineMouseDown(lineNumber, 6);
+
+// A write action that always succeeds, and props that inject it so the popover offers
+// its reply box and resolve control. `dialogButton` finds the popover button by label.
+const okAction = () => Promise.resolve({ ok: true as const });
+const writeProps = (over: Record<string, unknown> = {}) => ({
+    ...baseProps,
+    reviewThreads: [thread()],
+    replyToThread: okAction,
+    setThreadResolved: okAction,
+    ...over,
+});
+const dialogButton = (w: ReturnType<typeof mount>, label: string) =>
+    w.findAll('[role="dialog"] button').find((b) => b.text() === label);
 
 describe('DiffViewer', () => {
     it('mounts and creates a diff editor in its container', () => {
@@ -460,6 +474,77 @@ describe('DiffViewer', () => {
         const popover = wrapper.find('[role="dialog"]');
         expect(popover.text()).toContain('The property should be above methods.');
         expect(popover.text()).toContain('this can race');
+    });
+
+    it('shows a reply box and resolve control only when write actions are injected', async () => {
+        const wrapper = mount(DiffViewer, { props: writeProps() });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+        diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+        await flushPromises();
+
+        expect(wrapper.find('[role="dialog"] textarea').exists()).toBe(true);
+        expect(dialogButton(wrapper, 'Resolve')).toBeTruthy();
+        expect(dialogButton(wrapper, 'Reply')).toBeTruthy();
+    });
+
+    it('stays read-only when no write actions are injected', async () => {
+        const wrapper = mount(DiffViewer, { props: { ...baseProps, reviewThreads: [thread()] } });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+        diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+        await flushPromises();
+
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+        expect(wrapper.find('[role="dialog"] textarea').exists()).toBe(false);
+    });
+
+    it('submits a reply through the injected action', async () => {
+        const replyToThread =
+            vi.fn<(threadId: string, body: string) => Promise<{ ok: true }>>(okAction);
+        const wrapper = mount(DiffViewer, { props: writeProps({ replyToThread }) });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+        diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+        await flushPromises();
+
+        await wrapper.find('[role="dialog"] textarea').setValue('looks fixed');
+        await dialogButton(wrapper, 'Reply')!.trigger('click');
+        await flushPromises();
+
+        expect(replyToThread).toHaveBeenCalledWith('RT_1', 'looks fixed');
+    });
+
+    it('requests resolve for an unresolved thread through the injected action', async () => {
+        const setThreadResolved =
+            vi.fn<(threadId: string, resolved: boolean) => Promise<{ ok: true }>>(okAction);
+        const wrapper = mount(DiffViewer, { props: writeProps({ setThreadResolved }) });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+        diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+        await flushPromises();
+
+        await dialogButton(wrapper, 'Resolve')!.trigger('click');
+        await flushPromises();
+
+        expect(setThreadResolved).toHaveBeenCalledWith('RT_1', true);
+    });
+
+    it('shows an inline error when a reply fails', async () => {
+        const replyToThread = vi.fn<
+            (threadId: string, body: string) => Promise<{ ok: false; message: string }>
+        >(() => Promise.resolve({ ok: false, message: 'HTTP 403: Forbidden' }));
+        const wrapper = mount(DiffViewer, { props: writeProps({ replyToThread }) });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+        diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+        await flushPromises();
+
+        await wrapper.find('[role="dialog"] textarea').setValue('nope');
+        await dialogButton(wrapper, 'Reply')!.trigger('click');
+        await flushPromises();
+
+        expect(wrapper.find('[role="dialog"]').text()).toContain('HTTP 403');
     });
 
     it('jumps to a requested edge on demand via goToEdge', () => {

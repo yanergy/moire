@@ -431,6 +431,51 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
     }
 
+    // Re-read the current PR's review threads after a write (a reply or a resolve), so
+    // the diff popover reflects the change. Bumps the request token so it, not a stale
+    // in-flight load, is the one that lands.
+    async function reloadReviewThreads() {
+        await loadReviewThreads(pullRequest.value?.id, ++prRequest);
+    }
+
+    // Reply into an inline review thread by its node id, then re-fetch so the reply
+    // shows in the popover. Returns gh's ok/message result for an inline error.
+    async function replyToReviewThread(
+        threadId: string,
+        body: string
+    ): Promise<CommentMutationResult> {
+        const api = window.api;
+        if (!api?.replyToReviewThread || !threadId || !body.trim()) {
+            return { ok: false, message: 'Nothing to post.' };
+        }
+
+        const result = await api.replyToReviewThread(threadId, body);
+        if (result.ok) {
+            await reloadReviewThreads();
+        }
+
+        return result;
+    }
+
+    // Resolve or unresolve a review thread by its node id, then re-fetch so its state
+    // updates. Returns gh's ok/message result for an inline error.
+    async function setReviewThreadResolved(
+        threadId: string,
+        resolved: boolean
+    ): Promise<CommentMutationResult> {
+        const api = window.api;
+        if (!api?.setReviewThreadResolved || !threadId) {
+            return { ok: false, message: 'No thread to update.' };
+        }
+
+        const result = await api.setReviewThreadResolved(threadId, resolved);
+        if (result.ok) {
+            await reloadReviewThreads();
+        }
+
+        return result;
+    }
+
     // Re-detect the PR when the compared range changes. Compare mode does not affect
     // which PR exists (that is the base<-head pairing), so it is not a trigger. The
     // range change swaps the PR, so this run drives the spinner.
@@ -1079,6 +1124,8 @@ export const useComparisonStore = defineStore('comparison', () => {
         prWarning,
         reviewThreads,
         threadsForFile,
+        replyToReviewThread,
+        setReviewThreadResolved,
         checkAnnotations,
         annotationsForFile,
         annotationLevelForFile,

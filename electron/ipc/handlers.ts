@@ -14,6 +14,8 @@ import {
     editComment,
     deleteComment,
     editDescription,
+    replyToReviewThread,
+    setReviewThreadResolved,
 } from '../github/gh';
 import { watchRepo } from '../watcher/RepoWatcher';
 import {
@@ -199,6 +201,16 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
 
     handle('gh:edit-description', (prNumber: number, body: string) =>
         editDescription(requireRepo().repoPath, prNumber, body)
+    );
+
+    // Inline review-thread writes from the diff popover: reply into a thread, or
+    // resolve/unresolve it, both by the thread's node id.
+    handle('gh:reply-review-thread', (threadId: string, body: string) =>
+        replyToReviewThread(requireRepo().repoPath, threadId, body)
+    );
+
+    handle('gh:set-review-thread-resolved', (threadId: string, resolved: boolean) =>
+        setReviewThreadResolved(requireRepo().repoPath, threadId, resolved)
     );
 
     // Open an external URL (a PR link) in the default browser. Restricted to

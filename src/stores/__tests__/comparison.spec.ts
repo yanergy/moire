@@ -1032,6 +1032,7 @@ describe('comparison store', () => {
         it('loads the PR review threads by node id and narrows them per file', async () => {
             const threads = [
                 {
+                    id: 'RT_a',
                     path: 'src/a.ts',
                     line: 1,
                     originalLine: null,
@@ -1041,6 +1042,7 @@ describe('comparison store', () => {
                     comments: [{ author: 'bob', body: 'x', createdAt: '' }],
                 },
                 {
+                    id: 'RT_b',
                     path: 'src/b.ts',
                     line: 2,
                     originalLine: null,
@@ -1078,6 +1080,108 @@ describe('comparison store', () => {
             await flushPromises();
 
             expect(store.reviewThreads).toEqual([]);
+        });
+
+        it('replies to a review thread, then re-fetches so the reply shows', async () => {
+            const getReviewThreads = vi
+                .fn<(prId: string) => Promise<unknown>>()
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([
+                    {
+                        id: 'RT_1',
+                        path: 'src/a.ts',
+                        line: 1,
+                        originalLine: null,
+                        side: 'RIGHT',
+                        isResolved: false,
+                        isOutdated: false,
+                        comments: [{ author: 'me', body: 'done', createdAt: '' }],
+                    },
+                ]);
+            const replyToReviewThread = vi
+                .fn<(id: string, body: string) => Promise<unknown>>()
+                .mockResolvedValue({ ok: true });
+            const getPullRequest = vi
+                .fn<(base: string, head: string) => Promise<unknown>>()
+                .mockResolvedValue({ status: 'ok', pr: { ...PR, id: 'PR_7' } });
+            window.api = {
+                getPullRequest,
+                getReviewThreads,
+                replyToReviewThread,
+            } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'feature';
+            await store.loadPullRequest();
+            await flushPromises();
+
+            const result = await store.replyToReviewThread('RT_1', 'done');
+            await flushPromises();
+
+            expect(result).toEqual({ ok: true });
+            expect(replyToReviewThread).toHaveBeenCalledWith('RT_1', 'done');
+            // Re-fetched after the write, so the new reply is now present.
+            expect(getReviewThreads).toHaveBeenCalledTimes(2);
+            expect(store.threadsForFile('src/a.ts')).toHaveLength(1);
+        });
+
+        it('does not re-fetch when a reply fails', async () => {
+            const getReviewThreads = vi
+                .fn<(prId: string) => Promise<unknown>>()
+                .mockResolvedValue([]);
+            const replyToReviewThread = vi
+                .fn<(id: string, body: string) => Promise<unknown>>()
+                .mockResolvedValue({ ok: false, message: 'HTTP 403' });
+            const getPullRequest = vi
+                .fn<(base: string, head: string) => Promise<unknown>>()
+                .mockResolvedValue({ status: 'ok', pr: { ...PR, id: 'PR_7' } });
+            window.api = {
+                getPullRequest,
+                getReviewThreads,
+                replyToReviewThread,
+            } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'feature';
+            await store.loadPullRequest();
+            await flushPromises();
+
+            const result = await store.replyToReviewThread('RT_1', 'done');
+
+            expect(result).toEqual({ ok: false, message: 'HTTP 403' });
+            // Only the initial load fetched threads; the failed write did not re-fetch.
+            expect(getReviewThreads).toHaveBeenCalledTimes(1);
+        });
+
+        it('resolves a review thread through the bridge', async () => {
+            const setReviewThreadResolved = vi
+                .fn<(id: string, resolved: boolean) => Promise<unknown>>()
+                .mockResolvedValue({ ok: true });
+            const getReviewThreads = vi
+                .fn<(prId: string) => Promise<unknown>>()
+                .mockResolvedValue([]);
+            const getPullRequest = vi
+                .fn<(base: string, head: string) => Promise<unknown>>()
+                .mockResolvedValue({ status: 'ok', pr: { ...PR, id: 'PR_7' } });
+            window.api = {
+                getPullRequest,
+                getReviewThreads,
+                setReviewThreadResolved,
+            } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'feature';
+            await store.loadPullRequest();
+            await flushPromises();
+
+            const result = await store.setReviewThreadResolved('RT_1', true);
+
+            expect(result).toEqual({ ok: true });
+            expect(setReviewThreadResolved).toHaveBeenCalledWith('RT_1', true);
+            expect(getReviewThreads).toHaveBeenCalledTimes(2);
         });
 
         it('loads the check annotations by head sha and narrows them per file', async () => {

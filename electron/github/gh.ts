@@ -150,11 +150,13 @@ export interface PrReviewComment {
 }
 
 // An inline (line-anchored) code review thread on the PR, shown as a marker in the
-// diff viewer. `path` is the file it is on; `line`/`originalLine` are the anchored
-// line on the head (RIGHT) and base (LEFT) side (either can be null when GitHub
-// could not map it). `side` says which side the thread hangs on. `isResolved` and
-// `isOutdated` drive how the marker reads.
+// diff viewer. `id` is the thread's GraphQL node id, used to reply to or resolve it.
+// `path` is the file it is on; `line`/`originalLine` are the anchored line on the head
+// (RIGHT) and base (LEFT) side (either can be null when GitHub could not map it).
+// `side` says which side the thread hangs on. `isResolved` and `isOutdated` drive how
+// the marker reads.
 export interface PrReviewThread {
+    id: string;
     path: string;
     line: number | null;
     originalLine: number | null;
@@ -523,6 +525,7 @@ export async function getPullRequest(
 
 // The GraphQL shape a review thread comes back as; only the fields the viewer reads.
 interface GhReviewThread {
+    id: string | null;
     path: string | null;
     line: number | null;
     originalLine: number | null;
@@ -539,11 +542,12 @@ interface GhReviewComment {
 
 const REVIEW_THREADS_QUERY =
     'query($id:ID!){node(id:$id){... on PullRequest{reviewThreads(first:100){nodes{' +
-    'path line originalLine diffSide isResolved isOutdated ' +
+    'id path line originalLine diffSide isResolved isOutdated ' +
     'comments(first:100){nodes{author{login} body createdAt}}}}}}}';
 
 function toReviewThread(node: GhReviewThread): PrReviewThread {
     return {
+        id: node.id ?? '',
         path: node.path ?? '',
         line: node.line ?? null,
         originalLine: node.originalLine ?? null,
@@ -807,6 +811,74 @@ export async function editDescription(
 
     try {
         await run(['pr', 'edit', String(prNumber), '--body', body], repoPath);
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// --- Inline review thread writes (GraphQL) ---
+//
+// Replying to and resolving/unresolving an inline review thread, addressed by the
+// thread's node id (from getReviewThreads). Like the conversation writes, each returns
+// an ok/message result rather than throwing, so the diff popover shows an inline error.
+
+// Post a reply into an existing review thread via addPullRequestReviewThreadReply,
+// keyed on the thread's node id. A blank body is rejected before gh runs.
+export async function replyToReviewThread(
+    repoPath: string,
+    threadId: string,
+    body: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !threadId || !body.trim()) {
+        return { ok: false, message: 'Nothing to post.' };
+    }
+
+    const query =
+        'mutation($threadId:ID!,$body:String!){addPullRequestReviewThreadReply(' +
+        'input:{pullRequestReviewThreadId:$threadId,body:$body}){comment{id}}}';
+    try {
+        await run(
+            [
+                'api',
+                'graphql',
+                '-f',
+                `query=${query}`,
+                '-f',
+                `threadId=${threadId}`,
+                '-f',
+                `body=${body}`,
+            ],
+            repoPath
+        );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// Resolve or unresolve a review thread via resolveReviewThread / unresolveReviewThread,
+// keyed on the thread's node id; `resolved` picks the direction. GitHub permits this
+// for anyone with write access to the repo; a forbidden or failed call comes back as a
+// message.
+export async function setReviewThreadResolved(
+    repoPath: string,
+    threadId: string,
+    resolved: boolean,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !threadId) {
+        return { ok: false, message: 'No thread to update.' };
+    }
+
+    const mutation = resolved ? 'resolveReviewThread' : 'unresolveReviewThread';
+    const query = `mutation($threadId:ID!){${mutation}(input:{threadId:$threadId}){thread{id isResolved}}}`;
+    try {
+        await run(
+            ['api', 'graphql', '-f', `query=${query}`, '-f', `threadId=${threadId}`],
+            repoPath
+        );
         return { ok: true };
     } catch (error) {
         return { ok: false, message: mutationError(error) };

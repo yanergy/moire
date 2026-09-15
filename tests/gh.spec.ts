@@ -9,6 +9,8 @@ import {
     editComment,
     deleteComment,
     editDescription,
+    replyToReviewThread,
+    setReviewThreadResolved,
     type GhRunner,
 } from '../electron/github/gh';
 
@@ -577,6 +579,7 @@ describe('getReviewThreads', () => {
         const { run, calls } = okRunner(
             threadsJson([
                 {
+                    id: 'RT_a',
                     path: 'src/a.ts',
                     line: 12,
                     originalLine: null,
@@ -595,6 +598,7 @@ describe('getReviewThreads', () => {
                     },
                 },
                 {
+                    id: 'RT_b',
                     path: 'src/b.ts',
                     line: null,
                     originalLine: 4,
@@ -615,6 +619,7 @@ describe('getReviewThreads', () => {
 
         expect(threads).toHaveLength(2);
         expect(threads[0]).toEqual({
+            id: 'RT_a',
             path: 'src/a.ts',
             line: 12,
             originalLine: null,
@@ -657,6 +662,74 @@ describe('getReviewThreads', () => {
     it('returns an empty list when gh output is not valid JSON', async () => {
         const { run } = okRunner('not json');
         expect(await getReviewThreads('/repo', 'PR_1', run)).toEqual([]);
+    });
+});
+
+describe('replyToReviewThread', () => {
+    it('posts a reply via the thread-reply mutation, keyed on the thread id', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        const result = await replyToReviewThread('/repo', 'RT_1', 'looks fixed now', run);
+
+        expect(result).toEqual({ ok: true });
+        expect(calls[0]!.args[0]).toBe('api');
+        expect(calls[0]!.args).toContain('graphql');
+        expect(calls[0]!.args.some((a) => a.includes('addPullRequestReviewThreadReply'))).toBe(
+            true
+        );
+        expect(calls[0]!.args).toContain('threadId=RT_1');
+        expect(calls[0]!.args).toContain('body=looks fixed now');
+    });
+
+    it('rejects a blank body without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+        expect(await replyToReviewThread('/repo', 'RT_1', '   ', run)).toEqual({
+            ok: false,
+            message: 'Nothing to post.',
+        });
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a gh failure as an ok:false message', async () => {
+        const run = failRunner({ code: 1, stderr: 'HTTP 403: Forbidden' });
+        const result = await replyToReviewThread('/repo', 'RT_1', 'hi', run);
+        expect(result.ok).toBe(false);
+        expect(result.message).toContain('403');
+    });
+});
+
+describe('setReviewThreadResolved', () => {
+    it('resolves via resolveReviewThread when resolved is true', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        const result = await setReviewThreadResolved('/repo', 'RT_1', true, run);
+
+        expect(result).toEqual({ ok: true });
+        expect(calls[0]!.args.some((a) => a.includes('resolveReviewThread'))).toBe(true);
+        expect(calls[0]!.args.some((a) => a.includes('unresolveReviewThread'))).toBe(false);
+        expect(calls[0]!.args).toContain('threadId=RT_1');
+    });
+
+    it('unresolves via unresolveReviewThread when resolved is false', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        await setReviewThreadResolved('/repo', 'RT_1', false, run);
+
+        expect(calls[0]!.args.some((a) => a.includes('unresolveReviewThread'))).toBe(true);
+    });
+
+    it('rejects a missing thread id without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+        expect(await setReviewThreadResolved('/repo', '', true, run)).toEqual({
+            ok: false,
+            message: 'No thread to update.',
+        });
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a gh failure as an ok:false message', async () => {
+        const run = failRunner({ code: 1, stderr: 'HTTP 403: Forbidden' });
+        expect((await setReviewThreadResolved('/repo', 'RT_1', true, run)).ok).toBe(false);
     });
 });
 

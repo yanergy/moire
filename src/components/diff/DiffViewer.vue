@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import * as monaco from '@/lib/monaco';
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
-import { X } from '@lucide/vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, useTemplateRef, watch } from 'vue';
+import { LoaderCircle, X } from '@lucide/vue';
 import { monacoThemeFor } from '@/lib/monaco-themes';
 import { renderMarkdown } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
-import type { CheckAnnotation, CodeStyle, PrReviewThread, ViewMode } from '@/shared/types';
+import type {
+    CheckAnnotation,
+    CommentMutationResult,
+    CodeStyle,
+    PrReviewThread,
+    ViewMode,
+} from '@/shared/types';
 
 const props = defineProps<{
     original: string | null;
@@ -25,6 +31,11 @@ const props = defineProps<{
     // marked with a warning glyph on their line (head side), and shown in the same
     // popover as review comments.
     checkAnnotations?: CheckAnnotation[];
+    // Review-thread write actions, injected by the parent (which owns the store). When
+    // absent (e.g. no PR, or a plain diff), the popover shows no reply box or resolve
+    // control and stays read-only. Each resolves an ok/message result.
+    replyToThread?: (threadId: string, body: string) => Promise<CommentMutationResult>;
+    setThreadResolved?: (threadId: string, resolved: boolean) => Promise<CommentMutationResult>;
 }>();
 
 const emit = defineEmits<{
@@ -66,6 +77,54 @@ let commentListeners: monaco.IDisposable[] = [];
 const activeThreads = ref<PrReviewThread[]>([]);
 const activeAnnotations = ref<CheckAnnotation[]>([]);
 const popoverPos = ref<{ top: number; left: number } | null>(null);
+// The clicked line and side the popover is anchored to, so its threads can be
+// recomputed in place after a reply or resolve refreshes the underlying set.
+const activeLine = ref<number | null>(null);
+const activeSide = ref<'LEFT' | 'RIGHT' | null>(null);
+
+// Per-thread reply drafts (keyed by thread id), the thread currently mid-write, and
+// per-thread inline error text. Reactive records so a new key is tracked.
+const replyDrafts = reactive<Record<string, string>>({});
+const threadErrors = reactive<Record<string, string>>({});
+const busyThreadId = ref<string | null>(null);
+
+// Whether the popover can offer the reply box and resolve control: only when the
+// parent injected the write actions (a PR is open).
+const canWriteThreads = computed(() => Boolean(props.replyToThread && props.setThreadResolved));
+
+// Reply into a thread, then let the refreshed props redraw the popover in place. A
+// blank draft is ignored; a failure surfaces as inline text and keeps the draft.
+async function submitReply(thread: PrReviewThread) {
+    const body = (replyDrafts[thread.id] ?? '').trim();
+    if (!props.replyToThread || !body || busyThreadId.value) {
+        return;
+    }
+
+    busyThreadId.value = thread.id;
+    threadErrors[thread.id] = '';
+    const result = await props.replyToThread(thread.id, body);
+    busyThreadId.value = null;
+    if (result.ok) {
+        replyDrafts[thread.id] = '';
+    } else {
+        threadErrors[thread.id] = result.message ?? 'Could not post the reply.';
+    }
+}
+
+// Toggle a thread's resolved state, then let the refreshed props redraw it in place.
+async function toggleResolved(thread: PrReviewThread) {
+    if (!props.setThreadResolved || busyThreadId.value) {
+        return;
+    }
+
+    busyThreadId.value = thread.id;
+    threadErrors[thread.id] = '';
+    const result = await props.setThreadResolved(thread.id, !thread.isResolved);
+    busyThreadId.value = null;
+    if (!result.ok) {
+        threadErrors[thread.id] = result.message ?? 'Could not update the thread.';
+    }
+}
 
 function relative(iso: string): string {
     const ms = Date.parse(iso);
@@ -241,8 +300,11 @@ function openAnnotationUrl(url: string) {
 }
 
 // Open the popover for a clicked line, showing its annotations and review threads,
-// positioned at the click.
+// positioned at the click. The line and side are remembered so a reply or resolve can
+// recompute the shown threads in place afterward.
 function openPopover(
+    line: number,
+    side: 'LEFT' | 'RIGHT',
     threads: PrReviewThread[],
     annotations: CheckAnnotation[],
     clientX: number,
@@ -255,6 +317,8 @@ function openPopover(
 
     const width = 360;
     const left = Math.max(8, Math.min(clientX - rect.left + 8, rect.width - width - 8));
+    activeLine.value = line;
+    activeSide.value = side;
     activeThreads.value = threads;
     activeAnnotations.value = annotations;
     popoverPos.value = { top: Math.max(8, clientY - rect.top + 8), left: Math.max(8, left) };
@@ -264,8 +328,28 @@ function closeThreadPopover() {
     if (activeThreads.value.length > 0 || activeAnnotations.value.length > 0) {
         activeThreads.value = [];
         activeAnnotations.value = [];
+        activeLine.value = null;
+        activeSide.value = null;
         popoverPos.value = null;
     }
+}
+
+// After the thread set refreshes (a reply or resolve landed, or a PR refresh), redraw
+// the open popover in place from the rebuilt line lookup: keep it open with the current
+// threads for its anchored line, or close it if nothing is left there to show.
+function refreshOpenPopover() {
+    if (!popoverPos.value || activeLine.value === null || activeSide.value === null) {
+        return;
+    }
+
+    const map = activeSide.value === 'RIGHT' ? modifiedThreadsByLine : originalThreadsByLine;
+    const threads = map.get(activeLine.value) ?? [];
+    if (threads.length === 0 && activeAnnotations.value.length === 0) {
+        closeThreadPopover();
+        return;
+    }
+
+    activeThreads.value = threads;
 }
 
 // The popover header, naming whichever of annotations and comments it holds.
@@ -299,9 +383,9 @@ function onEditorMouseDown(e: monaco.editor.IEditorMouseEvent, side: 'LEFT' | 'R
     // Annotations anchor to the head file, so they exist only on the modified (RIGHT)
     // side.
     const annotations = line && side === 'RIGHT' ? modifiedAnnotationsByLine.get(line) : undefined;
-    if ((threads && threads.length > 0) || (annotations && annotations.length > 0)) {
+    if (line && ((threads && threads.length > 0) || (annotations && annotations.length > 0))) {
         const browser = e.event.browserEvent;
-        openPopover(threads ?? [], annotations ?? [], browser.clientX, browser.clientY);
+        openPopover(line, side, threads ?? [], annotations ?? [], browser.clientX, browser.clientY);
     } else {
         closeThreadPopover();
     }
@@ -630,13 +714,15 @@ watch(
     }
 );
 
-// The open file's threads changed (a PR refresh, or a fetch completing after the file
-// was opened): re-mark and drop any popover pinned to the old set.
+// The open file's threads changed (a reply/resolve landed, a PR refresh, or a fetch
+// completing after the file was opened): re-mark, then redraw an open popover in place
+// against the new set rather than dropping it, so a reply appears and a resolve updates
+// without the popover vanishing.
 watch(
     () => props.reviewThreads,
     () => {
-        closeThreadPopover();
         applyCommentMarkers();
+        refreshOpenPopover();
     }
 );
 
@@ -789,6 +875,50 @@ defineExpose({
                             class="pr-markdown text-[13px] leading-[1.55] text-moire-file-fg"
                             v-html="renderThreadComment(c.body)"
                         />
+                    </div>
+
+                    <!-- Reply box and resolve toggle (GitHub-style), shown only when the
+                         parent injected the write actions, i.e. a PR is open. -->
+                    <div v-if="canWriteThreads" class="flex flex-col gap-1.5">
+                        <p v-if="threadErrors[thread.id]" class="text-[12px] text-moire-status-d">
+                            {{ threadErrors[thread.id] }}
+                        </p>
+                        <!-- @keydown.stop so typing (Escape, etc.) does not reach the
+                             editor-level shortcuts that would close the popover. -->
+                        <textarea
+                            v-model="replyDrafts[thread.id]"
+                            rows="2"
+                            placeholder="Reply…"
+                            class="w-full resize-y rounded-md border border-moire-border bg-transparent px-2 py-1.5 text-[13px] text-moire-fg placeholder:text-moire-faint focus-visible:border-moire-ring focus-visible:outline-none"
+                            :disabled="busyThreadId === thread.id"
+                            @keydown.stop
+                        />
+                        <div class="flex items-center justify-between">
+                            <button
+                                type="button"
+                                class="cursor-pointer rounded-md border border-moire-border px-2 py-1 text-[12px] text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-fg disabled:cursor-not-allowed disabled:opacity-60"
+                                :disabled="busyThreadId === thread.id"
+                                @click="toggleResolved(thread)"
+                            >
+                                {{ thread.isResolved ? 'Unresolve' : 'Resolve' }}
+                            </button>
+                            <button
+                                type="button"
+                                class="inline-flex cursor-pointer items-center gap-1 rounded-md bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                :disabled="
+                                    !(replyDrafts[thread.id] || '').trim() ||
+                                    busyThreadId === thread.id
+                                "
+                                @click="submitReply(thread)"
+                            >
+                                <LoaderCircle
+                                    v-if="busyThreadId === thread.id"
+                                    :size="12"
+                                    class="animate-spin"
+                                />
+                                Reply
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

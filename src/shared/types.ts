@@ -111,11 +111,13 @@ export interface PrReviewComment {
 }
 
 // An inline (line-anchored) code review thread on the PR, shown as a marker in the
-// diff viewer rather than in the PR conversation. `path` is the file it is on;
-// `line`/`originalLine` are the anchored line on the head (RIGHT) and base (LEFT)
-// side (either can be null when GitHub could not map it); `side` says which side it
-// hangs on. `isResolved` and `isOutdated` drive how the marker reads.
+// diff viewer rather than in the PR conversation. `id` is the thread's GraphQL node
+// id, used to reply to or resolve it. `path` is the file it is on; `line`/`originalLine`
+// are the anchored line on the head (RIGHT) and base (LEFT) side (either can be null
+// when GitHub could not map it); `side` says which side it hangs on. `isResolved` and
+// `isOutdated` drive how the marker reads.
 export interface PrReviewThread {
+    id: string;
     path: string;
     line: number | null;
     originalLine: number | null;
@@ -264,6 +266,12 @@ export interface MoireApi {
     deleteComment(commentId: string): Promise<CommentMutationResult>;
     // `editDescription` rewrites the PR's own body (Markdown), addressed by number.
     editDescription(prNumber: number, body: string): Promise<CommentMutationResult>;
+    // Inline review-thread writes, from the diff viewer's popover. `replyToReviewThread`
+    // posts a reply into a thread by its node id; `setReviewThreadResolved` resolves or
+    // unresolves one (write access to the repo suffices). Both resolve an ok/message
+    // result rather than rejecting, so the popover can show an inline error.
+    replyToReviewThread(threadId: string, body: string): Promise<CommentMutationResult>;
+    setReviewThreadResolved(threadId: string, resolved: boolean): Promise<CommentMutationResult>;
     // Open a URL (a PR link) in the user's default browser, via the main process.
     // Restricted to http(s) URLs on the main side.
     openExternal(url: string): Promise<void>;

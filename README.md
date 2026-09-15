@@ -132,17 +132,19 @@ Track bugs and limitations here.
   written back via gh on a short debounce, so a burst of ticks on one target saves in a single
   call. Inline review comments (a reviewer's line-anchored notes, fetched over the GitHub GraphQL
   API) show in the normal diff viewer: a marker in the gutter of each commented line opens the
-  thread in a popover, with its resolved or outdated state. CI check annotations (a line-anchored
-  note a workflow such as a linter posts on the head commit, fetched over the Checks REST API) show
-  the same way, as a warning or error marker on the flagged head line that opens the finding in the
-  same popover, with a link out to the producing check. They are matched to the head commit, so a
-  repo whose checks post no annotations simply shows no markers. The file tree also flags each file
-  that carries an annotation with a small triangle next to its name (red for an error, amber for a
-  warning). Still missing:
-    - Replying to or resolving a review thread from the popover, or dismissing a check annotation.
-      Both are read-only for now; use GitHub for those.
+  thread in a popover, with its resolved or outdated state. From the popover you can reply into a
+  thread and resolve or unresolve it (GitHub-style), and the thread re-reads so the change shows in
+  place. CI check annotations (a line-anchored note a workflow such as a linter posts on the head
+  commit, fetched over the Checks REST API) show the same way, as a warning or error marker on the
+  flagged head line that opens the finding in the same popover, with a link out to the producing
+  check. They are matched to the head commit, so a repo whose checks post no annotations simply
+  shows no markers. The file tree also flags each file that carries an annotation with a small
+  triangle next to its name (red for an error, amber for a warning). Still missing:
     - A Commits tab (the commit list) is deliberately not built: an IDE already shows a branch's
       commits well, so it would duplicate tooling that is already to hand.
+    - Check annotations are read-only (view only). Unlike code scanning alerts, a check-run
+      annotation cannot be dismissed through the API; it belongs to a check run and clears when the
+      check re-runs, so there is nothing to act on here.
 - **A task-list tick can be lost if you leave within the debounce window.** Ticking a checkbox
   writes back after a short quiet period (about two seconds), batching a burst into one save.
   Pending ticks are flushed on the usual exits (leaving edit mode, refreshing, switching tab, the

@@ -35,6 +35,12 @@ contextBridge.exposeInMainWorld('api', {
     deleteComment: (commentId: string) => ipcRenderer.invoke('gh:delete-comment', commentId),
     editDescription: (prNumber: number, body: string) =>
         ipcRenderer.invoke('gh:edit-description', prNumber, body),
+    // Inline review-thread writes from the diff popover: reply into a thread, or
+    // resolve/unresolve it, both by the thread's node id.
+    replyToReviewThread: (threadId: string, body: string) =>
+        ipcRenderer.invoke('gh:reply-review-thread', threadId, body),
+    setReviewThreadResolved: (threadId: string, resolved: boolean) =>
+        ipcRenderer.invoke('gh:set-review-thread-resolved', threadId, resolved),
     // Open a PR link in the default browser (main restricts it to http(s)).
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
     // Theme is owned by main (nativeTheme). `getTheme` reads the resolved state;
