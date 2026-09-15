@@ -6,6 +6,7 @@ import {
     ChevronsDownUp,
     ChevronsUpDown,
     Minus,
+    TriangleAlert,
 } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { RecycleScroller } from 'vue-virtual-scroller';
@@ -156,6 +157,26 @@ function nameClass(node: FileNode): string {
     // Reviewed files stay green; otherwise the filename takes the status color
     // (green added, red deleted, blue modified, purple renamed).
     return node.viewed ? 'text-moire-viewed-fg' : STATUS_CLASS[node.status];
+}
+
+// A file with a CI check annotation gets a small warning triangle: red for a failure
+// (an error), amber for a warning or notice. The tooltip names the count and worst
+// level. `null` when the file has none, so no triangle shows.
+function annotationLevel(node: FileNode): 'failure' | 'warning' | null {
+    return comparison.annotationLevelForFile(node.path);
+}
+
+function annotationClass(node: FileNode): string {
+    return annotationLevel(node) === 'failure'
+        ? 'text-moire-annotation-error'
+        : 'text-moire-annotation-warn';
+}
+
+function annotationTitle(node: FileNode): string {
+    const count = comparison.annotationsForFile(node.path).length;
+    const noun = annotationLevel(node) === 'failure' ? 'error' : 'warning';
+    const plural = count === 1 ? noun : `${noun}s`;
+    return `${count} check ${plural}`;
 }
 
 // Checked is a solid green fill with a light glyph. Indeterminate keeps the green
@@ -358,6 +379,16 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                             >
                                 {{ node.name }}
                             </span>
+                            <!-- A check annotation on any line of this file: red for an
+                                 error, amber for a warning. Native title for its detail;
+                                 the row's own tooltip carries the path. -->
+                            <TriangleAlert
+                                v-if="annotationLevel(node)"
+                                class="size-3.5 shrink-0"
+                                :class="annotationClass(node)"
+                                :title="annotationTitle(node)"
+                                :aria-label="annotationTitle(node)"
+                            />
                             <span class="font-mono text-[11px] text-moire-add-fg">
                                 {{ node.additions ? '+' + node.additions : '' }}
                             </span>

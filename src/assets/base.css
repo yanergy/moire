@@ -116,6 +116,14 @@
     /* Warning amber for the toolbar's "PR lookup failed" triangle (gh missing,
        signed out, or an access error). */
     --moire-warn: #b45309;
+    /* Hues for the diff annotation markers (a check annotation's line highlight, gutter
+       glyph, and overview-ruler tick). The error red is the diff's own deletion red
+       (github theme diffEditorOverview.removedForeground), so a failing annotation reads
+       as the same red the diff uses for removals, just applied more opaquely. The
+       warning amber is a vivid tone in the same spirit. Both are deliberately more
+       saturated than the muted --moire-warn / --moire-status-d status tones. */
+    --moire-annotation-warn: #e8890c;
+    --moire-annotation-error: #cf222e;
     --moire-add-fg: #397d43;
     --moire-del-fg: #b03a3a;
     --moire-viewed: rgba(60, 150, 75, 0.12);
@@ -264,6 +272,8 @@ body {
     --color-moire-status-d: var(--moire-status-d);
     --color-moire-status-r: var(--moire-status-r);
     --color-moire-warn: var(--moire-warn);
+    --color-moire-annotation-warn: var(--moire-annotation-warn);
+    --color-moire-annotation-error: var(--moire-annotation-error);
     --color-moire-danger: var(--moire-danger-bg);
     --color-moire-danger-edge: var(--moire-danger-edge);
     --color-moire-merged: var(--moire-merged-bg);
@@ -348,6 +358,10 @@ body {
     --moire-changes-edge: rgba(227, 179, 65, 0.4);
     /* Warning amber, tuned for dark. */
     --moire-warn: #e0a53a;
+    /* Annotation-marker hues, brighter for dark (see the light block). The error red is
+       the dark github theme's deletion red (diffEditorOverview.removedForeground). */
+    --moire-annotation-warn: #f5a623;
+    --moire-annotation-error: #f85149;
     --moire-add-fg: #6a9955;
     --moire-del-fg: #c96a6a;
     --moire-viewed: rgba(80, 160, 90, 0.13);

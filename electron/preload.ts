@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.invoke('gh:pull-request', base, head),
     // The PR's inline review threads, by node id, for the diff viewer's markers.
     getReviewThreads: (prId: string) => ipcRenderer.invoke('gh:review-threads', prId),
+    // The head commit's CI check annotations, for the diff viewer's warning markers.
+    getCheckAnnotations: (headSha: string) => ipcRenderer.invoke('gh:check-annotations', headSha),
     // Conversation writes (edit mode only): post a new comment, or edit one of the
     // signed-in account's own comments by node id. Both resolve an ok/message result.
     postComment: (prNumber: number, body: string) =>

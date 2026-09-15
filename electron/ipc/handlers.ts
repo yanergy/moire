@@ -9,6 +9,7 @@ import { GitService, type CompareMode } from '../git/GitService';
 import {
     getPullRequest,
     getReviewThreads,
+    getCheckAnnotations,
     postComment,
     editComment,
     deleteComment,
@@ -173,6 +174,12 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
     // The PR's inline review threads (line-anchored comments), by node id, for the
     // diff viewer's in-code markers. Returns an empty list on any failure.
     handle('gh:review-threads', (prId: string) => getReviewThreads(requireRepo().repoPath, prId));
+
+    // The head commit's CI check annotations, for the diff viewer's warning markers.
+    // Returns an empty list on any failure (no annotating checks, no gh).
+    handle('gh:check-annotations', (headSha: string) =>
+        getCheckAnnotations(requireRepo().repoPath, headSha)
+    );
 
     // Conversation writes, used only while the PR view is in edit mode. Both operate
     // on the open repo's directory (gh resolves the GitHub remote there) and return

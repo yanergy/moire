@@ -132,9 +132,13 @@ Track bugs and limitations here.
   written back via gh on a short debounce, so a burst of ticks on one target saves in a single
   call. Inline review comments (a reviewer's line-anchored notes, fetched over the GitHub GraphQL
   API) show in the normal diff viewer: a marker in the gutter of each commented line opens the
-  thread in a popover, with its resolved or outdated state. Still missing:
-    - Replying to or resolving a review thread from the popover. It is read-only for now; use
-      GitHub for those.
+  thread in a popover, with its resolved or outdated state. CI check annotations (a line-anchored
+  note a workflow such as a linter posts on the head commit, fetched over the Checks REST API) show
+  the same way, as a warning or error marker on the flagged head line that opens the finding in the
+  same popover, with a link out to the producing check. They are matched to the head commit, so a
+  repo whose checks post no annotations simply shows no markers. Still missing:
+    - Replying to or resolving a review thread from the popover, or dismissing a check annotation.
+      Both are read-only for now; use GitHub for those.
     - A Commits tab (the commit list) is deliberately not built: an IDE already shows a branch's
       commits well, so it would duplicate tooling that is already to hand.
 - **A task-list tick can be lost if you leave within the debounce window.** Ticking a checkbox
@@ -161,7 +165,10 @@ Tracked as open issues on GitHub.
 - [ ] A PR viewer: when a PR exists for the selected branches, retrieve it and show its information
   (primarily the description) in a separate view.
   ([#3](https://github.com/yanergy/moire/issues/3))
-- [ ] Search filters in the file tree, for example by filetype or mutation type.
+- [ ] Search filters in the file tree, for example by filetype or mutation type. A filter menu
+  (next to the changed-files counter) should also offer filtering to only files that carry a check
+  annotation (a warning or error), building on the per-file warning/error triangles already shown
+  in the tree.
   ([#4](https://github.com/yanergy/moire/issues/4))
 - [ ] Click a filepath to open the file in the user's preferred editor. This probably needs a setting.
   ([#5](https://github.com/yanergy/moire/issues/5))

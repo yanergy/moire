@@ -107,6 +107,7 @@ function navigate(direction: 'next' | 'prev') {
             :code-style="ui.codeStyle"
             :pending-edge="comparison.pendingChangeEdge"
             :review-threads="comparison.threadsForFile(comparison.selectedFile.path)"
+            :check-annotations="comparison.annotationsForFile(comparison.selectedFile.path)"
             @update:change-count="changeCount = $event"
             @edge-consumed="comparison.clearChangeEdge()"
         />

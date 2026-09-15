@@ -125,6 +125,20 @@ export interface PrReviewThread {
     comments: PrReviewComment[];
 }
 
+// A CI check annotation (a line-anchored note a GitHub Actions workflow or app posts
+// on the head commit, e.g. a linter flagging a line), shown as a marker on its line in
+// the diff viewer, alongside review comments. `line` is the head-file line it anchors
+// to; `level` is GitHub's annotation level (notice/warning/failure); `title` is the
+// short heading and `message` the detail; `url` opens the producing check on GitHub.
+export interface CheckAnnotation {
+    path: string;
+    line: number | null;
+    level: string;
+    title: string;
+    message: string;
+    url: string;
+}
+
 // A PR label; `color` is a 6-digit hex without the leading '#', as GitHub returns.
 export interface PrLabel {
     name: string;
@@ -157,6 +171,9 @@ export interface PullRequest {
     url: string;
     baseRefName: string;
     headRefName: string;
+    // The head commit SHA, used to fetch the commit's check-run annotations.
+    // Optional because older fetches and test fixtures may omit it.
+    headRefOid?: string;
     createdAt: string;
     additions: number;
     deletions: number;
@@ -232,6 +249,10 @@ export interface MoireApi {
     // viewer's in-code markers. Resolves an empty list when there are none or the
     // lookup fails, so markers are simply absent rather than surfacing an error.
     getReviewThreads(prId: string): Promise<PrReviewThread[]>;
+    // The head commit's CI check annotations (a linter or other check flagging a
+    // line), by head SHA, for the diff viewer's warning markers. Resolves an empty
+    // list when there are none or the lookup fails, so markers are simply absent.
+    getCheckAnnotations(headSha: string): Promise<CheckAnnotation[]>;
     // Conversation writes, allowed only while the PR view is in edit mode.
     // `postComment` adds a new comment to the PR (addressed by its number);
     // `editComment` rewrites an existing comment by its node id, and

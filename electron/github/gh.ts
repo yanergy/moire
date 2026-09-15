@@ -22,7 +22,7 @@ const WORKING_TREE = 'WORKING TREE';
 // description in Markdown. The stats (additions/deletions/changedFiles), commit
 // list, and the comments/reviews feed the PR view's header and conversation.
 const PR_FIELDS =
-    'id,number,title,body,state,url,isDraft,author,baseRefName,headRefName,createdAt,' +
+    'id,number,title,body,state,url,isDraft,author,baseRefName,headRefName,headRefOid,createdAt,' +
     'additions,deletions,changedFiles,commits,comments,reviews,labels,mergeable,mergeStateStatus,' +
     'reviewDecision,statusCheckRollup';
 
@@ -86,6 +86,9 @@ export interface PullRequest {
     url: string;
     baseRefName: string;
     headRefName: string;
+    // The head commit SHA, used to fetch the commit's check-run annotations.
+    // Optional because older fetches and test fixtures may omit it.
+    headRefOid?: string;
     createdAt: string;
     additions: number;
     deletions: number;
@@ -161,6 +164,20 @@ export interface PrReviewThread {
     comments: PrReviewComment[];
 }
 
+// A CI check annotation (a line-anchored note a GitHub Actions workflow or app posts
+// on the head commit, e.g. a linter flagging a line), shown as a marker on its line in
+// the diff viewer. `line` is the head-file line it anchors to; `level` is GitHub's
+// annotation level (notice/warning/failure); `title` is the short heading and
+// `message` the detail; `url` opens the producing check run on GitHub.
+export interface CheckAnnotation {
+    path: string;
+    line: number | null;
+    level: string;
+    title: string;
+    message: string;
+    url: string;
+}
+
 // A statusCheckRollup entry. gh returns a union: an Actions `CheckRun` (a
 // lifecycle `status` plus a `conclusion` once done) or a legacy `StatusContext`
 // (a flat `state`). Every field is optional so a node of either shape parses.
@@ -192,6 +209,7 @@ interface GhPr {
     author: GhAuthor | null;
     baseRefName: string;
     headRefName: string;
+    headRefOid: string;
     createdAt: string;
     additions: number;
     deletions: number;
@@ -398,6 +416,7 @@ function toPullRequest(pr: GhPr): PullRequest {
         url: pr.url,
         baseRefName: pr.baseRefName,
         headRefName: pr.headRefName,
+        headRefOid: pr.headRefOid,
         createdAt: pr.createdAt,
         additions: pr.additions ?? 0,
         deletions: pr.deletions ?? 0,
@@ -573,6 +592,98 @@ export async function getReviewThreads(
 
     // Keep only threads that anchor to a file and carry at least one comment.
     return nodes.map(toReviewThread).filter((t) => t.path && t.comments.length > 0);
+}
+
+// --- Check run annotations (REST) ---
+//
+// A CI check (a GitHub Actions workflow or an app) can attach line-anchored
+// annotations to the head commit, e.g. a linter flagging a specific line, which
+// GitHub renders inline in the PR diff. They come from the Checks REST API in two
+// steps: list the head commit's check runs, then read the annotations of each run
+// that reports any. Like review threads they are supplementary: any failure yields an
+// empty list and the diff viewer simply shows no markers. Annotations are matched to
+// the open file by path, so all are fetched and filtered in the renderer.
+//
+// Query params go in the URL, not as `-f` fields: `gh api` switches to POST the moment
+// a field is added, which these GET endpoints reject. gh still fills {owner}/{repo}.
+
+// A check run as the commit check-runs endpoint returns it; only the read fields.
+// `annotations_count` gates the (paid) second call, so runs with none are skipped.
+interface GhCheckRun {
+    id: number | null;
+    html_url: string | null;
+    details_url: string | null;
+    output: { annotations_count: number | null } | null;
+}
+
+// The REST shape of a single check annotation; only the fields the viewer reads.
+interface GhAnnotation {
+    path: string | null;
+    start_line: number | null;
+    annotation_level: string | null;
+    title: string | null;
+    message: string | null;
+}
+
+function toAnnotation(a: GhAnnotation, url: string): CheckAnnotation {
+    return {
+        path: a.path ?? '',
+        line: a.start_line ?? null,
+        level: a.annotation_level ?? '',
+        title: a.title ?? '',
+        // Fall back to the title when an annotation carries no message (|| so an empty
+        // string falls back too, not only null/undefined).
+        message: a.message || a.title || '',
+        url,
+    };
+}
+
+// Fetch the head commit's check annotations. Lists the commit's check runs, then reads
+// the annotations of each run that reports any (in parallel), tagging each with its
+// run's URL so "view on GitHub" opens the producing check. Returns an empty list on any
+// failure, so a repo whose checks post no annotations just shows no markers.
+export async function getCheckAnnotations(
+    repoPath: string,
+    headSha: string,
+    run: GhRunner = defaultRunner
+): Promise<CheckAnnotation[]> {
+    if (!repoPath || !headSha) {
+        return [];
+    }
+
+    let runs: GhCheckRun[];
+    try {
+        const { stdout } = await run(
+            ['api', `repos/{owner}/{repo}/commits/${headSha}/check-runs?per_page=100`],
+            repoPath
+        );
+        const parsed = JSON.parse(stdout) as { check_runs?: GhCheckRun[] | null };
+        runs = parsed.check_runs ?? [];
+    } catch {
+        return [];
+    }
+
+    // Only runs that actually carry annotations need the (rate-limited) second call.
+    const annotated = runs.filter((r) => r.id !== null && (r.output?.annotations_count ?? 0) > 0);
+
+    const lists = await Promise.all(
+        annotated.map(async (r) => {
+            const url = r.html_url ?? r.details_url ?? '';
+            try {
+                const { stdout } = await run(
+                    ['api', `repos/{owner}/{repo}/check-runs/${r.id}/annotations?per_page=100`],
+                    repoPath
+                );
+                const parsed = JSON.parse(stdout) as unknown;
+                const list = Array.isArray(parsed) ? (parsed as GhAnnotation[]) : [];
+                return list.map((a) => toAnnotation(a, url));
+            } catch {
+                return [];
+            }
+        })
+    );
+
+    return lists.flat().filter((a) => a.path && a.line && a.message);
 }
 
 // --- Writing to the conversation (gh pr comment / GraphQL) ---

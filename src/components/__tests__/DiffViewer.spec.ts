@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
 import { editor } from './monaco-stub';
 import type { StubDiffEditor } from './monaco-stub';
-import type { CodeStyle, PrReviewThread, ViewMode } from '@/shared/types';
+import type { CheckAnnotation, CodeStyle, PrReviewThread, ViewMode } from '@/shared/types';
 
 const baseProps = {
     original: 'const a = 1;',
@@ -75,6 +75,29 @@ const thread = (over: Partial<PrReviewThread> = {}): PrReviewThread => ({
 function commentDecorations(diff: StubDiffEditor, side: 'modified' | 'original') {
     const inner = side === 'modified' ? diff.getModifiedEditor() : diff.getOriginalEditor();
     const set = inner.createDecorationsCollection.mock.results[2]!.value.set;
+    const calls = set.mock.calls;
+    return (calls[calls.length - 1]?.[0] ?? []) as {
+        range: { startLineNumber: number };
+        options: { glyphMarginClassName?: string; className?: string; isWholeLine?: boolean };
+    }[];
+}
+
+// A check annotation on line 8 of the head file.
+const annotation = (over: Partial<CheckAnnotation> = {}): CheckAnnotation => ({
+    path: 'src/a.ts',
+    line: 8,
+    level: 'warning',
+    title: 'quality-gates',
+    message: 'The property should be above methods.',
+    url: 'https://github.com/o/r/runs/101',
+    ...over,
+});
+
+// The annotation-marker collection is the fourth created on the modified editor (after
+// the word, active-change, and comment ones); annotations mark only the head side.
+// Returns its most recent set() payload.
+function annotationDecorations(diff: StubDiffEditor) {
+    const set = diff.getModifiedEditor().createDecorationsCollection.mock.results[3]!.value.set;
     const calls = set.mock.calls;
     return (calls[calls.length - 1]?.[0] ?? []) as {
         range: { startLineNumber: number };
@@ -374,6 +397,69 @@ describe('DiffViewer', () => {
         diff.getModifiedEditor().fireScroll();
         await flushPromises();
         expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    });
+
+    it('marks a check annotation in the gutter on its head-file line', () => {
+        mount(DiffViewer, { props: { ...baseProps, checkAnnotations: [annotation()] } });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+
+        const decos = annotationDecorations(diff);
+        expect(decos).toHaveLength(1);
+        expect(decos[0]!.range.startLineNumber).toBe(8);
+        expect(decos[0]!.options.glyphMarginClassName).toContain('moire-alert-glyph');
+        expect(decos[0]!.options.isWholeLine).toBe(true);
+        expect(decos[0]!.options.className).toContain('moire-alert-line');
+    });
+
+    it('tints a failure-level annotation as an error, not a warning', () => {
+        mount(DiffViewer, {
+            props: { ...baseProps, checkAnnotations: [annotation({ level: 'failure' })] },
+        });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+
+        const options = annotationDecorations(diff)[0]!.options;
+        expect(options.glyphMarginClassName).toContain('moire-alert-glyph-error');
+        expect(options.className).toContain('moire-alert-line-error');
+    });
+
+    it('opens a popover with the annotation when its line is clicked', async () => {
+        const wrapper = mount(DiffViewer, {
+            props: { ...baseProps, checkAnnotations: [annotation()] },
+        });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+        diff.getModifiedEditor().fireMouseDown(glyphClick(8));
+        await flushPromises();
+
+        const popover = wrapper.find('[role="dialog"]');
+        expect(popover.exists()).toBe(true);
+        expect(popover.text()).toContain('Warning');
+        expect(popover.text()).toContain('quality-gates');
+        expect(popover.text()).toContain('The property should be above methods.');
+    });
+
+    it('shows an annotation and a comment together when both sit on the same line', async () => {
+        const wrapper = mount(DiffViewer, {
+            props: {
+                ...baseProps,
+                reviewThreads: [thread({ line: 8 })],
+                checkAnnotations: [annotation()],
+            },
+        });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+
+        diff.getModifiedEditor().fireMouseDown(contentClick(8));
+        await flushPromises();
+
+        const popover = wrapper.find('[role="dialog"]');
+        expect(popover.text()).toContain('The property should be above methods.');
+        expect(popover.text()).toContain('this can race');
     });
 
     it('jumps to a requested edge on demand via goToEdge', () => {

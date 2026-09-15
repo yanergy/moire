@@ -252,4 +252,32 @@ describe('FileTreeSidebar', () => {
         await flushPromises();
         expect(wrapper.find('[data-path="electron/git/parsers.ts"]').exists()).toBe(true);
     });
+
+    it('flags a file that carries check annotations with a colored triangle', async () => {
+        const store = useComparisonStore();
+        store.files = CHANGED_FILES;
+        store.checkAnnotations = [
+            {
+                path: 'electron/git/parsers.ts',
+                line: 5,
+                level: 'failure',
+                title: 'quality-gates',
+                message: 'boom',
+                url: '',
+            },
+        ];
+        wrapper = mount(FileTreeSidebar, { global: { plugins: [pinia] } });
+        await flushPromises();
+
+        // The annotated file shows a red (error) triangle...
+        const flagged = wrapper.find('[data-path="electron/git/parsers.ts"]');
+        const triangle = flagged.find('.text-moire-annotation-error');
+        expect(triangle.exists()).toBe(true);
+        expect(triangle.attributes('aria-label')).toContain('error');
+
+        // ...and a file without annotations shows none.
+        const clean = wrapper.find('[data-path="shared/types.ts"]');
+        expect(clean.find('.text-moire-annotation-error').exists()).toBe(false);
+        expect(clean.find('.text-moire-annotation-warn').exists()).toBe(false);
+    });
 });

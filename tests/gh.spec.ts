@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     getPullRequest,
     getReviewThreads,
+    getCheckAnnotations,
     getAccounts,
     switchAccount,
     postComment,
@@ -656,5 +657,174 @@ describe('getReviewThreads', () => {
     it('returns an empty list when gh output is not valid JSON', async () => {
         const { run } = okRunner('not json');
         expect(await getReviewThreads('/repo', 'PR_1', run)).toEqual([]);
+    });
+});
+
+// A check run as the commit check-runs endpoint emits it, trimmed to the read fields.
+const checkRun = (over: Record<string, unknown> = {}) => ({
+    id: 101,
+    html_url: 'https://github.com/o/r/runs/101',
+    details_url: 'https://ci.example/run/101',
+    output: { annotations_count: 1 },
+    ...over,
+});
+
+// A single check annotation as the annotations endpoint emits it.
+const ghAnnotation = (over: Record<string, unknown> = {}) => ({
+    path: 'src/a.vue',
+    start_line: 224,
+    annotation_level: 'failure',
+    title: 'quality-gates',
+    message: 'The "computed" property should be above the "methods" property on line 176',
+    ...over,
+});
+
+// A runner for the two-step fetch: it returns `checkRuns` for the commit check-runs
+// call and looks up `annotationsById` (keyed by the run id in the URL) for each per-run
+// annotations call. Run ids in `failIds` reject, to model one run's lookup failing.
+function annotationsRunner(opts: {
+    checkRuns: unknown;
+    annotationsById?: Record<string, unknown>;
+    failIds?: string[];
+}) {
+    const calls: { args: string[]; cwd: string }[] = [];
+    const run: GhRunner = (args, cwd) => {
+        calls.push({ args, cwd });
+        const url = args[1] ?? '';
+        if (url.includes('/commits/')) {
+            return Promise.resolve({ stdout: JSON.stringify(opts.checkRuns), stderr: '' });
+        }
+
+        const id = /check-runs\/(\d+)\/annotations/.exec(url)?.[1] ?? '';
+        if (opts.failIds?.includes(id)) {
+            return Promise.reject(new Error('boom'));
+        }
+
+        return Promise.resolve({
+            stdout: JSON.stringify(opts.annotationsById?.[id] ?? []),
+            stderr: '',
+        });
+    };
+    return { run, calls };
+}
+
+describe('getCheckAnnotations', () => {
+    it("lists the head commit check runs, then maps each run's annotations with its url", async () => {
+        const { run, calls } = annotationsRunner({
+            checkRuns: {
+                total_count: 1,
+                check_runs: [checkRun({ id: 101, output: { annotations_count: 2 } })],
+            },
+            annotationsById: {
+                '101': [
+                    ghAnnotation({ start_line: 224 }),
+                    ghAnnotation({
+                        start_line: 232,
+                        annotation_level: 'warning',
+                        message: 'watch above methods',
+                    }),
+                ],
+            },
+        });
+
+        const annotations = await getCheckAnnotations('/repo', 'abc123', run);
+
+        // First call lists the commit's check runs; the second reads run 101's.
+        expect(calls[0]!.args[0]).toBe('api');
+        expect(calls[0]!.args[1]).toContain('commits/abc123/check-runs');
+        expect(calls[1]!.args[1]).toContain('check-runs/101/annotations');
+        expect(calls[0]!.cwd).toBe('/repo');
+
+        expect(annotations).toEqual([
+            {
+                path: 'src/a.vue',
+                line: 224,
+                level: 'failure',
+                title: 'quality-gates',
+                message:
+                    'The "computed" property should be above the "methods" property on line 176',
+                url: 'https://github.com/o/r/runs/101',
+            },
+            {
+                path: 'src/a.vue',
+                line: 232,
+                level: 'warning',
+                title: 'quality-gates',
+                message: 'watch above methods',
+                url: 'https://github.com/o/r/runs/101',
+            },
+        ]);
+    });
+
+    it('skips check runs that report no annotations', async () => {
+        const { run, calls } = annotationsRunner({
+            checkRuns: {
+                check_runs: [
+                    checkRun({ id: 200, output: { annotations_count: 0 } }),
+                    checkRun({ id: 201, output: { annotations_count: 1 } }),
+                ],
+            },
+            annotationsById: { '201': [ghAnnotation()] },
+        });
+
+        const annotations = await getCheckAnnotations('/repo', 'sha', run);
+
+        expect(annotations).toHaveLength(1);
+        // Only the annotated run's endpoint was hit; the empty one was not fetched.
+        expect(calls.some((c) => c.args[1]?.includes('check-runs/200/annotations'))).toBe(false);
+        expect(calls.some((c) => c.args[1]?.includes('check-runs/201/annotations'))).toBe(true);
+    });
+
+    it('falls back to the title when an annotation carries no message', async () => {
+        const { run } = annotationsRunner({
+            checkRuns: { check_runs: [checkRun({ id: 1 })] },
+            annotationsById: { '1': [ghAnnotation({ message: '', title: 'Style issue' })] },
+        });
+
+        const annotations = await getCheckAnnotations('/repo', 'sha', run);
+        expect(annotations[0]!.message).toBe('Style issue');
+    });
+
+    it('drops annotations with no path, no line, or no message', async () => {
+        const { run } = annotationsRunner({
+            checkRuns: { check_runs: [checkRun({ id: 1, output: { annotations_count: 3 } })] },
+            annotationsById: {
+                '1': [
+                    ghAnnotation({ path: null }),
+                    ghAnnotation({ start_line: null }),
+                    ghAnnotation({ message: '', title: '' }),
+                ],
+            },
+        });
+
+        expect(await getCheckAnnotations('/repo', 'sha', run)).toEqual([]);
+    });
+
+    it('drops a run whose annotations fail to load but keeps the rest', async () => {
+        const { run } = annotationsRunner({
+            checkRuns: { check_runs: [checkRun({ id: 1 }), checkRun({ id: 2 })] },
+            annotationsById: { '2': [ghAnnotation({ start_line: 9 })] },
+            failIds: ['1'],
+        });
+
+        const annotations = await getCheckAnnotations('/repo', 'sha', run);
+        expect(annotations).toHaveLength(1);
+        expect(annotations[0]!.line).toBe(9);
+    });
+
+    it('returns an empty list without calling gh when there is no head sha', async () => {
+        const run = vi.fn<GhRunner>();
+        expect(await getCheckAnnotations('/repo', '', run)).toEqual([]);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('returns an empty list when the check-runs lookup fails', async () => {
+        const run = failRunner({ code: 'ENOENT' });
+        expect(await getCheckAnnotations('/repo', 'sha', run)).toEqual([]);
+    });
+
+    it('returns an empty list when the check-runs output is not valid JSON', async () => {
+        const { run } = okRunner('not json');
+        expect(await getCheckAnnotations('/repo', 'sha', run)).toEqual([]);
     });
 });

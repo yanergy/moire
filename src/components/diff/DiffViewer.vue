@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import * as monaco from '@/lib/monaco';
-import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { X } from '@lucide/vue';
 import { monacoThemeFor } from '@/lib/monaco-themes';
 import { renderMarkdown } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
-import type { CodeStyle, PrReviewThread, ViewMode } from '@/shared/types';
+import type { CheckAnnotation, CodeStyle, PrReviewThread, ViewMode } from '@/shared/types';
 
 const props = defineProps<{
     original: string | null;
@@ -21,6 +21,10 @@ const props = defineProps<{
     // The open file's inline review threads (line-anchored PR comments). Each is
     // marked in the gutter on its line; clicking the marker opens it in a popover.
     reviewThreads?: PrReviewThread[];
+    // The open file's CI check annotations (a linter or other check flagging a line),
+    // marked with a warning glyph on their line (head side), and shown in the same
+    // popover as review comments.
+    checkAnnotations?: CheckAnnotation[];
 }>();
 
 const emit = defineEmits<{
@@ -48,12 +52,19 @@ let originalCommentDecorations: monaco.editor.IEditorDecorationsCollection | nul
 let modifiedCommentDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
 const modifiedThreadsByLine = new Map<number, PrReviewThread[]>();
 const originalThreadsByLine = new Map<number, PrReviewThread[]>();
-// Listeners for glyph clicks (open the popover) and scrolling (close it).
+
+// Check annotations anchor to the head file, so they mark only the modified side.
+let modifiedAnnotationDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
+const modifiedAnnotationsByLine = new Map<number, CheckAnnotation[]>();
+
+// Listeners for line clicks (open the popover) and scrolling (close it).
 let commentListeners: monaco.IDisposable[] = [];
 
-// The review threads shown in the open popover, and where it sits (relative to the
-// editor container). Empty/null means no popover.
+// What the open popover shows for a clicked line (the line's annotations and review
+// threads), and where it sits (relative to the editor container). All empty/null
+// means no popover.
 const activeThreads = ref<PrReviewThread[]>([]);
+const activeAnnotations = ref<CheckAnnotation[]>([]);
 const popoverPos = ref<{ top: number; left: number } | null>(null);
 
 function relative(iso: string): string {
@@ -163,8 +174,80 @@ function decorationsFor(
     return out;
 }
 
-// Open the popover for the thread(s) on a clicked glyph, positioned at the click.
-function openThreadPopover(threads: PrReviewThread[], clientX: number, clientY: number) {
+// Rebuild the check-annotation markers (head side only). An annotation on a line that
+// falls outside the current model is skipped, the same guard the comment markers use.
+function applyAnnotationMarkers() {
+    if (!editor || !modifiedAnnotationDecorations) {
+        return;
+    }
+
+    modifiedAnnotationsByLine.clear();
+    const modifiedLines = editor.getModifiedEditor().getModel()?.getLineCount() ?? 0;
+    for (const annotation of props.checkAnnotations ?? []) {
+        const line = annotation.line;
+        if (!line || line < 1 || line > modifiedLines) {
+            continue;
+        }
+
+        const existing = modifiedAnnotationsByLine.get(line);
+        if (existing) {
+            existing.push(annotation);
+        } else {
+            modifiedAnnotationsByLine.set(line, [annotation]);
+        }
+    }
+
+    modifiedAnnotationDecorations.set(annotationDecorations(modifiedAnnotationsByLine));
+}
+
+// An annotation line reads as an error (red) when any annotation on it is level
+// "failure", else as a warning (amber) for a warning or a notice.
+const lineHasError = (annotations: CheckAnnotation[]) =>
+    annotations.some((a) => a.level === 'failure');
+
+function annotationDecorations(
+    byLine: Map<number, CheckAnnotation[]>
+): monaco.editor.IModelDeltaDecoration[] {
+    const warn = tokenColor('--moire-annotation-warn');
+    const danger = tokenColor('--moire-annotation-error');
+    const out: monaco.editor.IModelDeltaDecoration[] = [];
+    for (const [line, annotations] of byLine) {
+        const error = lineHasError(annotations);
+        const rulerColor = error ? danger : warn;
+        out.push({
+            range: new monaco.Range(line, 1, line, 1),
+            options: {
+                glyphMarginClassName: error
+                    ? 'moire-alert-glyph moire-alert-glyph-error'
+                    : 'moire-alert-glyph',
+                glyphMarginHoverMessage: { value: 'Show check annotation' },
+                isWholeLine: true,
+                className: error ? 'moire-alert-line moire-alert-line-error' : 'moire-alert-line',
+                overviewRuler: rulerColor
+                    ? { color: rulerColor, position: monaco.editor.OverviewRulerLane.Right }
+                    : undefined,
+            },
+        });
+    }
+
+    return out;
+}
+
+// Open a GitHub URL (a check run) in the browser via the preload bridge.
+function openAnnotationUrl(url: string) {
+    if (url) {
+        void window.api?.openExternal(url);
+    }
+}
+
+// Open the popover for a clicked line, showing its annotations and review threads,
+// positioned at the click.
+function openPopover(
+    threads: PrReviewThread[],
+    annotations: CheckAnnotation[],
+    clientX: number,
+    clientY: number
+) {
     const rect = containerRef.value?.getBoundingClientRect();
     if (!rect) {
         return;
@@ -173,14 +256,35 @@ function openThreadPopover(threads: PrReviewThread[], clientX: number, clientY: 
     const width = 360;
     const left = Math.max(8, Math.min(clientX - rect.left + 8, rect.width - width - 8));
     activeThreads.value = threads;
+    activeAnnotations.value = annotations;
     popoverPos.value = { top: Math.max(8, clientY - rect.top + 8), left: Math.max(8, left) };
 }
 
 function closeThreadPopover() {
-    if (activeThreads.value.length > 0) {
+    if (activeThreads.value.length > 0 || activeAnnotations.value.length > 0) {
         activeThreads.value = [];
+        activeAnnotations.value = [];
         popoverPos.value = null;
     }
+}
+
+// The popover header, naming whichever of annotations and comments it holds.
+const popoverTitle = computed(() => {
+    const annotations = activeAnnotations.value.length;
+    const threads = activeThreads.value.length;
+    if (annotations && threads) {
+        return 'Annotations & comments';
+    }
+    if (annotations) {
+        return annotations > 1 ? 'Check annotations' : 'Check annotation';
+    }
+
+    return threads > 1 ? 'Review comments' : 'Review comment';
+});
+
+// GitHub's annotation level (notice/warning/failure) as a capitalized label.
+function levelLabel(level: string): string {
+    return level ? level.charAt(0).toUpperCase() + level.slice(1) : 'Annotation';
 }
 
 // A mouse-down anywhere on a commented line (its glyph, gutter, or the highlighted
@@ -192,9 +296,12 @@ function onEditorMouseDown(e: monaco.editor.IEditorMouseEvent, side: 'LEFT' | 'R
     const threads = line
         ? (side === 'RIGHT' ? modifiedThreadsByLine : originalThreadsByLine).get(line)
         : undefined;
-    if (threads && threads.length > 0) {
+    // Annotations anchor to the head file, so they exist only on the modified (RIGHT)
+    // side.
+    const annotations = line && side === 'RIGHT' ? modifiedAnnotationsByLine.get(line) : undefined;
+    if ((threads && threads.length > 0) || (annotations && annotations.length > 0)) {
         const browser = e.event.browserEvent;
-        openThreadPopover(threads, browser.clientX, browser.clientY);
+        openPopover(threads ?? [], annotations ?? [], browser.clientX, browser.clientY);
     } else {
         closeThreadPopover();
     }
@@ -204,7 +311,7 @@ function onEditorMouseDown(e: monaco.editor.IEditorMouseEvent, side: 'LEFT' | 'R
 // clicks are left to onEditorMouseDown (which opens on a commented line, closes
 // elsewhere), so this only handles clicks in the rest of the app.
 function onDocMouseDown(e: MouseEvent) {
-    if (activeThreads.value.length === 0) {
+    if (activeThreads.value.length === 0 && activeAnnotations.value.length === 0) {
         return;
     }
 
@@ -463,6 +570,8 @@ onMounted(() => {
     // Created after the four above so their collection indices are unchanged.
     originalCommentDecorations = editor.getOriginalEditor().createDecorationsCollection();
     modifiedCommentDecorations = editor.getModifiedEditor().createDecorationsCollection();
+    // Annotations mark the head side only.
+    modifiedAnnotationDecorations = editor.getModifiedEditor().createDecorationsCollection();
 
     // Clicking a commented line opens its popover; scrolling either side closes it,
     // since it is pinned to a pixel position that scrolling would strand.
@@ -483,8 +592,10 @@ onMounted(() => {
         changes = editor?.getLineChanges() ?? [];
         emit('update:changeCount', changes.length);
         applyWordHighlights();
-        // Re-place the review-comment markers against the (re)computed model.
+        // Re-place the review-comment and check-annotation markers against the
+        // (re)computed model.
         applyCommentMarkers();
+        applyAnnotationMarkers();
 
         // The selected change is reset (to -1) in buildModels, once per real content
         // change, NOT here: Monaco fires this event several times per file (layout,
@@ -529,6 +640,15 @@ watch(
     }
 );
 
+// The same, for check annotations arriving or refreshing.
+watch(
+    () => props.checkAnnotations,
+    () => {
+        closeThreadPopover();
+        applyAnnotationMarkers();
+    }
+);
+
 watch(
     () => props.viewMode,
     (mode) => {
@@ -568,6 +688,7 @@ onBeforeUnmount(() => {
     activeModifiedDecorations = null;
     originalCommentDecorations = null;
     modifiedCommentDecorations = null;
+    modifiedAnnotationDecorations = null;
 });
 
 defineExpose({
@@ -581,11 +702,11 @@ defineExpose({
     <div class="relative size-full">
         <div ref="container" class="size-full" :class="`code-style-${codeStyle}`" />
 
-        <!-- Inline review-thread popover, opened from a gutter marker. Pinned to the
-             click point; closes on a click outside, its X, Escape, scrolling, or a
-             file/layout change. -->
+        <!-- Line popover: the clicked line's check annotations and review threads.
+             Opened by clicking the line, pinned to the click; closes on a click
+             outside, its X, Escape, scrolling, or a file/layout change. -->
         <div
-            v-if="activeThreads.length && popoverPos"
+            v-if="(activeThreads.length || activeAnnotations.length) && popoverPos"
             ref="popover"
             class="absolute z-20 flex max-h-[60%] w-[360px] max-w-[calc(100%-16px)] flex-col overflow-hidden rounded-lg border border-moire-border bg-moire-pop text-moire-fg"
             :style="{
@@ -594,12 +715,12 @@ defineExpose({
                 boxShadow: 'var(--moire-pop-shadow)',
             }"
             role="dialog"
-            aria-label="Review comments"
+            aria-label="Review comments and check annotations"
         >
             <div
                 class="flex items-center justify-between border-b border-moire-border px-3 py-2 text-[12px] font-medium text-moire-muted"
             >
-                <span>{{ activeThreads.length > 1 ? 'Review comments' : 'Review comment' }}</span>
+                <span>{{ popoverTitle }}</span>
                 <button
                     type="button"
                     class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
@@ -610,9 +731,43 @@ defineExpose({
                 </button>
             </div>
             <div class="min-h-0 flex-1 overflow-y-auto">
+                <!-- Check annotations first (they are warnings), then comments. -->
+                <div
+                    v-for="(annotation, ai) in activeAnnotations"
+                    :key="`annotation-${ai}`"
+                    class="flex flex-col gap-1 border-b border-moire-border px-3 py-2.5"
+                >
+                    <div class="flex flex-wrap items-center gap-1.5 text-[12px]">
+                        <span
+                            class="font-medium"
+                            :class="
+                                annotation.level === 'failure'
+                                    ? 'text-moire-status-d'
+                                    : 'text-moire-warn'
+                            "
+                        >
+                            {{ levelLabel(annotation.level) }}
+                        </span>
+                        <span v-if="annotation.title" class="text-moire-faint">
+                            {{ annotation.title }}
+                        </span>
+                    </div>
+                    <div class="text-[13px] leading-[1.55] text-moire-file-fg">
+                        {{ annotation.message }}
+                    </div>
+                    <button
+                        v-if="annotation.url"
+                        type="button"
+                        class="cursor-pointer self-start text-[12px] text-moire-accent hover:underline"
+                        @click="openAnnotationUrl(annotation.url)"
+                    >
+                        View on GitHub
+                    </button>
+                </div>
+
                 <div
                     v-for="(thread, ti) in activeThreads"
-                    :key="ti"
+                    :key="`thread-${ti}`"
                     class="flex flex-col gap-2.5 border-b border-moire-border px-3 py-2.5 last:border-b-0"
                 >
                     <div
@@ -728,5 +883,41 @@ defineExpose({
 :deep(.view-overlays .moire-comment-line-resolved) {
     background-color: color-mix(in srgb, var(--moire-status-a) 28%, transparent);
     box-shadow: inset 4px 0 0 var(--moire-status-a);
+}
+
+/* Check-annotation marker in the glyph margin: a warning triangle drawn with a mask so
+   a theme token drives its color. Amber (a warning or notice) by default, red when any
+   annotation on the line is level "failure". Clickable (opens the popover). */
+:deep(.moire-alert-glyph) {
+    cursor: pointer;
+    background-color: var(--moire-annotation-warn);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13' stroke='black' stroke-width='2'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13' stroke='black' stroke-width='2'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+    mask-position: center;
+    -webkit-mask-position: center;
+    mask-size: 17px 17px;
+    -webkit-mask-size: 17px 17px;
+}
+
+:deep(.moire-alert-glyph-error) {
+    background-color: var(--moire-annotation-error);
+}
+
+/* Whole-line highlight for an annotated line: a bar down its left edge plus a wash. The
+   error red is the diff's own deletion red (see --moire-annotation-error), applied more
+   opaquely so a failing line reads as a solid, bold version of it; the warning amber
+   matches. Same overlay-layer z-index rule as the comment line, so it reads over the
+   red/green change indicator rather than under it. */
+:deep(.view-overlays .moire-alert-line) {
+    z-index: 2;
+    background-color: color-mix(in srgb, var(--moire-annotation-warn) 88%, transparent);
+    box-shadow: inset 5px 0 0 var(--moire-annotation-warn);
+}
+
+:deep(.view-overlays .moire-alert-line-error) {
+    background-color: color-mix(in srgb, var(--moire-annotation-error) 88%, transparent);
+    box-shadow: inset 5px 0 0 var(--moire-annotation-error);
 }
 </style>

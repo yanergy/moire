@@ -5,6 +5,7 @@ import type {
     ChangedFile,
     CommentMutationResult,
     CompareMode,
+    CheckAnnotation,
     FilePair,
     FileStatus,
     PrReviewThread,
@@ -187,6 +188,39 @@ export const useComparisonStore = defineStore('comparison', () => {
         return path ? reviewThreads.value.filter((t) => t.path === path) : [];
     }
 
+    // The head commit's CI check annotations, shown as warning markers in the diff
+    // viewer alongside the review comments. Fetched with the PR (by its head SHA).
+    // Empty when there are none or the lookup fails. `annotationsForFile` narrows by
+    // file.
+    const checkAnnotations = ref<CheckAnnotation[]>([]);
+    function annotationsForFile(path: string): CheckAnnotation[] {
+        return path ? checkAnnotations.value.filter((a) => a.path === path) : [];
+    }
+
+    // The worst annotation level per file path, so the file tree can flag which files
+    // carry a problem: 'failure' (an error, red) outranks 'warning' (a warning or
+    // notice, amber). Files with no annotations are absent. `annotationLevelForFile`
+    // reads it per row.
+    const annotationLevelByPath = computed(() => {
+        const map = new Map<string, 'failure' | 'warning'>();
+        for (const a of checkAnnotations.value) {
+            if (!a.path) {
+                continue;
+            }
+
+            if (a.level === 'failure') {
+                map.set(a.path, 'failure');
+            } else if (!map.has(a.path)) {
+                map.set(a.path, 'warning');
+            }
+        }
+
+        return map;
+    });
+    function annotationLevelForFile(path: string): 'failure' | 'warning' | null {
+        return annotationLevelByPath.value.get(path) ?? null;
+    }
+
     // True while a lookup triggered by a range change is in flight, so the toolbar
     // can show a spinner instead of the previous branch's PR status (which would
     // otherwise linger and read as the new branch's until gh returns).
@@ -314,6 +348,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             prStatus.value = 'no-pr';
             prMessage.value = '';
             reviewThreads.value = [];
+            checkAnnotations.value = [];
             prLoading.value = false;
             return;
         }
@@ -333,13 +368,40 @@ export const useComparisonStore = defineStore('comparison', () => {
             prMessage.value = result.message ?? '';
             prLoading.value = false;
             void loadReviewThreads(result.pr?.id, token);
+            void loadCheckAnnotations(result.pr?.headRefOid, token);
         } catch {
             if (token === prRequest) {
                 pullRequest.value = null;
                 prStatus.value = 'error';
                 prMessage.value = '';
                 reviewThreads.value = [];
+                checkAnnotations.value = [];
                 prLoading.value = false;
+            }
+        }
+    }
+
+    // Fetch the head commit's CI check annotations for the diff viewer's warning
+    // markers, guarded by the same request token as the PR load. Supplementary: no head
+    // SHA, or any failure, just clears them.
+    async function loadCheckAnnotations(headSha: string | undefined, token: number) {
+        const api = window.api;
+        if (!api?.getCheckAnnotations || !headSha) {
+            if (token === prRequest) {
+                checkAnnotations.value = [];
+            }
+
+            return;
+        }
+
+        try {
+            const annotations = await api.getCheckAnnotations(headSha);
+            if (token === prRequest) {
+                checkAnnotations.value = annotations;
+            }
+        } catch {
+            if (token === prRequest) {
+                checkAnnotations.value = [];
             }
         }
     }
@@ -768,6 +830,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         prStatus.value = 'no-pr';
         prMessage.value = '';
         reviewThreads.value = [];
+        checkAnnotations.value = [];
         prLoading.value = false;
     }
 
@@ -1016,6 +1079,9 @@ export const useComparisonStore = defineStore('comparison', () => {
         prWarning,
         reviewThreads,
         threadsForFile,
+        checkAnnotations,
+        annotationsForFile,
+        annotationLevelForFile,
         loadPullRequest,
         postComment,
         editComment,

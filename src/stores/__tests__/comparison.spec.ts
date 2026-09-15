@@ -1080,6 +1080,73 @@ describe('comparison store', () => {
             expect(store.reviewThreads).toEqual([]);
         });
 
+        it('loads the check annotations by head sha and narrows them per file', async () => {
+            const annotations = [
+                { path: 'src/a.ts', line: 3, level: 'failure', title: 't', message: 'x', url: '' },
+                { path: 'src/b.ts', line: 9, level: 'warning', title: 't', message: 'y', url: '' },
+            ];
+            const getPullRequest = vi
+                .fn<(base: string, head: string) => Promise<unknown>>()
+                .mockResolvedValue({ status: 'ok', pr: { ...PR, headRefOid: 'abc123' } });
+            const getCheckAnnotations = vi
+                .fn<(sha: string) => Promise<unknown>>()
+                .mockResolvedValue(annotations);
+            window.api = { getPullRequest, getCheckAnnotations } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'feature';
+
+            await store.loadPullRequest();
+            await flushPromises();
+
+            expect(getCheckAnnotations).toHaveBeenCalledWith('abc123');
+            expect(store.checkAnnotations).toHaveLength(2);
+            expect(store.annotationsForFile('src/a.ts')).toHaveLength(1);
+            expect(store.annotationsForFile('src/a.ts')[0]!.level).toBe('failure');
+            expect(store.annotationsForFile('nope.ts')).toEqual([]);
+
+            // The file tree reads the worst level per file: failure > warning, none null.
+            expect(store.annotationLevelForFile('src/a.ts')).toBe('failure');
+            expect(store.annotationLevelForFile('src/b.ts')).toBe('warning');
+            expect(store.annotationLevelForFile('nope.ts')).toBeNull();
+        });
+
+        it('reports the worst annotation level per file (failure outranks warning)', async () => {
+            const annotations = [
+                { path: 'src/a.ts', line: 1, level: 'warning', title: 't', message: 'w', url: '' },
+                { path: 'src/a.ts', line: 2, level: 'failure', title: 't', message: 'e', url: '' },
+                { path: 'src/b.ts', line: 1, level: 'notice', title: 't', message: 'n', url: '' },
+            ];
+            const getPullRequest = vi
+                .fn<(base: string, head: string) => Promise<unknown>>()
+                .mockResolvedValue({ status: 'ok', pr: { ...PR, headRefOid: 'sha' } });
+            const getCheckAnnotations = vi
+                .fn<(sha: string) => Promise<unknown>>()
+                .mockResolvedValue(annotations);
+            window.api = { getPullRequest, getCheckAnnotations } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'feature';
+
+            await store.loadPullRequest();
+            await flushPromises();
+
+            // A file with both a warning and a failure reads as failure.
+            expect(store.annotationLevelForFile('src/a.ts')).toBe('failure');
+            // A notice is grouped under the amber 'warning' bucket.
+            expect(store.annotationLevelForFile('src/b.ts')).toBe('warning');
+        });
+
+        it('leaves check annotations empty when the PR carries no head sha', async () => {
+            const { store } = prStore({ status: 'ok', pr: PR });
+            await store.loadPullRequest();
+            await flushPromises();
+
+            expect(store.checkAnnotations).toEqual([]);
+        });
+
         it('leaves hasPullRequest false and clears the PR when none is found', async () => {
             const { store } = prStore({ status: 'no-pr', pr: null });
             await store.loadPullRequest();
