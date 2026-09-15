@@ -280,4 +280,48 @@ describe('FileTreeSidebar', () => {
         expect(clean.find('.text-moire-annotation-error').exists()).toBe(false);
         expect(clean.find('.text-moire-annotation-warn').exists()).toBe(false);
     });
+
+    it('flags a file that carries review threads with a comment icon by state', async () => {
+        const store = useComparisonStore();
+        store.files = CHANGED_FILES;
+        store.reviewThreads = [
+            {
+                id: 'RT_open',
+                path: 'electron/git/parsers.ts',
+                line: 5,
+                originalLine: null,
+                side: 'RIGHT',
+                isResolved: false,
+                isOutdated: false,
+                comments: [{ author: 'bob', body: 'hm', createdAt: '' }],
+            },
+            {
+                id: 'RT_done',
+                path: 'shared/types.ts',
+                line: 2,
+                originalLine: null,
+                side: 'RIGHT',
+                isResolved: true,
+                isOutdated: false,
+                comments: [{ author: 'ann', body: 'ok', createdAt: '' }],
+            },
+        ];
+        wrapper = mount(FileTreeSidebar, { global: { plugins: [pinia] } });
+        await flushPromises();
+
+        // An open thread shows the accent comment icon...
+        const open = wrapper.find('[data-path="electron/git/parsers.ts"]');
+        const openIcon = open.find('.text-moire-accent');
+        expect(openIcon.exists()).toBe(true);
+        expect(openIcon.attributes('aria-label')).toContain('review comment');
+
+        // ...an all-resolved file shows the green one...
+        const resolved = wrapper.find('[data-path="shared/types.ts"]');
+        expect(resolved.find('.text-moire-status-a').exists()).toBe(true);
+
+        // ...and a file with no threads shows neither.
+        const clean = wrapper.find('[data-path="electron/git/GitService.ts"]');
+        expect(clean.find('.text-moire-accent').exists()).toBe(false);
+        expect(clean.find('.text-moire-status-a').exists()).toBe(false);
+    });
 });

@@ -5,6 +5,7 @@ import {
     ChevronRight,
     ChevronsDownUp,
     ChevronsUpDown,
+    MessageSquare,
     Minus,
     TriangleAlert,
 } from '@lucide/vue';
@@ -177,6 +178,24 @@ function annotationTitle(node: FileNode): string {
     const noun = annotationLevel(node) === 'failure' ? 'error' : 'warning';
     const plural = count === 1 ? noun : `${noun}s`;
     return `${count} check ${plural}`;
+}
+
+// A file with inline review threads gets a speech-bubble icon: accent while any thread
+// is still open, green once every thread on it is resolved. `null` when it has none, so
+// no icon shows.
+function commentState(node: FileNode): 'open' | 'resolved' | null {
+    return comparison.commentStateForFile(node.path);
+}
+
+function commentClass(node: FileNode): string {
+    return commentState(node) === 'resolved' ? 'text-moire-status-a' : 'text-moire-accent';
+}
+
+function commentTitle(node: FileNode): string {
+    const count = comparison.threadsForFile(node.path).length;
+    const noun = count === 1 ? 'review comment' : 'review comments';
+    const suffix = commentState(node) === 'resolved' ? ' (resolved)' : '';
+    return `${count} ${noun}${suffix}`;
 }
 
 // Checked is a solid green fill with a light glyph. Indeterminate keeps the green
@@ -379,6 +398,15 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                             >
                                 {{ node.name }}
                             </span>
+                            <!-- An inline review thread on any line of this file: accent
+                                 while open, green once resolved. -->
+                            <MessageSquare
+                                v-if="commentState(node)"
+                                class="size-3.5 shrink-0"
+                                :class="commentClass(node)"
+                                :title="commentTitle(node)"
+                                :aria-label="commentTitle(node)"
+                            />
                             <!-- A check annotation on any line of this file: red for an
                                  error, amber for a warning. Native title for its detail;
                                  the row's own tooltip carries the path. -->

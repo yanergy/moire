@@ -1072,6 +1072,12 @@ describe('comparison store', () => {
             expect(store.threadsForFile('src/a.ts')).toHaveLength(1);
             expect(store.threadsForFile('src/a.ts')[0]!.comments[0]!.author).toBe('bob');
             expect(store.threadsForFile('nope.ts')).toEqual([]);
+
+            // The file tree reads a comment state per file: an unresolved thread is
+            // 'open', an all-resolved file 'resolved', a file with none null.
+            expect(store.commentStateForFile('src/a.ts')).toBe('open');
+            expect(store.commentStateForFile('src/b.ts')).toBe('resolved');
+            expect(store.commentStateForFile('nope.ts')).toBeNull();
         });
 
         it('leaves review threads empty when the PR carries no node id', async () => {

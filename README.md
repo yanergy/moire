@@ -138,8 +138,9 @@ Track bugs and limitations here.
   commit, fetched over the Checks REST API) show the same way, as a warning or error marker on the
   flagged head line that opens the finding in the same popover, with a link out to the producing
   check. They are matched to the head commit, so a repo whose checks post no annotations simply
-  shows no markers. The file tree also flags each file that carries an annotation with a small
-  triangle next to its name (red for an error, amber for a warning). Still missing:
+  shows no markers. The file tree also flags each file next to its name: a speech-bubble icon when
+  it carries review threads (accent while any is open, green once all are resolved) and a triangle
+  when it carries an annotation (red for an error, amber for a warning). Still missing:
     - A Commits tab (the commit list) is deliberately not built: an IDE already shows a branch's
       commits well, so it would duplicate tooling that is already to hand.
     - Check annotations are read-only (view only). Unlike code scanning alerts, a check-run

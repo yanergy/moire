@@ -188,6 +188,18 @@ export const useComparisonStore = defineStore('comparison', () => {
         return path ? reviewThreads.value.filter((t) => t.path === path) : [];
     }
 
+    // Whether a file carries review threads, for the file tree's comment marker:
+    // 'open' when any thread on it is still unresolved, 'resolved' when it has threads
+    // but every one is resolved, null when it has none.
+    function commentStateForFile(path: string): 'open' | 'resolved' | null {
+        const threads = threadsForFile(path);
+        if (threads.length === 0) {
+            return null;
+        }
+
+        return threads.some((t) => !t.isResolved) ? 'open' : 'resolved';
+    }
+
     // The head commit's CI check annotations, shown as warning markers in the diff
     // viewer alongside the review comments. Fetched with the PR (by its head SHA).
     // Empty when there are none or the lookup fails. `annotationsForFile` narrows by
@@ -1124,6 +1136,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         prWarning,
         reviewThreads,
         threadsForFile,
+        commentStateForFile,
         replyToReviewThread,
         setReviewThreadResolved,
         checkAnnotations,
