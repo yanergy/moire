@@ -8,6 +8,7 @@ import { simpleGit, CheckRepoActions } from 'simple-git';
 import { GitService, type CompareMode } from '../git/GitService';
 import {
     getPullRequest,
+    getReviewThreads,
     postComment,
     editComment,
     deleteComment,
@@ -168,6 +169,10 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
     handle('gh:pull-request', (base: string, head: string) =>
         getPullRequest(requireRepo().repoPath, base, head)
     );
+
+    // The PR's inline review threads (line-anchored comments), by node id, for the
+    // diff viewer's in-code markers. Returns an empty list on any failure.
+    handle('gh:review-threads', (prId: string) => getReviewThreads(requireRepo().repoPath, prId));
 
     // Conversation writes, used only while the PR view is in edit mode. Both operate
     // on the open repo's directory (gh resolves the GitHub remote there) and return

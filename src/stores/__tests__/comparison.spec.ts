@@ -1029,6 +1029,57 @@ describe('comparison store', () => {
             expect(store.hasPullRequest).toBe(true);
         });
 
+        it('loads the PR review threads by node id and narrows them per file', async () => {
+            const threads = [
+                {
+                    path: 'src/a.ts',
+                    line: 1,
+                    originalLine: null,
+                    side: 'RIGHT',
+                    isResolved: false,
+                    isOutdated: false,
+                    comments: [{ author: 'bob', body: 'x', createdAt: '' }],
+                },
+                {
+                    path: 'src/b.ts',
+                    line: 2,
+                    originalLine: null,
+                    side: 'RIGHT',
+                    isResolved: true,
+                    isOutdated: false,
+                    comments: [{ author: 'ann', body: 'y', createdAt: '' }],
+                },
+            ];
+            const getPullRequest = vi
+                .fn<(base: string, head: string) => Promise<unknown>>()
+                .mockResolvedValue({ status: 'ok', pr: { ...PR, id: 'PR_7' } });
+            const getReviewThreads = vi
+                .fn<(prId: string) => Promise<unknown>>()
+                .mockResolvedValue(threads);
+            window.api = { getPullRequest, getReviewThreads } as unknown as Window['api'];
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.base = 'main';
+            store.head = 'feature';
+
+            await store.loadPullRequest();
+            await flushPromises();
+
+            expect(getReviewThreads).toHaveBeenCalledWith('PR_7');
+            expect(store.reviewThreads).toHaveLength(2);
+            expect(store.threadsForFile('src/a.ts')).toHaveLength(1);
+            expect(store.threadsForFile('src/a.ts')[0]!.comments[0]!.author).toBe('bob');
+            expect(store.threadsForFile('nope.ts')).toEqual([]);
+        });
+
+        it('leaves review threads empty when the PR carries no node id', async () => {
+            const { store } = prStore({ status: 'ok', pr: PR });
+            await store.loadPullRequest();
+            await flushPromises();
+
+            expect(store.reviewThreads).toEqual([]);
+        });
+
         it('leaves hasPullRequest false and clears the PR when none is found', async () => {
             const { store } = prStore({ status: 'no-pr', pr: null });
             await store.loadPullRequest();

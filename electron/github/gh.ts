@@ -22,7 +22,7 @@ const WORKING_TREE = 'WORKING TREE';
 // description in Markdown. The stats (additions/deletions/changedFiles), commit
 // list, and the comments/reviews feed the PR view's header and conversation.
 const PR_FIELDS =
-    'number,title,body,state,url,isDraft,author,baseRefName,headRefName,createdAt,' +
+    'id,number,title,body,state,url,isDraft,author,baseRefName,headRefName,createdAt,' +
     'additions,deletions,changedFiles,commits,comments,reviews,labels,mergeable,mergeStateStatus,' +
     'reviewDecision,statusCheckRollup';
 
@@ -74,6 +74,9 @@ export interface PrCheck {
 }
 
 export interface PullRequest {
+    // The PR's GraphQL node id, used to fetch its inline review threads. Optional
+    // because older fetches (and test fixtures) may omit it.
+    id?: string;
     number: number;
     title: string;
     body: string;
@@ -135,6 +138,29 @@ interface GhLabel {
     description: string;
 }
 
+// One comment inside an inline review thread: an author login, its Markdown body,
+// and when it was posted.
+export interface PrReviewComment {
+    author: string;
+    body: string;
+    createdAt: string;
+}
+
+// An inline (line-anchored) code review thread on the PR, shown as a marker in the
+// diff viewer. `path` is the file it is on; `line`/`originalLine` are the anchored
+// line on the head (RIGHT) and base (LEFT) side (either can be null when GitHub
+// could not map it). `side` says which side the thread hangs on. `isResolved` and
+// `isOutdated` drive how the marker reads.
+export interface PrReviewThread {
+    path: string;
+    line: number | null;
+    originalLine: number | null;
+    side: 'LEFT' | 'RIGHT';
+    isResolved: boolean;
+    isOutdated: boolean;
+    comments: PrReviewComment[];
+}
+
 // A statusCheckRollup entry. gh returns a union: an Actions `CheckRun` (a
 // lifecycle `status` plus a `conclusion` once done) or a legacy `StatusContext`
 // (a flat `state`). Every field is optional so a node of either shape parses.
@@ -156,6 +182,7 @@ interface GhCheckNode {
 }
 
 interface GhPr {
+    id: string;
     number: number;
     title: string;
     body: string;
@@ -361,6 +388,7 @@ function buildChecks(pr: GhPr): PrCheck[] {
 
 function toPullRequest(pr: GhPr): PullRequest {
     return {
+        id: pr.id,
         number: pr.number,
         title: pr.title,
         body: pr.body ?? '',
@@ -464,6 +492,87 @@ export async function getPullRequest(
     }
 
     return { status: 'ok', pr: toPullRequest(raw) };
+}
+
+// --- Inline review threads (GraphQL) ---
+//
+// `gh pr view --json` exposes the conversation but not the line-anchored review
+// threads (a reviewer's comments on specific diff lines). Those need the GraphQL
+// API, reached by the PR's node id (from PR_FIELDS above) so no owner/name parsing
+// is required. They are supplementary: any failure yields an empty list rather than
+// an error, so the diff viewer simply shows no markers.
+
+// The GraphQL shape a review thread comes back as; only the fields the viewer reads.
+interface GhReviewThread {
+    path: string | null;
+    line: number | null;
+    originalLine: number | null;
+    diffSide: string | null;
+    isResolved: boolean | null;
+    isOutdated: boolean | null;
+    comments: { nodes: GhReviewComment[] | null } | null;
+}
+interface GhReviewComment {
+    author: GhAuthor | null;
+    body: string | null;
+    createdAt: string | null;
+}
+
+const REVIEW_THREADS_QUERY =
+    'query($id:ID!){node(id:$id){... on PullRequest{reviewThreads(first:100){nodes{' +
+    'path line originalLine diffSide isResolved isOutdated ' +
+    'comments(first:100){nodes{author{login} body createdAt}}}}}}}';
+
+function toReviewThread(node: GhReviewThread): PrReviewThread {
+    return {
+        path: node.path ?? '',
+        line: node.line ?? null,
+        originalLine: node.originalLine ?? null,
+        side: node.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT',
+        isResolved: node.isResolved ?? false,
+        isOutdated: node.isOutdated ?? false,
+        comments: (node.comments?.nodes ?? []).map((c) => ({
+            author: c.author?.login ?? '',
+            body: c.body ?? '',
+            createdAt: c.createdAt ?? '',
+        })),
+    };
+}
+
+// Fetch the PR's inline review threads by its node id. Returns an empty list when
+// there is no id, or when gh is missing, unauthenticated, or otherwise fails, so a
+// caller can treat "no threads" and "could not load" the same (markers absent).
+export async function getReviewThreads(
+    repoPath: string,
+    prId: string,
+    run: GhRunner = defaultRunner
+): Promise<PrReviewThread[]> {
+    if (!repoPath || !prId) {
+        return [];
+    }
+
+    let stdout: string;
+    try {
+        ({ stdout } = await run(
+            ['api', 'graphql', '-f', `query=${REVIEW_THREADS_QUERY}`, '-f', `id=${prId}`],
+            repoPath
+        ));
+    } catch {
+        return [];
+    }
+
+    let nodes: GhReviewThread[];
+    try {
+        const parsed = JSON.parse(stdout) as {
+            data?: { node?: { reviewThreads?: { nodes?: GhReviewThread[] | null } | null } | null };
+        };
+        nodes = parsed.data?.node?.reviewThreads?.nodes ?? [];
+    } catch {
+        return [];
+    }
+
+    // Keep only threads that anchor to a file and carry at least one comment.
+    return nodes.map(toReviewThread).filter((t) => t.path && t.comments.length > 0);
 }
 
 // --- Writing to the conversation (gh pr comment / GraphQL) ---

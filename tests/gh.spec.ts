@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
     getPullRequest,
+    getReviewThreads,
     getAccounts,
     switchAccount,
     postComment,
@@ -563,5 +564,97 @@ describe('editDescription', () => {
 
         expect(result.ok).toBe(false);
         expect(result.message).toContain('write access');
+    });
+});
+
+// The GraphQL shape gh returns for reviewThreads under the PR node.
+const threadsJson = (nodes: unknown[]) =>
+    JSON.stringify({ data: { node: { reviewThreads: { nodes } } } });
+
+describe('getReviewThreads', () => {
+    it('queries by node id and maps threads to their file, line, side, and state', async () => {
+        const { run, calls } = okRunner(
+            threadsJson([
+                {
+                    path: 'src/a.ts',
+                    line: 12,
+                    originalLine: null,
+                    diffSide: 'RIGHT',
+                    isResolved: false,
+                    isOutdated: false,
+                    comments: {
+                        nodes: [
+                            {
+                                author: { login: 'bob' },
+                                body: 'this can race',
+                                createdAt: '2026-09-02T00:00:00Z',
+                            },
+                            { author: { login: 'me' }, body: 'fixed', createdAt: '2026-09-03Z' },
+                        ],
+                    },
+                },
+                {
+                    path: 'src/b.ts',
+                    line: null,
+                    originalLine: 4,
+                    diffSide: 'LEFT',
+                    isResolved: true,
+                    isOutdated: true,
+                    comments: { nodes: [{ author: { login: 'ann' }, body: 'old', createdAt: '' }] },
+                },
+            ])
+        );
+
+        const threads = await getReviewThreads('/repo', 'PR_1', run);
+
+        // Queried over GraphQL, keyed on the PR node id.
+        expect(calls[0]!.args[0]).toBe('api');
+        expect(calls[0]!.args).toContain('graphql');
+        expect(calls[0]!.args).toContain('id=PR_1');
+
+        expect(threads).toHaveLength(2);
+        expect(threads[0]).toEqual({
+            path: 'src/a.ts',
+            line: 12,
+            originalLine: null,
+            side: 'RIGHT',
+            isResolved: false,
+            isOutdated: false,
+            comments: [
+                { author: 'bob', body: 'this can race', createdAt: '2026-09-02T00:00:00Z' },
+                { author: 'me', body: 'fixed', createdAt: '2026-09-03Z' },
+            ],
+        });
+        expect(threads[1]!.side).toBe('LEFT');
+        expect(threads[1]!.originalLine).toBe(4);
+        expect(threads[1]!.isResolved).toBe(true);
+        expect(threads[1]!.isOutdated).toBe(true);
+    });
+
+    it('drops threads with no file or no comments', async () => {
+        const { run } = okRunner(
+            threadsJson([
+                { path: null, line: 1, diffSide: 'RIGHT', comments: { nodes: [] } },
+                { path: 'src/a.ts', line: 2, diffSide: 'RIGHT', comments: { nodes: [] } },
+            ])
+        );
+
+        expect(await getReviewThreads('/repo', 'PR_1', run)).toEqual([]);
+    });
+
+    it('returns an empty list without calling gh when there is no id', async () => {
+        const run = vi.fn<GhRunner>();
+        expect(await getReviewThreads('/repo', '', run)).toEqual([]);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('returns an empty list when gh fails (threads are supplementary)', async () => {
+        const run = failRunner({ code: 'ENOENT' });
+        expect(await getReviewThreads('/repo', 'PR_1', run)).toEqual([]);
+    });
+
+    it('returns an empty list when gh output is not valid JSON', async () => {
+        const { run } = okRunner('not json');
+        expect(await getReviewThreads('/repo', 'PR_1', run)).toEqual([]);
     });
 });

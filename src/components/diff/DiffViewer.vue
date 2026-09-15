@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import * as monaco from '@/lib/monaco';
-import { onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { X } from '@lucide/vue';
 import { monacoThemeFor } from '@/lib/monaco-themes';
-import type { CodeStyle, ViewMode } from '@/shared/types';
+import { renderMarkdown } from '@/lib/markdown';
+import { timeSince } from '@/lib/status-bar';
+import type { CodeStyle, PrReviewThread, ViewMode } from '@/shared/types';
 
 const props = defineProps<{
     original: string | null;
@@ -15,6 +18,9 @@ const props = defineProps<{
     // to land on once the diff is computed. Consumed on the next diff update, after
     // which the parent clears it via edgeConsumed.
     pendingEdge?: 'first' | 'last' | null;
+    // The open file's inline review threads (line-anchored PR comments). Each is
+    // marked in the gutter on its line; clicking the marker opens it in a popover.
+    reviewThreads?: PrReviewThread[];
 }>();
 
 const emit = defineEmits<{
@@ -23,6 +29,7 @@ const emit = defineEmits<{
 }>();
 
 const containerRef = useTemplateRef<HTMLDivElement>('container');
+const popoverRef = useTemplateRef<HTMLDivElement>('popover');
 
 let editor: monaco.editor.IStandaloneDiffEditor | null = null;
 let originalModel: monaco.editor.ITextModel | null = null;
@@ -34,6 +41,189 @@ let originalWordDecorations: monaco.editor.IEditorDecorationsCollection | null =
 let modifiedWordDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
 let activeOriginalDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
 let activeModifiedDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
+
+// Inline review-thread markers: a gutter glyph per line that carries thread(s), one
+// collection per side, plus a line -> threads lookup so a glyph click can find them.
+let originalCommentDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
+let modifiedCommentDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
+const modifiedThreadsByLine = new Map<number, PrReviewThread[]>();
+const originalThreadsByLine = new Map<number, PrReviewThread[]>();
+// Listeners for glyph clicks (open the popover) and scrolling (close it).
+let commentListeners: monaco.IDisposable[] = [];
+
+// The review threads shown in the open popover, and where it sits (relative to the
+// editor container). Empty/null means no popover.
+const activeThreads = ref<PrReviewThread[]>([]);
+const popoverPos = ref<{ top: number; left: number } | null>(null);
+
+function relative(iso: string): string {
+    const ms = Date.parse(iso);
+    return Number.isNaN(ms) ? '' : timeSince(ms, Date.now());
+}
+
+// Render a review comment's Markdown body; sanitized by renderMarkdown, so it is safe
+// to insert with v-html (same policy as the PR view).
+function renderThreadComment(body: string): string {
+    return renderMarkdown(body);
+}
+
+// The gutter glyph's class for a line's threads: tinted resolved when none are still
+// open, dimmed when every thread on the line is outdated.
+function glyphClassFor(threads: PrReviewThread[]): string {
+    let cls = 'moire-comment-glyph';
+    if (threads.every((t) => t.isResolved)) {
+        cls += ' moire-comment-glyph-resolved';
+    }
+    if (threads.every((t) => t.isOutdated)) {
+        cls += ' moire-comment-glyph-outdated';
+    }
+
+    return cls;
+}
+
+// The whole-line highlight class for a commented line: an accent left bar plus a
+// faint tint so the line, not just the tiny gutter icon, reads as carrying a comment.
+function lineClassFor(threads: PrReviewThread[]): string {
+    return threads.every((t) => t.isResolved)
+        ? 'moire-comment-line moire-comment-line-resolved'
+        : 'moire-comment-line';
+}
+
+// Rebuild the gutter markers from the current threads. A RIGHT-side thread anchors to
+// the head file (the modified editor) at `line`; a LEFT-side one to the base file (the
+// original editor) at `originalLine`. Threads whose line is missing or falls outside
+// the current model are skipped, so a marker never lands on the wrong line when the
+// local branch has drifted from what the PR was reviewed against.
+function applyCommentMarkers() {
+    if (!editor || !originalCommentDecorations || !modifiedCommentDecorations) {
+        return;
+    }
+
+    modifiedThreadsByLine.clear();
+    originalThreadsByLine.clear();
+
+    const modifiedLines = editor.getModifiedEditor().getModel()?.getLineCount() ?? 0;
+    const originalLines = editor.getOriginalEditor().getModel()?.getLineCount() ?? 0;
+
+    for (const thread of props.reviewThreads ?? []) {
+        const onRight = thread.side === 'RIGHT';
+        const line = onRight ? thread.line : (thread.originalLine ?? thread.line);
+        const max = onRight ? modifiedLines : originalLines;
+        if (!line || line < 1 || line > max) {
+            continue;
+        }
+
+        const map = onRight ? modifiedThreadsByLine : originalThreadsByLine;
+        const existing = map.get(line);
+        if (existing) {
+            existing.push(thread);
+        } else {
+            map.set(line, [thread]);
+        }
+    }
+
+    modifiedCommentDecorations.set(decorationsFor(modifiedThreadsByLine));
+    originalCommentDecorations.set(decorationsFor(originalThreadsByLine));
+}
+
+// Resolve a design token to its computed color, so the overview-ruler mark (drawn on
+// canvas, where a CSS var cannot reach) still follows the theme. Empty if unavailable.
+function tokenColor(name: string): string {
+    return containerRef.value
+        ? getComputedStyle(containerRef.value).getPropertyValue(name).trim()
+        : '';
+}
+
+function decorationsFor(
+    byLine: Map<number, PrReviewThread[]>
+): monaco.editor.IModelDeltaDecoration[] {
+    const accent = tokenColor('--moire-accent');
+    const resolvedColor = tokenColor('--moire-status-a');
+    const out: monaco.editor.IModelDeltaDecoration[] = [];
+    for (const [line, threads] of byLine) {
+        const rulerColor = threads.every((t) => t.isResolved) ? resolvedColor : accent;
+        out.push({
+            range: new monaco.Range(line, 1, line, 1),
+            options: {
+                glyphMarginClassName: glyphClassFor(threads),
+                glyphMarginHoverMessage: { value: 'Show review comment' },
+                // Highlight the whole line, not just the gutter, so a comment is
+                // obvious at a glance.
+                isWholeLine: true,
+                className: lineClassFor(threads),
+                // A mark in the scrollbar's overview ruler, so commented lines are
+                // findable across the whole file without scrolling to hunt for them.
+                overviewRuler: rulerColor
+                    ? { color: rulerColor, position: monaco.editor.OverviewRulerLane.Right }
+                    : undefined,
+            },
+        });
+    }
+
+    return out;
+}
+
+// Open the popover for the thread(s) on a clicked glyph, positioned at the click.
+function openThreadPopover(threads: PrReviewThread[], clientX: number, clientY: number) {
+    const rect = containerRef.value?.getBoundingClientRect();
+    if (!rect) {
+        return;
+    }
+
+    const width = 360;
+    const left = Math.max(8, Math.min(clientX - rect.left + 8, rect.width - width - 8));
+    activeThreads.value = threads;
+    popoverPos.value = { top: Math.max(8, clientY - rect.top + 8), left: Math.max(8, left) };
+}
+
+function closeThreadPopover() {
+    if (activeThreads.value.length > 0) {
+        activeThreads.value = [];
+        popoverPos.value = null;
+    }
+}
+
+// A mouse-down anywhere on a commented line (its glyph, gutter, or the highlighted
+// code itself) opens that line's popover, so a comment is a click away. A click on
+// any other line in the editor closes an open popover, so clicking off it dismisses
+// it. Clicks outside the editor are handled by onDocMouseDown.
+function onEditorMouseDown(e: monaco.editor.IEditorMouseEvent, side: 'LEFT' | 'RIGHT') {
+    const line = e.target.position?.lineNumber;
+    const threads = line
+        ? (side === 'RIGHT' ? modifiedThreadsByLine : originalThreadsByLine).get(line)
+        : undefined;
+    if (threads && threads.length > 0) {
+        const browser = e.event.browserEvent;
+        openThreadPopover(threads, browser.clientX, browser.clientY);
+    } else {
+        closeThreadPopover();
+    }
+}
+
+// Close the popover when a click lands outside both it and the editor. In-editor
+// clicks are left to onEditorMouseDown (which opens on a commented line, closes
+// elsewhere), so this only handles clicks in the rest of the app.
+function onDocMouseDown(e: MouseEvent) {
+    if (activeThreads.value.length === 0) {
+        return;
+    }
+
+    const target = e.target as Node | null;
+    if (
+        containerRef.value?.contains(target ?? null) ||
+        popoverRef.value?.contains(target ?? null)
+    ) {
+        return;
+    }
+
+    closeThreadPopover();
+}
+
+function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+        closeThreadPopover();
+    }
+}
 
 function buildModels() {
     if (!editor) {
@@ -238,6 +428,8 @@ onMounted(() => {
         originalEditable: false,
         automaticLayout: true,
         renderSideBySide: props.viewMode === 'split',
+        // Reserve the gutter for inline review-comment markers.
+        glyphMargin: true,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         renderLineHighlight: 'none',
@@ -268,12 +460,31 @@ onMounted(() => {
     modifiedWordDecorations = editor.getModifiedEditor().createDecorationsCollection();
     activeOriginalDecorations = editor.getOriginalEditor().createDecorationsCollection();
     activeModifiedDecorations = editor.getModifiedEditor().createDecorationsCollection();
+    // Created after the four above so their collection indices are unchanged.
+    originalCommentDecorations = editor.getOriginalEditor().createDecorationsCollection();
+    modifiedCommentDecorations = editor.getModifiedEditor().createDecorationsCollection();
+
+    // Clicking a commented line opens its popover; scrolling either side closes it,
+    // since it is pinned to a pixel position that scrolling would strand.
+    const modifiedEditor = editor.getModifiedEditor();
+    const originalEditor = editor.getOriginalEditor();
+    commentListeners = [
+        modifiedEditor.onMouseDown((e) => onEditorMouseDown(e, 'RIGHT')),
+        originalEditor.onMouseDown((e) => onEditorMouseDown(e, 'LEFT')),
+        modifiedEditor.onDidScrollChange(() => closeThreadPopover()),
+        originalEditor.onDidScrollChange(() => closeThreadPopover()),
+    ];
+    window.addEventListener('keydown', onKeydown);
+    // Dismiss the popover on a click anywhere outside it and the editor.
+    document.addEventListener('mousedown', onDocMouseDown);
     buildModels();
 
     diffListener = editor.onDidUpdateDiff(() => {
         changes = editor?.getLineChanges() ?? [];
         emit('update:changeCount', changes.length);
         applyWordHighlights();
+        // Re-place the review-comment markers against the (re)computed model.
+        applyCommentMarkers();
 
         // The selected change is reset (to -1) in buildModels, once per real content
         // change, NOT here: Monaco fires this event several times per file (layout,
@@ -301,12 +512,31 @@ onMounted(() => {
 
 watch(
     () => [props.original, props.modified, props.language],
-    () => buildModels()
+    () => {
+        // A new file: drop any open popover; markers are re-placed by onDidUpdateDiff.
+        closeThreadPopover();
+        buildModels();
+    }
+);
+
+// The open file's threads changed (a PR refresh, or a fetch completing after the file
+// was opened): re-mark and drop any popover pinned to the old set.
+watch(
+    () => props.reviewThreads,
+    () => {
+        closeThreadPopover();
+        applyCommentMarkers();
+    }
 );
 
 watch(
     () => props.viewMode,
-    (mode) => editor?.updateOptions({ renderSideBySide: mode === 'split' })
+    (mode) => {
+        // The unified/split switch re-lays out both sides, so a pinned popover would
+        // strand; close it and let the markers ride the relayout.
+        closeThreadPopover();
+        editor?.updateOptions({ renderSideBySide: mode === 'split' });
+    }
 );
 
 watch(
@@ -320,6 +550,13 @@ watch(
 
 onBeforeUnmount(() => {
     diffListener?.dispose();
+    for (const listener of commentListeners) {
+        listener.dispose();
+    }
+
+    commentListeners = [];
+    window.removeEventListener('keydown', onKeydown);
+    document.removeEventListener('mousedown', onDocMouseDown);
     originalModel?.dispose();
     modifiedModel?.dispose();
     editor?.dispose();
@@ -329,6 +566,8 @@ onBeforeUnmount(() => {
     modifiedWordDecorations = null;
     activeOriginalDecorations = null;
     activeModifiedDecorations = null;
+    originalCommentDecorations = null;
+    modifiedCommentDecorations = null;
 });
 
 defineExpose({
@@ -339,7 +578,67 @@ defineExpose({
 </script>
 
 <template>
-    <div ref="container" class="size-full" :class="`code-style-${codeStyle}`" />
+    <div class="relative size-full">
+        <div ref="container" class="size-full" :class="`code-style-${codeStyle}`" />
+
+        <!-- Inline review-thread popover, opened from a gutter marker. Pinned to the
+             click point; closes on a click outside, its X, Escape, scrolling, or a
+             file/layout change. -->
+        <div
+            v-if="activeThreads.length && popoverPos"
+            ref="popover"
+            class="absolute z-20 flex max-h-[60%] w-[360px] max-w-[calc(100%-16px)] flex-col overflow-hidden rounded-lg border border-moire-border bg-moire-pop text-moire-fg"
+            :style="{
+                top: `${popoverPos.top}px`,
+                left: `${popoverPos.left}px`,
+                boxShadow: 'var(--moire-pop-shadow)',
+            }"
+            role="dialog"
+            aria-label="Review comments"
+        >
+            <div
+                class="flex items-center justify-between border-b border-moire-border px-3 py-2 text-[12px] font-medium text-moire-muted"
+            >
+                <span>{{ activeThreads.length > 1 ? 'Review comments' : 'Review comment' }}</span>
+                <button
+                    type="button"
+                    class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                    aria-label="Close"
+                    @click="closeThreadPopover"
+                >
+                    <X :size="14" />
+                </button>
+            </div>
+            <div class="min-h-0 flex-1 overflow-y-auto">
+                <div
+                    v-for="(thread, ti) in activeThreads"
+                    :key="ti"
+                    class="flex flex-col gap-2.5 border-b border-moire-border px-3 py-2.5 last:border-b-0"
+                >
+                    <div
+                        v-if="thread.isResolved || thread.isOutdated"
+                        class="flex gap-1.5 text-[10px] font-medium tracking-wide uppercase"
+                    >
+                        <span v-if="thread.isResolved" class="text-moire-status-a">Resolved</span>
+                        <span v-if="thread.isOutdated" class="text-moire-faint">Outdated</span>
+                    </div>
+                    <div v-for="(c, ci) in thread.comments" :key="ci" class="flex flex-col gap-0.5">
+                        <div
+                            class="flex flex-wrap items-center gap-1.5 text-[12px] text-moire-faint"
+                        >
+                            <span class="font-medium text-moire-fg">{{ c.author }}</span>
+                            <span>{{ relative(c.createdAt) }}</span>
+                        </div>
+                        <!-- v-html is safe: renderThreadComment sanitizes via DOMPurify. -->
+                        <div
+                            class="pr-markdown text-[13px] leading-[1.55] text-moire-file-fg"
+                            v-html="renderThreadComment(c.body)"
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </template>
 
 <style scoped>
@@ -384,5 +683,50 @@ defineExpose({
 :deep(.moire-active-change-margin) {
     background-color: var(--moire-active-change-bg);
     box-shadow: inset 2px 0 0 var(--moire-active-change);
+}
+
+/* Inline review-thread marker in the glyph margin: a speech bubble drawn with a mask
+   so a theme token drives its color. Enlarged to fill the gutter cell so it reads at
+   a glance. Accent by default (an open thread), green once resolved, dimmed when
+   outdated. Clickable (opens the popover). */
+:deep(.moire-comment-glyph) {
+    cursor: pointer;
+    background-color: var(--moire-accent);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+    mask-position: center;
+    -webkit-mask-position: center;
+    mask-size: 17px 17px;
+    -webkit-mask-size: 17px 17px;
+}
+
+:deep(.moire-comment-glyph-resolved) {
+    background-color: var(--moire-status-a);
+}
+
+:deep(.moire-comment-glyph-outdated) {
+    opacity: 0.55;
+}
+
+/* Whole-line highlight for a commented line: a solid accent bar down its left edge
+   plus a faint wash, so the line itself signals a comment. Green variant once every
+   thread on the line is resolved. It is a decoration in the view-overlays layer, the
+   same layer that paints the added/removed diff line backgrounds, and those would
+   otherwise cover it. The overlay layer is isolated into its own stacking context
+   (see .view-overlays above), so a z-index lifts this highlight above the green/red
+   diff backgrounds (z 0) and the selection (z 1) while still sitting under the text,
+   which lives in a separate layer on top. Any future per-line color effect must do
+   the same, so it reads over the change indicator rather than under it. */
+:deep(.view-overlays .moire-comment-line) {
+    z-index: 2;
+    background-color: color-mix(in srgb, var(--moire-accent) 28%, transparent);
+    box-shadow: inset 4px 0 0 var(--moire-accent);
+}
+
+:deep(.view-overlays .moire-comment-line-resolved) {
+    background-color: color-mix(in srgb, var(--moire-status-a) 28%, transparent);
+    box-shadow: inset 4px 0 0 var(--moire-status-a);
 }
 </style>

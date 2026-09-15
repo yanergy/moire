@@ -7,6 +7,7 @@ import type {
     CompareMode,
     FilePair,
     FileStatus,
+    PrReviewThread,
     PrStatus,
     PullRequest,
 } from '@/shared/types';
@@ -178,6 +179,14 @@ export const useComparisonStore = defineStore('comparison', () => {
     const prStatus = ref<PrStatus>('no-pr');
     const prMessage = ref('');
 
+    // The PR's inline review threads (line-anchored comments), fetched alongside the
+    // PR and shown as markers in the diff viewer, not the PR conversation. Empty when
+    // there is no PR or the lookup failed. `threadsForFile` narrows them to one file.
+    const reviewThreads = ref<PrReviewThread[]>([]);
+    function threadsForFile(path: string): PrReviewThread[] {
+        return path ? reviewThreads.value.filter((t) => t.path === path) : [];
+    }
+
     // True while a lookup triggered by a range change is in flight, so the toolbar
     // can show a spinner instead of the previous branch's PR status (which would
     // otherwise linger and read as the new branch's until gh returns).
@@ -304,6 +313,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             pullRequest.value = null;
             prStatus.value = 'no-pr';
             prMessage.value = '';
+            reviewThreads.value = [];
             prLoading.value = false;
             return;
         }
@@ -322,12 +332,39 @@ export const useComparisonStore = defineStore('comparison', () => {
             prStatus.value = result.status;
             prMessage.value = result.message ?? '';
             prLoading.value = false;
+            void loadReviewThreads(result.pr?.id, token);
         } catch {
             if (token === prRequest) {
                 pullRequest.value = null;
                 prStatus.value = 'error';
                 prMessage.value = '';
+                reviewThreads.value = [];
                 prLoading.value = false;
+            }
+        }
+    }
+
+    // Fetch the PR's inline review threads for the diff viewer's markers, guarded by
+    // the same request token as the PR load so a stale range's threads never land on
+    // the current one. Threads are supplementary: any failure just clears them.
+    async function loadReviewThreads(prId: string | undefined, token: number) {
+        const api = window.api;
+        if (!api?.getReviewThreads || !prId) {
+            if (token === prRequest) {
+                reviewThreads.value = [];
+            }
+
+            return;
+        }
+
+        try {
+            const threads = await api.getReviewThreads(prId);
+            if (token === prRequest) {
+                reviewThreads.value = threads;
+            }
+        } catch {
+            if (token === prRequest) {
+                reviewThreads.value = [];
             }
         }
     }
@@ -730,6 +767,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         pullRequest.value = null;
         prStatus.value = 'no-pr';
         prMessage.value = '';
+        reviewThreads.value = [];
         prLoading.value = false;
     }
 
@@ -976,6 +1014,8 @@ export const useComparisonStore = defineStore('comparison', () => {
         prLoading,
         hasPullRequest,
         prWarning,
+        reviewThreads,
+        threadsForFile,
         loadPullRequest,
         postComment,
         editComment,

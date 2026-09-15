@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
 import { editor } from './monaco-stub';
 import type { StubDiffEditor } from './monaco-stub';
-import type { CodeStyle, ViewMode } from '@/shared/types';
+import type { CodeStyle, PrReviewThread, ViewMode } from '@/shared/types';
 
 const baseProps = {
     original: 'const a = 1;',
@@ -57,6 +57,39 @@ function lastActiveModified(diff: StubDiffEditor): StubDecoration[] {
     const calls = set.mock.calls;
     return calls[calls.length - 1]![0] as StubDecoration[];
 }
+
+// A RIGHT-side review thread on line 12 of the open file.
+const thread = (over: Partial<PrReviewThread> = {}): PrReviewThread => ({
+    path: 'src/a.ts',
+    line: 12,
+    originalLine: null,
+    side: 'RIGHT',
+    isResolved: false,
+    isOutdated: false,
+    comments: [{ author: 'bob', body: 'this can race', createdAt: '' }],
+    ...over,
+});
+
+// The comment-marker collection is the third created on each inner editor (after the
+// word-level and active-change ones). Returns its most recent set() payload.
+function commentDecorations(diff: StubDiffEditor, side: 'modified' | 'original') {
+    const inner = side === 'modified' ? diff.getModifiedEditor() : diff.getOriginalEditor();
+    const set = inner.createDecorationsCollection.mock.results[2]!.value.set;
+    const calls = set.mock.calls;
+    return (calls[calls.length - 1]?.[0] ?? []) as {
+        range: { startLineNumber: number };
+        options: { glyphMarginClassName?: string; className?: string; isWholeLine?: boolean };
+    }[];
+}
+
+// A mouse-down on a line, as Monaco reports it. `type` 2 is the glyph margin, 6 the
+// code content; the viewer opens the popover for either as long as the line matches.
+const lineMouseDown = (lineNumber: number, type = 2) => ({
+    target: { type, position: { lineNumber } },
+    event: { browserEvent: { clientX: 20, clientY: 100 } },
+});
+const glyphClick = (lineNumber: number) => lineMouseDown(lineNumber, 2);
+const contentClick = (lineNumber: number) => lineMouseDown(lineNumber, 6);
 
 describe('DiffViewer', () => {
     it('mounts and creates a diff editor in its container', () => {
@@ -221,6 +254,126 @@ describe('DiffViewer', () => {
 
         expect(diff.getModifiedEditor().revealLineInCenter).toHaveBeenLastCalledWith(20);
         expect(wrapper.emitted('edgeConsumed')).toHaveLength(1);
+    });
+
+    it('marks a review thread in the gutter on its line', () => {
+        const wrapper = mount(DiffViewer, { props: { ...baseProps, reviewThreads: [thread()] } });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+
+        const decos = commentDecorations(diff, 'modified');
+        expect(decos).toHaveLength(1);
+        expect(decos[0]!.range.startLineNumber).toBe(12);
+        expect(decos[0]!.options.glyphMarginClassName).toContain('moire-comment-glyph');
+        // The whole line is highlighted, not just the gutter, so it is obvious.
+        expect(decos[0]!.options.isWholeLine).toBe(true);
+        expect(decos[0]!.options.className).toContain('moire-comment-line');
+        // A different file's threads never touch this file.
+        expect(wrapper.props('reviewThreads')).toHaveLength(1);
+    });
+
+    it('tints a fully resolved thread differently', () => {
+        const wrapper = mount(DiffViewer, {
+            props: { ...baseProps, reviewThreads: [thread({ isResolved: true })] },
+        });
+        lastEditor().fireDiffUpdate();
+
+        expect(
+            commentDecorations(lastEditor(), 'modified')[0]!.options.glyphMarginClassName
+        ).toContain('moire-comment-glyph-resolved');
+        wrapper.unmount();
+    });
+
+    it('opens a popover with the thread when its gutter marker is clicked', async () => {
+        const wrapper = mount(DiffViewer, {
+            props: { ...baseProps, reviewThreads: [thread()] },
+        });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+
+        // No popover until a marker is clicked.
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+        diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+        await flushPromises();
+
+        const popover = wrapper.find('[role="dialog"]');
+        expect(popover.exists()).toBe(true);
+        expect(popover.text()).toContain('bob');
+        expect(popover.text()).toContain('this can race');
+    });
+
+    it('ignores a gutter click on a line with no thread', async () => {
+        const wrapper = mount(DiffViewer, {
+            props: { ...baseProps, reviewThreads: [thread()] },
+        });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+
+        diff.getModifiedEditor().fireMouseDown(glyphClick(3));
+        await flushPromises();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    });
+
+    it('opens the popover when the highlighted line itself is clicked, not only the glyph', async () => {
+        const wrapper = mount(DiffViewer, {
+            props: { ...baseProps, reviewThreads: [thread()] },
+        });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+
+        // A click on the code content of the commented line (not the gutter glyph).
+        diff.getModifiedEditor().fireMouseDown(contentClick(12));
+        await flushPromises();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+    });
+
+    it('closes the popover when a non-commented line is clicked', async () => {
+        const wrapper = mount(DiffViewer, {
+            props: { ...baseProps, reviewThreads: [thread()] },
+        });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+        diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+        await flushPromises();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+
+        diff.getModifiedEditor().fireMouseDown(contentClick(7));
+        await flushPromises();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    });
+
+    it('closes the popover on a click outside the editor and popover', async () => {
+        const wrapper = mount(DiffViewer, {
+            attachTo: document.body,
+            props: { ...baseProps, reviewThreads: [thread()] },
+        });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+        diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+        await flushPromises();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+
+        // A mouse-down elsewhere in the document dismisses it.
+        document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        await flushPromises();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it('closes the popover when the editor scrolls', async () => {
+        const wrapper = mount(DiffViewer, {
+            props: { ...baseProps, reviewThreads: [thread()] },
+        });
+        const diff = lastEditor();
+        diff.fireDiffUpdate();
+        diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+        await flushPromises();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+
+        diff.getModifiedEditor().fireScroll();
+        await flushPromises();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
     });
 
     it('jumps to a requested edge on demand via goToEdge', () => {

@@ -102,6 +102,29 @@ export interface PrComment {
     canEdit: boolean;
 }
 
+// One comment inside an inline review thread: an author login, its Markdown body,
+// and when it was posted.
+export interface PrReviewComment {
+    author: string;
+    body: string;
+    createdAt: string;
+}
+
+// An inline (line-anchored) code review thread on the PR, shown as a marker in the
+// diff viewer rather than in the PR conversation. `path` is the file it is on;
+// `line`/`originalLine` are the anchored line on the head (RIGHT) and base (LEFT)
+// side (either can be null when GitHub could not map it); `side` says which side it
+// hangs on. `isResolved` and `isOutdated` drive how the marker reads.
+export interface PrReviewThread {
+    path: string;
+    line: number | null;
+    originalLine: number | null;
+    side: 'LEFT' | 'RIGHT';
+    isResolved: boolean;
+    isOutdated: boolean;
+    comments: PrReviewComment[];
+}
+
 // A PR label; `color` is a 6-digit hex without the leading '#', as GitHub returns.
 export interface PrLabel {
     name: string;
@@ -122,6 +145,9 @@ export interface PrCheck {
 }
 
 export interface PullRequest {
+    // The PR's GraphQL node id, used to fetch its inline review threads. Optional
+    // because older fetches (and test fixtures) may omit it.
+    id?: string;
     number: number;
     title: string;
     body: string;
@@ -202,6 +228,10 @@ export interface MoireApi {
     // PR, ...) rather than rejecting. `base` is passed for context; the lookup
     // keys on the head branch.
     getPullRequest(base: string, head: string): Promise<PullRequestResult>;
+    // The PR's inline (line-anchored) review threads, by its node id, for the diff
+    // viewer's in-code markers. Resolves an empty list when there are none or the
+    // lookup fails, so markers are simply absent rather than surfacing an error.
+    getReviewThreads(prId: string): Promise<PrReviewThread[]>;
     // Conversation writes, allowed only while the PR view is in edit mode.
     // `postComment` adds a new comment to the PR (addressed by its number);
     // `editComment` rewrites an existing comment by its node id, and

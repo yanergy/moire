@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('api', {
     // process). Resolves a status-bearing result rather than rejecting.
     getPullRequest: (base: string, head: string) =>
         ipcRenderer.invoke('gh:pull-request', base, head),
+    // The PR's inline review threads, by node id, for the diff viewer's markers.
+    getReviewThreads: (prId: string) => ipcRenderer.invoke('gh:review-threads', prId),
     // Conversation writes (edit mode only): post a new comment, or edit one of the
     // signed-in account's own comments by node id. Both resolve an ok/message result.
     postComment: (prNumber: number, body: string) =>

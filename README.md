@@ -130,11 +130,13 @@ Track bugs and limitations here.
   deleting your own (behind a per-comment menu), editing the PR description, and ticking task-list
   checkboxes in the description or your own comments. A tick shows at once and the new body is
   written back via gh on a short debounce, so a burst of ticks on one target saves in a single
-  call. Still missing:
-    - A Commits tab (the commit list). Lower priority: editors such as PhpStorm already show a
-      branch's commits well, so this duplicates tooling the user likely already has.
-    - Inline review-thread comments and their resolved state, which need the GitHub GraphQL API,
-      beyond what `gh pr view --json` exposes.
+  call. Inline review comments (a reviewer's line-anchored notes, fetched over the GitHub GraphQL
+  API) show in the normal diff viewer: a marker in the gutter of each commented line opens the
+  thread in a popover, with its resolved or outdated state. Still missing:
+    - Replying to or resolving a review thread from the popover. It is read-only for now; use
+      GitHub for those.
+    - A Commits tab (the commit list) is deliberately not built: an IDE already shows a branch's
+      commits well, so it would duplicate tooling that is already to hand.
 - **A task-list tick can be lost if you leave within the debounce window.** Ticking a checkbox
   writes back after a short quiet period (about two seconds), batching a burst into one save.
   Pending ticks are flushed on the usual exits (leaving edit mode, refreshing, switching tab, the

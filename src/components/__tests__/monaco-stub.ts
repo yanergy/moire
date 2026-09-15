@@ -9,6 +9,10 @@ import type { Mock } from 'vitest';
 type DecorationsCollection = { set: Mock<(decorations: unknown) => void>; clear: Mock<() => void> };
 
 function makeInnerEditor() {
+    // Review-comment glyph clicks and scroll-to-close go through onMouseDown /
+    // onDidScrollChange; tests drive them via fireMouseDown / fireScroll below.
+    let mouseDownCb: ((e: unknown) => void) | null = null;
+    let scrollCb: (() => void) | null = null;
     return {
         revealLineInCenter: vi.fn<(line: number) => void>(),
         revealLine: vi.fn<(line: number) => void>(),
@@ -17,6 +21,22 @@ function makeInnerEditor() {
             set: vi.fn<(decorations: unknown) => void>(),
             clear: vi.fn<() => void>(),
         })),
+        // The diff viewer validates thread lines against the model's line count; a
+        // large stand-in keeps every fixture line in range.
+        getModel: vi.fn<() => { getLineCount: () => number }>(() => ({
+            getLineCount: () => Number.MAX_SAFE_INTEGER,
+        })),
+        onMouseDown: vi.fn<(cb: (e: unknown) => void) => { dispose: () => void }>((cb) => {
+            mouseDownCb = cb;
+            return { dispose: vi.fn<() => void>() };
+        }),
+        onDidScrollChange: vi.fn<(cb: () => void) => { dispose: () => void }>((cb) => {
+            scrollCb = cb;
+            return { dispose: vi.fn<() => void>() };
+        }),
+        // Test drivers (not part of Monaco).
+        fireMouseDown: (e: unknown) => mouseDownCb?.(e),
+        fireScroll: () => scrollCb?.(),
     };
 }
 
@@ -70,6 +90,10 @@ export const editor = {
     defineTheme: vi.fn<(name: string, theme: unknown) => void>(),
     setTheme: vi.fn<(name: string) => void>(),
     create: vi.fn<(container: unknown, options?: unknown) => void>(),
+    // Only the member the diff viewer compares a glyph click against.
+    MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 },
+    // Lanes the comment-marker overview-ruler decoration references.
+    OverviewRulerLane: { Left: 1, Center: 2, Right: 4, Full: 7 },
 };
 
 export const languages = {
