@@ -88,6 +88,12 @@ last branch range are remembered per repository.
 - System, light, and dark themes, with theme and branch selections persisted per repository.
 - A selectable diff color style (GitHub or VS Code) under **View > Code Style**, persisted across launches.
 - A status bar reporting line-ending style and how long ago the diff was synced.
+- A pull-request viewer for the compared branches: title, status, merge state, labels, description
+  and conversation as Markdown, and a Checks tab with the head commit's CI. An edit mode (off by
+  default) adds posting, editing, and deleting your own comments, editing the description, and
+  ticking task-list checkboxes. Inline review threads and CI check annotations show on their lines
+  in the diff, and you can reply to and resolve threads in place. The file tree flags each file that
+  carries review threads or annotations.
 
 ## Development
 
@@ -122,30 +128,12 @@ Track bugs and limitations here.
   certificate, which this project does not use.
 - **Windows and Linux packaged builds are unverified.** The `electron-builder` config targets
   them, but the app has only been built and run on macOS so far.
-- **The PR viewer (issue [#3](https://github.com/yanergy/moire/issues/3)) does not yet cover
-  everything the design shows.** It detects a PR for the selected head branch and shows the title,
-  number, status, change stats, commit count, labels, merge status, description (Markdown), the
-  conversation (comments and review verdicts), and a Checks tab with the head commit's CI runs.
-  An edit mode (off by default, toggled from the PR header) adds posting new comments, editing or
-  deleting your own (behind a per-comment menu), editing the PR description, and ticking task-list
-  checkboxes in the description or your own comments. A tick shows at once and the new body is
-  written back via gh on a short debounce, so a burst of ticks on one target saves in a single
-  call. Inline review comments (a reviewer's line-anchored notes, fetched over the GitHub GraphQL
-  API) show in the normal diff viewer: a marker in the gutter of each commented line opens the
-  thread in a popover, with its resolved or outdated state. From the popover you can reply into a
-  thread and resolve or unresolve it (GitHub-style), and the thread re-reads so the change shows in
-  place. CI check annotations (a line-anchored note a workflow such as a linter posts on the head
-  commit, fetched over the Checks REST API) show the same way, as a warning or error marker on the
-  flagged head line that opens the finding in the same popover, with a link out to the producing
-  check. They are matched to the head commit, so a repo whose checks post no annotations simply
-  shows no markers. The file tree also flags each file next to its name: a speech-bubble icon when
-  it carries review threads (accent while any is open, green once all are resolved) and a triangle
-  when it carries an annotation (red for an error, amber for a warning). Still missing:
-    - A Commits tab (the commit list) is deliberately not built: an IDE already shows a branch's
-      commits well, so it would duplicate tooling that is already to hand.
-    - Check annotations are read-only (view only). Unlike code scanning alerts, a check-run
-      annotation cannot be dismissed through the API; it belongs to a check run and clears when the
-      check re-runs, so there is nothing to act on here.
+- **The PR viewer (issue [#3](https://github.com/yanergy/moire/issues/3)) leaves two things out on
+  purpose.** A Commits tab (the commit list) is deliberately not built, since an IDE already shows a
+  branch's commits well and it would duplicate tooling that is already to hand. And CI check
+  annotations are read-only: unlike code scanning alerts, a check-run annotation cannot be dismissed
+  through the API (it belongs to a check run and clears when the check re-runs), so there is nothing
+  to act on.
 - **A task-list tick can be lost if you quit within the debounce window.** Ticking a checkbox
   writes back after a short quiet period (about two seconds), batching a burst into one save.
   Pending ticks are flushed on the usual exits (leaving edit mode, refreshing, switching tab, the
@@ -169,7 +157,7 @@ Tracked as open issues on GitHub.
 - [x] Next and previous change navigation that crosses into the next file once the end of the current
   file is reached.
   ([#2](https://github.com/yanergy/moire/issues/2))
-- [ ] A PR viewer: when a PR exists for the selected branches, retrieve it and show its information
+- [x] A PR viewer: when a PR exists for the selected branches, retrieve it and show its information
   (primarily the description) in a separate view.
   ([#3](https://github.com/yanergy/moire/issues/3))
 - [ ] Search filters in the file tree, for example by filetype or mutation type. A filter menu
