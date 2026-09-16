@@ -162,7 +162,9 @@ Tracked as open issues on GitHub.
   annotation (a warning or error), building on the per-file warning/error triangles already shown
   in the tree.
   ([#4](https://github.com/yanergy/moire/issues/4))
-- [ ] Click a filepath to open the file in the user's preferred editor. This probably needs a setting.
+- [ ] Open the diffed file straight from the diff viewer: a button next to the filename (in the
+  diff header) opens the file in the operating system's default app for that filetype. A later
+  setting could point this at a preferred editor instead of the OS default.
   ([#5](https://github.com/yanergy/moire/issues/5))
 - [ ] Infinite scroll on the review page. Add setting to view files under each other, like GitHub does, instead of separated by file.
   ([#6](https://github.com/yanergy/moire/issues/6))
