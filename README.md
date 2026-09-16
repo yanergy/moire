@@ -146,11 +146,13 @@ Track bugs and limitations here.
     - Check annotations are read-only (view only). Unlike code scanning alerts, a check-run
       annotation cannot be dismissed through the API; it belongs to a check run and clears when the
       check re-runs, so there is nothing to act on here.
-- **A task-list tick can be lost if you leave within the debounce window.** Ticking a checkbox
+- **A task-list tick can be lost if you quit within the debounce window.** Ticking a checkbox
   writes back after a short quiet period (about two seconds), batching a burst into one save.
   Pending ticks are flushed on the usual exits (leaving edit mode, refreshing, switching tab, the
-  window losing focus). They are not flushed when the branch or PR is switched or the app quits
-  within that window, so a tick made in the last couple of seconds before either can be dropped.
+  window losing focus, and switching the branch or PR, which flushes to the old PR before the new
+  one loads). They are not flushed when the app quits within that window, so a tick made in the
+  last couple of seconds before quitting can still be dropped. Handling that needs the main
+  process to hold quitting until the pending write lands, which is not wired up yet.
 - **The Git menu's account list refreshes only when the menu is rebuilt** (on launch, when a repo
   opens, and right after switching accounts). Signing in or out with `gh auth login` / `gh auth
   logout` while the app is running is not picked up until one of those happens (or a relaunch).

@@ -303,9 +303,20 @@ watch(editing, (on) => {
     }
 });
 
+// Switching the compared range (base or head) swaps `pr` to a different PR, but
+// only a moment later: the store's PR lookup is async, so `pr` still points at the
+// old PR when this fires. Flush pending task-list ticks now, while it does, so a
+// tick made in the debounce window just before the switch is written back to the PR
+// it belongs to instead of being dropped. `saveTask` captures the old PR number
+// synchronously here, before the reload replaces `pr`, so the write lands correctly.
+watch([() => comparison.base, () => comparison.head], () => {
+    void flushTasks();
+});
+
 // A different PR (a branch switch) resets to read-only; its own edit state means
-// nothing here. Pending task-list drafts belonged to the old PR and cannot be
-// written to the new one, so they are dropped.
+// nothing here. Any pending task-list ticks were already flushed to the old PR by
+// the range watcher above (it fires before this swap), so here we only clear the
+// now-settled task state and reset the edit-mode UI.
 watch(
     () => pr.value?.number,
     () => {
@@ -638,7 +649,8 @@ function onBodyClick(event: MouseEvent) {
 // the draft is dropped. On failure the draft is dropped (reverting to the server
 // state) and an error banner shows. Pending drafts are flushed on the exits that
 // would otherwise lose them (leaving edit mode, refreshing, switching tab, the
-// window losing focus, unmount); a branch/PR switch drops them (see the watchers).
+// window losing focus, unmount, and switching the compared range before the PR
+// swaps; see the watchers).
 const TASK_SAVE_DEBOUNCE_MS = 2000;
 // How long the "Saved" confirmation lingers after a write lands.
 const TASK_SAVED_HINT_MS = 2000;

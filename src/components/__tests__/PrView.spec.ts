@@ -760,6 +760,22 @@ describe('PrView', () => {
             expect(edit).toHaveBeenCalledWith('- [x] a');
         });
 
+        it('flushes a pending tick when the compared range switches, before the PR swaps', async () => {
+            const store = useComparisonStore();
+            const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
+
+            const wrapper = await enableEditing({ ...PR, body: '- [ ] a' });
+            await wrapper.get('input.pr-task-checkbox').trigger('click');
+            // Still within the debounce window: nothing written yet.
+            expect(edit).not.toHaveBeenCalled();
+
+            // Switching the base (a range change) swaps to a different PR a moment
+            // later; the tick must be written to the current PR first, not dropped.
+            store.base = 'release';
+            await flushPromises();
+            expect(edit).toHaveBeenCalledWith('- [x] a');
+        });
+
         it('reverts the checkbox and shows an error when the write fails', async () => {
             vi.useFakeTimers();
             const store = useComparisonStore();
