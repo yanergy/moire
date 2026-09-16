@@ -94,6 +94,9 @@ last branch range are remembered per repository.
   ticking task-list checkboxes. Inline review threads and CI check annotations show on their lines
   in the diff, and you can reply to and resolve threads in place. The file tree flags each file that
   carries review threads or annotations.
+- A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
+  the tree by filetype, mutation type, or marker (files carrying an error, warning, or review
+  comment). Filters are multi-select and combine, and a reset clears them at once.
 
 ## Development
 
@@ -157,7 +160,7 @@ Tracked as open issues on GitHub.
 - [x] A PR viewer: when a PR exists for the selected branches, retrieve it and show its information
   (primarily the description) in a separate view.
   ([#3](https://github.com/yanergy/moire/issues/3))
-- [ ] Search filters in the file tree, for example by filetype or mutation type. A filter menu
+- [x] Search filters in the file tree, for example by filetype or mutation type. A filter menu
   (next to the changed-files counter) should also offer filtering to only files that carry a check
   annotation (a warning or error), building on the per-file warning/error triangles already shown
   in the tree.

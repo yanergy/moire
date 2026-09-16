@@ -1380,4 +1380,175 @@ describe('comparison store', () => {
             expect(store.prLoading).toBe(false);
         });
     });
+
+    describe('file-tree filters', () => {
+        // The paths shown in the tree (file rows only) under the current filters, the
+        // way the sidebar renders them.
+        const shownPaths = (store: ReturnType<typeof useComparisonStore>) =>
+            files(store.treeNodes).map((n) => n.path);
+
+        it('lists the filetypes present, with counts, no-extension last', () => {
+            const store = useComparisonStore();
+            store.files = [
+                { path: 'src/a.ts', status: 'M', additions: 1, deletions: 0, binary: false },
+                { path: 'src/b.ts', status: 'M', additions: 1, deletions: 0, binary: false },
+                { path: 'src/c.vue', status: 'M', additions: 1, deletions: 0, binary: false },
+                { path: 'Makefile', status: 'M', additions: 1, deletions: 0, binary: false },
+            ];
+
+            expect(store.availableExtensions).toEqual([
+                { value: 'ts', label: '.ts', count: 2 },
+                { value: 'vue', label: '.vue', count: 1 },
+                { value: '', label: '(no extension)', count: 1 },
+            ]);
+        });
+
+        it('lists the change types present, by mutation, in A/M/D/R order', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES;
+
+            // CHANGED_FILES has one A, eight M, one D, no R.
+            expect(store.availableStatuses).toEqual([
+                { value: 'A', label: 'Added', count: 1 },
+                { value: 'M', label: 'Modified', count: 8 },
+                { value: 'D', label: 'Deleted', count: 1 },
+            ]);
+        });
+
+        it('narrows the tree to a selected filetype', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES;
+
+            store.toggleExtensionFilter('vue');
+            const shown = shownPaths(store);
+            expect(shown).toHaveLength(3);
+            expect(shown.every((p) => p.endsWith('.vue'))).toBe(true);
+        });
+
+        it('narrows the tree to a selected change type', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES;
+
+            store.toggleStatusFilter('D');
+            expect(shownPaths(store)).toEqual(['src/components/LegacyDiff.vue']);
+        });
+
+        it('combines facets with AND', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES;
+
+            // Added AND a .ts file: only the newly added TypeScript file qualifies.
+            store.toggleStatusFilter('A');
+            store.toggleExtensionFilter('ts');
+            expect(shownPaths(store)).toEqual(['electron/watcher/RepoWatcher.ts']);
+        });
+
+        it('ORs the values within one facet', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES;
+
+            // Added OR deleted: the one added and the one deleted file, nothing else.
+            store.toggleStatusFilter('A');
+            store.toggleStatusFilter('D');
+            const shown = shownPaths(store);
+            expect(shown).toHaveLength(2);
+            expect(shown).toContain('electron/watcher/RepoWatcher.ts');
+            expect(shown).toContain('src/components/LegacyDiff.vue');
+        });
+
+        it('offers and filters on markers (errors, warnings, comments)', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES;
+            store.checkAnnotations = [
+                {
+                    path: 'electron/git/parsers.ts',
+                    line: 5,
+                    level: 'failure',
+                    title: 'quality-gates',
+                    message: 'boom',
+                    url: '',
+                },
+                {
+                    path: 'shared/types.ts',
+                    line: 2,
+                    level: 'warning',
+                    title: 'lint',
+                    message: 'careful',
+                    url: '',
+                },
+            ];
+            store.reviewThreads = [
+                {
+                    id: 'RT_1',
+                    path: 'src/stores/comparison.ts',
+                    line: 8,
+                    originalLine: null,
+                    side: 'RIGHT',
+                    isResolved: false,
+                    isOutdated: false,
+                    comments: [{ author: 'bob', body: 'hm', createdAt: '' }],
+                },
+            ];
+
+            expect(store.availableMarkers).toEqual([
+                { value: 'error', label: 'Errors', count: 1 },
+                { value: 'warning', label: 'Warnings', count: 1 },
+                { value: 'comment', label: 'Comments', count: 1 },
+            ]);
+
+            store.toggleMarkerFilter('error');
+            expect(shownPaths(store)).toEqual(['electron/git/parsers.ts']);
+
+            // Errors OR comments: the error file and the commented file.
+            store.toggleMarkerFilter('comment');
+            const both = shownPaths(store);
+            expect(both).toHaveLength(2);
+            expect(both).toContain('electron/git/parsers.ts');
+            expect(both).toContain('src/stores/comparison.ts');
+        });
+
+        it('omits a marker facet with no matching files', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES; // no annotations or threads seeded
+
+            expect(store.availableMarkers).toEqual([]);
+        });
+
+        it('tracks the active count and clears every facet at once', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES;
+
+            expect(store.hasActiveFilters).toBe(false);
+            store.toggleStatusFilter('M');
+            store.toggleExtensionFilter('ts');
+            expect(store.activeFilterCount).toBe(2);
+            expect(store.hasActiveFilters).toBe(true);
+
+            store.clearFilters();
+            expect(store.activeFilterCount).toBe(0);
+            expect(store.hasActiveFilters).toBe(false);
+            expect(shownPaths(store)).toHaveLength(CHANGED_FILES.length);
+        });
+
+        it('toggling the same value twice removes it', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES;
+
+            store.toggleStatusFilter('D');
+            expect(shownPaths(store)).toHaveLength(1);
+            store.toggleStatusFilter('D');
+            expect(shownPaths(store)).toHaveLength(CHANGED_FILES.length);
+        });
+
+        it('applies the text box and the facets together', () => {
+            const store = useComparisonStore();
+            store.files = CHANGED_FILES;
+
+            // Modified files whose path mentions "electron": three of the M files.
+            store.toggleStatusFilter('M');
+            store.setTreeFilter('electron');
+            expect(shownPaths(store).every((p) => p.startsWith('electron/'))).toBe(true);
+            expect(shownPaths(store)).toHaveLength(3);
+        });
+    });
 });

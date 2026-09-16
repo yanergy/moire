@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, type Ref } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import type {
     BranchInfo,
@@ -71,6 +71,55 @@ const EMPTY_PAIR: FilePair = {
 function baseName(path: string): string {
     const parts = path.split('/');
     return parts[parts.length - 1] ?? path;
+}
+
+// A file's extension for the tree's filetype filter: the basename's last suffix,
+// lowercased. A dotfile (a leading dot with no other, like `.gitignore`) and a
+// name with no dot both count as having no extension, bucketed under NO_EXTENSION.
+const NO_EXTENSION = '';
+function fileExtension(path: string): string {
+    const base = baseName(path);
+    const dot = base.lastIndexOf('.');
+    return dot > 0 ? base.slice(dot + 1).toLowerCase() : NO_EXTENSION;
+}
+
+// A row marker the tree can filter on: a CI error or warning annotation, or a
+// review comment thread. Named for what the file carries, not its diff status.
+export type FileMarker = 'error' | 'warning' | 'comment';
+
+// Human labels for the filter menu's change-type and marker options. Statuses read
+// as their mutation ("Added" rather than "A"); markers as their plural noun.
+const STATUS_LABEL: Record<FileStatus, string> = {
+    A: 'Added',
+    M: 'Modified',
+    D: 'Deleted',
+    R: 'Renamed',
+};
+const MARKER_LABEL: Record<FileMarker, string> = {
+    error: 'Errors',
+    warning: 'Warnings',
+    comment: 'Comments',
+};
+
+// One selectable option in a filter group: the raw value to toggle, its label, and
+// how many files in the current change set carry it.
+export interface FilterOption<T extends string> {
+    value: T;
+    label: string;
+    count: number;
+}
+
+// Flip one value in a filter facet's set. The set is replaced (not mutated in place)
+// so the computeds reading it re-run, matching how the task drafts are handled.
+function toggleInSet<T>(setRef: Ref<Set<T>>, value: T) {
+    const next = new Set(setRef.value);
+    if (next.has(value)) {
+        next.delete(value);
+    } else {
+        next.add(value);
+    }
+
+    setRef.value = next;
 }
 
 // Group a flat change set into a nested directory tree, keyed by path segment.
@@ -161,6 +210,15 @@ export const useComparisonStore = defineStore('comparison', () => {
     const treeFilter = ref('');
     const collapsed = ref<Record<string, boolean>>({});
 
+    // The file tree's faceted filters, each an active set narrowing the change set
+    // alongside the text box. Empty means "no constraint from this facet"; within a
+    // facet the selected values are ORed (any match keeps the file), and the facets
+    // combine with AND (a file must satisfy every non-empty facet). Toggling replaces
+    // the set so the computeds that read them re-run.
+    const filterStatuses = ref<Set<FileStatus>>(new Set());
+    const filterExtensions = ref<Set<string>>(new Set());
+    const filterMarkers = ref<Set<FileMarker>>(new Set());
+
     // One-shot instruction for the diff viewer set when change navigation crosses
     // into another file: which edge of the newly selected file to land on ('first'
     // change when moving forward, 'last' when moving back). The viewer reads it
@@ -188,16 +246,27 @@ export const useComparisonStore = defineStore('comparison', () => {
         return path ? reviewThreads.value.filter((t) => t.path === path) : [];
     }
 
-    // Whether a file carries review threads, for the file tree's comment marker:
-    // 'open' when any thread on it is still unresolved, 'resolved' when it has threads
-    // but every one is resolved, null when it has none.
-    function commentStateForFile(path: string): 'open' | 'resolved' | null {
-        const threads = threadsForFile(path);
-        if (threads.length === 0) {
-            return null;
+    // The review-comment state per file path, for the tree's comment marker and the
+    // marker filter: 'open' when any thread on the file is unresolved, 'resolved' when
+    // it has threads but all are resolved. Files with no threads are absent.
+    const commentStateByPath = computed(() => {
+        const map = new Map<string, 'open' | 'resolved'>();
+        for (const t of reviewThreads.value) {
+            if (!t.path) {
+                continue;
+            }
+
+            if (!t.isResolved) {
+                map.set(t.path, 'open');
+            } else if (!map.has(t.path)) {
+                map.set(t.path, 'resolved');
+            }
         }
 
-        return threads.some((t) => !t.isResolved) ? 'open' : 'resolved';
+        return map;
+    });
+    function commentStateForFile(path: string): 'open' | 'resolved' | null {
+        return commentStateByPath.value.get(path) ?? null;
     }
 
     // The head commit's CI check annotations, shown as warning markers in the diff
@@ -619,12 +688,107 @@ export const useComparisonStore = defineStore('comparison', () => {
         void window.api?.setBranchSelection?.(repoPath.value, nextBase, nextHead);
     });
 
-    // The change set narrowed to the filter box, shared by the tree render and the
-    // per-folder "mark viewed" action so the folder checkbox and the files it
-    // toggles always agree on what the folder contains.
+    // Whether a file carries a given marker, read from the by-path maps so the filter
+    // and the facet counts share one source of truth.
+    function fileHasMarker(path: string, marker: FileMarker): boolean {
+        if (marker === 'comment') {
+            return commentStateByPath.value.has(path);
+        }
+
+        const level = annotationLevelByPath.value.get(path);
+        return marker === 'error' ? level === 'failure' : level === 'warning';
+    }
+
+    // The filetype options offered by the filter menu: every extension present in the
+    // current change set, with a file count, sorted alphabetically. Files with no
+    // extension come last under a "(no extension)" label so the bucket is legible.
+    const availableExtensions = computed<FilterOption<string>[]>(() => {
+        const counts = new Map<string, number>();
+        for (const f of files.value) {
+            const ext = fileExtension(f.path);
+            counts.set(ext, (counts.get(ext) ?? 0) + 1);
+        }
+
+        const entries = [...counts.entries()];
+        // Sorting the freshly built array in place is safe (nothing else holds it).
+        // oxlint-disable-next-line no-array-sort
+        entries.sort(([a], [b]) => {
+            if (a === NO_EXTENSION) {
+                return 1;
+            }
+            if (b === NO_EXTENSION) {
+                return -1;
+            }
+
+            return a.localeCompare(b);
+        });
+
+        return entries.map(([value, count]) => ({
+            value,
+            label: value === NO_EXTENSION ? '(no extension)' : '.' + value,
+            count,
+        }));
+    });
+
+    // The change-type options: each file status present in the change set, labelled by
+    // its mutation, in a stable A/M/D/R order.
+    const STATUS_ORDER: FileStatus[] = ['A', 'M', 'D', 'R'];
+    const availableStatuses = computed<FilterOption<FileStatus>[]>(() => {
+        const counts = new Map<FileStatus, number>();
+        for (const f of files.value) {
+            counts.set(f.status, (counts.get(f.status) ?? 0) + 1);
+        }
+
+        return STATUS_ORDER.filter((s) => counts.has(s)).map((value) => ({
+            value,
+            label: STATUS_LABEL[value],
+            count: counts.get(value) ?? 0,
+        }));
+    });
+
+    // The marker options: errors, warnings, and comments that actually occur in the
+    // change set (a facet with no such files is not offered).
+    const MARKER_ORDER: FileMarker[] = ['error', 'warning', 'comment'];
+    const availableMarkers = computed<FilterOption<FileMarker>[]>(() => {
+        return MARKER_ORDER.map((value) => ({
+            value,
+            label: MARKER_LABEL[value],
+            count: files.value.filter((f) => fileHasMarker(f.path, value)).length,
+        })).filter((o) => o.count > 0);
+    });
+
+    // How many filter options are selected across every facet (the text box aside), so
+    // the menu trigger can badge the active count and callers can tell if any is on.
+    const activeFilterCount = computed(
+        () => filterStatuses.value.size + filterExtensions.value.size + filterMarkers.value.size
+    );
+    const hasActiveFilters = computed(() => activeFilterCount.value > 0);
+
+    // The change set narrowed to the filter box and the active facets, shared by the
+    // tree render and the per-folder "mark viewed" action so the folder checkbox and
+    // the files it toggles always agree on what the folder contains. Facets combine
+    // with AND; the values within a facet with OR (see the filter state above).
     const shownFiles = computed(() => {
         const filter = treeFilter.value.toLowerCase();
-        return files.value.filter((f) => !filter || f.path.toLowerCase().includes(filter));
+        const statuses = filterStatuses.value;
+        const extensions = filterExtensions.value;
+        const markers = filterMarkers.value;
+        return files.value.filter((f) => {
+            if (filter && !f.path.toLowerCase().includes(filter)) {
+                return false;
+            }
+            if (statuses.size > 0 && !statuses.has(f.status)) {
+                return false;
+            }
+            if (extensions.size > 0 && !extensions.has(fileExtension(f.path))) {
+                return false;
+            }
+            if (markers.size > 0 && ![...markers].some((m) => fileHasMarker(f.path, m))) {
+                return false;
+            }
+
+            return true;
+        });
     });
 
     const treeNodes = computed<TreeNode[]>(() => {
@@ -829,6 +993,24 @@ export const useComparisonStore = defineStore('comparison', () => {
         treeFilter.value = value;
     }
 
+    function toggleStatusFilter(status: FileStatus) {
+        toggleInSet(filterStatuses, status);
+    }
+    function toggleExtensionFilter(ext: string) {
+        toggleInSet(filterExtensions, ext);
+    }
+    function toggleMarkerFilter(marker: FileMarker) {
+        toggleInSet(filterMarkers, marker);
+    }
+
+    // Drop every active facet at once (the menu's "Clear all"). The text box is a
+    // separate control, so it is left as is.
+    function clearFilters() {
+        filterStatuses.value = new Set();
+        filterExtensions.value = new Set();
+        filterMarkers.value = new Set();
+    }
+
     function setBase(name: string) {
         base.value = name;
         disappearedBranches.value = [];
@@ -882,6 +1064,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         viewed.value = {};
         collapsed.value = {};
         treeFilter.value = '';
+        clearFilters();
         selectedPath.value = '';
         pullRequest.value = null;
         prStatus.value = 'no-pr';
@@ -1125,6 +1308,14 @@ export const useComparisonStore = defineStore('comparison', () => {
         selectedPath,
         viewed,
         treeFilter,
+        filterStatuses,
+        filterExtensions,
+        filterMarkers,
+        availableStatuses,
+        availableExtensions,
+        availableMarkers,
+        activeFilterCount,
+        hasActiveFilters,
         collapsed,
         pendingChangeEdge,
         lastSyncedAt,
@@ -1174,6 +1365,10 @@ export const useComparisonStore = defineStore('comparison', () => {
         collapseAll,
         toggleAll,
         setTreeFilter,
+        toggleStatusFilter,
+        toggleExtensionFilter,
+        toggleMarkerFilter,
+        clearFilters,
         setBase,
         setHead,
         setCompareMode,

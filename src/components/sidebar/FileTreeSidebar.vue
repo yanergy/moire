@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import FileFilterMenu from '@/components/sidebar/FileFilterMenu.vue';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { celebrate } from '@/lib/celebrate';
 
@@ -30,6 +31,14 @@ const ui = useUiStore();
 function openFile(path: string): void {
     comparison.selectFile(path);
     ui.setMainView('diff');
+}
+
+// The change set has files but the search box or the filter menu hides every one,
+// so the tree would render blank. Show a hint with a one-click way back instead.
+const filteredEmpty = computed(() => comparison.fileCount > 0 && comparison.treeNodes.length === 0);
+function clearAllFilters(): void {
+    comparison.setTreeFilter('');
+    comparison.clearFilters();
 }
 
 // A small flourish the moment every changed file has been marked viewed (only on
@@ -271,6 +280,7 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                     {{ comparison.fileCount }}
                 </Badge>
                 <div class="flex-1" />
+                <FileFilterMenu />
                 <Tooltip>
                     <TooltipTrigger as-child>
                         <Button
@@ -299,15 +309,32 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
             <div class="px-3 pb-2.5">
                 <Input
                     v-model="comparison.treeFilter"
-                    placeholder="Filter files…"
+                    placeholder="Search files…"
                     class="h-8 border-moire-border bg-transparent font-mono text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
                 />
+            </div>
+
+            <!-- Everything filtered out: a hint plus a reset, rather than a blank tree. -->
+            <div
+                v-if="filteredEmpty"
+                class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 pb-6 text-center"
+            >
+                <p class="text-xs text-moire-muted">No files match the current filters.</p>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-7 border-moire-border text-xs text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                    @click="clearAllFilters"
+                >
+                    Clear filters
+                </Button>
             </div>
 
             <!-- Only the rows in view are in the DOM. treeNodes is already the flat,
                  folded, expand-aware row list, so it feeds the scroller directly and
                  each row keeps its own height (ROW_HEIGHT) for placement. -->
             <recycle-scroller
+                v-else
                 v-slot="{ item: node }"
                 class="min-h-0 flex-1 pb-3"
                 :items="comparison.treeNodes"

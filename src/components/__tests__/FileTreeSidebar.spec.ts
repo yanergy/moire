@@ -324,4 +324,28 @@ describe('FileTreeSidebar', () => {
         expect(clean.find('.text-moire-accent').exists()).toBe(false);
         expect(clean.find('.text-moire-status-a').exists()).toBe(false);
     });
+
+    it('renders the filter menu trigger in the header', () => {
+        const wrapper = mountTree();
+        expect(wrapper.find('button[aria-label="Filter files"]').exists()).toBe(true);
+    });
+
+    it('shows a clear-filters hint (not a blank tree) when every file is filtered out', async () => {
+        const wrapper = mountTree();
+        await flushPromises();
+        const store = useComparisonStore();
+
+        // A search that matches nothing hides every row; the change set is non-empty.
+        store.setTreeFilter('zzz-no-such-file');
+        await flushPromises();
+
+        expect(wrapper.text()).toContain('No files match the current filters.');
+        const clear = wrapper.findAll('button').find((b) => b.text() === 'Clear filters');
+        expect(clear).toBeTruthy();
+
+        await clear?.trigger('click');
+        await flushPromises();
+        expect(wrapper.text()).not.toContain('No files match the current filters.');
+        expect(wrapper.find('[data-path="electron/git/parsers.ts"]').exists()).toBe(true);
+    });
 });
