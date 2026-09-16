@@ -52,7 +52,12 @@ function navigate(direction: 'next' | 'prev') {
 
 <template>
     <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
+        <!-- With no file selected (no repo, or a range with no changes), `selectedFile`
+             falls back to the empty placeholder, whose blank path and default status
+             would otherwise render a stray banner and (M) badge over an empty pane.
+             Show the banner only when a real file is selected. -->
         <selection-banner
+            v-if="comparison.selectedFile.path"
             :file="comparison.selectedFile"
             :viewed="comparison.isViewed(comparison.selectedFile.path)"
             :change-count="showViewer ? changeCount : 0"

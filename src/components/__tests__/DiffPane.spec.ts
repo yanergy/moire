@@ -198,3 +198,27 @@ describe('DiffPane cross-file change navigation', () => {
         expect(store.pendingChangeEdge).toBe('first');
     });
 });
+
+describe('DiffPane selection banner', () => {
+    beforeEach(() => setActivePinia(createPinia()));
+    afterEach(() => {
+        delete window.api;
+    });
+
+    it('hides the banner when no file is selected, so no stray status badge shows', () => {
+        // No repo or selection: the store's selectedFile is the empty placeholder
+        // (blank path, default M status), which must not render a banner over the
+        // otherwise-empty pane.
+        useComparisonStore();
+        const wrapper = mount(DiffPane);
+        expect(wrapper.findComponent(SelectionBanner).exists()).toBe(false);
+    });
+
+    it('shows the banner once a file is selected', () => {
+        const store = useComparisonStore();
+        store.files = [textFile('a.ts')];
+        store.selectFile('a.ts');
+        const wrapper = mount(DiffPane);
+        expect(wrapper.findComponent(SelectionBanner).exists()).toBe(true);
+    });
+});
