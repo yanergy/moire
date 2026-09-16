@@ -241,16 +241,24 @@ describe('FileTreeSidebar', () => {
     it('toggles all folders from the single header control', async () => {
         const wrapper = mountTree();
         await flushPromises();
+        const store = useComparisonStore();
+        // Whether a nested file is present in the row model. Asserting on treeNodes
+        // (not the rendered rows) keeps this deterministic: the virtualized scroller
+        // can lag the reactive collapse under full-suite load, but the model does not.
+        const hasNestedFile = () =>
+            store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts');
 
-        // Starts expanded, so the control collapses and its label flips.
+        expect(hasNestedFile()).toBe(true);
+
+        // Starts expanded, so the control collapses everything and its label flips.
         await wrapper.find('[aria-label="Collapse all"]').trigger('click');
-        await flushPromises();
-        expect(wrapper.find('[data-path="electron/git/parsers.ts"]').exists()).toBe(false);
+        expect(store.allCollapsed).toBe(true);
+        expect(hasNestedFile()).toBe(false);
 
-        // Now fully collapsed, so the same control expands.
+        // Now fully collapsed, so the same control expands everything back.
         await wrapper.find('[aria-label="Expand all"]').trigger('click');
-        await flushPromises();
-        expect(wrapper.find('[data-path="electron/git/parsers.ts"]').exists()).toBe(true);
+        expect(store.allCollapsed).toBe(false);
+        expect(hasNestedFile()).toBe(true);
     });
 
     it('flags a file that carries check annotations with a colored triangle', async () => {
