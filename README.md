@@ -77,6 +77,10 @@ last branch range are remembered per repository.
 - Two-branch diff for any local Git repository, with `merge-base` (pull-request style) and `direct`
   comparison modes.
 - Split and unified layouts, powered by the Monaco editor.
+- A choice of diff layout under **View > Diff Layout**: the single-file view, or a GitHub-style
+  "all files" list that stacks every changed file's diff in one scroll. The stacked view windows
+  its editors so large pull requests stay responsive, marking a file viewed collapses it, and
+  clicking a file in the tree jumps to it.
 - A virtualized file tree that stays smooth on large change sets, with per-file and per-folder
   "mark viewed" progress.
 - Next and previous change navigation that steps through the open file, then crosses into the
@@ -172,7 +176,8 @@ Tracked as open issues on GitHub.
   that opens the file in the operating system's default app, and a **View > Open Files In** setting
   can point this at a preferred editor instead.
   ([#5](https://github.com/yanergy/moire/issues/5))
-- [ ] Infinite scroll on the review page. Add setting to view files under each other, like GitHub does, instead of separated by file.
+- [x] Infinite scroll on the review page: a **View > Diff Layout** setting to view every file's
+  diff stacked in one scroll, like GitHub does, instead of one file at a time.
   ([#6](https://github.com/yanergy/moire/issues/6))
 
 ## Documentation
