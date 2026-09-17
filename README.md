@@ -62,10 +62,20 @@ confirm. After that it opens normally. (Windows and Linux targets are configured
     - **direct**: compares the base and head tips directly, so commits added to base after head
       branched off also show up.
 4. **Choose the layout.** Toggle between **split** (side by side) and **unified** (single column).
+   Under **View > Diff Layout** you can switch the whole review area between the single-file view
+   and an **All Files** list that stacks every changed file's diff in one scroll, GitHub style.
 5. **Browse the changes.** The sidebar lists every changed file as a tree. Click a file to open its
-   diff. Mark a file or a whole folder as viewed to keep track of what you have already read.
-   Renames, binary files, and images are handled with their own previews, and very large files sit
-   behind a click so they never lock up the window.
+   diff, or search and filter the tree (by name, or by filetype, mutation type, or marker) to focus
+   on what matters. Mark a file or a whole folder as viewed to track what you have read, and step
+   through changes with the previous and next buttons in the diff header, which cross into the
+   adjacent file at each end. Click the filename in the diff header to open the file in an editor
+   (choose which under **View > Open Files In**). Renames, binary files, and images get their own
+   previews, and very large files sit behind a click so they never lock up the window.
+6. **Review the pull request.** When a pull request exists for the selected branches, a PR view
+   becomes available with its description, status, labels, conversation, and CI checks. Inline
+   review comments and check annotations show on their lines in the diff. An optional edit mode lets
+   you reply to and resolve threads, post and edit your own comments, edit the description, and tick
+   task-list boxes.
 
 The diff refreshes on its own when the repository changes on disk. Use **View > Refresh**
 (`Cmd/Ctrl+R`) to re-scan manually. Set the appearance under **View > Theme** (System, Light, or
@@ -154,31 +164,6 @@ Track bugs and limitations here.
 - **The Git menu's account list refreshes only when the menu is rebuilt** (on launch, when a repo
   opens, and right after switching accounts). Signing in or out with `gh auth login` / `gh auth
   logout` while the app is running is not picked up until one of those happens (or a relaunch).
-
-## Planned features
-
-Tracked as open issues on GitHub.
-
-- [x] Diff viewer colors that match GitHub's diff view. 
-  ([#1](https://github.com/yanergy/moire/issues/1))
-- [x] Next and previous change navigation that crosses into the next file once the end of the current
-  file is reached.
-  ([#2](https://github.com/yanergy/moire/issues/2))
-- [x] A PR viewer: when a PR exists for the selected branches, retrieve it and show its information
-  (primarily the description) in a separate view.
-  ([#3](https://github.com/yanergy/moire/issues/3))
-- [x] Search filters in the file tree, for example by filetype or mutation type. A filter menu
-  (next to the changed-files counter) should also offer filtering to only files that carry a check
-  annotation (a warning or error), building on the per-file warning/error triangles already shown
-  in the tree.
-  ([#4](https://github.com/yanergy/moire/issues/4))
-- [x] Open the diffed file straight from the diff viewer: the filename in the diff header is a link
-  that opens the file in the operating system's default app, and a **View > Open Files In** setting
-  can point this at a preferred editor instead.
-  ([#5](https://github.com/yanergy/moire/issues/5))
-- [x] Infinite scroll on the review page: a **View > Diff Layout** setting to view every file's
-  diff stacked in one scroll, like GitHub does, instead of one file at a time.
-  ([#6](https://github.com/yanergy/moire/issues/6))
 
 ## Documentation
 
