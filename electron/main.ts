@@ -19,6 +19,7 @@ import {
     setDiffLayout,
 } from './settings';
 import { detectEditors } from './editors';
+import { promptUpdateIfAvailable } from './updates';
 
 // Send a menu-triggered message to the window the user is in (or the only one).
 function sendToFocused(channel: string, ...args: unknown[]): void {
@@ -162,6 +163,11 @@ app.whenReady().then(async () => {
     registerIpcHandlers({ onRecentsChanged: () => void buildMenu() });
     await buildMenu();
     await createWindow();
+
+    // Best-effort update check against the GitHub Releases feed. Fire-and-forget
+    // so it never delays the window: it pops a native dialog when a newer release
+    // exists and stays silent when the build is current or the check fails.
+    void promptUpdateIfAvailable();
 });
 
 // macOS keeps the app running after its last window is closed (see

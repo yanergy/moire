@@ -48,6 +48,33 @@ Because the app is not code-signed, macOS Gatekeeper blocks it on first launch. 
 first time, right-click (or Control-click) the app in Applications and choose **Open**, then
 confirm. After that it opens normally. (Windows and Linux targets are configured but unverified.)
 
+### Releasing a new version
+
+Moiré checks for updates on launch. It asks the GitHub Releases API for the latest release of
+`yanergy/moire`, compares that release tag to the running version (`app.getVersion()`, which reads
+the `version` field from `package.json`), and pops a native dialog when the release is newer,
+offering to open the release page. The app is not code-signed, so it cannot install updates itself.
+The popup only notifies, and the user downloads and installs the new build by hand.
+
+For that check to work, a release has to be published and its tag has to match the version in
+`package.json`. To cut a release:
+
+1. Bump `version` in `package.json` (for example `1.0.0` becomes `1.1.0`).
+2. Run `npm run pack` to build the installers into `release/`.
+3. Publish a GitHub release whose tag is `v` followed by that version (for example `v1.1.0`), with
+   the built `.dmg` and `.zip` files attached as assets. The `gh` CLI does both at once:
+
+    ```bash
+    gh release create v1.1.0 release/*.dmg release/*.zip \
+      --title "Moiré 1.1.0" --notes "What changed"
+    ```
+
+Two caveats. The update check only reaches users whose installed build already contains it, so the
+first release that ships this feature (and every build before it) has to be announced by hand.
+Releases after it are detected automatically. And because the comparison is numeric (major, then
+minor, then patch), the release tag and the `package.json` version have to stay in step, otherwise
+the popup never appears.
+
 ## Using the app
 
 1. **Pick a repository.** Click the repository button in the top-left and choose **Open folder…**,

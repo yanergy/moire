@@ -228,6 +228,22 @@ export interface CommentMutationResult {
     message?: string;
 }
 
+// The result of the launch-time update check against the GitHub Releases feed.
+// 'available' means a release newer than the running build exists (with its
+// version and the release-page url to open); 'current' means this build is the
+// latest; 'error' means the check could not complete (offline, rate-limited, no
+// release yet), in which case the app stays silent. `currentVersion` is always
+// the running build's version, for the banner's "you're on x" line.
+export type UpdateStatus = 'available' | 'current' | 'error';
+
+export interface UpdateCheckResult {
+    status: UpdateStatus;
+    currentVersion: string;
+    latestVersion?: string;
+    url?: string;
+    message?: string;
+}
+
 // Preload API surface, exposed on window.api once the git backend lands.
 export interface MoireApi {
     openRepoDialog(): Promise<string | null>;
