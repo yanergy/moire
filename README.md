@@ -81,6 +81,9 @@ last branch range are remembered per repository.
   "mark viewed" progress.
 - Next and previous change navigation that steps through the open file, then crosses into the
   adjacent file (in sidebar order) once a boundary is reached, wrapping around the whole change set.
+- Open a changed file from the diff header. The filename is a link (with an external-link icon)
+  that opens the working-tree copy, and **View > Open Files In** chooses the OS default app or a
+  detected editor (auto-detected per machine and persisted across launches).
 - Rename detection, binary-file notices, and inline image previews.
 - A large-file gate so oversized files never freeze the UI.
 - Recent-repository list and a native folder picker.
@@ -165,9 +168,9 @@ Tracked as open issues on GitHub.
   annotation (a warning or error), building on the per-file warning/error triangles already shown
   in the tree.
   ([#4](https://github.com/yanergy/moire/issues/4))
-- [ ] Open the diffed file straight from the diff viewer: a button next to the filename (in the
-  diff header) opens the file in the operating system's default app for that filetype. A later
-  setting could point this at a preferred editor instead of the OS default.
+- [x] Open the diffed file straight from the diff viewer: the filename in the diff header is a link
+  that opens the file in the operating system's default app, and a **View > Open Files In** setting
+  can point this at a preferred editor instead.
   ([#5](https://github.com/yanergy/moire/issues/5))
 - [ ] Infinite scroll on the review page. Add setting to view files under each other, like GitHub does, instead of separated by file.
   ([#6](https://github.com/yanergy/moire/issues/6))
