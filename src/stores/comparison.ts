@@ -14,6 +14,7 @@ import type {
 } from '@/shared/types';
 import { WORKING_TREE } from '@/shared/types';
 import { repoLabel } from '@/lib/repo-path';
+import { useUiStore } from '@/stores/ui';
 
 export interface DirNode {
     kind: 'dir';
@@ -384,6 +385,11 @@ export const useComparisonStore = defineStore('comparison', () => {
     // load (a new file, a range change, a refresh), so each large file re-gates.
     const largeDiffLoaded = ref(false);
 
+    // The view-preferences store, read to gate the single-file loader: in the
+    // stacked "all files" layout each card loads its own pair, so the per-selection
+    // fetch below is skipped (see loadFilePair).
+    const ui = useUiStore();
+
     // Monotonic token so an out-of-order getFilePair response (the user picked
     // another file, or moved the range, before this one resolved) is dropped
     // rather than overwriting the current pair. The latest dispatched request
@@ -394,6 +400,14 @@ export const useComparisonStore = defineStore('comparison', () => {
     // selection and whenever the compared range changes, since a range change can
     // keep the same file selected but still alters the base (and so the old side).
     async function loadFilePair() {
+        // The stacked "all files" layout renders each file from its own pairFor()
+        // cache and does not mount the single-file pane, so skip this per-selection
+        // fetch there (scroll sync moves selectedPath and would otherwise fetch every
+        // file the user scrolls past). Switching back to single re-runs it.
+        if (ui.diffLayout === 'stacked') {
+            return;
+        }
+
         largeDiffLoaded.value = false;
         const api = window.api;
         const path = selectedFile.value.path;
@@ -416,6 +430,66 @@ export const useComparisonStore = defineStore('comparison', () => {
     }
 
     watch([() => selectedFile.value.path, base, head, compareMode], () => void loadFilePair());
+
+    // Returning to the single-file layout mounts the pane, which reads selectedPair;
+    // load the current file's pair, since selection and range changes were ignored
+    // while the stacked layout was active.
+    watch(
+        () => ui.diffLayout,
+        (layout) => {
+            if (layout === 'single') {
+                void loadFilePair();
+            }
+        }
+    );
+
+    // Diff pairs for the stacked "all files" view, where many files render at once
+    // (unlike the single-file pane's one selectedPair). Cached by path within the
+    // current range and dropped whenever the change set is reloaded (a range change,
+    // a refresh, or a repo switch all funnel through loadChangedFiles), since every
+    // cached pair then belongs to a stale range. In-flight requests are shared, so a
+    // card that mounts, unmounts, and remounts while scrolling fetches once.
+    const pairCache = ref<Record<string, FilePair>>({});
+    const pairInFlight = new Map<string, Promise<FilePair>>();
+
+    function clearPairCache() {
+        pairCache.value = {};
+        pairInFlight.clear();
+    }
+
+    // Fetch (and cache) the diff pair for one file, for the stacked view. A cached
+    // pair returns at once; concurrent calls for the same path share one request.
+    // Resolves an empty pair rather than rejecting, so one file's failure leaves a
+    // blank card instead of breaking the whole list.
+    function pairFor(path: string): Promise<FilePair> {
+        const cached = pairCache.value[path];
+        if (cached) {
+            return Promise.resolve(cached);
+        }
+
+        const pending = pairInFlight.get(path);
+        if (pending) {
+            return pending;
+        }
+
+        const api = window.api;
+        if (!api || !base.value || !path) {
+            return Promise.resolve({ ...EMPTY_PAIR, path });
+        }
+
+        const request = api
+            .getFilePair(base.value, head.value, path, compareMode.value)
+            .then((result) => {
+                pairCache.value = { ...pairCache.value, [path]: result };
+                return result;
+            })
+            .catch(() => ({ ...EMPTY_PAIR, path }))
+            .finally(() => {
+                pairInFlight.delete(path);
+            });
+        pairInFlight.set(path, request);
+        return request;
+    }
 
     // Monotonic token so an out-of-order PR lookup (the range moved before gh
     // resolved) is dropped rather than overwriting a newer result.
@@ -888,11 +962,32 @@ export const useComparisonStore = defineStore('comparison', () => {
         return paths;
     });
 
+    // The shown files in the sidebar's display order, as full change records. Backs
+    // the stacked "all files" list (one card per entry); mirrors orderedPaths but
+    // carries each file's metadata (status, +/- counts, oldPath) so a card needs no
+    // extra lookup.
+    const orderedShownFiles = computed<ChangedFile[]>(() => {
+        const byPath = new Map(files.value.map((f) => [f.path, f]));
+        return orderedPaths.value
+            .map((path) => byPath.get(path))
+            .filter((f): f is ChangedFile => f !== undefined);
+    });
+
     function selectFile(path: string) {
         // A manual pick lands at the top of the file; drop any pending cross-file
         // edge so it can't hijack this selection with an unexpected jump.
         pendingChangeEdge.value = null;
         selectedPath.value = path;
+    }
+
+    // Update the current file from the stacked list's scroll position, so the sidebar
+    // highlight and status bar follow what the reader is looking at. A plain
+    // assignment (no pendingChangeEdge reset); the single-file loader is gated off in
+    // the stacked layout, so this does not trigger a per-file fetch.
+    function setCurrentFromScroll(path: string) {
+        if (path && path !== selectedPath.value) {
+            selectedPath.value = path;
+        }
     }
 
     // Move the selection to the next/previous file in display order, wrapping at
@@ -1231,6 +1326,9 @@ export const useComparisonStore = defineStore('comparison', () => {
         // A fresh change set (range change, refresh, repo switch) invalidates any
         // queued cross-file landing, so it can't fire on a file it wasn't set for.
         pendingChangeEdge.value = null;
+        // The stacked view's per-file pair cache is keyed to the old range; drop it
+        // so cards refetch against the new change set.
+        clearPairCache();
 
         const api = window.api;
         if (!api || !base.value) {
@@ -1366,9 +1464,12 @@ export const useComparisonStore = defineStore('comparison', () => {
         loadLargeDiff,
         treeNodes,
         orderedPaths,
+        orderedShownFiles,
         allCollapsed,
         selectFile,
+        setCurrentFromScroll,
         openFile,
+        pairFor,
         goToAdjacentFile,
         clearChangeEdge,
         toggleViewed,

@@ -2,6 +2,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
 import type { DirNode, FileNode, TreeNode } from '@/stores/comparison';
 import type { BranchInfo, ChangedFile, CompareMode, FilePair } from '@/shared/types';
 import { BRANCHES as PROTOTYPE_BRANCHES, CHANGED_FILES } from '@/components/__tests__/fixtures';
@@ -1579,6 +1580,116 @@ describe('comparison store', () => {
             window.api = { openFile } as unknown as Window['api'];
             expect((await store.openFile('')).ok).toBe(false);
             expect(openFile).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('stacked view support', () => {
+        afterEach(() => {
+            delete window.api;
+        });
+
+        // A getFilePair stub echoing the path, so a test can assert the returned pair.
+        function fileApi(extra: Record<string, unknown> = {}) {
+            const getFilePair = vi
+                .fn<(b: string, h: string, p: string, m: CompareMode) => Promise<FilePair>>()
+                .mockImplementation((_b, _h, p) => Promise.resolve(pairFor(p)));
+            window.api = { getFilePair, ...extra } as unknown as Window['api'];
+            return getFilePair;
+        }
+
+        it('lists the shown files in display order, following the filter', () => {
+            const store = seededStore();
+            // Same order and set as orderedPaths, but carrying the file records.
+            expect(store.orderedShownFiles.map((f) => f.path)).toEqual(store.orderedPaths);
+            expect(store.orderedShownFiles.length).toBe(store.files.length);
+
+            store.setTreeFilter('comparison');
+            expect(store.orderedShownFiles.map((f) => f.path)).toEqual(store.orderedPaths);
+            expect(store.orderedShownFiles.every((f) => f.path.includes('comparison'))).toBe(true);
+            expect(store.orderedShownFiles.length).toBeLessThan(store.files.length);
+        });
+
+        it('caches a file pair and shares concurrent requests', async () => {
+            const getFilePair = fileApi();
+            const store = useComparisonStore();
+            store.base = 'main';
+            await flushPromises();
+            getFilePair.mockClear();
+
+            const [a, b] = await Promise.all([
+                store.pairFor('src/a.ts'),
+                store.pairFor('src/a.ts'),
+            ]);
+            const again = await store.pairFor('src/a.ts');
+
+            expect(a).toEqual(pairFor('src/a.ts'));
+            expect(b).toBe(a); // shared in-flight request
+            expect(again).toEqual(a); // served from cache
+            expect(getFilePair).toHaveBeenCalledTimes(1);
+        });
+
+        it('returns an empty pair without a bridge or base', async () => {
+            const store = useComparisonStore(); // no window.api, no base
+            const pair = await store.pairFor('src/a.ts');
+            expect(pair.path).toBe('src/a.ts');
+            expect(pair.oldContent).toBe('');
+            expect(pair.newContent).toBe('');
+        });
+
+        it('drops the pair cache when the change set reloads', async () => {
+            const getFilePair = fileApi({
+                getChangedFiles: vi.fn<() => Promise<ChangedFile[]>>().mockResolvedValue([]),
+            });
+            const store = useComparisonStore();
+            store.base = 'main';
+            await flushPromises();
+            getFilePair.mockClear();
+
+            await store.pairFor('src/a.ts');
+            expect(getFilePair).toHaveBeenCalledTimes(1);
+
+            await store.loadChangedFiles(); // clears the cache
+            await store.pairFor('src/a.ts');
+            expect(getFilePair).toHaveBeenCalledTimes(2); // refetched, not served stale
+        });
+
+        it('sets the current file from scroll without touching the change edge', () => {
+            const store = seededStore();
+            store.pendingChangeEdge = 'first';
+
+            store.setCurrentFromScroll('src/stores/comparison.ts');
+            expect(store.selectedPath).toBe('src/stores/comparison.ts');
+            expect(store.pendingChangeEdge).toBe('first'); // untouched, unlike selectFile
+        });
+
+        it('skips the single-file fetch in the stacked layout, and loads on return', async () => {
+            const getFilePair = fileApi();
+            const store = useComparisonStore();
+            const ui = useUiStore();
+            store.files = [
+                { path: 'src/a.ts', status: 'M', additions: 1, deletions: 0, binary: false },
+                { path: 'src/b.ts', status: 'M', additions: 1, deletions: 0, binary: false },
+            ];
+            store.base = 'main';
+            await flushPromises();
+            getFilePair.mockClear();
+
+            // In the stacked layout, moving the current file (scroll sync) must not
+            // fetch the single pane's pair.
+            ui.setDiffLayout('stacked');
+            store.setCurrentFromScroll('src/b.ts');
+            await flushPromises();
+            expect(getFilePair).not.toHaveBeenCalled();
+
+            // Returning to single remounts the pane, so the current file loads.
+            ui.setDiffLayout('single');
+            await flushPromises();
+            expect(getFilePair).toHaveBeenCalledWith(
+                'main',
+                expect.anything(),
+                'src/b.ts',
+                expect.anything()
+            );
         });
     });
 });
