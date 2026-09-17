@@ -98,6 +98,34 @@ function onScroll() {
     });
 }
 
+// Clicking inside a Monaco editor focuses its hidden textarea, and the browser then
+// scrolls that textarea into view, yanking the list (often to the top) when the
+// clicked file is partly above the fold. Snapshot the scroll position as the click
+// travels down (capture phase, before Monaco focuses), then undo any scroll the
+// focus alone caused. Pointer-only, so keyboard focus still scrolls its target in.
+let preFocusScrollTop = 0;
+let pointerFocusGuard = false;
+
+function onPointerDownCapture() {
+    const container = containerRef.value;
+    if (!container) {
+        return;
+    }
+
+    preFocusScrollTop = container.scrollTop;
+    pointerFocusGuard = true;
+    // A click's focusin fires within this same task; clear the guard just after, so
+    // a later keyboard focus is free to scroll its target into view.
+    setTimeout(() => (pointerFocusGuard = false), 0);
+}
+
+function onFocusIn() {
+    const container = containerRef.value;
+    if (pointerFocusGuard && container && container.scrollTop !== preFocusScrollTop) {
+        container.scrollTop = preFocusScrollTop;
+    }
+}
+
 // Scroll the list to a file only when the file tree asks (a sidebar click). This is
 // deliberately not driven by selectedPath: the current file also moves as the reader
 // scrolls or clicks within the list, and jumping the scroll then would disorient.
@@ -138,6 +166,8 @@ onBeforeUnmount(() => {
         class="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-moire-app"
         style="overflow-anchor: auto"
         @scroll="onScroll"
+        @pointerdown.capture="onPointerDownCapture"
+        @focusin="onFocusIn"
     >
         <stacked-diff-card
             v-for="file in comparison.orderedShownFiles"
