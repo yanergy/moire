@@ -101,7 +101,7 @@ function openInEditor() {
 </script>
 
 <template>
-    <div class="border-b border-moire-border" :data-path="file.path">
+    <div class="mb-3 border-b border-moire-border" :data-path="file.path">
         <!-- Slim per-file header: a collapse chevron, the status badge, the path
              (its filename opens the file), the +/- counts, and a mark-viewed toggle.
              Sticks to the top of the scroll area while the file is in view. -->
