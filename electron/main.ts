@@ -15,6 +15,8 @@ import {
     setCodeStyle,
     getEditorPreference,
     setEditorPreference,
+    getDiffLayout,
+    setDiffLayout,
 } from './settings';
 import { detectEditors } from './editors';
 
@@ -106,6 +108,14 @@ app.whenReady().then(async () => {
             onSelectCodeStyle: (style) => {
                 void setCodeStyle(style);
                 sendToFocused('code-style:changed', style);
+            },
+            // The diff layout (single-file vs the stacked all-files list). Persist
+            // the choice and tell the renderer, which swaps the review pane. Electron
+            // keeps the clicked radio checked; the stored value re-seeds it on rebuild.
+            currentDiffLayout: await getDiffLayout(),
+            onSelectDiffLayout: (layout) => {
+                void setDiffLayout(layout);
+                sendToFocused('diff-layout:changed', layout);
             },
             // The chosen editor is read by the main-process open handler, so a change
             // just persists; Electron keeps the clicked radio checked for the session,

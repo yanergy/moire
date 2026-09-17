@@ -2,7 +2,7 @@ import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import type { CodeStyle, ThemeState } from '@/shared/types';
+import type { CodeStyle, DiffLayout, ThemeState } from '@/shared/types';
 
 // monaco-env pulls Vite `?worker` modules that can't resolve under vitest (the
 // monaco-editor alias mangles their paths), so stub the worker wiring. The theme
@@ -26,6 +26,7 @@ function stubApi() {
         repoChanged: vi.fn<Unsub>(),
         flourishes: vi.fn<Unsub>(),
         codeStyle: vi.fn<Unsub>(),
+        diffLayout: vi.fn<Unsub>(),
     };
     const api = {
         getTheme: vi.fn<() => Promise<ThemeState>>().mockResolvedValue({
@@ -43,6 +44,10 @@ function stubApi() {
         ),
         getCodeStyle: vi.fn<() => Promise<CodeStyle>>().mockResolvedValue('github'),
         onCodeStyleChanged: vi.fn<(cb: (style: CodeStyle) => void) => Unsub>(() => unsub.codeStyle),
+        getDiffLayout: vi.fn<() => Promise<DiffLayout>>().mockResolvedValue('single'),
+        onDiffLayoutChanged: vi.fn<(cb: (layout: DiffLayout) => void) => Unsub>(
+            () => unsub.diffLayout
+        ),
     };
     window.api = api as unknown as Window['api'];
     return { api, unsub };
@@ -72,6 +77,7 @@ describe('App', () => {
         const restore = vi.spyOn(comparison, 'restoreLastRepo').mockResolvedValue(undefined);
         const applyTheme = vi.spyOn(ui, 'applyThemeState');
         const applyCodeStyle = vi.spyOn(ui, 'setCodeStyle');
+        const applyDiffLayout = vi.spyOn(ui, 'setDiffLayout');
 
         mountApp();
         await flushPromises();
@@ -81,6 +87,8 @@ describe('App', () => {
         expect(applyTheme).toHaveBeenCalledWith({ preference: 'system', isDark: true });
         expect(api.getCodeStyle).toHaveBeenCalledTimes(1);
         expect(applyCodeStyle).toHaveBeenCalledWith('github');
+        expect(api.getDiffLayout).toHaveBeenCalledTimes(1);
+        expect(applyDiffLayout).toHaveBeenCalledWith('single');
     });
 
     it('keeps document.title in sync with the open repo name', async () => {
@@ -134,6 +142,7 @@ describe('App', () => {
         expect(unsub.repoChanged).toHaveBeenCalledTimes(1);
         expect(unsub.flourishes).toHaveBeenCalledTimes(1);
         expect(unsub.codeStyle).toHaveBeenCalledTimes(1);
+        expect(unsub.diffLayout).toHaveBeenCalledTimes(1);
     });
 
     it('does not touch the bridge when window.api is absent', async () => {

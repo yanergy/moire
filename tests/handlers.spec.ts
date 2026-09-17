@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
     setBranchSelection: vi.fn<() => Promise<void>>(),
     getFlourishes: vi.fn<() => Promise<boolean>>(),
     getCodeStyle: vi.fn<() => Promise<string>>(),
+    getDiffLayout: vi.fn<() => Promise<string>>(),
     currentThemeState: vi.fn<() => { preference: string; isDark: boolean }>(),
     logError: vi.fn<(context: string, error: unknown) => void>(),
     onRecentsChanged: vi.fn<() => void>(),
@@ -72,6 +73,7 @@ vi.mock('../electron/settings', () => ({
     getFlourishes: state.getFlourishes,
     getCodeStyle: state.getCodeStyle,
     getEditorPreference: state.getEditorPreference,
+    getDiffLayout: state.getDiffLayout,
 }));
 vi.mock('../electron/theme', () => ({ currentThemeState: state.currentThemeState }));
 vi.mock('../electron/logger', () => ({ logError: state.logError }));
@@ -101,6 +103,7 @@ describe('registerIpcHandlers', () => {
         state.setBranchSelection.mockResolvedValue(undefined);
         state.getFlourishes.mockResolvedValue(true);
         state.getCodeStyle.mockResolvedValue('github');
+        state.getDiffLayout.mockResolvedValue('single');
         state.getEditorPreference.mockResolvedValue('auto');
         state.openPath.mockResolvedValue('');
         state.detectEditors.mockResolvedValue([]);
@@ -124,6 +127,7 @@ describe('registerIpcHandlers', () => {
             'theme:get',
             'flourishes:get',
             'code-style:get',
+            'diff-layout:get',
             'git:branches',
             'git:changed-files',
             'git:file-pair',
@@ -191,6 +195,10 @@ describe('registerIpcHandlers', () => {
 
     it('serves the code style setting', async () => {
         expect(await invoke('code-style:get')).toBe('github');
+    });
+
+    it('serves the diff layout setting', async () => {
+        expect(await invoke('diff-layout:get')).toBe('single');
     });
 
     it('looks up a PR against the open repo path, forwarding base and head', async () => {

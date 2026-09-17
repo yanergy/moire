@@ -19,6 +19,10 @@ function codeStyleSubmenu(extra = {}) {
     return viewSubmenu('system', extra)?.find((entry) => entry.label === 'Code Style')?.submenu;
 }
 
+function diffLayoutSubmenu(extra = {}) {
+    return viewSubmenu('system', extra)?.find((entry) => entry.label === 'Diff Layout')?.submenu;
+}
+
 function openFilesSubmenu(extra = {}) {
     return viewSubmenu('system', extra)?.find((entry) => entry.label === 'Open Files In')?.submenu;
 }
@@ -77,6 +81,27 @@ describe('application menu', () => {
 
         items?.find((item) => item.label === 'VS Code')?.click();
         expect(onSelectCodeStyle).toHaveBeenCalledWith('vscode');
+    });
+
+    it('offers Single File and All Files as radio items in the View → Diff Layout menu', () => {
+        const items = diffLayoutSubmenu();
+        expect(items?.map((item) => item.label)).toEqual(['Single File', 'All Files']);
+        expect(items?.every((item) => item.type === 'radio')).toBe(true);
+    });
+
+    it('defaults the checked diff layout to Single File and checks the current one', () => {
+        expect(diffLayoutSubmenu()?.find((item) => item.checked)?.label).toBe('Single File');
+        expect(
+            diffLayoutSubmenu({ currentDiffLayout: 'stacked' })?.find((item) => item.checked)?.label
+        ).toBe('All Files');
+    });
+
+    it('reports the chosen diff layout through onSelectDiffLayout', () => {
+        const onSelectDiffLayout = vi.fn<(layout: string) => void>();
+        const items = diffLayoutSubmenu({ onSelectDiffLayout });
+
+        items?.find((item) => item.label === 'All Files')?.click();
+        expect(onSelectDiffLayout).toHaveBeenCalledWith('stacked');
     });
 
     it('offers System Default plus the detected editors as one radio group in Open Files In', () => {

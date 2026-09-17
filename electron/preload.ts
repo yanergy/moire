@@ -71,6 +71,16 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('code-style:changed', listener);
         return () => ipcRenderer.removeListener('code-style:changed', listener);
     },
+    // The diff layout (single-file vs the stacked all-files list), owned by main
+    // and set from the View → Diff Layout menu. `getDiffLayout` reads the stored
+    // value on launch; `onDiffLayoutChanged` fires when the menu selection changes.
+    // Returns an unsubscribe function.
+    getDiffLayout: () => ipcRenderer.invoke('diff-layout:get'),
+    onDiffLayoutChanged: (callback: (layout: string) => void) => {
+        const listener = (_event: IpcRendererEvent, layout: string) => callback(layout);
+        ipcRenderer.on('diff-layout:changed', listener);
+        return () => ipcRenderer.removeListener('diff-layout:changed', listener);
+    },
     // Fired when the native View → Refresh item is chosen. Returns an unsubscribe
     // function so the caller can drop the listener.
     onMenuRefresh: (callback: () => void) => {

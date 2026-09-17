@@ -16,6 +16,11 @@ export type ThemePreference = 'system' | 'light' | 'dark';
 // two in sync.
 export type CodeStyle = 'github' | 'vscode';
 
+// How the review area lays diffs out: the current one-file-at-a-time view
+// ('single'), or a GitHub-style continuous list of every changed file ('stacked').
+// Mirrored on the renderer side in src/shared/types.ts; keep the two in sync.
+export type DiffLayout = 'single' | 'stacked';
+
 export interface WindowState {
     x?: number;
     y?: number;
@@ -48,6 +53,7 @@ function getStore(): Promise<SettingsStore> {
                         branchSelections: {},
                         windowState: null,
                         flourishes: true,
+                        diffLayout: 'single',
                     },
                 }) as unknown as SettingsStore
         );
@@ -144,6 +150,19 @@ export async function getEditorPreference(): Promise<string> {
 export async function setEditorPreference(editor: string): Promise<void> {
     const store = await getStore();
     store.set('editor', editor);
+}
+
+// The diff layout the review area renders with ('single' | 'stacked'). Read on
+// launch to seed the View → Diff Layout menu radio; persisted whenever the user
+// changes it. Defaults to 'single' (the one-file-at-a-time view).
+export async function getDiffLayout(): Promise<DiffLayout> {
+    const store = await getStore();
+    return store.get<DiffLayout>('diffLayout', 'single');
+}
+
+export async function setDiffLayout(layout: DiffLayout): Promise<void> {
+    const store = await getStore();
+    store.set('diffLayout', layout);
 }
 
 // Whether the review-complete flourishes play. Persisted so the (deliberately

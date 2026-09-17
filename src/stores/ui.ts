@@ -1,17 +1,25 @@
 import { ref, watch } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { CodeStyle, MainView, ThemePreference, ThemeState, ViewMode } from '@/shared/types';
+import type {
+    CodeStyle,
+    DiffLayout,
+    MainView,
+    ThemePreference,
+    ThemeState,
+    ViewMode,
+} from '@/shared/types';
 
-// View-level preferences. The theme and diff-color palette are owned by the
-// Electron main process: `preference` is what the user picked in the View → Theme
-// menu ('system' follows the OS), `isDark` is the resolved value main pushes over
-// IPC, and `codeStyle` is the View → Code Style selection. This store only mirrors
-// and applies those; it never decides them itself. The split/unified diff layout
-// is local renderer state.
+// View-level preferences. The theme, diff-color palette, and diff layout are owned
+// by the Electron main process: `preference` is what the user picked in the View →
+// Theme menu ('system' follows the OS), `isDark` is the resolved value main pushes
+// over IPC, `codeStyle` is the View → Code Style selection, and `diffLayout` is the
+// View → Diff Layout selection. This store only mirrors and applies those; it never
+// decides them itself. The split/unified view mode is local renderer state.
 export const useUiStore = defineStore('ui', () => {
     const preference = ref<ThemePreference>('system');
     const isDark = ref(true);
     const codeStyle = ref<CodeStyle>('github');
+    const diffLayout = ref<DiffLayout>('single');
     const viewMode = ref<ViewMode>('split');
     // Which pane the main area shows: the diff (default) or the pull-request view.
     // Local renderer state, like viewMode; the PR view is only reachable when a PR
@@ -25,6 +33,10 @@ export const useUiStore = defineStore('ui', () => {
 
     function setCodeStyle(style: CodeStyle) {
         codeStyle.value = style;
+    }
+
+    function setDiffLayout(layout: DiffLayout) {
+        diffLayout.value = layout;
     }
 
     function setViewMode(mode: ViewMode) {
@@ -49,10 +61,12 @@ export const useUiStore = defineStore('ui', () => {
         preference,
         isDark,
         codeStyle,
+        diffLayout,
         viewMode,
         mainView,
         applyThemeState,
         setCodeStyle,
+        setDiffLayout,
         setViewMode,
         setMainView,
     };

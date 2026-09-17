@@ -120,4 +120,12 @@ describe('settings: theme and window state', () => {
         await setEditorPreference('phpstorm');
         expect(await getEditorPreference()).toBe('phpstorm');
     });
+
+    it('defaults the diff layout to single and persists a change', async () => {
+        const { getDiffLayout, setDiffLayout } = await loadSettings();
+        expect(await getDiffLayout()).toBe('single');
+
+        await setDiffLayout('stacked');
+        expect(await getDiffLayout()).toBe('stacked');
+    });
 });

@@ -23,6 +23,13 @@ export type ThemePreference = 'system' | 'light' | 'dark';
 // two in sync.
 export type CodeStyle = 'github' | 'vscode';
 
+// How the review area lays diffs out, picked in the View → Diff Layout menu:
+// 'single' is the one-file-at-a-time view (the default); 'stacked' is a
+// GitHub-style continuous list of every changed file. The backend keeps its own
+// copy in electron/settings.ts (the process split forbids sharing across it); keep
+// the two in sync.
+export type DiffLayout = 'single' | 'stacked';
+
 // The theme state the main process owns (via nativeTheme) and pushes to the
 // renderer: the chosen preference plus the resolved dark/light it maps to.
 export interface ThemeState {
@@ -297,6 +304,12 @@ export interface MoireApi {
     // unsubscribe function.
     getCodeStyle(): Promise<CodeStyle>;
     onCodeStyleChanged(cb: (style: CodeStyle) => void): () => void;
+    // The diff layout, owned by the main process and set from the View → Diff
+    // Layout menu. `getDiffLayout` reads the stored value on launch;
+    // `onDiffLayoutChanged` fires when the menu selection changes, and returns an
+    // unsubscribe function.
+    getDiffLayout(): Promise<DiffLayout>;
+    onDiffLayoutChanged(cb: (layout: DiffLayout) => void): () => void;
     // Fired when the native View → Refresh item is chosen; the renderer re-reads
     // the repo for the current range. Returns an unsubscribe function.
     onMenuRefresh(cb: () => void): () => void;

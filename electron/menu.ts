@@ -5,7 +5,7 @@
 // pushes the resolved theme to the renderer over the preload bridge.
 
 import { Menu, type MenuItemConstructorOptions } from 'electron';
-import type { CodeStyle, ThemePreference } from './settings';
+import type { CodeStyle, DiffLayout, ThemePreference } from './settings';
 import type { GhAccount } from './github/gh';
 
 interface ThemeOption {
@@ -29,6 +29,16 @@ export const CODE_STYLE_OPTIONS: CodeStyleOption[] = [
     { label: 'VS Code', style: 'vscode' },
 ];
 
+interface DiffLayoutOption {
+    label: string;
+    layout: DiffLayout;
+}
+
+export const DIFF_LAYOUT_OPTIONS: DiffLayoutOption[] = [
+    { label: 'Single File', layout: 'single' },
+    { label: 'All Files', layout: 'stacked' },
+];
+
 export interface MenuOptions {
     isMac: boolean;
     currentTheme: ThemePreference;
@@ -37,6 +47,11 @@ export interface MenuOptions {
     // (and the menu tests) fall back to the 'github' default.
     currentCodeStyle?: CodeStyle;
     onSelectCodeStyle?: (style: CodeStyle) => void;
+    // The "Diff Layout" radio group: the persisted layout that marks the checked
+    // radio, and the select handler. Optional so callers that don't care (and the
+    // menu tests) fall back to the 'single' default.
+    currentDiffLayout?: DiffLayout;
+    onSelectDiffLayout?: (layout: DiffLayout) => void;
     // The "Open Files In" radio group: the editors detected on this machine, the
     // stored preference ('auto' or an editor id) that marks the checked radio, and
     // the select handler. Optional so callers that don't care fall back to 'auto'
@@ -82,6 +97,8 @@ export function buildMenuTemplate({
     onSelectTheme,
     currentCodeStyle = 'github',
     onSelectCodeStyle,
+    currentDiffLayout = 'single',
+    onSelectDiffLayout,
     editors = [],
     currentEditor = 'auto',
     onSelectEditor,
@@ -185,6 +202,19 @@ export function buildMenuTemplate({
                             type: 'radio',
                             checked: currentCodeStyle === style,
                             click: () => onSelectCodeStyle?.(style),
+                        })
+                    ),
+                },
+                // How the review area lays out diffs: one file at a time, or a
+                // GitHub-style continuous list of every changed file.
+                {
+                    label: 'Diff Layout',
+                    submenu: DIFF_LAYOUT_OPTIONS.map(
+                        ({ label, layout }): MenuItemConstructorOptions => ({
+                            label,
+                            type: 'radio',
+                            checked: currentDiffLayout === layout,
+                            click: () => onSelectDiffLayout?.(layout),
                         })
                     ),
                 },

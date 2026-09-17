@@ -21,6 +21,7 @@ let stopMenuOpenRecent: (() => void) | undefined;
 let stopRepoChanged: (() => void) | undefined;
 let stopFlourishes: (() => void) | undefined;
 let stopCodeStyle: (() => void) | undefined;
+let stopDiffLayout: (() => void) | undefined;
 
 // Electron mirrors document.title into the native window title bar, so the open
 // repo shows there. This replaces the in-app title the removed fake title bar
@@ -48,6 +49,12 @@ onMounted(async () => {
     ui.setCodeStyle(await api.getCodeStyle());
     stopCodeStyle = api.onCodeStyleChanged((style) => ui.setCodeStyle(style));
 
+    // The diff layout (single-file vs the stacked all-files list), owned by main
+    // and set from the View → Diff Layout menu. Pull the stored value, then stay in
+    // sync as the selection changes.
+    ui.setDiffLayout(await api.getDiffLayout());
+    stopDiffLayout = api.onDiffLayoutChanged((layout) => ui.setDiffLayout(layout));
+
     // The review-complete flourishes, gated by the View menu toggle (persisted).
     setFlourishesEnabled(await api.getFlourishes());
     stopFlourishes = api.onFlourishesChanged((enabled) => setFlourishesEnabled(enabled));
@@ -73,6 +80,7 @@ onUnmounted(() => {
     stopRepoChanged?.();
     stopFlourishes?.();
     stopCodeStyle?.();
+    stopDiffLayout?.();
 });
 </script>
 

@@ -27,6 +27,7 @@ import {
     getFlourishes,
     getCodeStyle,
     getEditorPreference,
+    getDiffLayout,
 } from '../settings';
 import { detectEditors, openWithEditor } from '../editors';
 import { currentThemeState } from '../theme';
@@ -152,6 +153,10 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
     // The diff-color palette. Read on launch; the View → Code Style menu pushes
     // later changes via 'code-style:changed'.
     handle('code-style:get', () => getCodeStyle());
+
+    // The diff layout (single-file vs stacked all-files). Read on launch; the
+    // View → Diff Layout menu pushes later changes via 'diff-layout:changed'.
+    handle('diff-layout:get', () => getDiffLayout());
 
     // Git-backed channels. Each operates on the currently open repo and has a
     // matching method in the preload bridge and an entry in MoireApi.

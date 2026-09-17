@@ -60,6 +60,8 @@ describe('preload bridge', () => {
             'onFlourishesChanged',
             'getCodeStyle',
             'onCodeStyleChanged',
+            'getDiffLayout',
+            'onDiffLayoutChanged',
             'onMenuRefresh',
             'onMenuOpenRepo',
             'onMenuOpenRecent',
