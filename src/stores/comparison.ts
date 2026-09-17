@@ -460,16 +460,20 @@ export const useComparisonStore = defineStore('comparison', () => {
     // Fetch (and cache) the diff pair for one file, for the stacked view. A cached
     // pair returns at once; concurrent calls for the same path share one request.
     // Resolves an empty pair rather than rejecting, so one file's failure leaves a
-    // blank card instead of breaking the whole list.
-    function pairFor(path: string): Promise<FilePair> {
-        const cached = pairCache.value[path];
-        if (cached) {
-            return Promise.resolve(cached);
-        }
+    // blank card instead of breaking the whole list. `full` refetches a large file's
+    // withheld content when its per-card "Load diff" gate is cleared, bypassing (and
+    // then replacing) the gated cache entry.
+    function pairFor(path: string, full = false): Promise<FilePair> {
+        if (!full) {
+            const cached = pairCache.value[path];
+            if (cached) {
+                return Promise.resolve(cached);
+            }
 
-        const pending = pairInFlight.get(path);
-        if (pending) {
-            return pending;
+            const pending = pairInFlight.get(path);
+            if (pending) {
+                return pending;
+            }
         }
 
         const api = window.api;
@@ -478,7 +482,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
 
         const request = api
-            .getFilePair(base.value, head.value, path, compareMode.value)
+            .getFilePair(base.value, head.value, path, compareMode.value, full)
             .then((result) => {
                 pairCache.value = { ...pairCache.value, [path]: result };
                 return result;
@@ -487,7 +491,10 @@ export const useComparisonStore = defineStore('comparison', () => {
             .finally(() => {
                 pairInFlight.delete(path);
             });
-        pairInFlight.set(path, request);
+        if (!full) {
+            pairInFlight.set(path, request);
+        }
+
         return request;
     }
 

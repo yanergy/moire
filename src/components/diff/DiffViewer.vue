@@ -36,20 +36,34 @@ const props = defineProps<{
     // control and stays read-only. Each resolves an ok/message result.
     replyToThread?: (threadId: string, body: string) => Promise<CommentMutationResult>;
     setThreadResolved?: (threadId: string, resolved: boolean) => Promise<CommentMutationResult>;
+    // The stacked "all files" view mounts one viewer per file inside a single
+    // scroll container, so each editor must size itself to its content (rather than
+    // fill its parent and scroll internally). When set, the container height tracks
+    // the diff's content height, the inner scroll is released to the outer list, and
+    // the measured height is emitted so the card can reserve space while off-screen.
+    fitContent?: boolean;
 }>();
 
 const emit = defineEmits<{
     'update:changeCount': [count: number];
+    'update:contentHeight': [height: number];
     edgeConsumed: [];
 }>();
 
 const containerRef = useTemplateRef<HTMLDivElement>('container');
 const popoverRef = useTemplateRef<HTMLDivElement>('popover');
 
+// The container height in fitContent mode, tracking the diff's content height so
+// the whole diff shows with no inner scroll. A floor keeps a tiny (or empty) diff
+// from collapsing to nothing.
+const MIN_FIT_HEIGHT = 60;
+const fitHeight = ref(MIN_FIT_HEIGHT);
+
 let editor: monaco.editor.IStandaloneDiffEditor | null = null;
 let originalModel: monaco.editor.ITextModel | null = null;
 let modifiedModel: monaco.editor.ITextModel | null = null;
 let diffListener: monaco.IDisposable | null = null;
+let contentSizeListeners: monaco.IDisposable[] = [];
 let changes: readonly monaco.editor.ILineChange[] = [];
 let changeIndex = -1;
 let originalWordDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
@@ -609,6 +623,27 @@ function goToEdge(edge: 'first' | 'last') {
     revealChange();
 }
 
+// fitContent only: size the container to the diff's content height (the taller of
+// the two sides, folded regions accounted for), so the whole diff shows and the
+// outer list scrolls. Runs after each diff update and on Monaco's content-size
+// changes (revealing a hidden region grows it). The height is emitted so the card
+// can reserve the same space with a spacer while the editor is unmounted off-screen.
+function syncFitHeight() {
+    if (!editor || !props.fitContent) {
+        return;
+    }
+
+    const height = Math.max(
+        editor.getModifiedEditor().getContentHeight(),
+        editor.getOriginalEditor().getContentHeight(),
+        MIN_FIT_HEIGHT
+    );
+    if (height !== fitHeight.value) {
+        fitHeight.value = height;
+        emit('update:contentHeight', height);
+    }
+}
+
 onMounted(() => {
     if (!containerRef.value) {
         return;
@@ -636,6 +671,9 @@ onMounted(() => {
             verticalScrollbarSize: 12,
             horizontalScrollbarSize: 12,
             useShadows: false,
+            // fitContent shows the whole diff with no inner scroll, so let the wheel
+            // pass through to the outer stacked list instead of being swallowed.
+            alwaysConsumeMouseWheel: !props.fitContent,
         },
         hideUnchangedRegions: {
             enabled: true,
@@ -670,6 +708,15 @@ onMounted(() => {
     window.addEventListener('keydown', onKeydown);
     // Dismiss the popover on a click anywhere outside it and the editor.
     document.addEventListener('mousedown', onDocMouseDown);
+    // fitContent tracks the content height: an initial sync happens on the first
+    // diff update below, and these keep it in step as folded regions are revealed.
+    if (props.fitContent) {
+        contentSizeListeners = [
+            modifiedEditor.onDidContentSizeChange(() => syncFitHeight()),
+            originalEditor.onDidContentSizeChange(() => syncFitHeight()),
+        ];
+    }
+
     buildModels();
 
     diffListener = editor.onDidUpdateDiff(() => {
@@ -680,6 +727,9 @@ onMounted(() => {
         // (re)computed model.
         applyCommentMarkers();
         applyAnnotationMarkers();
+        // Keep the fitContent height in step with each recomputed diff (a no-op in
+        // the single-file pane, which fills its parent instead).
+        syncFitHeight();
 
         // The selected change is reset (to -1) in buildModels, once per real content
         // change, NOT here: Monaco fires this event several times per file (layout,
@@ -761,6 +811,11 @@ onBeforeUnmount(() => {
     }
 
     commentListeners = [];
+    for (const listener of contentSizeListeners) {
+        listener.dispose();
+    }
+
+    contentSizeListeners = [];
     window.removeEventListener('keydown', onKeydown);
     document.removeEventListener('mousedown', onDocMouseDown);
     originalModel?.dispose();
@@ -785,8 +840,14 @@ defineExpose({
 </script>
 
 <template>
-    <div class="relative size-full">
-        <div ref="container" class="size-full" :class="`code-style-${codeStyle}`" />
+    <div class="relative" :class="fitContent ? 'w-full' : 'size-full'">
+        <!-- fitContent sizes the editor to its content (height set inline) so the
+             outer stacked list scrolls; otherwise it fills the single-file pane. -->
+        <div
+            ref="container"
+            :class="[fitContent ? 'w-full' : 'size-full', `code-style-${codeStyle}`]"
+            :style="fitContent ? { height: fitHeight + 'px' } : undefined"
+        />
 
         <!-- Line popover: the clicked line's check annotations and review threads.
              Opened by clicking the line, pinned to the click; closes on a click

@@ -13,6 +13,10 @@ function makeInnerEditor() {
     // onDidScrollChange; tests drive them via fireMouseDown / fireScroll below.
     let mouseDownCb: ((e: unknown) => void) | null = null;
     let scrollCb: (() => void) | null = null;
+    // The stacked "all files" view sizes each editor to its content via
+    // getContentHeight + onDidContentSizeChange; tests drive it with fireContentSize.
+    let contentSizeCb: (() => void) | null = null;
+    let contentHeight = 0;
     return {
         revealLineInCenter: vi.fn<(line: number) => void>(),
         revealLine: vi.fn<(line: number) => void>(),
@@ -34,9 +38,18 @@ function makeInnerEditor() {
             scrollCb = cb;
             return { dispose: vi.fn<() => void>() };
         }),
+        getContentHeight: vi.fn<() => number>(() => contentHeight),
+        onDidContentSizeChange: vi.fn<(cb: () => void) => { dispose: () => void }>((cb) => {
+            contentSizeCb = cb;
+            return { dispose: vi.fn<() => void>() };
+        }),
         // Test drivers (not part of Monaco).
         fireMouseDown: (e: unknown) => mouseDownCb?.(e),
         fireScroll: () => scrollCb?.(),
+        fireContentSize: (h: number) => {
+            contentHeight = h;
+            contentSizeCb?.();
+        },
     };
 }
 

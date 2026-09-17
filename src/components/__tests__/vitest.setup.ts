@@ -13,6 +13,21 @@ class ResizeObserverStub {
 
 globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 
+// The stacked diff pane windows its editors with an IntersectionObserver; jsdom
+// has none. A no-op stub lets the pane mount (cards stay off-window, so no editor
+// mounts) without driving real intersection, which jsdom cannot compute anyway.
+class IntersectionObserverStub {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): [] {
+        return [];
+    }
+}
+
+globalThis.IntersectionObserver =
+    IntersectionObserverStub as unknown as typeof IntersectionObserver;
+
 if (!globalThis.matchMedia) {
     globalThis.matchMedia = ((query: string) => ({
         matches: false,

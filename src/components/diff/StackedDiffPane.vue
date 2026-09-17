@@ -1,0 +1,160 @@
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useComparisonStore } from '@/stores/comparison';
+import StackedDiffCard from '@/components/diff/StackedDiffCard.vue';
+
+// The GitHub-style "all files" view: every changed file's diff stacked in one
+// scroll container. Only the cards near the viewport mount a real editor (windowed
+// by an IntersectionObserver), so the list stays responsive on very large PRs.
+const comparison = useComparisonStore();
+
+const containerRef = ref<HTMLElement | null>(null);
+// Paths whose cards are inside the scroll window (plus overscan); their editors mount.
+const active = ref<Set<string>>(new Set());
+
+let observer: IntersectionObserver | null = null;
+let rafPending = false;
+// Set while our own scroll sync moves selectedPath, so the selectedPath watch does
+// not scroll the list back and fight the reader's scroll.
+let suppressSelectWatch = false;
+
+function onIntersect(entries: IntersectionObserverEntry[]) {
+    const next = new Set(active.value);
+    for (const entry of entries) {
+        const path = (entry.target as HTMLElement).dataset.path;
+        if (!path) {
+            continue;
+        }
+        if (entry.isIntersecting) {
+            next.add(path);
+        } else {
+            next.delete(path);
+        }
+    }
+
+    active.value = next;
+}
+
+// (Re)observe every card after the list first renders or its contents change.
+function syncObserved() {
+    const container = containerRef.value;
+    if (!observer || !container) {
+        return;
+    }
+
+    observer.disconnect();
+    const paths = new Set<string>();
+    for (const el of container.querySelectorAll<HTMLElement>('[data-path]')) {
+        observer.observe(el);
+        if (el.dataset.path) {
+            paths.add(el.dataset.path);
+        }
+    }
+
+    // Drop any active paths whose cards were filtered out of the list.
+    active.value = new Set([...active.value].filter((path) => paths.has(path)));
+}
+
+function cardEl(path: string): HTMLElement | null {
+    const container = containerRef.value;
+    if (!container) {
+        return null;
+    }
+
+    for (const el of container.querySelectorAll<HTMLElement>('[data-path]')) {
+        if (el.dataset.path === path) {
+            return el;
+        }
+    }
+
+    return null;
+}
+
+// The top-most card in view becomes the current file, so the sidebar highlight and
+// status follow what the reader is looking at. Throttled to one read per frame.
+function onScroll() {
+    if (rafPending) {
+        return;
+    }
+
+    rafPending = true;
+    requestAnimationFrame(() => {
+        rafPending = false;
+        const container = containerRef.value;
+        if (!container) {
+            return;
+        }
+
+        const top = container.scrollTop + 8;
+        let current = '';
+        for (const el of container.querySelectorAll<HTMLElement>('[data-path]')) {
+            if (el.offsetTop <= top) {
+                current = el.dataset.path ?? current;
+            } else {
+                break;
+            }
+        }
+
+        if (current && current !== comparison.selectedPath) {
+            suppressSelectWatch = true;
+            comparison.setCurrentFromScroll(current);
+        }
+    });
+}
+
+// A selection from elsewhere (a sidebar click) scrolls the list to that file. Our
+// own scroll-driven selection is skipped so it does not fight the reader's scroll.
+watch(
+    () => comparison.selectedPath,
+    (path) => {
+        if (suppressSelectWatch) {
+            suppressSelectWatch = false;
+            return;
+        }
+
+        cardEl(path)?.scrollIntoView({ block: 'start' });
+    }
+);
+
+// Re-observe whenever the shown-file list changes (filters, a refresh, a range change).
+watch(
+    () => comparison.orderedShownFiles.map((f) => f.path).join('\n'),
+    () => void nextTick(syncObserved)
+);
+
+onMounted(() => {
+    observer = new IntersectionObserver(onIntersect, {
+        root: containerRef.value,
+        // Mount editors a screenful early, so they are ready before they scroll in.
+        rootMargin: '800px 0px',
+    });
+    void nextTick(syncObserved);
+});
+
+onBeforeUnmount(() => {
+    observer?.disconnect();
+    observer = null;
+});
+</script>
+
+<template>
+    <div
+        ref="containerRef"
+        class="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-moire-app"
+        style="overflow-anchor: auto"
+        @scroll="onScroll"
+    >
+        <stacked-diff-card
+            v-for="file in comparison.orderedShownFiles"
+            :key="file.path"
+            :file="file"
+            :active="active.has(file.path)"
+        />
+        <div
+            v-if="comparison.orderedShownFiles.length === 0"
+            class="flex h-full items-center justify-center px-6 text-center text-sm text-moire-faint"
+        >
+            No files match the current filter.
+        </div>
+    </div>
+</template>
