@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ArrowDown, ArrowRight, ArrowUp, Check } from '@lucide/vue';
+import { ArrowDown, ArrowRight, ArrowUp, Check, SquareArrowOutUpRight } from '@lucide/vue';
 import type { ChangedFile, FileStatus } from '@/shared/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ const emit = defineEmits<{
     prev: [];
     next: [];
     toggleViewed: [];
+    open: [];
 }>();
 
 const STATUS_BADGE: Record<FileStatus, string> = {
@@ -24,6 +25,13 @@ const STATUS_BADGE: Record<FileStatus, string> = {
     D: 'border-moire-status-d text-moire-status-d',
     R: 'border-moire-status-r text-moire-status-r',
 };
+
+// The filename doubles as an "open file" trigger, so it looks like a link: an
+// accent color and underline on hover. Kept in a constant so the inline tag below
+// stays on one line with the directory prefix (a line break there would render a
+// stray space between the folder path and the filename).
+const NAME_LINK_CLASS =
+    'cursor-pointer font-medium text-moire-fg hover:text-moire-accent hover:underline';
 
 const dir = computed(() => {
     const slash = props.file.path.lastIndexOf('/');
@@ -50,7 +58,25 @@ const name = computed(() => {
                     <ArrowRight :size="13" class="shrink-0 text-moire-faint" />
                 </template>
                 <span class="min-w-0 truncate">
-                    {{ dir }}<span class="font-medium text-moire-fg">{{ name }}</span>
+                    {{ dir
+                    }}<button
+                        v-if="file.status !== 'D'"
+                        type="button"
+                        :title="file.path"
+                        :class="NAME_LINK_CLASS"
+                        @click="emit('open')"
+                    >
+                        {{ name
+                        }}<SquareArrowOutUpRight
+                            :size="12"
+                            aria-hidden="true"
+                            style="
+                                display: inline-block;
+                                margin-left: 0.4rem;
+                                vertical-align: -0.1em;
+                            "
+                        /></button
+                    ><span v-else class="font-medium text-moire-fg">{{ name }}</span>
                 </span>
             </span>
             <Badge
@@ -78,6 +104,7 @@ const name = computed(() => {
                         <Button
                             variant="outline"
                             size="icon-sm"
+                            aria-label="Previous change"
                             class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                             @click="emit('prev')"
                         >
@@ -91,6 +118,7 @@ const name = computed(() => {
                         <Button
                             variant="outline"
                             size="icon-sm"
+                            aria-label="Next change"
                             class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                             @click="emit('next')"
                         >

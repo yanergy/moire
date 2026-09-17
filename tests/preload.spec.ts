@@ -53,6 +53,7 @@ describe('preload bridge', () => {
             'getFilePair',
             'getPullRequest',
             'openExternal',
+            'openFile',
             'getTheme',
             'onThemeChanged',
             'getFlourishes',
@@ -98,6 +99,9 @@ describe('preload bridge', () => {
             'shell:open-external',
             'https://github.com/o/r/pull/1'
         );
+
+        await api().openFile!('src/a.ts');
+        expect(bridge.invoke).toHaveBeenCalledWith('shell:open-path', 'src/a.ts');
     });
 
     it('subscribes and returns an unsubscribe that removes the same listener', () => {

@@ -109,6 +109,18 @@ export interface FilterOption<T extends string> {
     count: number;
 }
 
+// Open a file's working-tree copy through the main process, in the chosen editor (or
+// the OS default app). Resolves an ok/message result (a file missing from the
+// checked-out tree fails) so the caller can decide whether to surface it.
+function openFile(filePath: string): Promise<{ ok: boolean; message?: string }> {
+    const api = window.api;
+    if (!api?.openFile || !filePath) {
+        return Promise.resolve({ ok: false, message: 'Cannot open this file.' });
+    }
+
+    return api.openFile(filePath);
+}
+
 // Flip one value in a filter facet's set. The set is replaced (not mutated in place)
 // so the computeds reading it re-run, matching how the task drafts are handled.
 function toggleInSet<T>(setRef: Ref<Set<T>>, value: T) {
@@ -1356,6 +1368,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         orderedPaths,
         allCollapsed,
         selectFile,
+        openFile,
         goToAdjacentFile,
         clearChangeEdge,
         toggleViewed,

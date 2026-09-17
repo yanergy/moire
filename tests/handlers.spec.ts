@@ -23,6 +23,11 @@ const state = vi.hoisted(() => ({
     onRecentsChanged: vi.fn<() => void>(),
     getPullRequest: vi.fn<(repoPath: string, base: string, head: string) => Promise<unknown>>(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
+    openPath: vi.fn<(p: string) => Promise<string>>(),
+    getEditorPreference: vi.fn<() => Promise<string>>(),
+    detectEditors:
+        vi.fn<() => Promise<{ id: string; label: string; kind: string; target: string }[]>>(),
+    openWithEditor: vi.fn<(editor: unknown, p: string) => Promise<string>>(),
 }));
 
 vi.mock('electron', () => ({
@@ -31,7 +36,12 @@ vi.mock('electron', () => ({
             state.handlers.set(channel, fn),
     },
     dialog: { showOpenDialog: state.showOpenDialog, showErrorBox: state.showErrorBox },
-    shell: { openExternal: state.openExternal },
+    shell: { openExternal: state.openExternal, openPath: state.openPath },
+}));
+
+vi.mock('../electron/editors', () => ({
+    detectEditors: state.detectEditors,
+    openWithEditor: state.openWithEditor,
 }));
 
 vi.mock('simple-git', () => ({
@@ -61,6 +71,7 @@ vi.mock('../electron/settings', () => ({
     setBranchSelection: state.setBranchSelection,
     getFlourishes: state.getFlourishes,
     getCodeStyle: state.getCodeStyle,
+    getEditorPreference: state.getEditorPreference,
 }));
 vi.mock('../electron/theme', () => ({ currentThemeState: state.currentThemeState }));
 vi.mock('../electron/logger', () => ({ logError: state.logError }));
@@ -90,6 +101,10 @@ describe('registerIpcHandlers', () => {
         state.setBranchSelection.mockResolvedValue(undefined);
         state.getFlourishes.mockResolvedValue(true);
         state.getCodeStyle.mockResolvedValue('github');
+        state.getEditorPreference.mockResolvedValue('auto');
+        state.openPath.mockResolvedValue('');
+        state.detectEditors.mockResolvedValue([]);
+        state.openWithEditor.mockResolvedValue('');
         state.currentThemeState.mockReturnValue({ preference: 'system', isDark: false });
 
         // Fresh module each test so the internal currentRepo starts unset.
@@ -114,6 +129,7 @@ describe('registerIpcHandlers', () => {
             'git:file-pair',
             'gh:pull-request',
             'shell:open-external',
+            'shell:open-path',
         ]) {
             expect(state.handlers.has(channel)).toBe(true);
         }
@@ -202,5 +218,60 @@ describe('registerIpcHandlers', () => {
         await invoke('shell:open-external', 'file:///etc/passwd');
         await invoke('shell:open-external', 'javascript:alert(1)');
         expect(state.openExternal).not.toHaveBeenCalled();
+    });
+
+    it('opens a repo file in the OS default app under the auto preference', async () => {
+        await invoke('repo:open', '/repos/moire');
+
+        const result = await invoke('shell:open-path', 'src/a.ts');
+
+        expect(state.openPath).toHaveBeenCalledWith('/repos/moire/src/a.ts');
+        expect(state.openWithEditor).not.toHaveBeenCalled();
+        expect(result).toEqual({ ok: true });
+    });
+
+    it('opens in the chosen editor when one is set and detected', async () => {
+        state.getEditorPreference.mockResolvedValue('phpstorm');
+        state.detectEditors.mockResolvedValue([
+            {
+                id: 'phpstorm',
+                label: 'PhpStorm',
+                kind: 'mac-app',
+                target: '/Applications/PhpStorm.app',
+            },
+        ]);
+        await invoke('repo:open', '/repos/moire');
+
+        const result = await invoke('shell:open-path', 'src/a.ts');
+
+        expect(state.openWithEditor).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'phpstorm' }),
+            '/repos/moire/src/a.ts'
+        );
+        expect(state.openPath).not.toHaveBeenCalled();
+        expect(result).toEqual({ ok: true });
+    });
+
+    it('falls back to the OS default when the chosen editor is gone or fails', async () => {
+        state.getEditorPreference.mockResolvedValue('phpstorm');
+        state.detectEditors.mockResolvedValue([]); // no longer installed
+        await invoke('repo:open', '/repos/moire');
+
+        await invoke('shell:open-path', 'src/a.ts');
+        expect(state.openWithEditor).not.toHaveBeenCalled();
+        expect(state.openPath).toHaveBeenCalledWith('/repos/moire/src/a.ts');
+    });
+
+    it('refuses to open a path that escapes the repository', async () => {
+        await invoke('repo:open', '/repos/moire');
+
+        const result = await invoke('shell:open-path', '../../etc/passwd');
+
+        expect(result).toEqual({
+            ok: false,
+            message: 'Refusing to open a path outside the repository.',
+        });
+        expect(state.openPath).not.toHaveBeenCalled();
+        expect(state.openWithEditor).not.toHaveBeenCalled();
     });
 });

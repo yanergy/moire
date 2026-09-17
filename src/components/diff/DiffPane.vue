@@ -48,6 +48,13 @@ function navigate(direction: 'next' | 'prev') {
         diffRef.value.goToEdge(direction === 'next' ? 'first' : 'last');
     }
 }
+
+// Open the selected file's working-tree copy in the chosen editor (or OS default).
+// Fire-and-forget: a failure (e.g. the file is not in the checked-out tree) is left
+// unsurfaced for now.
+function openSelected() {
+    void comparison.openFile(comparison.selectedFile.path);
+}
 </script>
 
 <template>
@@ -64,6 +71,7 @@ function navigate(direction: 'next' | 'prev') {
             @prev="navigate('prev')"
             @next="navigate('next')"
             @toggle-viewed="comparison.toggleViewed(comparison.selectedFile.path)"
+            @open="openSelected"
         />
 
         <div

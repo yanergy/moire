@@ -20,6 +20,9 @@ describe('SelectionBanner', () => {
 
         expect(text).toContain('src/stores/');
         expect(text).toContain('comparison.ts');
+        // The directory prefix and filename must join with no stray space between
+        // them, even though the filename is a separate clickable element.
+        expect(text).toContain('src/stores/comparison.ts');
         expect(text).toContain('M');
         expect(text).toContain('+19');
         expect(text).toContain('−7');
@@ -67,14 +70,40 @@ describe('SelectionBanner', () => {
         const wrapper = mount(SelectionBanner, {
             props: { file, viewed: false, changeCount: 2 },
         });
-        const buttons = wrapper.findAll('button'); // prev, next, mark-viewed
+        const markViewed = wrapper.findAll('button').find((b) => b.text().includes('Mark viewed'));
 
-        await buttons[0]!.trigger('click');
-        await buttons[1]!.trigger('click');
-        await buttons[2]!.trigger('click');
+        await wrapper.get('[aria-label="Previous change"]').trigger('click');
+        await wrapper.get('[aria-label="Next change"]').trigger('click');
+        await markViewed?.trigger('click');
 
         expect(wrapper.emitted('prev')).toHaveLength(1);
         expect(wrapper.emitted('next')).toHaveLength(1);
         expect(wrapper.emitted('toggleViewed')).toHaveLength(1);
+    });
+
+    it('makes the filename an open-file link with an external-link icon', async () => {
+        const wrapper = mount(SelectionBanner, {
+            props: { file, viewed: false, changeCount: 0 },
+        });
+        const link = wrapper.get('[title="src/stores/comparison.ts"]');
+
+        // The icon lives inside the link (an "opens externally" affordance), not a
+        // separate button beside it.
+        expect(link.find('.lucide-square-arrow-out-up-right').exists()).toBe(true);
+
+        await link.trigger('click');
+        expect(wrapper.emitted('open')).toHaveLength(1);
+    });
+
+    it('renders the filename as plain text with no link or icon for a deleted file', () => {
+        const deleted: ChangedFile = { ...file, status: 'D', additions: 0, deletions: 214 };
+        const wrapper = mount(SelectionBanner, {
+            props: { file: deleted, viewed: false, changeCount: 0 },
+        });
+
+        // No open affordance: a deleted file has no working-tree copy to open.
+        expect(wrapper.find('[title="src/stores/comparison.ts"]').exists()).toBe(false);
+        expect(wrapper.find('.lucide-square-arrow-out-up-right').exists()).toBe(false);
+        expect(wrapper.text()).toContain('src/stores/comparison.ts');
     });
 });

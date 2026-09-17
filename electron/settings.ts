@@ -44,6 +44,7 @@ function getStore(): Promise<SettingsStore> {
                         recentRepos: [],
                         theme: 'system',
                         codeStyle: 'github',
+                        editor: 'auto',
                         branchSelections: {},
                         windowState: null,
                         flourishes: true,
@@ -130,6 +131,19 @@ export async function getCodeStyle(): Promise<CodeStyle> {
 export async function setCodeStyle(style: CodeStyle): Promise<void> {
     const store = await getStore();
     store.set('codeStyle', style);
+}
+
+// Which editor files open in when launched from the diff header: 'auto' (the OS
+// default app) or an editor id from electron/editors.ts. Read on launch to seed the
+// View → "Open Files In" menu radio; persisted whenever the user changes it.
+export async function getEditorPreference(): Promise<string> {
+    const store = await getStore();
+    return store.get<string>('editor', 'auto');
+}
+
+export async function setEditorPreference(editor: string): Promise<void> {
+    const store = await getStore();
+    store.set('editor', editor);
 }
 
 // Whether the review-complete flourishes play. Persisted so the (deliberately

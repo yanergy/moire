@@ -1551,4 +1551,34 @@ describe('comparison store', () => {
             expect(shownPaths(store)).toHaveLength(3);
         });
     });
+
+    describe('open file', () => {
+        afterEach(() => {
+            delete window.api;
+        });
+
+        it('opens a file through the bridge and returns its result', async () => {
+            const openFile = vi
+                .fn<(p: string) => Promise<{ ok: boolean }>>()
+                .mockResolvedValue({ ok: true });
+            window.api = { openFile } as unknown as Window['api'];
+            const store = useComparisonStore();
+
+            const result = await store.openFile('src/stores/comparison.ts');
+
+            expect(openFile).toHaveBeenCalledWith('src/stores/comparison.ts');
+            expect(result.ok).toBe(true);
+        });
+
+        it('fails without opening when there is no path or no bridge', async () => {
+            const store = useComparisonStore();
+            // No window.api at all.
+            expect((await store.openFile('a.ts')).ok).toBe(false);
+
+            const openFile = vi.fn<(p: string) => Promise<{ ok: boolean }>>();
+            window.api = { openFile } as unknown as Window['api'];
+            expect((await store.openFile('')).ok).toBe(false);
+            expect(openFile).not.toHaveBeenCalled();
+        });
+    });
 });

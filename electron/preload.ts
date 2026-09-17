@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.invoke('gh:set-review-thread-resolved', threadId, resolved),
     // Open a PR link in the default browser (main restricts it to http(s)).
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
+    openFile: (filePath: string) => ipcRenderer.invoke('shell:open-path', filePath),
     // Theme is owned by main (nativeTheme). `getTheme` reads the resolved state;
     // `onThemeChanged` fires when the View → Theme selection or the OS theme
     // changes, returning an unsubscribe function so the caller can drop it.

@@ -37,6 +37,13 @@ export interface MenuOptions {
     // (and the menu tests) fall back to the 'github' default.
     currentCodeStyle?: CodeStyle;
     onSelectCodeStyle?: (style: CodeStyle) => void;
+    // The "Open Files In" radio group: the editors detected on this machine, the
+    // stored preference ('auto' or an editor id) that marks the checked radio, and
+    // the select handler. Optional so callers that don't care fall back to 'auto'
+    // with no editors listed.
+    editors?: { id: string; label: string }[];
+    currentEditor?: string;
+    onSelectEditor?: (editor: string) => void;
     onRefresh: () => void;
     onOpenLog?: () => void;
     onOpenRepo?: () => void;
@@ -75,6 +82,9 @@ export function buildMenuTemplate({
     onSelectTheme,
     currentCodeStyle = 'github',
     onSelectCodeStyle,
+    editors = [],
+    currentEditor = 'auto',
+    onSelectEditor,
     onRefresh,
     onOpenLog,
     onOpenRepo,
@@ -177,6 +187,29 @@ export function buildMenuTemplate({
                             click: () => onSelectCodeStyle?.(style),
                         })
                     ),
+                },
+                // Which editor a file opens in from the diff header: the OS default
+                // app, or a detected editor, in catalog order. One contiguous radio
+                // group (no separator between the default and the editors) so
+                // Electron's native radio behavior unchecks the previous choice when
+                // a new one is picked. A separator would split the group and leave
+                // both the old and new selection checked.
+                {
+                    label: 'Open Files In',
+                    submenu: [
+                        {
+                            label: 'System Default',
+                            type: 'radio',
+                            checked: currentEditor === 'auto',
+                            click: () => onSelectEditor?.('auto'),
+                        },
+                        ...editors.map(({ id, label }): MenuItemConstructorOptions => ({
+                            label,
+                            type: 'radio',
+                            checked: currentEditor === id,
+                            click: () => onSelectEditor?.(id),
+                        })),
+                    ],
                 },
                 { type: 'separator' },
                 // Unobtrusive toggle for the review-complete flourishes; the label

@@ -112,4 +112,12 @@ describe('settings: theme and window state', () => {
         await setCodeStyle('vscode');
         expect(await getCodeStyle()).toBe('vscode');
     });
+
+    it('defaults the editor to auto and persists a change', async () => {
+        const { getEditorPreference, setEditorPreference } = await loadSettings();
+        expect(await getEditorPreference()).toBe('auto');
+
+        await setEditorPreference('phpstorm');
+        expect(await getEditorPreference()).toBe('phpstorm');
+    });
 });

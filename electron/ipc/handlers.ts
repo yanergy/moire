@@ -26,7 +26,9 @@ import {
     setBranchSelection,
     getFlourishes,
     getCodeStyle,
+    getEditorPreference,
 } from '../settings';
+import { detectEditors, openWithEditor } from '../editors';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
 
@@ -219,6 +221,33 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
         if (/^https?:\/\//i.test(url)) {
             await shell.openExternal(url);
         }
+    });
+
+    // Open the working-tree copy of a repo file. The path is repo-relative and
+    // resolved against the open repo root; a path that escapes the root is refused so
+    // a crafted path can't open an arbitrary file. The chosen editor ('auto' or an
+    // editor id) decides the app: 'auto' (or an editor that is no longer installed or
+    // fails) falls back to the OS default app for the filetype.
+    handle('shell:open-path', async (relPath: string) => {
+        const root = requireRepo().repoPath;
+        const target = path.resolve(root, relPath);
+        const within = path.relative(root, target);
+        if (within === '' || within.startsWith('..') || path.isAbsolute(within)) {
+            return { ok: false, message: 'Refusing to open a path outside the repository.' };
+        }
+
+        const preference = await getEditorPreference();
+        if (preference !== 'auto') {
+            const editor = (await detectEditors()).find((e) => e.id === preference);
+            // A successful editor open wins; otherwise fall through to the OS default.
+            if (editor && !(await openWithEditor(editor, target))) {
+                return { ok: true };
+            }
+        }
+
+        // openPath resolves to '' on success, or an error string the caller can show.
+        const error = await shell.openPath(target);
+        return error ? { ok: false, message: error } : { ok: true };
     });
 }
 

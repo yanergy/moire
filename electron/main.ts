@@ -13,7 +13,10 @@ import {
     setFlourishes,
     getCodeStyle,
     setCodeStyle,
+    getEditorPreference,
+    setEditorPreference,
 } from './settings';
+import { detectEditors } from './editors';
 
 // Send a menu-triggered message to the window the user is in (or the only one).
 function sendToFocused(channel: string, ...args: unknown[]): void {
@@ -91,6 +94,8 @@ app.whenReady().then(async () => {
         // The gh accounts back the Git menu; an empty list (gh missing or signed
         // out) hides the menu. This is a fast local `gh auth status`, no network.
         const { accounts } = await getAccounts();
+        // The editors installed on this machine seed the "Open Files In" submenu.
+        const detected = await detectEditors();
         installAppMenu({
             currentTheme: currentThemeState().preference,
             onSelectTheme: (preference) => setThemePreference(preference),
@@ -102,6 +107,12 @@ app.whenReady().then(async () => {
                 void setCodeStyle(style);
                 sendToFocused('code-style:changed', style);
             },
+            // The chosen editor is read by the main-process open handler, so a change
+            // just persists; Electron keeps the clicked radio checked for the session,
+            // and the stored value re-seeds the checkmark on the next menu rebuild.
+            editors: detected.map(({ id, label }) => ({ id, label })),
+            currentEditor: await getEditorPreference(),
+            onSelectEditor: (editor) => void setEditorPreference(editor),
             // The store owns the git re-read / the open flow, so these items just
             // poke the focused window; the renderer acts on the message.
             onRefresh: () => sendToFocused('menu:refresh'),

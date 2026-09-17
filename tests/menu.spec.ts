@@ -19,6 +19,10 @@ function codeStyleSubmenu(extra = {}) {
     return viewSubmenu('system', extra)?.find((entry) => entry.label === 'Code Style')?.submenu;
 }
 
+function openFilesSubmenu(extra = {}) {
+    return viewSubmenu('system', extra)?.find((entry) => entry.label === 'Open Files In')?.submenu;
+}
+
 function fileSubmenu(extra = {}) {
     const template = buildMenuTemplate({ isMac: true, currentTheme: 'system', ...extra });
     return template.find((menu) => menu.label === 'File')?.submenu;
@@ -73,6 +77,50 @@ describe('application menu', () => {
 
         items?.find((item) => item.label === 'VS Code')?.click();
         expect(onSelectCodeStyle).toHaveBeenCalledWith('vscode');
+    });
+
+    it('offers System Default plus the detected editors as one radio group in Open Files In', () => {
+        const items = openFilesSubmenu({
+            editors: [
+                { id: 'phpstorm', label: 'PhpStorm' },
+                { id: 'vscode', label: 'VS Code' },
+            ],
+        });
+        expect(items?.map((item) => item.label)).toEqual(['System Default', 'PhpStorm', 'VS Code']);
+        // One contiguous radio group with no separator, so Electron unchecks the
+        // previous choice when a new one is picked. A separator here would split the
+        // group and leave both the old and new selection checked.
+        expect(items?.every((item) => item.type === 'radio')).toBe(true);
+    });
+
+    it('checks System Default by default and the current editor otherwise', () => {
+        expect(openFilesSubmenu()?.find((item) => item.checked)?.label).toBe('System Default');
+
+        const items = openFilesSubmenu({
+            editors: [{ id: 'phpstorm', label: 'PhpStorm' }],
+            currentEditor: 'phpstorm',
+        });
+        expect(items?.find((item) => item.checked)?.label).toBe('PhpStorm');
+    });
+
+    it('lists only System Default (no separator) when no editors are detected', () => {
+        const items = openFilesSubmenu();
+        expect(items?.map((item) => item.label)).toEqual(['System Default']);
+        expect(items?.some((item) => item.type === 'separator')).toBe(false);
+    });
+
+    it('reports the chosen editor through onSelectEditor', () => {
+        const onSelectEditor = vi.fn<(id: string) => void>();
+        const items = openFilesSubmenu({
+            editors: [{ id: 'phpstorm', label: 'PhpStorm' }],
+            onSelectEditor,
+        });
+
+        items?.find((item) => item.label === 'PhpStorm')?.click();
+        expect(onSelectEditor).toHaveBeenCalledWith('phpstorm');
+
+        items?.find((item) => item.label === 'System Default')?.click();
+        expect(onSelectEditor).toHaveBeenCalledWith('auto');
     });
 
     it('offers a Refresh item bound to Cmd/Ctrl+R in the View menu', () => {
