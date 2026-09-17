@@ -6,6 +6,7 @@ import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import MissingBranchNotice from '@/components/headers/MissingBranchNotice.vue';
 import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import DiffPane from '@/components/diff/DiffPane.vue';
+import StackedDiffPane from '@/components/diff/StackedDiffPane.vue';
 import PrView from '@/components/pr/PrView.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
@@ -20,6 +21,7 @@ const stubs = {
     MissingBranchNotice: true,
     FileTreeSidebar: true,
     DiffPane: true,
+    StackedDiffPane: true,
     PrView: true,
 };
 
@@ -61,7 +63,32 @@ describe('MoirePage', () => {
         expect(wrapper.findComponent(MissingBranchNotice).exists()).toBe(true);
         expect(wrapper.findComponent(FileTreeSidebar).exists()).toBe(true);
         expect(wrapper.findComponent(DiffPane).exists()).toBe(true);
+        expect(wrapper.findComponent(StackedDiffPane).exists()).toBe(false);
         expect(wrapper.findComponent(PrView).exists()).toBe(false);
+    });
+
+    it('shows the stacked all-files pane instead of the single-file diff in stacked layout', () => {
+        useUiStore().setDiffLayout('stacked');
+
+        const wrapper = mount(MoirePage, { global: { plugins: [pinia], stubs } });
+
+        expect(wrapper.findComponent(StackedDiffPane).exists()).toBe(true);
+        expect(wrapper.findComponent(DiffPane).exists()).toBe(false);
+    });
+
+    it('keeps showing the PR view over the stacked pane while a PR is active', () => {
+        const comparison = useComparisonStore();
+        comparison.prStatus = 'ok';
+        comparison.pullRequest = PR;
+        const ui = useUiStore();
+        ui.setMainView('pr');
+        ui.setDiffLayout('stacked');
+
+        const wrapper = mount(MoirePage, { global: { plugins: [pinia], stubs } });
+
+        expect(wrapper.findComponent(PrView).exists()).toBe(true);
+        expect(wrapper.findComponent(StackedDiffPane).exists()).toBe(false);
+        expect(wrapper.findComponent(DiffPane).exists()).toBe(false);
     });
 
     it('shows the PR view instead of the diff when the PR view is active and a PR exists', () => {

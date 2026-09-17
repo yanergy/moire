@@ -6,6 +6,7 @@ import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import MissingBranchNotice from '@/components/headers/MissingBranchNotice.vue';
 import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import DiffPane from '@/components/diff/DiffPane.vue';
+import StackedDiffPane from '@/components/diff/StackedDiffPane.vue';
 import PrView from '@/components/pr/PrView.vue';
 
 const comparison = useComparisonStore();
@@ -36,7 +37,10 @@ watch(
         <div class="flex min-h-0 flex-1">
             <file-tree-sidebar />
             <pr-view v-if="showPrView" />
-            <diff-pane v-else />
+            <!-- The diff area follows the View → Diff Layout setting: the single-file
+                 pane, or the GitHub-style stacked all-files list. -->
+            <diff-pane v-else-if="ui.diffLayout === 'single'" />
+            <stacked-diff-pane v-else />
         </div>
     </div>
 </template>
