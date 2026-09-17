@@ -14,9 +14,6 @@ const active = ref<Set<string>>(new Set());
 
 let observer: IntersectionObserver | null = null;
 let rafPending = false;
-// Set while our own scroll sync moves selectedPath, so the selectedPath watch does
-// not scroll the list back and fight the reader's scroll.
-let suppressSelectWatch = false;
 
 function onIntersect(entries: IntersectionObserverEntry[]) {
     const next = new Set(active.value);
@@ -96,23 +93,21 @@ function onScroll() {
         }
 
         if (current && current !== comparison.selectedPath) {
-            suppressSelectWatch = true;
             comparison.setCurrentFromScroll(current);
         }
     });
 }
 
-// A selection from elsewhere (a sidebar click) scrolls the list to that file. Our
-// own scroll-driven selection is skipped so it does not fight the reader's scroll.
+// Scroll the list to a file only when the file tree asks (a sidebar click). This is
+// deliberately not driven by selectedPath: the current file also moves as the reader
+// scrolls or clicks within the list, and jumping the scroll then would disorient.
 watch(
-    () => comparison.selectedPath,
-    (path) => {
-        if (suppressSelectWatch) {
-            suppressSelectWatch = false;
-            return;
+    () => comparison.scrollToFile.seq,
+    () => {
+        const path = comparison.scrollToFile.path;
+        if (path) {
+            cardEl(path)?.scrollIntoView({ block: 'start' });
         }
-
-        cardEl(path)?.scrollIntoView({ block: 'start' });
     }
 );
 

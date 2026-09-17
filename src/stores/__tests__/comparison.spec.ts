@@ -1662,6 +1662,19 @@ describe('comparison store', () => {
             expect(store.pendingChangeEdge).toBe('first'); // untouched, unlike selectFile
         });
 
+        it('raises a scroll-to-file request, bumping seq on every call', () => {
+            const store = useComparisonStore();
+            expect(store.scrollToFile).toEqual({ path: '', seq: 0 });
+
+            store.requestScrollToFile('src/a.ts');
+            expect(store.scrollToFile).toEqual({ path: 'src/a.ts', seq: 1 });
+
+            // A repeat request for the already-current file still bumps seq, so the
+            // stacked pane jumps again rather than ignoring it.
+            store.requestScrollToFile('src/a.ts');
+            expect(store.scrollToFile).toEqual({ path: 'src/a.ts', seq: 2 });
+        });
+
         it('skips the single-file fetch in the stacked layout, and loads on return', async () => {
             const getFilePair = fileApi();
             const store = useComparisonStore();

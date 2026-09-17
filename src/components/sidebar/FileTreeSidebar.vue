@@ -30,6 +30,9 @@ const ui = useUiStore();
 // is open. The store selection alone would keep the PR pane up over the new file.
 function openFile(path: string): void {
     comparison.selectFile(path);
+    // Ask the stacked "all files" view to jump to this file. Only a file-tree click
+    // jumps; selecting by scrolling or clicking within the diff list never does.
+    comparison.requestScrollToFile(path);
     ui.setMainView('diff');
 }
 

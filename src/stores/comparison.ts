@@ -997,6 +997,16 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
     }
 
+    // A one-shot request to scroll the stacked "all files" view to a file, raised by
+    // the file tree. The stacked pane jumps only on this, never on selectedPath: the
+    // current file also moves as the reader scrolls or clicks within the list, and
+    // jumping the scroll then would be disorienting. The bumped seq lets a repeat
+    // click on the already-current file still jump.
+    const scrollToFile = ref<{ path: string; seq: number }>({ path: '', seq: 0 });
+    function requestScrollToFile(path: string) {
+        scrollToFile.value = { path, seq: scrollToFile.value.seq + 1 };
+    }
+
     // Move the selection to the next/previous file in display order, wrapping at
     // the ends, and record which change edge the viewer should land on. Returns
     // whether the selection actually changed: a single-file set wraps onto itself,
@@ -1475,6 +1485,8 @@ export const useComparisonStore = defineStore('comparison', () => {
         allCollapsed,
         selectFile,
         setCurrentFromScroll,
+        scrollToFile,
+        requestScrollToFile,
         openFile,
         pairFor,
         goToAdjacentFile,
