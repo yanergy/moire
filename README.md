@@ -165,6 +165,11 @@ Track bugs and limitations here.
   opens, and right after switching accounts). Signing in or out with `gh auth login` / `gh auth
   logout` while the app is running is not picked up until one of those happens (or a relaunch).
 
+## Planned features
+
+No features are planned at the moment. Everything on the original roadmap has shipped. New ideas
+are tracked as open issues on GitHub.
+
 ## Documentation
 
 - `documentation/code-conventions.md`: code conventions and project rules. Read this before making
