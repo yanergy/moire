@@ -191,6 +191,12 @@ Track bugs and limitations here.
 - **The Git menu's account list refreshes only when the menu is rebuilt** (on launch, when a repo
   opens, and right after switching accounts). Signing in or out with `gh auth login` / `gh auth
   logout` while the app is running is not picked up until one of those happens (or a relaunch).
+- **`gh` has to be reachable from your login shell.** A packaged app started from Finder or the
+  Dock inherits launchd's minimal PATH, so the app asks `$SHELL -ilc` for its PATH at startup and
+  merges that in (plus the usual install directories: Homebrew, MacPorts, `~/.local/bin`,
+  `~/bin`). A `gh` that only appears under a different shell, or only in a non-interactive
+  context, is still reported as not installed. The effective PATH is logged on every launch, so
+  Help, Open Log File is the first place to look.
 
 ## Planned features
 

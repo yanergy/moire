@@ -6,7 +6,8 @@ import { stopWatchingRepo } from './watcher/RepoWatcher';
 import { installAppMenu } from './menu';
 import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
 import { restoreWindowState, trackWindowState } from './window-state';
-import { initLogging, logError } from './logger';
+import { initLogging, logError, logInfo } from './logger';
+import { repairPath } from './shell-path';
 import {
     getRecentRepos,
     getFlourishes,
@@ -72,6 +73,12 @@ app.whenReady().then(async () => {
         const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'build', 'icon.png'));
         if (!icon.isEmpty()) app.dock?.setIcon(icon);
     }
+
+    // Before anything spawns a child process: a Finder/Dock launch inherits only
+    // launchd's minimal PATH, which hides Homebrew-installed tools such as `gh`.
+    // See shell-path.ts. Logged because the effective PATH is the first thing to
+    // check when a tool reads as missing.
+    logInfo(`PATH: ${await repairPath()}`);
 
     // Git is a hard dependency: without it there is nothing to diff. Gate launch
     // on it, show a native error box (the renderer is not up yet), and quit.

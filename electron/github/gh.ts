@@ -230,12 +230,10 @@ interface GhPr {
 // Injectable so the lookup is unit-testable without spawning a real gh.
 export type GhRunner = (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>;
 
-// KNOWN LIMITATION (packaging): `gh` is resolved off PATH. A `npm run dev` app
-// inherits the shell's PATH so this finds a Homebrew/npm-installed gh, but a
-// packaged app launched from Finder/Explorer often has a minimal PATH that omits
-// /opt/homebrew/bin, /usr/local/bin, etc. There gh can read as 'not-installed'
-// even when it is installed. Before relying on packaged builds, resolve gh's
-// absolute path first (a login shell, `which`/`where`, or a configured path).
+// `gh` is resolved off PATH, which is only safe because main.ts repairs PATH from
+// the user's login shell at startup (see shell-path.ts). Without that, a packaged
+// app launched from Finder/Dock inherits launchd's minimal PATH, misses
+// /opt/homebrew/bin, and reports an installed gh as 'not-installed'.
 const defaultRunner: GhRunner = async (args, cwd) => {
     const { stdout, stderr } = await execFileAsync('gh', args, {
         cwd,

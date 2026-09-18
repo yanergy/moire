@@ -37,6 +37,10 @@ function write(level: string, message: string): void {
     logStream?.write(line);
 }
 
+export function logInfo(message: string): void {
+    write('INFO', message);
+}
+
 export function logError(context: string, error: unknown): void {
     write('ERROR', `${context}: ${formatValue(error)}`);
 }
