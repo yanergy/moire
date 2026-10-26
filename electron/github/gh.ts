@@ -183,7 +183,7 @@ export interface CheckAnnotation {
 // A statusCheckRollup entry. gh returns a union: an Actions `CheckRun` (a
 // lifecycle `status` plus a `conclusion` once done) or a legacy `StatusContext`
 // (a flat `state`). Every field is optional so a node of either shape parses.
-interface GhCheckNode {
+export interface GhCheckNode {
     __typename?: string;
     // CheckRun
     name?: string;
@@ -234,7 +234,7 @@ export type GhRunner = (args: string[], cwd: string) => Promise<{ stdout: string
 // the user's login shell at startup (see shell-path.ts). Without that, a packaged
 // app launched from Finder/Dock inherits launchd's minimal PATH, misses
 // /opt/homebrew/bin, and reports an installed gh as 'not-installed'.
-const defaultRunner: GhRunner = async (args, cwd) => {
+export const defaultRunner: GhRunner = async (args, cwd) => {
     const { stdout, stderr } = await execFileAsync('gh', args, {
         cwd,
         // PR bodies can be long; default 1 MB is usually fine but cheap to raise.
@@ -338,7 +338,7 @@ function formatDuration(startIso?: string, endIso?: string): string {
 // Map one rollup node onto the view's shape. A legacy StatusContext carries a flat
 // `state`; a CheckRun carries a `status` (lifecycle) and, once COMPLETED, a
 // `conclusion` (result). GitHub's many values collapse into five buckets.
-function toCheck(node: GhCheckNode): PrCheck {
+export function toCheck(node: GhCheckNode): PrCheck {
     if (node.__typename === 'StatusContext') {
         const st = (node.state ?? '').toUpperCase();
         let state: PrCheckState = 'pending';
@@ -437,7 +437,7 @@ function toPullRequest(pr: GhPr): PullRequest {
 
 // Map a gh failure onto a status the renderer can act on. A spawn ENOENT means gh
 // is not on PATH; otherwise the reason is in stderr (auth, no GitHub remote, ...).
-function classifyFailure(error: unknown): PullRequestResult {
+export function classifyFailure(error: unknown): PullRequestResult {
     const err = error as { code?: string | number; stderr?: string | Buffer };
     if (err.code === 'ENOENT') {
         return { status: 'not-installed', pr: null };
