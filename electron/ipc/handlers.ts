@@ -93,8 +93,12 @@ async function isGitAvailable(
 }
 
 // onRecentsChanged fires after the recent-repos list changes (an open or a
-// removal) so main can rebuild the app menu's "Open Recent" submenu.
-function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => void } = {}): void {
+// removal) so main can rebuild the app menu's "Open Recent" submenu. onRepoOpened
+// fires after a successful open, so main can point the GitHub notifier at it.
+function registerIpcHandlers({
+    onRecentsChanged,
+    onRepoOpened,
+}: { onRecentsChanged?: () => void; onRepoOpened?: (repoPath: string) => void } = {}): void {
     handle('dialog:open-repo', async () => {
         const result = await dialog.showOpenDialog({
             title: 'Open repository',
@@ -123,6 +127,7 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
         watchRepo(repoPath);
         // After currentRepo is set, so the rebuilt menu can mark it active.
         onRecentsChanged?.();
+        onRepoOpened?.(repoPath);
         return { path: repoPath, name: path.basename(repoPath) };
     });
 

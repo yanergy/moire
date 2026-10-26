@@ -5,8 +5,9 @@
 // pushes the resolved theme to the renderer over the preload bridge.
 
 import { Menu, type MenuItemConstructorOptions } from 'electron';
-import type { CodeStyle, DiffLayout, ThemePreference } from './settings';
+import type { CodeStyle, DiffLayout, NotificationPrefs, ThemePreference } from './settings';
 import type { GhAccount } from './github/gh';
+import type { DashboardEventKind } from './github/notifications';
 
 interface ThemeOption {
     label: string;
@@ -37,6 +38,22 @@ interface DiffLayoutOption {
 export const DIFF_LAYOUT_OPTIONS: DiffLayoutOption[] = [
     { label: 'Single File', layout: 'single' },
     { label: 'All Files', layout: 'stacked' },
+];
+
+interface NotificationEventOption {
+    label: string;
+    kind: DashboardEventKind;
+}
+
+export const NOTIFICATION_EVENT_OPTIONS: NotificationEventOption[] = [
+    { label: 'Review Requested', kind: 'review-requested' },
+    { label: 'Changes Requested', kind: 'changes-requested' },
+    { label: 'Closed Without Merge', kind: 'closed-unmerged' },
+    { label: 'Checks Failed', kind: 'checks-failed' },
+    { label: 'Approved', kind: 'approved' },
+    { label: 'Merge Conflict', kind: 'merge-conflict' },
+    { label: 'Ready to Merge', kind: 'ready-to-merge' },
+    { label: 'Merged by Someone Else', kind: 'merged-by-other' },
 ];
 
 export interface MenuOptions {
@@ -75,6 +92,13 @@ export interface MenuOptions {
     // choosing a non-active one switches through onSelectAccount.
     accounts?: GhAccount[];
     onSelectAccount?: (login: string, host: string) => void;
+    // The Git → Notifications submenu: the master switch, one checkbox per event
+    // kind and the dock badge. The per event and badge items are disabled while
+    // the master switch is off. Omitted prefs hide the submenu.
+    notificationPrefs?: NotificationPrefs;
+    onToggleNotifications?: (enabled: boolean) => void;
+    onToggleNotificationEvent?: (kind: DashboardEventKind, enabled: boolean) => void;
+    onToggleDockBadge?: (enabled: boolean) => void;
 }
 
 // The trailing path segment, for a readable "Open Recent" label (the full path
@@ -112,6 +136,10 @@ export function buildMenuTemplate({
     onToggleFlourishes,
     accounts = [],
     onSelectAccount,
+    notificationPrefs,
+    onToggleNotifications,
+    onToggleNotificationEvent,
+    onToggleDockBadge,
 }: MenuOptions): MenuItemConstructorOptions[] {
     const recentItems: MenuItemConstructorOptions[] = recentRepos.length
         ? recentRepos.map((repoPath): MenuItemConstructorOptions => ({
@@ -125,6 +153,43 @@ export function buildMenuTemplate({
         : [{ label: 'No recent repositories', enabled: false }];
 
     const appMenu: MenuItemConstructorOptions[] = isMac ? [{ role: 'appMenu' }] : [];
+
+    // GitHub notifications for the open repository. Lives in the Git menu, since
+    // it needs a connected gh just like the account switcher.
+    const notificationItems: MenuItemConstructorOptions[] = notificationPrefs
+        ? [
+              { type: 'separator' },
+              {
+                  label: 'Notifications',
+                  submenu: [
+                      {
+                          label: 'GitHub Notifications',
+                          type: 'checkbox',
+                          checked: notificationPrefs.enabled,
+                          click: (item) => onToggleNotifications?.(item.checked),
+                      },
+                      { type: 'separator' },
+                      ...NOTIFICATION_EVENT_OPTIONS.map(
+                          ({ label, kind }): MenuItemConstructorOptions => ({
+                              label,
+                              type: 'checkbox',
+                              checked: notificationPrefs.events[kind],
+                              enabled: notificationPrefs.enabled,
+                              click: (item) => onToggleNotificationEvent?.(kind, item.checked),
+                          })
+                      ),
+                      { type: 'separator' },
+                      {
+                          label: 'Dock Badge',
+                          type: 'checkbox',
+                          checked: notificationPrefs.dockBadge,
+                          enabled: notificationPrefs.enabled,
+                          click: (item) => onToggleDockBadge?.(item.checked),
+                      },
+                  ],
+              },
+          ]
+        : [];
 
     // The Git menu carries the gh account switcher and appears only when gh is
     // connected with at least one account. Each account is a radio item; the
@@ -146,6 +211,7 @@ export function buildMenuTemplate({
                               }
                           },
                       })),
+                      ...notificationItems,
                   ],
               },
           ]

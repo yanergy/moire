@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildMenuTemplate } from '../electron/menu';
+import { buildMenuTemplate, NOTIFICATION_EVENT_OPTIONS } from '../electron/menu';
+import { DEFAULT_NOTIFICATION_PREFS } from '../electron/settings';
 
 // menu.cjs is CommonJS loaded natively under vitest, so `require('electron')`
 // inside it resolves to the binary path (not the API) and Menu is undefined. The
@@ -261,6 +262,75 @@ describe('application menu', () => {
 
         items?.find((item) => item.label === 'yanergy')?.click();
         expect(onSelectAccount).not.toHaveBeenCalled();
+    });
+
+    describe('Notifications submenu', () => {
+        function notificationsSubmenu(extra = {}) {
+            return gitSubmenu({ accounts, ...extra })?.find(
+                (item) => item.label === 'Notifications'
+            )?.submenu as Electron.MenuItemConstructorOptions[] | undefined;
+        }
+
+        it('is omitted without notification preferences', () => {
+            expect(notificationsSubmenu()).toBeUndefined();
+        });
+
+        it('shows the master switch, every event kind with its default, and the dock badge', () => {
+            const items = notificationsSubmenu({ notificationPrefs: DEFAULT_NOTIFICATION_PREFS })!;
+            const checkboxes = items.filter((item) => item.type === 'checkbox');
+
+            expect(checkboxes.map((item) => item.label)).toEqual([
+                'GitHub Notifications',
+                ...NOTIFICATION_EVENT_OPTIONS.map((option) => option.label),
+                'Dock Badge',
+            ]);
+            expect(checkboxes.map((item) => item.checked)).toEqual([
+                true,
+                true,
+                true,
+                true,
+                true,
+                true,
+                true,
+                false,
+                false,
+                true,
+            ]);
+        });
+
+        it('disables the event and badge items while the master switch is off', () => {
+            const items = notificationsSubmenu({
+                notificationPrefs: { ...DEFAULT_NOTIFICATION_PREFS, enabled: false },
+            })!;
+            const checkboxes = items.filter((item) => item.type === 'checkbox');
+
+            expect(checkboxes[0]!.enabled).toBeUndefined();
+            expect(checkboxes.slice(1).every((item) => item.enabled === false)).toBe(true);
+        });
+
+        it('reports each toggle with its new state', () => {
+            const onToggleNotifications = vi.fn<(enabled: boolean) => void>();
+            const onToggleNotificationEvent = vi.fn<(kind: string, enabled: boolean) => void>();
+            const onToggleDockBadge = vi.fn<(enabled: boolean) => void>();
+            const items = notificationsSubmenu({
+                notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
+                onToggleNotifications,
+                onToggleNotificationEvent,
+                onToggleDockBadge,
+            })!;
+            const click = (label: string, checked: boolean) =>
+                (items.find((item) => item.label === label)!.click as (item: object) => void)({
+                    checked,
+                });
+
+            click('GitHub Notifications', false);
+            click('Checks Failed', false);
+            click('Dock Badge', false);
+
+            expect(onToggleNotifications).toHaveBeenCalledWith(false);
+            expect(onToggleNotificationEvent).toHaveBeenCalledWith('checks-failed', false);
+            expect(onToggleDockBadge).toHaveBeenCalledWith(false);
+        });
     });
 
     it('omits the macOS app menu on other platforms', () => {

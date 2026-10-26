@@ -469,3 +469,15 @@ export function diffSnapshots(prev: DashboardSnapshot, next: DashboardSnapshot):
 
     return { events, snapshot: { ...next, mine, failureNotified } };
 }
+
+// One delivered event in a repository's recent activity list, so a notification
+// that was missed can still be found on the dashboard. `at` is when it was seen.
+export interface ActivityEntry {
+    kind: DashboardEventKind;
+    at: string;
+    number: number;
+    title: string;
+    url: string;
+    actor?: string;
+    checks?: string[];
+}

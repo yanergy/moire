@@ -2,6 +2,8 @@
 // so it is loaded with a dynamic import rather than a static one, keeping the
 // store off the module's synchronous init path.
 
+import type { ActivityEntry, DashboardEventKind, DashboardSnapshot } from './github/notifications';
+
 const MAX_RECENT_REPOS = 10;
 
 export interface BranchSelection {
@@ -187,4 +189,81 @@ export async function getWindowState(): Promise<WindowState | null> {
 export async function setWindowState(state: WindowState): Promise<void> {
     const store = await getStore();
     store.set('windowState', state);
+}
+
+// GitHub notification preferences. `enabled` is the master switch (on by default,
+// users can opt out); `events` holds one toggle per event kind; `dockBadge` shows
+// the review request count on the dock icon; `showDrafts` includes draft PRs in
+// the dashboard and in notifications. Stored values are merged over the defaults,
+// so an event kind added later starts at its default instead of off.
+export interface NotificationPrefs {
+    enabled: boolean;
+    events: Record<DashboardEventKind, boolean>;
+    dockBadge: boolean;
+    showDrafts: boolean;
+}
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+    enabled: true,
+    events: {
+        'review-requested': true,
+        'changes-requested': true,
+        'closed-unmerged': true,
+        'checks-failed': true,
+        approved: true,
+        'merge-conflict': true,
+        'ready-to-merge': false,
+        'merged-by-other': false,
+    },
+    dockBadge: true,
+    showDrafts: true,
+};
+
+export async function getNotificationPrefs(): Promise<NotificationPrefs> {
+    const store = await getStore();
+    const stored = store.get<Partial<NotificationPrefs>>('notifications', {});
+    return {
+        ...DEFAULT_NOTIFICATION_PREFS,
+        ...stored,
+        events: { ...DEFAULT_NOTIFICATION_PREFS.events, ...stored.events },
+    };
+}
+
+// Merge a partial change (a single toggle) into the stored preferences and
+// return the result.
+export async function setNotificationPrefs(
+    change: Partial<Omit<NotificationPrefs, 'events'>> & {
+        events?: Partial<NotificationPrefs['events']>;
+    }
+): Promise<NotificationPrefs> {
+    const store = await getStore();
+    const current = await getNotificationPrefs();
+    const next: NotificationPrefs = {
+        ...current,
+        ...change,
+        events: { ...current.events, ...change.events },
+    };
+    store.set('notifications', next);
+    return next;
+}
+
+// The notifier's saved state for one gh login and repository: the last snapshot
+// (diffed against on the next poll, so a restart does not resend notifications)
+// and the recent activity list. Keyed by `login|owner/name`; null when that pair
+// has never been polled, which the notifier treats as a silent baseline.
+export interface NotifierRepoState {
+    snapshot: DashboardSnapshot;
+    activity: ActivityEntry[];
+}
+
+export async function getNotifierState(key: string): Promise<NotifierRepoState | null> {
+    const store = await getStore();
+    return store.get<Record<string, NotifierRepoState>>('notifierState', {})[key] ?? null;
+}
+
+export async function setNotifierState(key: string, state: NotifierRepoState): Promise<void> {
+    const store = await getStore();
+    const all = store.get<Record<string, NotifierRepoState>>('notifierState', {});
+    all[key] = state;
+    store.set('notifierState', all);
 }

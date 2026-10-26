@@ -14,7 +14,7 @@ Branch: `feat/github-notifications`.
 
 ### Master switch
 
-A "GitHub Notifications" toggle in the Notifications menu, **on by default**. Turning it off
+A "GitHub Notifications" toggle in the Git → Notifications menu, **on by default**. Turning it off
 stops polling, notifications and the dock badge. The dashboard keeps working when it is off
 (it fetches on open and on refresh instead of in the background).
 
@@ -33,7 +33,8 @@ Native macOS notifications, sent by the main process, for these events:
 | Ready to merge | One of your PRs is approved, has passing checks and has no conflicts, all at once | Off |
 | Merged by someone else | One of your PRs is merged by another account (your own merges never notify) | Off |
 
-Each event type has its own toggle in the Notifications menu. Clicking a notification opens the
+Each event type has its own toggle in the Git → Notifications menu. That menu lives under Git
+because, like the account switcher there, it needs a connected `gh`. Clicking a notification opens the
 PR (see "Opening a PR" below). More event types can be added later by extending the diff
 function.
 
@@ -98,7 +99,7 @@ messages.
 
 The dock icon shows the number of PRs in the open repository waiting for your review, and is
 cleared when there are none or no repository is open. macOS only (`app.dock.setBadge`). It has its
-own toggle in the Notifications menu and follows the master switch.
+own toggle in the Git → Notifications menu and follows the master switch.
 
 ### Opening a PR
 
@@ -206,7 +207,7 @@ Following `documentation/code-conventions.md`:
 | `electron/github/notifications.ts` (new) | Repository and login lookup, GraphQL query, parsing into a snapshot, the pure diff function |
 | `electron/notifier.ts` (new) | Poll loop tied to the open repository, wake handling, native notifications, summary notification, click handling, dock badge, recent activity |
 | `electron/settings.ts` | Master switch, per event toggles, dock badge toggle, "Show drafts", saved snapshot and recent activity per login and repository |
-| `electron/menu.ts` | "Notifications" submenu with the master switch, a checkbox per event type and one for the dock badge; "Dashboard" item under View, enabled only while a repository is open |
+| `electron/menu.ts` | Git → "Notifications" submenu with the master switch, a checkbox per event type and one for the dock badge; "Dashboard" item under View, enabled only while a repository is open |
 | `electron/main.ts` | Start, restart and stop the notifier as repositories open and close |
 | `electron/ipc/handlers.ts`, `electron/preload.ts`, `src/shared/types.ts` | Dashboard IPC channels and types |
 | `src/stores/dashboard.ts` (new) | Pinia store mirroring the snapshot |

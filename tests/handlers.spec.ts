@@ -22,6 +22,7 @@ const state = vi.hoisted(() => ({
     currentThemeState: vi.fn<() => { preference: string; isDark: boolean }>(),
     logError: vi.fn<(context: string, error: unknown) => void>(),
     onRecentsChanged: vi.fn<() => void>(),
+    onRepoOpened: vi.fn<(repoPath: string) => void>(),
     getPullRequest: vi.fn<(repoPath: string, base: string, head: string) => Promise<unknown>>(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
     openPath: vi.fn<(p: string) => Promise<string>>(),
@@ -113,7 +114,10 @@ describe('registerIpcHandlers', () => {
         // Fresh module each test so the internal currentRepo starts unset.
         vi.resetModules();
         mod = await import('../electron/ipc/handlers');
-        mod.registerIpcHandlers({ onRecentsChanged: state.onRecentsChanged });
+        mod.registerIpcHandlers({
+            onRecentsChanged: state.onRecentsChanged,
+            onRepoOpened: state.onRepoOpened,
+        });
     });
 
     it('registers every IPC channel', () => {
@@ -152,6 +156,7 @@ describe('registerIpcHandlers', () => {
         expect(state.addRecentRepo).toHaveBeenCalledWith('/repos/moire');
         expect(state.watchRepo).toHaveBeenCalledWith('/repos/moire');
         expect(state.onRecentsChanged).toHaveBeenCalledTimes(1);
+        expect(state.onRepoOpened).toHaveBeenCalledWith('/repos/moire');
         expect(mod.getCurrentRepoPath()).toBe('/repos/moire');
 
         // A git channel now resolves instead of throwing the guard.
@@ -166,6 +171,7 @@ describe('registerIpcHandlers', () => {
         expect(result).toBeNull();
         expect(state.showErrorBox).toHaveBeenCalled();
         expect(state.addRecentRepo).not.toHaveBeenCalled();
+        expect(state.onRepoOpened).not.toHaveBeenCalled();
         expect(mod.getCurrentRepoPath()).toBeNull();
     });
 
