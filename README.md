@@ -200,8 +200,17 @@ Track bugs and limitations here.
 
 ## Planned features
 
-No features are planned at the moment. Everything on the original roadmap has shipped. New ideas
-are tracked as open issues on GitHub.
+Everything on the original roadmap has shipped. New ideas are tracked as open issues on GitHub.
+
+In progress: GitHub notifications and a dashboard of the PRs that need your attention in the open
+repository. See `documentation/github-notifications-plan.md`.
+
+Possible expansions of that feature, not planned yet:
+
+- Count review requests made to a team you belong to, not only requests addressed to you.
+- Notify when a review with comments is submitted on your PR.
+- Notify when you are mentioned in a PR.
+- Watch several repositories at once, not only the one that is open.
 
 ## Documentation
 
