@@ -68,6 +68,10 @@ export interface DashboardSnapshot {
     toReview: DashboardPr[];
     // The viewer's open PRs plus those closed within CLOSED_WINDOW_DAYS.
     mine: DashboardPr[];
+    // Every open PR in the repository, by any author, for the dashboard's
+    // repository wide cards (failing checks, stale). Not diffed. Optional because
+    // snapshots saved before it existed lack it.
+    open?: DashboardPr[];
     // Ids of the viewer's PRs that already got a "checks failed" notification and
     // have not passed since. CI is notified once per PR, not per commit.
     failureNotified: string[];
@@ -127,14 +131,16 @@ fragment Pr on PullRequest {
   } } } } } }
 }`;
 
-// Three searches in one round trip. Search cannot OR "open" with "closed
+// Four searches in one round trip. Search cannot OR "open" with "closed
 // recently", so the viewer's open and recently closed PRs are separate aliases.
+// `allOpen` is every open PR in the repository (capped at 100, GitHub's page size).
 const DASHBOARD_QUERY = `
-query($review: String!, $mineOpen: String!, $mineClosed: String!) {
+query($review: String!, $mineOpen: String!, $mineClosed: String!, $allOpen: String!) {
   viewer { login }
   review: search(query: $review, type: ISSUE, first: 50) { nodes { ...Pr } }
   mineOpen: search(query: $mineOpen, type: ISSUE, first: 50) { nodes { ...Pr } }
   mineClosed: search(query: $mineClosed, type: ISSUE, first: 50) { nodes { ...Pr } }
+  allOpen: search(query: $allOpen, type: ISSUE, first: 100) { nodes { ...Pr } }
 }
 ${PR_FRAGMENT}`;
 
@@ -181,6 +187,7 @@ interface GqlDashboard {
         review?: { nodes?: (GqlPr | null)[] | null } | null;
         mineOpen?: { nodes?: (GqlPr | null)[] | null } | null;
         mineClosed?: { nodes?: (GqlPr | null)[] | null } | null;
+        allOpen?: { nodes?: (GqlPr | null)[] | null } | null;
     } | null;
 }
 
@@ -329,6 +336,8 @@ export async function fetchSnapshot(
                 `mineOpen=${scope} is:open author:@me`,
                 '-f',
                 `mineClosed=${scope} is:closed author:@me closed:>=${since}`,
+                '-f',
+                `allOpen=${scope} is:open archived:false`,
             ],
             repoPath
         ));
@@ -370,6 +379,7 @@ export async function fetchSnapshot(
             // GitHub does not let an author review their own PR, but guard anyway.
             toReview: toPrList(data.review?.nodes).filter((pr) => pr.author !== login),
             mine,
+            open: toPrList(data.allOpen?.nodes),
             failureNotified: [],
         },
     };

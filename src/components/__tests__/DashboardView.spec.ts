@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import DashboardView from '@/components/dashboard/DashboardView.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
+import DashboardCard from '@/components/dashboard/DashboardCard.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { useDashboardStore } from '@/stores/dashboard';
 import type { DashboardState } from '@/shared/types';
 import { dashboardPr, dashboardSnapshot, dashboardState } from './fixtures';
 
@@ -42,64 +44,49 @@ describe('DashboardView', () => {
         return { api, wrapper };
     }
 
-    it('loads on mount and shows the repo, summary and last update', async () => {
+    it('loads on mount and shows the overview with the open count and last update', async () => {
         const { api, wrapper } = await mountView(
             dashboardState({
-                snapshot: dashboardSnapshot({ toReview: [dashboardPr({ author: 'ann' })] }),
+                snapshot: dashboardSnapshot({
+                    open: [dashboardPr({ id: 'A' }), dashboardPr({ id: 'B', number: 2 })],
+                }),
             })
         );
 
         expect(api.getDashboard).toHaveBeenCalledTimes(1);
-        expect(wrapper.text()).toContain('o/r');
-        expect(wrapper.text()).toContain('1 PR to review');
+        expect(wrapper.text()).toContain('Overview');
+        expect(wrapper.text()).toContain('2 open in o/r');
         expect(wrapper.text()).toContain('Updated 5m ago');
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
     });
 
-    it('renders the sections that have content, with group headers for open PRs', async () => {
+    it("lists a card's PRs when it is clicked, and goes back to the overview", async () => {
         const { wrapper } = await mountView(
             dashboardState({
                 snapshot: dashboardSnapshot({
-                    toReview: [dashboardPr({ id: 'R', number: 9, author: 'ann' })],
-                    mine: [
-                        dashboardPr({ id: 'A', number: 1, ci: 'failing' }),
-                        dashboardPr({ id: 'B', number: 2, isDraft: true }),
-                        dashboardPr({
-                            id: 'C',
-                            number: 3,
-                            state: 'CLOSED',
-                            closedAt: '2026-10-25T00:00:00Z',
-                        }),
+                    toReview: [
+                        dashboardPr({ id: 'R1', number: 8, author: 'ann' }),
+                        dashboardPr({ id: 'R2', number: 9, author: 'ann' }),
                     ],
                 }),
-                activity: [
-                    {
-                        kind: 'review-requested',
-                        at: '2026-10-26T12:00:00Z',
-                        number: 9,
-                        title: 'Fix login',
-                        url: 'https://github.com/o/r/pull/9',
-                    },
-                ],
             })
         );
 
-        const headings = wrapper.findAll('h2').map((h) => h.text());
-        expect(headings).toEqual([
-            'To review 1',
-            'Your open PRs 2',
-            'Recently closed without merge 1',
-            'Recent activity 1',
-        ]);
-        expect(wrapper.text()).toContain('Checks failing');
-        expect(wrapper.text()).toContain('Drafts');
-        expect(wrapper.text()).toContain('Review requested');
-        expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(4);
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(0);
+        expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(2);
+        expect(wrapper.text()).toContain('Needs your review');
+        expect(wrapper.text()).toContain('2 · Requested from you');
+
+        await wrapper.get('button').trigger('click'); // Overview
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
     });
 
-    it('says when nothing needs attention', async () => {
+    it('says so when a card has no PRs', async () => {
         const { wrapper } = await mountView(dashboardState());
-        expect(wrapper.text()).toContain('Nothing needs your attention right now.');
-        expect(wrapper.findAll('h2')).toHaveLength(0);
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        expect(wrapper.text()).toContain('No pull requests here.');
     });
 
     it('explains a failed load, keeping stale data on screen', async () => {
@@ -112,7 +99,7 @@ describe('DashboardView', () => {
 
         expect(wrapper.text()).toContain('gh is not signed in to GitHub');
         expect(wrapper.text()).toContain('Showing data from 5m ago');
-        expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(1);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
     });
 
     it('refreshes and toggles drafts through the store', async () => {
@@ -125,22 +112,26 @@ describe('DashboardView', () => {
         expect(api.setDashboardShowDrafts).toHaveBeenCalledWith(false);
     });
 
-    it('opens a PR on GitHub when a row is clicked', async () => {
+    it('opens a PR through the store when a row is clicked', async () => {
         const pr = dashboardPr({ author: 'ann' });
-        const { api, wrapper } = await mountView(
+        const { wrapper } = await mountView(
             dashboardState({ snapshot: dashboardSnapshot({ toReview: [pr] }) })
         );
+        const openPr = vi.spyOn(useDashboardStore(), 'openPr').mockImplementation(() => {});
 
+        await wrapper.getComponent(DashboardCard).trigger('click');
         wrapper.getComponent(DashboardPrRow).vm.$emit('open', pr);
-        expect(api.openExternal).toHaveBeenCalledWith(pr.url);
+        expect(openPr).toHaveBeenCalledWith(pr);
     });
 
-    it('reloads when another repository opens', async () => {
-        const { api } = await mountView(dashboardState());
+    it('reloads, back on the overview, when another repository opens', async () => {
+        const { api, wrapper } = await mountView(dashboardState());
+        await wrapper.getComponent(DashboardCard).trigger('click');
 
         useComparisonStore().repoPath = '/repos/other';
         await flushPromises();
 
         expect(api.getDashboard).toHaveBeenCalledTimes(2);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
     });
 });

@@ -1,6 +1,6 @@
 import { setActivePinia, createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { groupOf, isReadyToMerge, useDashboardStore } from '@/stores/dashboard';
+import { isReadyToMerge, useDashboardStore } from '@/stores/dashboard';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { DashboardPr, DashboardSnapshot, DashboardState } from '@/shared/types';
@@ -48,24 +48,13 @@ function state(overrides: Partial<DashboardState> = {}): DashboardState {
     return { status: 'ok', snapshot: snapshot(), activity: [], showDrafts: true, ...overrides };
 }
 
-describe('groupOf', () => {
-    it('puts each PR in the group for what it needs most', () => {
-        expect(groupOf(pr({ isDraft: true, reviewDecision: 'CHANGES_REQUESTED' }))).toBe('drafts');
-        expect(groupOf(pr({ reviewDecision: 'CHANGES_REQUESTED', ci: 'failing' }))).toBe(
-            'changes-requested'
-        );
-        expect(groupOf(pr({ mergeable: 'CONFLICTING', ci: 'failing' }))).toBe('merge-conflict');
-        expect(groupOf(pr({ ci: 'failing', reviewDecision: 'APPROVED' }))).toBe('checks-failing');
-        expect(groupOf(pr({ reviewDecision: 'APPROVED', ci: 'passing' }))).toBe('ready');
-        expect(groupOf(pr({ reviewDecision: 'APPROVED', ci: 'pending' }))).toBe('approved');
-        expect(groupOf(pr())).toBe('waiting');
-    });
-
+describe('isReadyToMerge', () => {
     it('treats a PR without checks as ready once approved', () => {
         expect(isReadyToMerge(pr({ reviewDecision: 'APPROVED', ci: 'none' }))).toBe(true);
         expect(isReadyToMerge(pr({ reviewDecision: 'APPROVED', mergeable: 'UNKNOWN' }))).toBe(
             false
         );
+        expect(isReadyToMerge(pr({ reviewDecision: 'APPROVED', isDraft: true }))).toBe(false);
     });
 });
 
@@ -94,6 +83,13 @@ function openApi() {
     return openExternal;
 }
 
+// The PR numbers on each card, by card key.
+function counts(store: ReturnType<typeof useDashboardStore>) {
+    return Object.fromEntries(
+        store.categories.map((category) => [category.key, category.prs.map((p) => p.number)])
+    );
+}
+
 describe('dashboard store', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
@@ -112,112 +108,81 @@ describe('dashboard store', () => {
         expect(store.showDrafts).toBe(false);
     });
 
-    it('groups the open PRs in display order, leaving out empty groups and closed PRs', () => {
+    it('fills the overview cards in display order', () => {
         const store = useDashboardStore();
+        const staleDate = '2026-10-10T00:00:00Z';
         store.applyState(
             state({
                 snapshot: snapshot({
+                    toReview: [pr({ id: 'R', number: 9, author: 'ann' })],
                     mine: [
-                        pr({ id: 'A', number: 1 }),
-                        pr({ id: 'B', number: 2, reviewDecision: 'CHANGES_REQUESTED' }),
+                        pr({ id: 'A', number: 1, reviewDecision: 'CHANGES_REQUESTED' }),
+                        pr({ id: 'B', number: 2, reviewDecision: 'APPROVED', ci: 'passing' }),
                         pr({ id: 'C', number: 3, isDraft: true }),
-                        pr({ id: 'D', number: 4, state: 'MERGED' }),
+                        pr({ id: 'D', number: 4, state: 'CLOSED' }),
+                    ],
+                    open: [
+                        pr({ id: 'A', number: 1, ci: 'failing' }),
+                        pr({
+                            id: 'X',
+                            number: 7,
+                            author: 'bob',
+                            ci: 'failing',
+                            updatedAt: staleDate,
+                        }),
+                        pr({ id: 'Y', number: 8, author: 'bob' }),
                     ],
                 }),
             })
         );
 
-        expect(store.groups.map((g) => [g.key, g.prs.map((p) => p.number)])).toEqual([
-            ['changes-requested', [2]],
-            ['waiting', [1]],
-            ['drafts', [3]],
+        expect(store.categories.map((c) => c.key)).toEqual([
+            'review',
+            'changes',
+            'ready',
+            'failing',
+            'mine',
+            'stale',
+            'drafts',
         ]);
+        expect(counts(store)).toEqual({
+            review: [9],
+            changes: [1],
+            ready: [2],
+            failing: [1, 7],
+            mine: [1, 2, 3],
+            stale: [7],
+            drafts: [3],
+        });
+        expect(store.openCount).toBe(3);
     });
 
-    it('hides drafts everywhere when Show drafts is off', () => {
+    it('drops drafts from every card, and the drafts card, when Show drafts is off', () => {
         const store = useDashboardStore();
         store.applyState(
             state({
                 showDrafts: false,
                 snapshot: snapshot({
                     toReview: [pr({ id: 'R', number: 9, author: 'ann', isDraft: true })],
-                    mine: [
-                        pr({ id: 'C', number: 3, isDraft: true }),
-                        pr({ id: 'X', number: 5, isDraft: true, state: 'CLOSED' }),
-                    ],
+                    mine: [pr({ id: 'C', number: 3, isDraft: true })],
+                    open: [pr({ id: 'C', number: 3, isDraft: true, ci: 'failing' })],
                 }),
             })
         );
 
-        expect(store.toReview).toEqual([]);
-        expect(store.groups).toEqual([]);
-        expect(store.recentlyClosed).toEqual([]);
+        expect(store.categories.map((c) => c.key)).not.toContain('drafts');
+        expect(store.categories.every((c) => c.prs.length === 0)).toBe(true);
+        expect(store.openCount).toBe(0);
     });
 
-    it('lists PRs closed without merge, most recent first', () => {
+    it('copes with a snapshot saved before the repository wide list existed', () => {
         const store = useDashboardStore();
-        store.applyState(
-            state({
-                snapshot: snapshot({
-                    mine: [
-                        pr({
-                            id: 'A',
-                            number: 1,
-                            state: 'CLOSED',
-                            closedAt: '2026-10-20T00:00:00Z',
-                        }),
-                        pr({
-                            id: 'B',
-                            number: 2,
-                            state: 'MERGED',
-                            closedAt: '2026-10-25T00:00:00Z',
-                        }),
-                        pr({
-                            id: 'C',
-                            number: 3,
-                            state: 'CLOSED',
-                            closedAt: '2026-10-24T00:00:00Z',
-                        }),
-                    ],
-                }),
-            })
-        );
+        const old = snapshot();
+        delete old.open;
+        store.applyState(state({ snapshot: old }));
 
-        expect(store.recentlyClosed.map((p) => p.number)).toEqual([3, 1]);
-    });
-
-    describe('summary', () => {
-        it('counts what needs attention', () => {
-            const store = useDashboardStore();
-            store.applyState(
-                state({
-                    snapshot: snapshot({
-                        toReview: [
-                            pr({ id: 'R1', number: 7, author: 'ann' }),
-                            pr({ id: 'R2', number: 8, author: 'ann' }),
-                            pr({ id: 'R3', number: 9, author: 'ann' }),
-                        ],
-                        mine: [
-                            pr({ id: 'A', number: 1, reviewDecision: 'CHANGES_REQUESTED' }),
-                            pr({ id: 'B', number: 2, mergeable: 'CONFLICTING' }),
-                            pr({ id: 'C', number: 3, mergeable: 'CONFLICTING' }),
-                            pr({ id: 'D', number: 4, ci: 'failing' }),
-                            pr({ id: 'E', number: 5, reviewDecision: 'APPROVED', ci: 'passing' }),
-                        ],
-                    }),
-                })
-            );
-
-            expect(store.summary).toBe(
-                '3 PRs to review, 1 needs changes, 2 have merge conflicts, 1 has failing checks, 1 ready to merge'
-            );
-        });
-
-        it('says so when nothing needs attention', () => {
-            const store = useDashboardStore();
-            store.applyState(state({ snapshot: snapshot({ mine: [pr()] }) }));
-            expect(store.summary).toBe('Nothing needs your attention');
-        });
+        expect(store.openCount).toBe(0);
+        expect(store.categories.find((c) => c.key === 'failing')?.prs).toEqual([]);
     });
 
     describe('bridge calls', () => {

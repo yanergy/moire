@@ -303,6 +303,9 @@ export interface DashboardSnapshot {
     toReview: DashboardPr[];
     // The viewer's open PRs plus those closed in the last 7 days.
     mine: DashboardPr[];
+    // Every open PR in the repository, by any author. Optional because snapshots
+    // saved before it existed lack it.
+    open?: DashboardPr[];
     failureNotified: string[];
 }
 

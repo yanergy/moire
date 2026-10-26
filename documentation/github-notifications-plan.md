@@ -69,31 +69,31 @@ and "Ready to merge" is the more useful version).
 
 ### Dashboard
 
-A compact view of the open repository's PRs that need your attention, with counts at the top and
-a list per section:
+An overview of the open repository's pull requests, as a grid of cards. Each card shows a status
+dot, a label, the PR count and a caption saying what is counted:
 
-- **To review**: open PRs that request your review. Shows title, author, age, size (additions
-  and deletions) and check status.
-- **Your open PRs**, grouped by what they need:
-  - Changes requested
-  - Merge conflict
-  - Checks failing
-  - Ready to merge (approved, checks passing, no conflicts)
-  - Approved (checks still running or other requirements open)
-  - Waiting for review
-  - Drafts (hidden when "Show drafts" is off)
-- **Recently closed without merge**: your PRs closed unmerged in the last 7 days.
-- **Recent activity**: the last events the notifier produced for this repository, so a
-  notification you missed can still be found.
+| Card | Counts | Caption |
+|---|---|---|
+| Needs your review (blue) | Open PRs that request your review | Requested from you |
+| Changes requested (orange) | Your open PRs with changes requested | On your PRs |
+| Ready to merge (green) | Your open PRs that are approved, with passing checks and no conflicts | Approved, checks green |
+| Failing checks (red) | Open PRs with failing checks, by any author | Any author |
+| Your open PRs (purple) | Your open PRs | Authored by you |
+| Stale (gray) | Open PRs with no activity in 7 or more days, by any author | No activity in 7+ days |
+| Drafts (gray) | Your open draft PRs | Not ready for review |
 
-The header shows the summary line ("3 PRs to review, 1 needs changes"), when the data was last
-refreshed, a refresh button and the "Show drafts" toggle. Empty sections are hidden.
+Clicking a card lists its PRs (title, author, branches, age, size and CI state), with a way back
+to the overview. The header shows how many PRs are open in the repository, when the data was last
+refreshed, a refresh button and the "Show drafts" toggle. With drafts hidden, the Drafts card goes
+away and drafts are left out of every other card.
 
 The dashboard is a third main view next to the diff and PR views, reachable from the toolbar and
 View → Dashboard. It only exists while a repository is open: with no repository open, the toolbar
 button and the menu item are not available. When the repository has no GitHub remote, or `gh` is
 missing or not signed in, the dashboard shows the reason using the existing `PrStatus` style
 messages.
+
+The recent activity list is still recorded by the notifier but not shown on the dashboard.
 
 ### Dock badge
 
@@ -126,15 +126,17 @@ until the repository changes or the `gh` account is switched in Moiré.
 ### Data source
 
 While a repository is open, the main process runs one `gh api graphql` query every 2 minutes
-through the existing `gh` runner in `electron/github/gh.ts`. The query contains two searches,
-both limited with `repo:<owner>/<name>`:
+through the existing `gh` runner in `electron/github/gh.ts`. The query contains three searches,
+all limited with `repo:<owner>/<name>`:
 
 1. `is:open is:pr user-review-requested:@me archived:false` for review requests.
 2. `is:pr author:@me` limited to open PRs and PRs updated in the last 7 days, with each PR's
    state, merged flag, who merged it, base and head branch names, review decision, latest review
    per reviewer, mergeable state, check rollup (with failed check names) and draft flag.
+3. `is:pr is:open archived:false` for every open PR in the repository (up to 100), for the cards
+   that count PRs by any author. This list is not diffed.
 
-The result is normalized into a **snapshot**: a plain object with both lists.
+The result is normalized into a **snapshot**: a plain object with these lists.
 
 GitHub webhooks are not an option, because they need a publicly reachable server. GitHub's own
 notifications feed is not used either: it reports that something happened on your PR without

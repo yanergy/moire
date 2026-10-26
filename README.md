@@ -104,9 +104,10 @@ the popup never appears.
    you reply to and resolve threads, post and edit your own comments, edit the description, and tick
    task-list boxes.
 7. **Keep track of pull requests.** The dashboard button in the toolbar (or **View > Dashboard**,
-   `Cmd/Ctrl+Shift+D`) shows the open repository's pull requests that need you: review requests,
-   your own open PRs grouped by what they need, and your PRs recently closed without merge. Its
-   count, also shown on the dock icon, is the number of PRs waiting for your review. Moiré checks
+   `Cmd/Ctrl+Shift+D`) shows an overview of the open repository's pull requests as cards: needs
+   your review, changes requested, ready to merge, failing checks, your open PRs, stale, and
+   drafts. Click a card to list its PRs. The toolbar count, also shown on the dock icon, is the
+   number of PRs waiting for your review. Moiré checks
    GitHub every two minutes and sends a notification when something changes. Click a PR to open
    it in the PR view. Choose which events notify you under **Git > Notifications**.
 
@@ -150,9 +151,10 @@ last branch range are remembered per repository.
   by someone else. Each event has its own toggle under **Git > Notifications**, next to a master
   switch (on by default) and a dock badge toggle. More than three updates at once arrive as one
   summary notification.
-- A dashboard of the open repository's pull requests that need your attention, with a summary
-  line, a "Show drafts" toggle that also applies to notifications, and a list of recent
-  notifications.
+- A dashboard for the open repository: an overview of cards counting the PRs that need your
+  review, have changes requested, are ready to merge, have failing checks (any author), are
+  yours, are stale (no activity in 7 or more days, any author), or are your drafts. Each card
+  opens a list of its PRs. A "Show drafts" toggle also applies to notifications.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
   the tree by filetype, mutation type, or marker (files carrying an error, warning, or review
   comment). Filters are multi-select and combine, and a reset clears them at once.

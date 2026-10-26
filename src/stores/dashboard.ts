@@ -10,34 +10,27 @@ import type {
     PrStatus,
 } from '@/shared/types';
 
-// Where one of the viewer's open PRs lands on the dashboard, by what it needs
-// most. A PR appears in exactly one group; the order here is the display order.
-export type DashboardGroupKey =
-    | 'changes-requested'
-    | 'merge-conflict'
-    | 'checks-failing'
+// The overview cards, in display order. Each card counts a set of PRs and opens a
+// list of them. `dotClass` colors the card's status dot with the app's PR tones.
+export type DashboardCategoryKey =
+    | 'review'
+    | 'changes'
     | 'ready'
-    | 'approved'
-    | 'waiting'
+    | 'failing'
+    | 'mine'
+    | 'stale'
     | 'drafts';
 
-export interface DashboardGroup {
-    key: DashboardGroupKey;
+export interface DashboardCategory {
+    key: DashboardCategoryKey;
     label: string;
+    caption: string;
+    dotClass: string;
     prs: DashboardPr[];
 }
 
-const GROUP_LABELS: Record<DashboardGroupKey, string> = {
-    'changes-requested': 'Changes requested',
-    'merge-conflict': 'Merge conflict',
-    'checks-failing': 'Checks failing',
-    ready: 'Ready to merge',
-    approved: 'Approved',
-    waiting: 'Waiting for review',
-    drafts: 'Drafts',
-};
-
-const GROUP_ORDER = Object.keys(GROUP_LABELS) as DashboardGroupKey[];
+// An open PR with no activity for this long counts as stale.
+export const STALE_DAYS = 7;
 
 // Approved, checks passing (or none configured), no conflicts, not a draft.
 // Restated from isReadyToMerge in electron/github/notifications.ts (the process
@@ -50,20 +43,6 @@ export function isReadyToMerge(pr: DashboardPr): boolean {
         (pr.ci === 'passing' || pr.ci === 'none') &&
         pr.mergeable === 'MERGEABLE'
     );
-}
-
-export function groupOf(pr: DashboardPr): DashboardGroupKey {
-    if (pr.isDraft) return 'drafts';
-    if (pr.reviewDecision === 'CHANGES_REQUESTED') return 'changes-requested';
-    if (pr.mergeable === 'CONFLICTING') return 'merge-conflict';
-    if (pr.ci === 'failing') return 'checks-failing';
-    if (isReadyToMerge(pr)) return 'ready';
-    if (pr.reviewDecision === 'APPROVED') return 'approved';
-    return 'waiting';
-}
-
-function plural(count: number, one: string, many: string): string {
-    return `${count} ${count === 1 ? one : many}`;
 }
 
 // Open a PR in Moiré's PR view by selecting its base and head as the range.
@@ -84,7 +63,7 @@ function openPr(pr: DashboardPr) {
 
 // The GitHub dashboard for the repository open in Moiré. The data is owned by the
 // notifier in the main process; this store mirrors the last state it sent and
-// derives the dashboard's sections from it. "Show drafts" filters every list.
+// derives the overview cards from it. "Show drafts" filters every card.
 export const useDashboardStore = defineStore('dashboard', () => {
     const status = ref<PrStatus>('ok');
     const message = ref<string | undefined>();
@@ -137,46 +116,81 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     const toReview = computed(() => visible(snapshot.value?.toReview ?? []));
 
-    const groups = computed<DashboardGroup[]>(() => {
-        const open = visible((snapshot.value?.mine ?? []).filter((pr) => pr.state === 'OPEN'));
-        return GROUP_ORDER.map((key) => ({
-            key,
-            label: GROUP_LABELS[key],
-            prs: open.filter((pr) => groupOf(pr) === key),
-        })).filter((group) => group.prs.length > 0);
+    // The viewer's open PRs, and every open PR in the repository (by any author).
+    const mineOpen = computed(() =>
+        visible((snapshot.value?.mine ?? []).filter((pr) => pr.state === 'OPEN'))
+    );
+    const allOpen = computed(() => visible(snapshot.value?.open ?? []));
+
+    // Stale is measured against the fetch time, so it does not drift while the
+    // dashboard sits open on old data.
+    const staleBefore = computed(() => {
+        const fetched = Date.parse(snapshot.value?.fetchedAt ?? '');
+        return Number.isNaN(fetched) ? 0 : fetched - STALE_DAYS * 24 * 60 * 60 * 1000;
     });
 
-    // The viewer's PRs closed without merge (the snapshot only holds the last
-    // 7 days), most recently closed first.
-    const recentlyClosed = computed(() => {
-        const closed = visible((snapshot.value?.mine ?? []).filter((pr) => pr.state === 'CLOSED'));
-        // filter returns a fresh array, so sorting it in place mutates nothing
-        // shared (and toSorted is not in the project's TS lib target).
-        // oxlint-disable-next-line unicorn/no-array-sort
-        return closed.sort((a, b) => b.closedAt.localeCompare(a.closedAt));
-    });
+    const categories = computed<DashboardCategory[]>(() => {
+        const list: DashboardCategory[] = [
+            {
+                key: 'review',
+                label: 'Needs your review',
+                caption: 'Requested from you',
+                dotClass: 'bg-moire-accent',
+                prs: toReview.value,
+            },
+            {
+                key: 'changes',
+                label: 'Changes requested',
+                caption: 'On your PRs',
+                dotClass: 'bg-moire-changes-fg',
+                prs: mineOpen.value.filter((pr) => pr.reviewDecision === 'CHANGES_REQUESTED'),
+            },
+            {
+                key: 'ready',
+                label: 'Ready to merge',
+                caption: 'Approved, checks green',
+                dotClass: 'bg-moire-pr-open',
+                prs: mineOpen.value.filter(isReadyToMerge),
+            },
+            {
+                key: 'failing',
+                label: 'Failing checks',
+                caption: 'Any author',
+                dotClass: 'bg-moire-pr-closed',
+                prs: allOpen.value.filter((pr) => pr.ci === 'failing'),
+            },
+            {
+                key: 'mine',
+                label: 'Your open PRs',
+                caption: 'Authored by you',
+                dotClass: 'bg-moire-pr-merged',
+                prs: mineOpen.value,
+            },
+            {
+                key: 'stale',
+                label: 'Stale',
+                caption: `No activity in ${STALE_DAYS}+ days`,
+                dotClass: 'bg-moire-pr-draft',
+                prs: allOpen.value.filter((pr) => Date.parse(pr.updatedAt) < staleBefore.value),
+            },
+        ];
 
-    // The header line: "3 PRs to review, 1 needs changes".
-    const summary = computed(() => {
-        const count = (key: DashboardGroupKey) =>
-            groups.value.find((group) => group.key === key)?.prs.length ?? 0;
-
-        const parts: string[] = [];
-        if (toReview.value.length) {
-            parts.push(`${plural(toReview.value.length, 'PR', 'PRs')} to review`);
+        // Drafts are the viewer's own; the card goes away with "Show drafts".
+        if (showDrafts.value) {
+            list.push({
+                key: 'drafts',
+                label: 'Drafts',
+                caption: 'Not ready for review',
+                dotClass: 'bg-moire-pr-draft',
+                prs: mineOpen.value.filter((pr) => pr.isDraft),
+            });
         }
-        const changes = count('changes-requested');
-        if (changes) parts.push(plural(changes, 'needs changes', 'need changes'));
-        const conflicts = count('merge-conflict');
-        if (conflicts)
-            parts.push(plural(conflicts, 'has a merge conflict', 'have merge conflicts'));
-        const failing = count('checks-failing');
-        if (failing) parts.push(plural(failing, 'has failing checks', 'have failing checks'));
-        const ready = count('ready');
-        if (ready) parts.push(`${ready} ready to merge`);
 
-        return parts.length ? parts.join(', ') : 'Nothing needs your attention';
+        return list;
     });
+
+    // The header's "9 open in owner/name".
+    const openCount = computed(() => allOpen.value.length);
 
     return {
         status,
@@ -186,9 +200,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
         showDrafts,
         loading,
         toReview,
-        groups,
-        recentlyClosed,
-        summary,
+        categories,
+        openCount,
         applyState,
         load,
         refresh,

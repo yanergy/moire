@@ -44,6 +44,7 @@ function gqlResponse(data: Record<string, unknown>) {
             review: { nodes: [] },
             mineOpen: { nodes: [] },
             mineClosed: { nodes: [] },
+            allOpen: { nodes: [] },
             ...data,
         },
     });
@@ -158,6 +159,7 @@ describe('fetchSnapshot', () => {
         expect(args).toContain(
             'mineClosed=repo:o/r is:pr is:closed author:@me closed:>=2026-10-19'
         );
+        expect(args).toContain('allOpen=repo:o/r is:pr is:open archived:false');
     });
 
     it('normalizes the review requests and the viewer’s PRs', async () => {
@@ -172,6 +174,7 @@ describe('fetchSnapshot', () => {
         expect(status).toBe('ok');
         expect(snap).toMatchObject({ login: 'me', repo: 'o/r', fetchedAt: now.toISOString() });
         expect(snap!.toReview.map((p) => p.number)).toEqual([9]);
+        expect(snap!.open).toEqual([]);
         expect(snap!.mine[0]).toMatchObject({
             number: 1,
             author: 'me',
@@ -275,6 +278,25 @@ describe('fetchSnapshot', () => {
             [1, 'OPEN', ''],
             [2, 'MERGED', 'ann'],
             [3, 'CLOSED', ''],
+        ]);
+    });
+
+    it('lists every open PR in the repository, by any author', async () => {
+        const run = runnerReturning(
+            gqlResponse({
+                allOpen: {
+                    nodes: [
+                        gqlPr({ id: 'A', number: 1, author: { login: 'ann' } }),
+                        gqlPr({ id: 'B', number: 2 }),
+                    ],
+                },
+            })
+        );
+        const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
+
+        expect(snap!.open?.map((p) => [p.number, p.author])).toEqual([
+            [1, 'ann'],
+            [2, 'me'],
         ]);
     });
 
