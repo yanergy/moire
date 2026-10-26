@@ -11,7 +11,7 @@ export type CompareMode = 'merge-base' | 'direct';
 export type ViewMode = 'split' | 'unified';
 // Which pane fills the main area: the diff, or the pull-request view (reachable
 // only when a PR is detected for the compared branches). Renderer-only state.
-export type MainView = 'diff' | 'pr';
+export type MainView = 'diff' | 'pr' | 'dashboard';
 // The concrete theme the UI resolves to. `ThemePreference` is what the user
 // picks; `system` follows the OS and resolves to one of these.
 export type ThemeName = 'dark' | 'light';
@@ -429,4 +429,7 @@ export interface MoireApi {
     refreshDashboard(): Promise<DashboardState>;
     setDashboardShowDrafts(show: boolean): Promise<DashboardState>;
     onDashboardChanged(cb: (state: DashboardState) => void): () => void;
+    // Fired by View → Dashboard and the summary notification, to switch the main
+    // area to the dashboard. Returns an unsubscribe function.
+    onShowDashboard(cb: () => void): () => void;
 }

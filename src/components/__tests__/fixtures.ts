@@ -4,7 +4,13 @@
 // viewed state seed them from here instead. Not a *.spec file, so vitest does
 // not run it as a suite.
 
-import type { BranchInfo, ChangedFile } from '@/shared/types';
+import type {
+    BranchInfo,
+    ChangedFile,
+    DashboardPr,
+    DashboardSnapshot,
+    DashboardState,
+} from '@/shared/types';
 
 export const BRANCHES: BranchInfo[] = [
     { name: 'main', kind: 'local', isCurrent: true },
@@ -53,3 +59,53 @@ export const CHANGED_FILES: ChangedFile[] = [
     { path: 'src/stores/comparison.ts', status: 'M', additions: 19, deletions: 7, binary: false },
     { path: 'tests/parsers.spec.ts', status: 'M', additions: 48, deletions: 3, binary: false },
 ];
+
+// Builders for the dashboard component tests.
+export function dashboardPr(overrides: Partial<DashboardPr> = {}): DashboardPr {
+    return {
+        id: 'PR_1',
+        number: 1,
+        title: 'Add notifications',
+        url: 'https://github.com/o/r/pull/1',
+        author: 'me',
+        isDraft: false,
+        state: 'OPEN',
+        mergedBy: '',
+        baseRefName: 'main',
+        headRefName: 'feat/x',
+        isCrossRepository: false,
+        createdAt: '2026-10-26T09:00:00Z',
+        updatedAt: '2026-10-26T10:00:00Z',
+        closedAt: '',
+        additions: 10,
+        deletions: 2,
+        mergeable: 'MERGEABLE',
+        reviewDecision: '',
+        ci: 'pending',
+        failedChecks: [],
+        reviews: [],
+        ...overrides,
+    };
+}
+
+export function dashboardSnapshot(overrides: Partial<DashboardSnapshot> = {}): DashboardSnapshot {
+    return {
+        login: 'me',
+        repo: 'o/r',
+        fetchedAt: '2026-10-26T12:00:00Z',
+        toReview: [],
+        mine: [],
+        failureNotified: [],
+        ...overrides,
+    };
+}
+
+export function dashboardState(overrides: Partial<DashboardState> = {}): DashboardState {
+    return {
+        status: 'ok',
+        snapshot: dashboardSnapshot(),
+        activity: [],
+        showDrafts: true,
+        ...overrides,
+    };
+}

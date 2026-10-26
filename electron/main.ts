@@ -63,16 +63,26 @@ function showNotification(content: NotificationContent, onClick: () => void): vo
 
 // Bring the main window to the front, recreating it when it was closed (the app
 // stays alive on macOS), for a notification click that needs the app.
-async function revealWindow(): Promise<void> {
+async function revealWindow(): Promise<BrowserWindow> {
     const win = BrowserWindow.getAllWindows()[0];
     if (!win) {
-        await createWindow();
-        return;
+        const created = await createWindow();
+        // A fresh renderer cannot receive messages until it has loaded.
+        await new Promise<void>((resolve) => created.webContents.once('did-finish-load', resolve));
+        return created;
     }
 
     if (win.isMinimized()) win.restore();
     win.show();
     win.focus();
+    return win;
+}
+
+// Switch the main window to the dashboard (the summary notification and View →
+// Dashboard).
+async function showDashboard(): Promise<void> {
+    const win = await revealWindow();
+    win.webContents.send('dashboard:show');
 }
 
 // Polls GitHub for the open repository. See notifier.ts and
@@ -87,7 +97,7 @@ const notifier = new Notifier({
     setBadge: (count) => app.dock?.setBadge(count > 0 ? String(count) : ''),
     // Opening the PR inside Moiré lands with the dashboard; until then, GitHub.
     onOpenPr: (pr) => void shell.openExternal(pr.url),
-    onOpenDashboard: () => void revealWindow(),
+    onOpenDashboard: () => void showDashboard(),
     // Keep an open dashboard current after every poll.
     onChange: () => {
         void dashboardState().then((state) => {
@@ -104,7 +114,7 @@ async function dashboardState(): Promise<DashboardState> {
     return { ...notifier.getView(), showDrafts };
 }
 
-async function createWindow(): Promise<void> {
+async function createWindow(): Promise<BrowserWindow> {
     // Reopen at the last session's size/position (off-screen positions dropped).
     const { bounds, maximized } = await restoreWindowState();
     const win = new BrowserWindow({
@@ -136,6 +146,8 @@ async function createWindow(): Promise<void> {
     } else {
         win.loadFile(path.join(app.getAppPath(), 'dist/index.html'));
     }
+
+    return win;
 }
 
 app.whenReady().then(async () => {
@@ -210,6 +222,7 @@ app.whenReady().then(async () => {
             // The store owns the git re-read / the open flow, so these items just
             // poke the focused window; the renderer acts on the message.
             onRefresh: () => sendToFocused('menu:refresh'),
+            onShowDashboard: () => void showDashboard(),
             onOpenRepo: () => sendToFocused('menu:open-repo'),
             onOpenRecent: (repoPath) => sendToFocused('menu:open-recent', repoPath),
             // Help → Open Log File opens the log in the OS default text viewer.

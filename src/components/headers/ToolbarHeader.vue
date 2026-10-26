@@ -4,11 +4,13 @@ import {
     ArrowRightLeft,
     GitPullRequest,
     GitPullRequestDraft,
+    LayoutDashboard,
     LoaderCircle,
     TriangleAlert,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
+import { useDashboardStore } from '@/stores/dashboard';
 import type { CompareMode, ViewMode } from '@/shared/types';
 import RefSelector from '@/components/controls/RefSelector.vue';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
@@ -19,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 const comparison = useComparisonStore();
 const ui = useUiStore();
+const dashboard = useDashboardStore();
 
 const compareOptions: { value: CompareMode; label: string; tooltip: string }[] = [
     {
@@ -44,6 +47,14 @@ const viewOptions: { value: ViewMode; label: string }[] = [
 // the range. Its pressed state maps straight to which pane fills the main area.
 function setPrView(on: boolean) {
     ui.setMainView(on ? 'pr' : 'diff');
+}
+
+// The dashboard toggle, shown while a repository is open. Its count is the number
+// of PRs waiting for the viewer's review, matching the dock badge.
+const reviewCount = computed(() => dashboard.toReview.length);
+
+function setDashboardView(on: boolean) {
+    ui.setMainView(on ? 'dashboard' : 'diff');
 }
 
 // A status dot before the PR button label: vibrant green open, red closed,
@@ -159,6 +170,38 @@ const statusDotClass = computed(() => {
                 </TooltipTrigger>
                 <TooltipContent class="flex max-w-xs flex-col gap-2">
                     <span v-for="(line, i) in comparison.prWarning" :key="i">{{ line }}</span>
+                </TooltipContent>
+            </Tooltip>
+
+            <Tooltip v-if="comparison.repoPath">
+                <TooltipTrigger as-child>
+                    <!-- Wrapped in a span for the same data-state reason as the PR
+                         toggle above. -->
+                    <span class="inline-flex">
+                        <Toggle
+                            variant="outline"
+                            size="sm"
+                            :model-value="ui.mainView === 'dashboard'"
+                            class="h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                            aria-label="Dashboard"
+                            @update:model-value="setDashboardView"
+                        >
+                            <LayoutDashboard :size="16" />
+                            <span
+                                v-if="reviewCount"
+                                class="rounded-full bg-moire-pr-open px-1.5 text-[11px] leading-4 font-semibold text-moire-check-fg"
+                            >
+                                {{ reviewCount }}
+                            </span>
+                        </Toggle>
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                    {{
+                        reviewCount
+                            ? `${reviewCount} ${reviewCount === 1 ? 'PR' : 'PRs'} to review`
+                            : 'Dashboard'
+                    }}
                 </TooltipContent>
             </Tooltip>
 

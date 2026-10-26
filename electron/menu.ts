@@ -77,6 +77,8 @@ export interface MenuOptions {
     currentEditor?: string;
     onSelectEditor?: (editor: string) => void;
     onRefresh: () => void;
+    // View → Dashboard, enabled only while a repository is open (`activeRepo`).
+    onShowDashboard?: () => void;
     onOpenLog?: () => void;
     onOpenRepo?: () => void;
     onOpenRecent?: (repoPath: string) => void;
@@ -127,6 +129,7 @@ export function buildMenuTemplate({
     currentEditor = 'auto',
     onSelectEditor,
     onRefresh,
+    onShowDashboard,
     onOpenLog,
     onOpenRepo,
     onOpenRecent,
@@ -240,6 +243,13 @@ export function buildMenuTemplate({
                 // open pair). Takes Cmd/Ctrl+R since a git re-scan is the refresh a
                 // user of this app wants; the full-page reload stays on Force Reload.
                 { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => onRefresh() },
+                // The GitHub dashboard is always about the open repository.
+                {
+                    label: 'Dashboard',
+                    accelerator: 'CmdOrCtrl+Shift+D',
+                    enabled: !!activeRepo,
+                    click: () => onShowDashboard?.(),
+                },
                 { role: 'forceReload' },
                 { role: 'toggleDevTools' },
                 { type: 'separator' },

@@ -29,6 +29,7 @@ function stubApi() {
         codeStyle: vi.fn<Unsub>(),
         diffLayout: vi.fn<Unsub>(),
         dashboard: vi.fn<Unsub>(),
+        showDashboard: vi.fn<Unsub>(),
     };
     const api = {
         getTheme: vi.fn<() => Promise<ThemeState>>().mockResolvedValue({
@@ -53,6 +54,7 @@ function stubApi() {
         onDashboardChanged: vi.fn<(cb: (state: DashboardState) => void) => Unsub>(
             () => unsub.dashboard
         ),
+        onShowDashboard: vi.fn<(cb: () => void) => Unsub>(() => unsub.showDashboard),
     };
     window.api = api as unknown as Window['api'];
     return { api, unsub };
@@ -149,6 +151,19 @@ describe('App', () => {
         expect(unsub.codeStyle).toHaveBeenCalledTimes(1);
         expect(unsub.diffLayout).toHaveBeenCalledTimes(1);
         expect(unsub.dashboard).toHaveBeenCalledTimes(1);
+        expect(unsub.showDashboard).toHaveBeenCalledTimes(1);
+    });
+
+    it('switches to the dashboard when main asks for it', async () => {
+        const { api } = stubApi();
+        const comparison = useComparisonStore();
+        vi.spyOn(comparison, 'restoreLastRepo').mockResolvedValue(undefined);
+
+        mountApp();
+        await flushPromises();
+
+        api.onShowDashboard.mock.calls[0]![0]();
+        expect(useUiStore().mainView).toBe('dashboard');
     });
 
     it('applies dashboard updates pushed by the main process', async () => {

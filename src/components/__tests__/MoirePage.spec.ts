@@ -8,6 +8,7 @@ import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import DiffPane from '@/components/diff/DiffPane.vue';
 import StackedDiffPane from '@/components/diff/StackedDiffPane.vue';
 import PrView from '@/components/pr/PrView.vue';
+import DashboardView from '@/components/dashboard/DashboardView.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { flushPromises } from '@vue/test-utils';
@@ -23,6 +24,7 @@ const stubs = {
     DiffPane: true,
     StackedDiffPane: true,
     PrView: true,
+    DashboardView: true,
 };
 
 const PR: PullRequest = {
@@ -89,6 +91,26 @@ describe('MoirePage', () => {
         expect(wrapper.findComponent(PrView).exists()).toBe(true);
         expect(wrapper.findComponent(StackedDiffPane).exists()).toBe(false);
         expect(wrapper.findComponent(DiffPane).exists()).toBe(false);
+    });
+
+    it('shows the dashboard full width, without the file tree, while a repo is open', () => {
+        useComparisonStore().repoPath = '/repos/moire';
+        useUiStore().setMainView('dashboard');
+
+        const wrapper = mount(MoirePage, { global: { plugins: [pinia], stubs } });
+
+        expect(wrapper.findComponent(DashboardView).exists()).toBe(true);
+        expect(wrapper.findComponent(FileTreeSidebar).exists()).toBe(false);
+        expect(wrapper.findComponent(DiffPane).exists()).toBe(false);
+    });
+
+    it('never shows the dashboard without an open repo', () => {
+        useUiStore().setMainView('dashboard');
+
+        const wrapper = mount(MoirePage, { global: { plugins: [pinia], stubs } });
+
+        expect(wrapper.findComponent(DashboardView).exists()).toBe(false);
+        expect(wrapper.findComponent(DiffPane).exists()).toBe(true);
     });
 
     it('shows the PR view instead of the diff when the PR view is active and a PR exists', () => {

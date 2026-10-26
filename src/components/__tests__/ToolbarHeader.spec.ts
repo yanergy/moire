@@ -4,6 +4,8 @@ import { mount } from '@vue/test-utils';
 import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
+import { useDashboardStore } from '@/stores/dashboard';
+import { dashboardPr, dashboardSnapshot, dashboardState } from './fixtures';
 import type { PullRequest } from '@/shared/types';
 
 const PR: PullRequest = {
@@ -34,6 +36,17 @@ const PR: PullRequest = {
 // Stub them here and exercise the piece ToolbarHeader owns directly: the swap
 // button. (The theme toggle moved to the native View menu; see tests/menu.spec.ts.)
 const stubs = { RepoPicker: true, RefSelector: true, SegmentedToggle: true };
+
+// A dashboard state with `count` PRs waiting for review.
+function withRequests(count: number) {
+    return dashboardState({
+        snapshot: dashboardSnapshot({
+            toReview: Array.from({ length: count }, (_, i) =>
+                dashboardPr({ id: `R${i}`, number: i + 1, author: 'ann' })
+            ),
+        }),
+    });
+}
 
 describe('ToolbarHeader', () => {
     let pinia: Pinia;
@@ -175,5 +188,36 @@ describe('ToolbarHeader', () => {
 
         const wrapper = mountToolbar();
         expect(wrapper.find('.lucide-triangle-alert').exists()).toBe(false);
+    });
+
+    describe('dashboard toggle', () => {
+        it('is hidden without an open repo', () => {
+            const wrapper = mountToolbar();
+            expect(wrapper.find('[aria-label="Dashboard"]').exists()).toBe(false);
+        });
+
+        it('shows the review count and switches the main view', async () => {
+            useComparisonStore().repoPath = '/repos/moire';
+            useDashboardStore().applyState(withRequests(2));
+            const ui = useUiStore();
+
+            const wrapper = mountToolbar();
+            const toggle = wrapper.get('[aria-label="Dashboard"]');
+            expect(toggle.text()).toBe('2');
+
+            await toggle.trigger('click');
+            expect(ui.mainView).toBe('dashboard');
+
+            await toggle.trigger('click');
+            expect(ui.mainView).toBe('diff');
+        });
+
+        it('shows no count when nothing waits for review', () => {
+            useComparisonStore().repoPath = '/repos/moire';
+            useDashboardStore().applyState(withRequests(0));
+
+            const wrapper = mountToolbar();
+            expect(wrapper.get('[aria-label="Dashboard"]').text()).toBe('');
+        });
     });
 });

@@ -25,6 +25,7 @@ let stopFlourishes: (() => void) | undefined;
 let stopCodeStyle: (() => void) | undefined;
 let stopDiffLayout: (() => void) | undefined;
 let stopDashboard: (() => void) | undefined;
+let stopShowDashboard: (() => void) | undefined;
 
 // Electron mirrors document.title into the native window title bar, so the open
 // repo shows there. This replaces the in-app title the removed fake title bar
@@ -76,6 +77,7 @@ onMounted(async () => {
 
     // The GitHub notifier in main pushes the dashboard state after every poll.
     stopDashboard = api.onDashboardChanged((state) => dashboard.applyState(state));
+    stopShowDashboard = api.onShowDashboard(() => ui.setMainView('dashboard'));
 });
 
 onUnmounted(() => {
@@ -88,6 +90,7 @@ onUnmounted(() => {
     stopCodeStyle?.();
     stopDiffLayout?.();
     stopDashboard?.();
+    stopShowDashboard?.();
 });
 </script>
 

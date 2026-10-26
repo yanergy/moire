@@ -114,6 +114,13 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('dashboard:changed', listener);
         return () => ipcRenderer.removeListener('dashboard:changed', listener);
     },
+    // Fired by View → Dashboard and the summary notification, to switch the main
+    // area to the dashboard. Returns an unsubscribe function.
+    onShowDashboard: (callback: () => void) => {
+        const listener = () => callback();
+        ipcRenderer.on('dashboard:show', listener);
+        return () => ipcRenderer.removeListener('dashboard:show', listener);
+    },
     // Fired when the RepoWatcher (main process) sees the open repo's refs or
     // working tree change, so the renderer can auto-refresh. Returns an
     // unsubscribe function so the caller can drop the listener.

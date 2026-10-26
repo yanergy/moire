@@ -333,6 +333,23 @@ describe('application menu', () => {
         });
     });
 
+    it('enables View → Dashboard only while a repo is open, and reports the click', () => {
+        const onShowDashboard = vi.fn<() => void>();
+        const closed = viewSubmenu('system', { onShowDashboard })?.find(
+            (entry) => entry.label === 'Dashboard'
+        );
+        const open = viewSubmenu('system', { onShowDashboard, activeRepo: '/repos/moire' })?.find(
+            (entry) => entry.label === 'Dashboard'
+        );
+
+        expect(closed?.enabled).toBe(false);
+        expect(open?.enabled).toBe(true);
+        expect(open?.accelerator).toBe('CmdOrCtrl+Shift+D');
+
+        (open!.click as () => void)();
+        expect(onShowDashboard).toHaveBeenCalledTimes(1);
+    });
+
     it('omits the macOS app menu on other platforms', () => {
         // With the app menu present (mac) the File menu is second; without it, first.
         expect(buildMenuTemplate({ isMac: true, currentTheme: 'system' })[0].role).toBe('appMenu');

@@ -70,6 +70,7 @@ describe('preload bridge', () => {
             'refreshDashboard',
             'setDashboardShowDrafts',
             'onDashboardChanged',
+            'onShowDashboard',
         ]) {
             expect(typeof api()[method]).toBe('function');
         }
