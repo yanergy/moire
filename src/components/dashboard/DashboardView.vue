@@ -112,7 +112,7 @@ const updated = computed(() =>
                         <Button
                             variant="ghost"
                             size="sm"
-                            class="-ml-2 h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                            class="h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                             @click="selectedKey = null"
                         >
                             <ArrowLeft :size="16" />
@@ -265,7 +265,7 @@ const updated = computed(() =>
 
                     <section class="pt-8">
                         <h2
-                            class="mb-2 flex items-center gap-2 text-[13px] font-semibold text-moire-fg"
+                            class="flex items-center pb-4 gap-2 text-[13px] font-semibold text-moire-fg"
                         >
                             Notifications
                             <span
