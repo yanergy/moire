@@ -1,6 +1,7 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import DashboardView from '@/components/dashboard/DashboardView.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
 import DashboardCard from '@/components/dashboard/DashboardCard.vue';
@@ -35,11 +36,16 @@ describe('DashboardView', () => {
     afterEach(() => {
         delete window.api;
         vi.useRealTimers();
+        document.body.innerHTML = '';
     });
 
     async function mountView(state: DashboardState) {
         const api = stubApi(state);
-        const wrapper = mount(DashboardView, { global: { plugins: [pinia] } });
+        // Attached so the Display menu, which teleports to the body, can open.
+        const wrapper = mount(DashboardView, {
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
         await flushPromises();
         return { api, wrapper };
     }
@@ -48,14 +54,14 @@ describe('DashboardView', () => {
         const { api, wrapper } = await mountView(
             dashboardState({
                 snapshot: dashboardSnapshot({
-                    open: [dashboardPr({ id: 'A' }), dashboardPr({ id: 'B', number: 2 })],
+                    mine: [dashboardPr({ id: 'A' }), dashboardPr({ id: 'B', number: 2 })],
                 }),
             })
         );
 
         expect(api.getDashboard).toHaveBeenCalledTimes(1);
         expect(wrapper.text()).toContain('Overview');
-        expect(wrapper.text()).toContain('2 open in o/r');
+        expect(wrapper.text()).toContain('2 open by you in o/r');
         expect(wrapper.text()).toContain('Updated 5m ago');
         expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
     });
@@ -102,14 +108,32 @@ describe('DashboardView', () => {
         expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
     });
 
-    it('refreshes and toggles drafts through the store', async () => {
+    it('refreshes through the store', async () => {
         const { api, wrapper } = await mountView(dashboardState());
 
         await wrapper.get('[aria-label="Refresh"]').trigger('click');
         expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
+    });
 
-        await wrapper.get('[aria-label="Show drafts"]').trigger('click');
+    it('offers Show drafts and a Users submenu in the Display menu', async () => {
+        const { api, wrapper } = await mountView(dashboardState());
+
+        await wrapper.get('[aria-label="Display options"]').trigger('click');
+        await flushPromises();
+        await nextTick();
+
+        const items = [
+            ...document.querySelectorAll('[data-slot="dropdown-menu-checkbox-item"]'),
+        ] as HTMLElement[];
+        const subTrigger = document.querySelector('[data-slot="dropdown-menu-sub-trigger"]');
+        expect(items.map((el) => el.textContent?.trim())).toEqual(['Show drafts']);
+        expect(subTrigger?.textContent).toContain('Users');
+        expect(subTrigger?.textContent).toContain('You');
+
+        items[0]!.click();
+        await flushPromises();
         expect(api.setDashboardShowDrafts).toHaveBeenCalledWith(false);
+        wrapper.unmount();
     });
 
     it('opens a PR through the store when a row is clicked', async () => {

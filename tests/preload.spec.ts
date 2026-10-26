@@ -69,6 +69,7 @@ describe('preload bridge', () => {
             'getDashboard',
             'refreshDashboard',
             'setDashboardShowDrafts',
+            'setDashboardAuthors',
             'onDashboardChanged',
             'onShowDashboard',
             'onOpenPr',
@@ -119,6 +120,9 @@ describe('preload bridge', () => {
 
         await api().setDashboardShowDrafts!(false);
         expect(bridge.invoke).toHaveBeenCalledWith('dashboard:set-show-drafts', false);
+
+        await api().setDashboardAuthors!('all');
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:set-authors', 'all');
     });
 
     it('subscribes and returns an unsubscribe that removes the same listener', () => {

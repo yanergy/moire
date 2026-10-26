@@ -320,16 +320,23 @@ export interface ActivityEntry {
     checks?: string[];
 }
 
+// Whose PRs the dashboard cards count: 'me' is the signed in gh account (kept
+// symbolic so it follows an account switch), 'all' is every author, and a list
+// names specific logins. Mirrors AuthorFilter in electron/settings.ts.
+export type AuthorFilter = 'me' | 'all' | string[];
+
 // The dashboard for the open repository. `status` explains a missing or stale
 // snapshot (no gh, not signed in, no GitHub remote, ...); `snapshot` stays the
 // last good fetch when a later one fails. `showDrafts` is the dashboard's
-// "Show drafts" toggle, which also applies to notifications.
+// "Show drafts" toggle, which also applies to notifications. `authors` is its
+// author filter: whose open PRs the cards count.
 export interface DashboardState {
     status: PrStatus;
     message?: string;
     snapshot: DashboardSnapshot | null;
     activity: ActivityEntry[];
     showDrafts: boolean;
+    authors: AuthorFilter;
 }
 
 // Preload API surface, exposed on window.api once the git backend lands.
@@ -425,12 +432,14 @@ export interface MoireApi {
     onMenuOpenRecent(cb: (path: string) => void): () => void;
     // The GitHub dashboard for the open repository. `getDashboard` returns the
     // current state (fetching first if nothing was fetched yet); `refreshDashboard`
-    // polls GitHub now; `setDashboardShowDrafts` persists the "Show drafts" toggle.
+    // polls GitHub now; `setDashboardShowDrafts` and `setDashboardAuthors` persist
+    // the "Show drafts" toggle and the author filter.
     // All three reject when no repository is open. `onDashboardChanged` fires after
     // every background poll, and returns an unsubscribe function.
     getDashboard(): Promise<DashboardState>;
     refreshDashboard(): Promise<DashboardState>;
     setDashboardShowDrafts(show: boolean): Promise<DashboardState>;
+    setDashboardAuthors(authors: AuthorFilter): Promise<DashboardState>;
     onDashboardChanged(cb: (state: DashboardState) => void): () => void;
     // Fired by View → Dashboard and the summary notification, to switch the main
     // area to the dashboard. Returns an unsubscribe function.

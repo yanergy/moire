@@ -33,6 +33,7 @@ import { detectEditors, openWithEditor } from '../editors';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
 import type { DashboardState } from '../notifier';
+import type { AuthorFilter } from '../settings';
 
 // The dashboard's data comes from the Notifier, which main.ts owns; main hands
 // these in so the handlers stay free of polling and Electron notification code.
@@ -43,6 +44,7 @@ export interface DashboardBridge {
     // Poll now, then return the new state.
     refresh: () => Promise<DashboardState>;
     setShowDrafts: (show: boolean) => Promise<DashboardState>;
+    setAuthors: (authors: AuthorFilter) => Promise<DashboardState>;
 }
 
 // ipcMain.handle that logs a handler rejection before it propagates. A git
@@ -194,6 +196,9 @@ function registerIpcHandlers({
     handle('dashboard:get', () => requireDashboard().get());
     handle('dashboard:refresh', () => requireDashboard().refresh());
     handle('dashboard:set-show-drafts', (show: boolean) => requireDashboard().setShowDrafts(show));
+    handle('dashboard:set-authors', (authors: AuthorFilter) =>
+        requireDashboard().setAuthors(authors)
+    );
 
     // Git-backed channels. Each operates on the currently open repo and has a
     // matching method in the preload bridge and an entry in MoireApi.

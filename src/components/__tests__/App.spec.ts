@@ -203,6 +203,7 @@ describe('App', () => {
             snapshot: null,
             activity: [],
             showDrafts: false,
+            authors: 'me',
         };
         api.onDashboardChanged.mock.calls[0]![0](state);
         expect(applyState).toHaveBeenCalledWith(state);

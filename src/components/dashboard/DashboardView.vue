@@ -1,13 +1,22 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowLeft, Check, LoaderCircle, RefreshCw, TriangleAlert } from '@lucide/vue';
+import { ArrowLeft, LoaderCircle, RefreshCw, SlidersHorizontal, TriangleAlert } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useDashboardStore, type DashboardCategoryKey } from '@/stores/dashboard';
 import { dashboardNotice } from '@/lib/dashboard';
 import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Toggle } from '@/components/ui/toggle';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import DashboardCard from '@/components/dashboard/DashboardCard.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
@@ -65,9 +74,24 @@ const notice = computed(() => {
     };
 });
 
-const subtitle = computed(() =>
-    dashboard.snapshot ? `${dashboard.openCount} open in ${dashboard.snapshot.repo}` : ''
-);
+const subtitle = computed(() => {
+    const snapshot = dashboard.snapshot;
+    if (!snapshot) {
+        return '';
+    }
+    return `${dashboard.openCount} ${dashboard.openLabel} in ${snapshot.repo}`;
+});
+
+// Keep the display menu open when a checkbox is toggled, so both can be set in
+// one go (as the file tree's filter menu does).
+function keepOpen(event: Event) {
+    event.preventDefault();
+}
+
+// The file filter menu's popover surface and row styling.
+const menuSurface = 'min-w-[180px] border-moire-border bg-moire-pop text-moire-fg';
+const menuSurfaceStyle = { boxShadow: 'var(--moire-pop-shadow)' };
+const menuRow = 'text-xs text-moire-file-fg focus:bg-moire-hover focus:text-moire-fg';
 
 const updated = computed(() =>
     dashboard.snapshot
@@ -112,30 +136,76 @@ const updated = computed(() =>
                     <div class="flex-1" />
 
                     <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
-                    <Toggle
-                        variant="outline"
-                        size="sm"
-                        :model-value="dashboard.showDrafts"
-                        class="h-7 shrink-0 gap-1.5 border border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=on]:bg-moire-hover data-[state=on]:text-moire-fg"
-                        aria-label="Show drafts"
-                        title="Include draft PRs in the dashboard and in notifications"
-                        @update:model-value="dashboard.setShowDrafts($event)"
-                    >
-                        <!-- The checkbox look of the PR view's Edit mode toggle, for the
-                             same reason: a real Checkbox renders a button, which would be
-                             invalid inside this Toggle. -->
-                        <span
-                            class="flex size-[15px] shrink-0 items-center justify-center rounded-sm border"
-                            :class="
-                                dashboard.showDrafts
-                                    ? 'border-moire-fg bg-moire-fg text-moire-check-fg'
-                                    : 'border-current'
-                            "
+                    <!-- Display options: drafts, and whose PRs the cards count. -->
+                    <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                aria-label="Display options"
+                            >
+                                <SlidersHorizontal :size="16" />
+                                Display
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            :side-offset="6"
+                            :class="menuSurface"
+                            :style="menuSurfaceStyle"
                         >
-                            <Check v-if="dashboard.showDrafts" class="size-[11px]" />
-                        </span>
-                        Show drafts
-                    </Toggle>
+                            <DropdownMenuCheckboxItem
+                                :model-value="dashboard.showDrafts"
+                                :class="menuRow"
+                                title="Include draft PRs in the dashboard and in notifications"
+                                @select="keepOpen"
+                                @update:model-value="dashboard.setShowDrafts($event)"
+                            >
+                                Show drafts
+                            </DropdownMenuCheckboxItem>
+                            <!-- Whose PRs the cards count: the signed in account by
+                                 default, any mix of authors, or everyone. -->
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger :class="menuRow">
+                                    Users
+                                    <span class="ml-auto pl-3 text-moire-faint">
+                                        {{ dashboard.authorsLabel }}
+                                    </span>
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent
+                                    :class="menuSurface"
+                                    :style="menuSurfaceStyle"
+                                >
+                                    <DropdownMenuCheckboxItem
+                                        :model-value="dashboard.authors === 'all'"
+                                        :class="menuRow"
+                                        @select="keepOpen"
+                                        @update:model-value="dashboard.toggleAllAuthors()"
+                                    >
+                                        All
+                                    </DropdownMenuCheckboxItem>
+                                    <DropdownMenuSeparator class="bg-moire-border" />
+                                    <DropdownMenuCheckboxItem
+                                        v-for="login in dashboard.knownAuthors"
+                                        :key="login"
+                                        :model-value="dashboard.isAuthorSelected(login)"
+                                        :class="menuRow"
+                                        @select="keepOpen"
+                                        @update:model-value="dashboard.toggleAuthorSelected(login)"
+                                    >
+                                        {{ login }}
+                                        <span
+                                            v-if="login === dashboard.snapshot?.login"
+                                            class="text-moire-faint"
+                                        >
+                                            (you)
+                                        </span>
+                                    </DropdownMenuCheckboxItem>
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button
                         variant="outline"
                         size="icon-sm"

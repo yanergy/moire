@@ -27,6 +27,7 @@ const state = vi.hoisted(() => ({
         get: vi.fn<() => Promise<unknown>>(),
         refresh: vi.fn<() => Promise<unknown>>(),
         setShowDrafts: vi.fn<(show: boolean) => Promise<unknown>>(),
+        setAuthors: vi.fn<(authors: unknown) => Promise<unknown>>(),
     },
     getPullRequest: vi.fn<(repoPath: string, base: string, head: string) => Promise<unknown>>(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
@@ -147,6 +148,7 @@ describe('registerIpcHandlers', () => {
             'dashboard:get',
             'dashboard:refresh',
             'dashboard:set-show-drafts',
+            'dashboard:set-authors',
         ]) {
             expect(state.handlers.has(channel)).toBe(true);
         }
@@ -243,6 +245,10 @@ describe('registerIpcHandlers', () => {
         expect(await invoke('dashboard:refresh')).toBe(dashboardState);
         expect(await invoke('dashboard:set-show-drafts', false)).toBe(dashboardState);
         expect(state.dashboard.setShowDrafts).toHaveBeenCalledWith(false);
+
+        state.dashboard.setAuthors.mockResolvedValue(dashboardState);
+        expect(await invoke('dashboard:set-authors', ['ann'])).toBe(dashboardState);
+        expect(state.dashboard.setAuthors).toHaveBeenCalledWith(['ann']);
     });
 
     it('rejects the PR lookup before any repo is opened', async () => {

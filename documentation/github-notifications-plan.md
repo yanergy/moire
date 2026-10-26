@@ -72,20 +72,26 @@ and "Ready to merge" is the more useful version).
 An overview of the open repository's pull requests, as a grid of cards. Each card shows a status
 dot, a label, the PR count and a caption saying what is counted:
 
-| Card | Counts | Caption |
+| Card | Counts | Caption (default) |
 |---|---|---|
-| Needs your review (blue) | Open PRs that request your review | Requested from you |
-| Changes requested (orange) | Your open PRs with changes requested | On your PRs |
-| Ready to merge (green) | Your open PRs that are approved, with passing checks and no conflicts | Approved, checks green |
-| Failing checks (red) | Open PRs with failing checks, by any author | Any author |
-| Your open PRs (purple) | Your open PRs | Authored by you |
-| Stale (gray) | Open PRs with no activity in 7 or more days, by any author | No activity in 7+ days |
-| Drafts (gray) | Your open draft PRs | Not ready for review |
+| Needs your review (blue) | Open PRs that request your review, whatever the user filter | Requested from you |
+| Changes requested (orange) | Open PRs with changes requested | On your PRs |
+| Ready to merge (green) | Open PRs that are approved, with passing checks and no conflicts | Approved, checks green |
+| Failing checks (red) | Open PRs with failing checks | On your PRs |
+| Your open PRs (purple) | Open PRs | Authored by you |
+| Stale (gray) | Open PRs with no activity in 7 or more days | No activity in 7+ days |
+| Drafts (gray) | Open draft PRs | Not ready for review |
+
+Every card but the first counts the open PRs of the authors picked in the **Users** submenu of
+the header's **Display** menu. It defaults to the signed in account (stored as "me", so it
+follows an account switch), and can pick any mix of the authors with an open PR in the
+repository, or **All**. The captions follow the pick ("Any author", "By ann", "3 authors"), and
+"Your open PRs" reads "Open PRs" for anyone but yourself.
 
 Clicking a card lists its PRs (title, author, branches, age, size and CI state), with a way back
-to the overview. The header shows how many PRs are open in the repository, when the data was last
-refreshed, a refresh button and the "Show drafts" toggle. With drafts hidden, the Drafts card goes
-away and drafts are left out of every other card.
+to the overview. The header shows how many PRs the cards cover, when the data was last refreshed,
+the **Display** menu (with "Show drafts" and **Users**) and a refresh button. With drafts hidden,
+the Drafts card goes away and drafts are left out of every other card.
 
 The dashboard is a third main view next to the diff and PR views, reachable from the toolbar and
 View → Dashboard. It only exists while a repository is open: with no repository open, the toolbar
@@ -133,8 +139,9 @@ all limited with `repo:<owner>/<name>`:
 2. `is:pr author:@me` limited to open PRs and PRs updated in the last 7 days, with each PR's
    state, merged flag, who merged it, base and head branch names, review decision, latest review
    per reviewer, mergeable state, check rollup (with failed check names) and draft flag.
-3. `is:pr is:open archived:false` for every open PR in the repository (up to 100), for the cards
-   that count PRs by any author. This list is not diffed.
+3. `is:pr is:open archived:false` for every open PR in the repository (up to 100), for the
+   cards when the user filter picks other authors, and for the Users submenu. This list is not
+   diffed.
 
 The result is normalized into a **snapshot**: a plain object with these lists.
 

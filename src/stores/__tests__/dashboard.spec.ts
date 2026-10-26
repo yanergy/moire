@@ -1,9 +1,14 @@
 import { setActivePinia, createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { isReadyToMerge, useDashboardStore } from '@/stores/dashboard';
+import {
+    isReadyToMerge,
+    selectedAuthors,
+    toggleAuthor,
+    useDashboardStore,
+} from '@/stores/dashboard';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import type { DashboardPr, DashboardSnapshot, DashboardState } from '@/shared/types';
+import type { AuthorFilter, DashboardPr, DashboardSnapshot, DashboardState } from '@/shared/types';
 
 function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
     return {
@@ -45,8 +50,39 @@ function snapshot(overrides: Partial<DashboardSnapshot> = {}): DashboardSnapshot
 }
 
 function state(overrides: Partial<DashboardState> = {}): DashboardState {
-    return { status: 'ok', snapshot: snapshot(), activity: [], showDrafts: true, ...overrides };
+    return {
+        status: 'ok',
+        snapshot: snapshot(),
+        activity: [],
+        showDrafts: true,
+        authors: 'me',
+        ...overrides,
+    };
 }
+
+describe('author filter helpers', () => {
+    const known = ['me', 'ann', 'bob'];
+
+    it('resolves the logins a filter selects', () => {
+        expect(selectedAuthors('me', 'me')).toEqual(new Set(['me']));
+        expect(selectedAuthors(['ann'], 'me')).toEqual(new Set(['ann']));
+        expect(selectedAuthors('all', 'me')).toBeNull();
+    });
+
+    it('adds and removes logins, collapsing back to me', () => {
+        expect(toggleAuthor('me', 'ann', 'me', known)).toEqual(['me', 'ann']);
+        expect(toggleAuthor(['me', 'ann'], 'ann', 'me', known)).toBe('me');
+        expect(toggleAuthor('me', 'me', 'me', known)).toEqual([]);
+    });
+
+    it('keeps everyone else when unticking someone under All', () => {
+        expect(toggleAuthor('all', 'bob', 'me', known)).toEqual(['me', 'ann']);
+    });
+
+    it('keeps a selected login that no longer has an open PR', () => {
+        expect(toggleAuthor(['gone'], 'ann', 'me', known)).toEqual(['ann', 'gone']);
+    });
+});
 
 describe('isReadyToMerge', () => {
     it('treats a PR without checks as ready once approved', () => {
@@ -66,6 +102,9 @@ function stubApi(result: DashboardState = state()) {
         setDashboardShowDrafts: vi
             .fn<(show: boolean) => Promise<DashboardState>>()
             .mockResolvedValue(result),
+        setDashboardAuthors: vi
+            .fn<(authors: AuthorFilter) => Promise<DashboardState>>()
+            .mockImplementation(async (authors) => ({ ...result, authors })),
     };
     window.api = api as unknown as Window['api'];
     return api;
@@ -108,40 +147,38 @@ describe('dashboard store', () => {
         expect(store.showDrafts).toBe(false);
     });
 
-    it('fills the overview cards in display order', () => {
-        const store = useDashboardStore();
+    // My PRs: 1 changes requested, 2 ready, 3 draft, 4 closed, 5 failing and stale.
+    // Bob's: 7 failing and stale, 8 waiting.
+    function scopedSnapshot() {
         const staleDate = '2026-10-10T00:00:00Z';
-        store.applyState(
-            state({
-                snapshot: snapshot({
-                    toReview: [pr({ id: 'R', number: 9, author: 'ann' })],
-                    mine: [
-                        pr({ id: 'A', number: 1, reviewDecision: 'CHANGES_REQUESTED' }),
-                        pr({ id: 'B', number: 2, reviewDecision: 'APPROVED', ci: 'passing' }),
-                        pr({ id: 'C', number: 3, isDraft: true }),
-                        pr({ id: 'D', number: 4, state: 'CLOSED' }),
-                    ],
-                    open: [
-                        pr({ id: 'A', number: 1, ci: 'failing' }),
-                        pr({
-                            id: 'X',
-                            number: 7,
-                            author: 'bob',
-                            ci: 'failing',
-                            updatedAt: staleDate,
-                        }),
-                        pr({ id: 'Y', number: 8, author: 'bob' }),
-                    ],
-                }),
-            })
-        );
+        const mineOpen = [
+            pr({ id: 'A', number: 1, reviewDecision: 'CHANGES_REQUESTED' }),
+            pr({ id: 'B', number: 2, reviewDecision: 'APPROVED', ci: 'passing' }),
+            pr({ id: 'C', number: 3, isDraft: true }),
+            pr({ id: 'E', number: 5, ci: 'failing', updatedAt: staleDate }),
+        ];
+        return snapshot({
+            toReview: [pr({ id: 'R', number: 9, author: 'ann' })],
+            mine: [...mineOpen, pr({ id: 'D', number: 4, state: 'CLOSED' })],
+            open: [
+                ...mineOpen,
+                pr({ id: 'X', number: 7, author: 'bob', ci: 'failing', updatedAt: staleDate }),
+                pr({ id: 'Y', number: 8, author: 'bob' }),
+                pr({ id: 'R', number: 9, author: 'ann' }),
+            ],
+        });
+    }
+
+    it("fills the overview cards in display order with the viewer's own PRs by default", () => {
+        const store = useDashboardStore();
+        store.applyState(state({ snapshot: scopedSnapshot() }));
 
         expect(store.categories.map((c) => c.key)).toEqual([
             'review',
             'changes',
             'ready',
             'failing',
-            'mine',
+            'open',
             'stale',
             'drafts',
         ]);
@@ -149,12 +186,51 @@ describe('dashboard store', () => {
             review: [9],
             changes: [1],
             ready: [2],
-            failing: [1, 7],
-            mine: [1, 2, 3],
-            stale: [7],
+            failing: [5],
+            open: [1, 2, 3, 5],
+            stale: [5],
             drafts: [3],
         });
-        expect(store.openCount).toBe(3);
+        expect(store.categories.find((c) => c.key === 'open')?.label).toBe('Your open PRs');
+        expect(store.openCount).toBe(4);
+        expect(store.openLabel).toBe('open by you');
+        expect(store.authorsLabel).toBe('You');
+    });
+
+    it("counts every author with All, keeping review requests the viewer's", () => {
+        const store = useDashboardStore();
+        store.applyState(state({ authors: 'all', snapshot: scopedSnapshot() }));
+
+        expect(counts(store)).toMatchObject({
+            review: [9],
+            failing: [5, 7],
+            open: [1, 2, 3, 5, 7, 8, 9],
+            stale: [5, 7],
+        });
+        expect(store.categories.find((c) => c.key === 'open')).toMatchObject({
+            label: 'Open PRs',
+            caption: 'Any author',
+        });
+        expect(store.openLabel).toBe('open');
+    });
+
+    it('counts only the picked authors', () => {
+        const store = useDashboardStore();
+        store.applyState(state({ authors: ['bob'], snapshot: scopedSnapshot() }));
+
+        expect(counts(store)).toMatchObject({ failing: [7], open: [7, 8], stale: [7] });
+        expect(store.categories.find((c) => c.key === 'failing')?.caption).toBe('By bob');
+        expect(store.openLabel).toBe('open by bob');
+        expect(store.authorsLabel).toBe('bob');
+    });
+
+    it('lists the viewer first, then every other author with an open PR', () => {
+        const store = useDashboardStore();
+        store.applyState(state({ snapshot: scopedSnapshot() }));
+
+        expect(store.knownAuthors).toEqual(['me', 'ann', 'bob']);
+        expect(store.isAuthorSelected('me')).toBe(true);
+        expect(store.isAuthorSelected('bob')).toBe(false);
     });
 
     it('drops drafts from every card, and the drafts card, when Show drafts is off', () => {
@@ -213,6 +289,21 @@ describe('dashboard store', () => {
             await pending;
 
             expect(api.setDashboardShowDrafts).toHaveBeenCalledWith(false);
+        });
+
+        it('persists author picks, and All toggles back to the viewer', async () => {
+            const api = stubApi(state({ snapshot: snapshot({ open: [pr({ author: 'bob' })] }) }));
+            const store = useDashboardStore();
+            await store.load();
+
+            await store.toggleAuthorSelected('bob');
+            expect(api.setDashboardAuthors).toHaveBeenLastCalledWith(['me', 'bob']);
+            expect(store.authors).toEqual(['me', 'bob']);
+
+            await store.toggleAllAuthors();
+            expect(store.authors).toBe('all');
+            await store.toggleAllAuthors();
+            expect(store.authors).toBe('me');
         });
 
         it('swallows a rejection when no repository is open', async () => {

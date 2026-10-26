@@ -191,16 +191,24 @@ export async function setWindowState(state: WindowState): Promise<void> {
     store.set('windowState', state);
 }
 
+// Whose PRs the dashboard cards count: 'me' is the signed in gh account (kept
+// symbolic so it follows an account switch), 'all' is every author, and a list
+// names specific logins. Mirrored in src/shared/types.ts; keep the two in sync.
+export type AuthorFilter = 'me' | 'all' | string[];
+
 // GitHub notification preferences. `enabled` is the master switch (on by default,
 // users can opt out); `events` holds one toggle per event kind; `dockBadge` shows
 // the review request count on the dock icon; `showDrafts` includes draft PRs in
-// the dashboard and in notifications. Stored values are merged over the defaults,
+// the dashboard and in notifications; `dashboardAuthors` picks whose PRs the
+// dashboard cards count (it does not affect notifications). Stored values are
+// merged over the defaults,
 // so an event kind added later starts at its default instead of off.
 export interface NotificationPrefs {
     enabled: boolean;
     events: Record<DashboardEventKind, boolean>;
     dockBadge: boolean;
     showDrafts: boolean;
+    dashboardAuthors: AuthorFilter;
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -217,6 +225,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
     },
     dockBadge: true,
     showDrafts: true,
+    dashboardAuthors: 'me',
 };
 
 export async function getNotificationPrefs(): Promise<NotificationPrefs> {

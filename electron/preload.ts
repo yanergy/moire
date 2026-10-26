@@ -109,6 +109,7 @@ contextBridge.exposeInMainWorld('api', {
     refreshDashboard: () => ipcRenderer.invoke('dashboard:refresh'),
     setDashboardShowDrafts: (show: boolean) =>
         ipcRenderer.invoke('dashboard:set-show-drafts', show),
+    setDashboardAuthors: (authors: unknown) => ipcRenderer.invoke('dashboard:set-authors', authors),
     onDashboardChanged: (callback: (state: unknown) => void) => {
         const listener = (_event: IpcRendererEvent, state: unknown) => callback(state);
         ipcRenderer.on('dashboard:changed', listener);

@@ -16,7 +16,7 @@ import {
     type SnapshotResult,
 } from './github/notifications';
 import type { PrStatus } from './github/gh';
-import type { NotificationPrefs, NotifierRepoState } from './settings';
+import type { AuthorFilter, NotificationPrefs, NotifierRepoState } from './settings';
 
 export const POLL_INTERVAL_MS = 2 * 60 * 1000;
 
@@ -40,11 +40,12 @@ export interface NotifierView {
     activity: ActivityEntry[];
 }
 
-// What the renderer's dashboard receives: the view plus the "Show drafts" toggle,
-// which the dashboard applies to its lists. Mirrored as DashboardState in
-// src/shared/types.ts; keep the two in sync.
+// What the renderer's dashboard receives: the view plus the "Show drafts" toggle
+// and the author filter, which the dashboard applies to its cards. Mirrored as
+// DashboardState in src/shared/types.ts; keep the two in sync.
 export interface DashboardState extends NotifierView {
     showDrafts: boolean;
+    authors: AuthorFilter;
 }
 
 export interface NotifierDeps {

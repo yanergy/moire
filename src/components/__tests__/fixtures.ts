@@ -106,6 +106,7 @@ export function dashboardState(overrides: Partial<DashboardState> = {}): Dashboa
         snapshot: dashboardSnapshot(),
         activity: [],
         showDrafts: true,
+        authors: 'me',
         ...overrides,
     };
 }
