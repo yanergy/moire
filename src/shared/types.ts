@@ -432,4 +432,8 @@ export interface MoireApi {
     // Fired by View → Dashboard and the summary notification, to switch the main
     // area to the dashboard. Returns an unsubscribe function.
     onShowDashboard(cb: () => void): () => void;
+    // Fired when a PR notification is clicked, with the PR to open in the PR view
+    // (or on GitHub when its branches are not available). Returns an unsubscribe
+    // function.
+    onOpenPr(cb: (pr: DashboardPr) => void): () => void;
 }

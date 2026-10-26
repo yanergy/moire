@@ -114,6 +114,13 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('dashboard:changed', listener);
         return () => ipcRenderer.removeListener('dashboard:changed', listener);
     },
+    // Fired when a PR notification is clicked, with the PR to open. Returns an
+    // unsubscribe function.
+    onOpenPr: (callback: (pr: unknown) => void) => {
+        const listener = (_event: IpcRendererEvent, pr: unknown) => callback(pr);
+        ipcRenderer.on('dashboard:open-pr', listener);
+        return () => ipcRenderer.removeListener('dashboard:open-pr', listener);
+    },
     // Fired by View → Dashboard and the summary notification, to switch the main
     // area to the dashboard. Returns an unsubscribe function.
     onShowDashboard: (callback: () => void) => {

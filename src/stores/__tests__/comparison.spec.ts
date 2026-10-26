@@ -51,6 +51,24 @@ function seededStore() {
     return store;
 }
 
+function branchStore() {
+    window.api = {
+        getChangedFiles: vi.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+        getPullRequest: vi
+            .fn<() => Promise<unknown>>()
+            .mockResolvedValue({ status: 'no-pr', pr: null }),
+    } as unknown as Window['api'];
+    const store = useComparisonStore();
+    store.repoPath = '/repo';
+    store.branches = [
+        { name: 'main', kind: 'local' },
+        { name: 'feat/local', kind: 'local' },
+        { name: 'upstream/feat/remote', kind: 'remote' },
+        { name: 'origin/feat/remote', kind: 'remote' },
+    ];
+    return store;
+}
+
 describe('comparison store', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
@@ -1019,6 +1037,51 @@ describe('comparison store', () => {
 
         afterEach(() => {
             delete window.api;
+        });
+
+        it('looks a remote tracking head up by its branch name, without the remote', async () => {
+            const { store, getPullRequest } = prStore({ status: 'ok', pr: PR });
+            store.branches = [
+                { name: 'main', kind: 'local' },
+                { name: 'origin/feat/x', kind: 'remote' },
+            ];
+            store.head = 'origin/feat/x';
+            await store.loadPullRequest();
+
+            expect(getPullRequest).toHaveBeenLastCalledWith('main', 'feat/x');
+        });
+
+        it('keeps a local branch name as is, even with a slash in it', async () => {
+            const { store, getPullRequest } = prStore({ status: 'ok', pr: PR });
+            store.branches = [
+                { name: 'origin/x', kind: 'local' },
+                { name: 'origin/x', kind: 'remote' },
+            ];
+            store.head = 'origin/x';
+            await store.loadPullRequest();
+
+            expect(getPullRequest).toHaveBeenLastCalledWith('main', 'origin/x');
+        });
+
+        describe('selectPullRequestRange', () => {
+            it('prefers the local branch, then the origin tracking branch', () => {
+                const store = branchStore();
+
+                expect(store.selectPullRequestRange('main', 'feat/local')).toBe(true);
+                expect([store.base, store.head]).toEqual(['main', 'feat/local']);
+
+                expect(store.selectPullRequestRange('main', 'feat/remote')).toBe(true);
+                expect(store.head).toBe('origin/feat/remote');
+            });
+
+            it('leaves the range alone when a branch is not available', () => {
+                const store = branchStore();
+                store.base = 'main';
+                store.head = 'feat/local';
+
+                expect(store.selectPullRequestRange('main', 'feat/missing')).toBe(false);
+                expect([store.base, store.head]).toEqual(['main', 'feat/local']);
+            });
         });
 
         it('detects a PR and flags hasPullRequest', async () => {

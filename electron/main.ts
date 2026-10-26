@@ -95,8 +95,10 @@ const notifier = new Notifier({
     saveState: setNotifierState,
     notify: showNotification,
     setBadge: (count) => app.dock?.setBadge(count > 0 ? String(count) : ''),
-    // Opening the PR inside Moiré lands with the dashboard; until then, GitHub.
-    onOpenPr: (pr) => void shell.openExternal(pr.url),
+    // The renderer opens it in the PR view, or on GitHub when it cannot.
+    onOpenPr: (pr) => {
+        void revealWindow().then((win) => win.webContents.send('dashboard:open-pr', pr));
+    },
     onOpenDashboard: () => void showDashboard(),
     // Keep an open dashboard current after every poll.
     onChange: () => {

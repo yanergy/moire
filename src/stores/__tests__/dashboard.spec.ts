@@ -1,6 +1,8 @@
 import { setActivePinia, createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { groupOf, isReadyToMerge, useDashboardStore } from '@/stores/dashboard';
+import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
 import type { DashboardPr, DashboardSnapshot, DashboardState } from '@/shared/types';
 
 function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
@@ -78,6 +80,18 @@ function stubApi(result: DashboardState = state()) {
     };
     window.api = api as unknown as Window['api'];
     return api;
+}
+
+function openApi() {
+    const openExternal = vi.fn<(url: string) => Promise<void>>().mockResolvedValue(undefined);
+    window.api = {
+        openExternal,
+        getChangedFiles: vi.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+        getPullRequest: vi
+            .fn<() => Promise<unknown>>()
+            .mockResolvedValue({ status: 'no-pr', pr: null }),
+    } as unknown as Window['api'];
+    return openExternal;
 }
 
 describe('dashboard store', () => {
@@ -250,6 +264,39 @@ describe('dashboard store', () => {
             const store = useDashboardStore();
             await expect(store.load()).resolves.toBeUndefined();
             await expect(store.refresh()).resolves.toBeUndefined();
+        });
+    });
+
+    describe('openPr', () => {
+        it('selects the PR range and switches to the PR view', () => {
+            openApi();
+            const comparison = useComparisonStore();
+            comparison.repoPath = '/repo';
+            comparison.branches = [
+                { name: 'main', kind: 'local' },
+                { name: 'origin/feat/x', kind: 'remote' },
+            ];
+
+            useDashboardStore().openPr(pr());
+
+            expect([comparison.base, comparison.head]).toEqual(['main', 'origin/feat/x']);
+            expect(useUiStore().mainView).toBe('pr');
+        });
+
+        it('opens a fork PR, or one with unavailable branches, on GitHub', () => {
+            const openExternal = openApi();
+            const comparison = useComparisonStore();
+            comparison.branches = [
+                { name: 'main', kind: 'local' },
+                { name: 'feat/x', kind: 'local' },
+            ];
+            const store = useDashboardStore();
+
+            store.openPr(pr({ isCrossRepository: true }));
+            store.openPr(pr({ headRefName: 'feat/missing' }));
+
+            expect(openExternal).toHaveBeenCalledTimes(2);
+            expect(useUiStore().mainView).toBe('diff');
         });
     });
 });

@@ -2,7 +2,13 @@ import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import type { CodeStyle, DashboardState, DiffLayout, ThemeState } from '@/shared/types';
+import type {
+    CodeStyle,
+    DashboardPr,
+    DashboardState,
+    DiffLayout,
+    ThemeState,
+} from '@/shared/types';
 
 // monaco-env pulls Vite `?worker` modules that can't resolve under vitest (the
 // monaco-editor alias mangles their paths), so stub the worker wiring. The theme
@@ -30,6 +36,7 @@ function stubApi() {
         diffLayout: vi.fn<Unsub>(),
         dashboard: vi.fn<Unsub>(),
         showDashboard: vi.fn<Unsub>(),
+        openPr: vi.fn<Unsub>(),
     };
     const api = {
         getTheme: vi.fn<() => Promise<ThemeState>>().mockResolvedValue({
@@ -55,6 +62,7 @@ function stubApi() {
             () => unsub.dashboard
         ),
         onShowDashboard: vi.fn<(cb: () => void) => Unsub>(() => unsub.showDashboard),
+        onOpenPr: vi.fn<(cb: (pr: DashboardPr) => void) => Unsub>(() => unsub.openPr),
     };
     window.api = api as unknown as Window['api'];
     return { api, unsub };
@@ -152,6 +160,21 @@ describe('App', () => {
         expect(unsub.diffLayout).toHaveBeenCalledTimes(1);
         expect(unsub.dashboard).toHaveBeenCalledTimes(1);
         expect(unsub.showDashboard).toHaveBeenCalledTimes(1);
+        expect(unsub.openPr).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens the PR from a clicked notification through the dashboard store', async () => {
+        const { api } = stubApi();
+        const comparison = useComparisonStore();
+        vi.spyOn(comparison, 'restoreLastRepo').mockResolvedValue(undefined);
+        const openPr = vi.spyOn(useDashboardStore(), 'openPr').mockImplementation(() => {});
+
+        mountApp();
+        await flushPromises();
+
+        const pr = { number: 5 } as DashboardPr;
+        api.onOpenPr.mock.calls[0]![0](pr);
+        expect(openPr).toHaveBeenCalledWith(pr);
     });
 
     it('switches to the dashboard when main asks for it', async () => {

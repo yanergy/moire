@@ -1,5 +1,7 @@
 import { computed, ref } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
+import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
 import type {
     ActivityEntry,
     DashboardPr,
@@ -62,6 +64,22 @@ export function groupOf(pr: DashboardPr): DashboardGroupKey {
 
 function plural(count: number, one: string, many: string): string {
     return `${count} ${count === 1 ? one : many}`;
+}
+
+// Open a PR in Moiré's PR view by selecting its base and head as the range.
+// A PR from a fork, or one whose branches are not available locally or as
+// remote tracking branches, opens on GitHub instead.
+function openPr(pr: DashboardPr) {
+    const comparison = useComparisonStore();
+    if (
+        !pr.isCrossRepository &&
+        comparison.selectPullRequestRange(pr.baseRefName, pr.headRefName)
+    ) {
+        useUiStore().setMainView('pr');
+        return;
+    }
+
+    void window.api?.openExternal(pr.url);
 }
 
 // The GitHub dashboard for the repository open in Moiré. The data is owned by the
@@ -175,6 +193,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         load,
         refresh,
         setShowDrafts,
+        openPr,
     };
 });
 

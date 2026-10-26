@@ -71,6 +71,7 @@ describe('preload bridge', () => {
             'setDashboardShowDrafts',
             'onDashboardChanged',
             'onShowDashboard',
+            'onOpenPr',
         ]) {
             expect(typeof api()[method]).toBe('function');
         }

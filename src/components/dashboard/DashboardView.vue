@@ -76,7 +76,7 @@ const updated = computed(() =>
 );
 
 function openPr(pr: DashboardPr) {
-    void window.api?.openExternal(pr.url);
+    dashboard.openPr(pr);
 }
 
 // An activity entry only carries the PR's number; open the full PR when it is

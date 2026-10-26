@@ -235,9 +235,12 @@ Following `documentation/code-conventions.md`:
 - GitHub keeps sending its own email and mobile notifications. Moiré cannot turn those off.
 - macOS notification permission must be verified on the packaged release build, not only in
   dev, because code signing affects whether notifications show.
-- To check during implementation: the existing PR lookup passes the head branch name to
-  `gh pr list --head`, so selecting a remote tracking branch (`origin/<head>`) must strip the
-  remote prefix for the PR view to find the PR.
+- Clicking a notification while the main window is closed reopens it, but the repository's
+  branches may not be loaded yet when the PR arrives, in which case the PR opens on GitHub.
+
+Resolved during implementation: the PR lookup used to pass a remote tracking head
+(`origin/<head>`) to `gh pr list --head` unchanged, so it never found the PR. It now drops the
+remote prefix for remote tracking branches.
 
 ## Decisions
 
