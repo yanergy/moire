@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { CircleCheck, CircleDot, CircleX } from '@lucide/vue';
-import { ciVisual, dashboardNotice, prDotClass } from '@/lib/dashboard';
-import type { DashboardPr } from '@/shared/types';
+import {
+    activityDotClass,
+    activityLabel,
+    ciVisual,
+    dashboardNotice,
+    prDotClass,
+} from '@/lib/dashboard';
+import type { ActivityEntry, DashboardPr } from '@/shared/types';
 
 function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
     return {
@@ -30,6 +36,17 @@ function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
     };
 }
 
+function entry(overrides: Partial<ActivityEntry>): ActivityEntry {
+    return {
+        kind: 'approved',
+        at: '2026-10-26T12:00:00Z',
+        number: 1,
+        title: 'Add notifications',
+        url: 'https://github.com/o/r/pull/1',
+        ...overrides,
+    };
+}
+
 describe('prDotClass', () => {
     it('colors a PR by its state, changes requested over open', () => {
         expect(prDotClass(pr())).toBe('bg-moire-pr-open');
@@ -50,6 +67,30 @@ describe('ciVisual', () => {
         });
         expect(ciVisual(pr({ ci: 'failing' }))?.label).toBe('Checks failed');
         expect(ciVisual(pr({ ci: 'none' }))).toBeNull();
+    });
+});
+
+describe('activityLabel', () => {
+    it('words each kind, with the actor and checks where known', () => {
+        expect(activityLabel(entry({ kind: 'review-requested' }))).toBe('Review requested');
+        expect(activityLabel(entry({ kind: 'changes-requested', actor: 'ann' }))).toBe(
+            'ann requested changes'
+        );
+        expect(activityLabel(entry({ kind: 'checks-failed', checks: ['lint'] }))).toBe(
+            'Checks failed: lint'
+        );
+        expect(activityLabel(entry({ kind: 'merged-by-other', actor: 'bob' }))).toBe(
+            'Merged by bob'
+        );
+        expect(activityLabel(entry({ kind: 'closed-unmerged' }))).toBe('Closed without merge');
+    });
+});
+
+describe('activityDotClass', () => {
+    it('colors good news green and trouble red', () => {
+        expect(activityDotClass(entry({ kind: 'approved' }))).toBe('bg-moire-pr-open');
+        expect(activityDotClass(entry({ kind: 'checks-failed' }))).toBe('bg-moire-pr-closed');
+        expect(activityDotClass(entry({ kind: 'review-requested' }))).toBe('bg-moire-accent');
     });
 });
 

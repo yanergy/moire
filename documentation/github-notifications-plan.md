@@ -99,7 +99,9 @@ button and the menu item are not available. When the repository has no GitHub re
 missing or not signed in, the dashboard shows the reason using the existing `PrStatus` style
 messages.
 
-The recent activity list is still recorded by the notifier but not shown on the dashboard.
+Below the cards, a **Notifications** list shows every notification sent for the repository (the
+recent activity list, newest first, up to 50), each with what happened, the PR, and how long ago.
+Clicking one opens its PR.
 
 ### Dock badge
 

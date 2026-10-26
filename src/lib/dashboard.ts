@@ -1,9 +1,10 @@
 // Presentation helpers for the GitHub dashboard: the status dot and CI icon of a
-// PR row, and the notice shown when the dashboard cannot load. Kept out of the components so they stay unit-testable.
+// PR row, the wording and dot of a notification row, and the notice shown when
+// the dashboard cannot load. Kept out of the components so they stay unit-testable.
 
 import type { Component } from 'vue';
 import { CircleCheck, CircleDot, CircleX } from '@lucide/vue';
-import type { DashboardPr, PrStatus } from '@/shared/types';
+import type { ActivityEntry, DashboardEventKind, DashboardPr, PrStatus } from '@/shared/types';
 
 // The status dot before a PR row, in the toolbar PR button's colors: gray draft,
 // purple merged, red closed, yellow changes requested, green open.
@@ -34,6 +35,50 @@ export function ciVisual(pr: DashboardPr): { icon: Component; cls: string; label
         default:
             return null;
     }
+}
+
+// What a notification said, for its row in the dashboard's notification list.
+// Restates the notification titles in electron/notifier.ts (describeEvent); keep
+// the wording in step.
+export function activityLabel(entry: ActivityEntry): string {
+    switch (entry.kind) {
+        case 'review-requested':
+            return 'Review requested';
+        case 'changes-requested':
+            return entry.actor ? `${entry.actor} requested changes` : 'Changes requested';
+        case 'closed-unmerged':
+            return 'Closed without merge';
+        case 'checks-failed':
+            return entry.checks?.length
+                ? `Checks failed: ${entry.checks.join(', ')}`
+                : 'Checks failed';
+        case 'approved':
+            return 'Approved';
+        case 'merge-conflict':
+            return 'Merge conflict';
+        case 'ready-to-merge':
+            return 'Ready to merge';
+        case 'merged-by-other':
+            return entry.actor ? `Merged by ${entry.actor}` : 'Merged';
+    }
+}
+
+// The dot before a notification row, in the colors the overview cards use for the
+// same kind of thing: blue review, orange changes, green good news, red trouble,
+// purple merged.
+const ACTIVITY_DOTS: Record<DashboardEventKind, string> = {
+    'review-requested': 'bg-moire-accent',
+    'changes-requested': 'bg-moire-changes-fg',
+    'closed-unmerged': 'bg-moire-pr-closed',
+    'checks-failed': 'bg-moire-pr-closed',
+    approved: 'bg-moire-pr-open',
+    'merge-conflict': 'bg-moire-pr-closed',
+    'ready-to-merge': 'bg-moire-pr-open',
+    'merged-by-other': 'bg-moire-pr-merged',
+};
+
+export function activityDotClass(entry: ActivityEntry): string {
+    return ACTIVITY_DOTS[entry.kind];
 }
 
 // Why the dashboard has no (fresh) data, as a title and a hint. Null when the

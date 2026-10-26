@@ -5,6 +5,7 @@ import { nextTick } from 'vue';
 import DashboardView from '@/components/dashboard/DashboardView.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
 import DashboardCard from '@/components/dashboard/DashboardCard.vue';
+import DashboardNotificationRow from '@/components/dashboard/DashboardNotificationRow.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useDashboardStore } from '@/stores/dashboard';
 import type { DashboardState } from '@/shared/types';
@@ -64,6 +65,40 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('2 open by you in o/r');
         expect(wrapper.text()).toContain('Updated 5m ago');
         expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
+    });
+
+    it('lists the sent notifications under the cards, newest first', async () => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                activity: [
+                    {
+                        kind: 'checks-failed',
+                        checks: ['lint'],
+                        at: '2026-10-26T12:00:00Z',
+                        number: 2,
+                        title: 'Second',
+                        url: 'https://github.com/o/r/pull/2',
+                    },
+                    {
+                        kind: 'review-requested',
+                        at: '2026-10-26T11:00:00Z',
+                        number: 1,
+                        title: 'First',
+                        url: 'https://github.com/o/r/pull/1',
+                    },
+                ],
+            })
+        );
+
+        expect(wrapper.text()).toContain('Notifications');
+        const rows = wrapper.findAllComponents(DashboardNotificationRow);
+        expect(rows.map((row) => row.props('entry').number)).toEqual([2, 1]);
+        expect(rows[0]!.text()).toContain('Checks failed: lint');
+    });
+
+    it('says when no notifications were sent yet', async () => {
+        const { wrapper } = await mountView(dashboardState());
+        expect(wrapper.text()).toContain('No notifications for this repository yet.');
     });
 
     it("lists a card's PRs when it is clicked, and goes back to the overview", async () => {

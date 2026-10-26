@@ -20,6 +20,7 @@ import {
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import DashboardCard from '@/components/dashboard/DashboardCard.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
+import DashboardNotificationRow from '@/components/dashboard/DashboardNotificationRow.vue';
 
 // A quick overview of the open repository's pull requests: a grid of cards, each
 // counting one kind of PR (needs your review, changes requested, ...). Clicking a
@@ -250,19 +251,47 @@ const updated = computed(() =>
                     </div>
                 </div>
 
-                <!-- The overview grid. Fills as many columns as fit, four at full
-                     width. -->
-                <div
-                    v-else-if="dashboard.snapshot"
-                    class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5 pt-6"
-                >
-                    <dashboard-card
-                        v-for="category in dashboard.categories"
-                        :key="category.key"
-                        :category="category"
-                        @open="selectedKey = category.key"
-                    />
-                </div>
+                <!-- The overview: the card grid (as many columns as fit, four at
+                     full width), then every notification sent for this repository. -->
+                <template v-else-if="dashboard.snapshot">
+                    <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5 pt-6">
+                        <dashboard-card
+                            v-for="category in dashboard.categories"
+                            :key="category.key"
+                            :category="category"
+                            @open="selectedKey = category.key"
+                        />
+                    </div>
+
+                    <section class="pt-8">
+                        <h2
+                            class="mb-2 flex items-center gap-2 text-[13px] font-semibold text-moire-fg"
+                        >
+                            Notifications
+                            <span
+                                v-if="dashboard.activity.length"
+                                class="rounded-full bg-moire-chrome px-1.5 text-[11px] font-medium text-moire-muted"
+                            >
+                                {{ dashboard.activity.length }}
+                            </span>
+                        </h2>
+                        <div
+                            v-if="dashboard.activity.length"
+                            class="divide-y divide-moire-border overflow-hidden rounded-lg border border-moire-border"
+                        >
+                            <dashboard-notification-row
+                                v-for="(entry, i) in dashboard.activity"
+                                :key="`${entry.at}-${entry.kind}-${entry.number}-${i}`"
+                                :entry="entry"
+                                :now="now"
+                                @open="dashboard.openActivity"
+                            />
+                        </div>
+                        <p v-else class="py-4 text-[13px] text-moire-muted">
+                            No notifications for this repository yet.
+                        </p>
+                    </section>
+                </template>
             </div>
         </ScrollArea>
     </div>

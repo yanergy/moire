@@ -339,6 +339,32 @@ describe('dashboard store', () => {
             expect(useUiStore().mainView).toBe('pr');
         });
 
+        it("opens a notification's PR when the snapshot has it, else its GitHub page", () => {
+            const openExternal = openApi();
+            const comparison = useComparisonStore();
+            comparison.repoPath = '/repo';
+            comparison.branches = [
+                { name: 'main', kind: 'local' },
+                { name: 'feat/x', kind: 'local' },
+            ];
+            const store = useDashboardStore();
+            store.applyState(state({ snapshot: snapshot({ mine: [pr({ number: 5 })] }) }));
+            const entry = {
+                kind: 'approved' as const,
+                at: '2026-10-26T12:00:00Z',
+                number: 5,
+                title: 'Add notifications',
+                url: 'https://github.com/o/r/pull/5',
+            };
+
+            store.openActivity(entry);
+            expect(useUiStore().mainView).toBe('pr');
+            expect(openExternal).not.toHaveBeenCalled();
+
+            store.openActivity({ ...entry, number: 99, url: 'https://github.com/o/r/pull/99' });
+            expect(openExternal).toHaveBeenCalledWith('https://github.com/o/r/pull/99');
+        });
+
         it('opens a fork PR, or one with unavailable branches, on GitHub', () => {
             const openExternal = openApi();
             const comparison = useComparisonStore();

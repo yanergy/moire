@@ -200,6 +200,20 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return filter.length === 1 ? filter[0]! : `${filter.length} users`;
     });
 
+    // A notification only carries its PR's number; open the full PR when the
+    // snapshot still has it, otherwise its GitHub page.
+    function openActivity(entry: ActivityEntry) {
+        const snap = snapshot.value;
+        const pr = [...(snap?.toReview ?? []), ...(snap?.mine ?? []), ...(snap?.open ?? [])].find(
+            (candidate) => candidate.number === entry.number
+        );
+        if (pr) {
+            openPr(pr);
+        } else {
+            void window.api?.openExternal(entry.url);
+        }
+    }
+
     function visible(prs: DashboardPr[]): DashboardPr[] {
         return showDrafts.value ? prs : prs.filter((pr) => !pr.isDraft);
     }
@@ -316,6 +330,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         toggleAuthorSelected,
         toggleAllAuthors,
         openPr,
+        openActivity,
     };
 });
 
