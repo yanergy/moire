@@ -102,6 +102,18 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('menu:open-recent', listener);
         return () => ipcRenderer.removeListener('menu:open-recent', listener);
     },
+    // The GitHub dashboard for the open repository, backed by the notifier in the
+    // main process. `onDashboardChanged` fires after every background poll and
+    // returns an unsubscribe function.
+    getDashboard: () => ipcRenderer.invoke('dashboard:get'),
+    refreshDashboard: () => ipcRenderer.invoke('dashboard:refresh'),
+    setDashboardShowDrafts: (show: boolean) =>
+        ipcRenderer.invoke('dashboard:set-show-drafts', show),
+    onDashboardChanged: (callback: (state: unknown) => void) => {
+        const listener = (_event: IpcRendererEvent, state: unknown) => callback(state);
+        ipcRenderer.on('dashboard:changed', listener);
+        return () => ipcRenderer.removeListener('dashboard:changed', listener);
+    },
     // Fired when the RepoWatcher (main process) sees the open repo's refs or
     // working tree change, so the renderer can auto-refresh. Returns an
     // unsubscribe function so the caller can drop the listener.

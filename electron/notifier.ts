@@ -40,6 +40,13 @@ export interface NotifierView {
     activity: ActivityEntry[];
 }
 
+// What the renderer's dashboard receives: the view plus the "Show drafts" toggle,
+// which the dashboard applies to its lists. Mirrored as DashboardState in
+// src/shared/types.ts; keep the two in sync.
+export interface DashboardState extends NotifierView {
+    showDrafts: boolean;
+}
+
 export interface NotifierDeps {
     getRepoIdentity: (repoPath: string) => Promise<RepoIdentityResult>;
     fetchSnapshot: (repoPath: string, repo: string, now: Date) => Promise<SnapshotResult>;

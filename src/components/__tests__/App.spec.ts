@@ -2,7 +2,7 @@ import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import type { CodeStyle, DiffLayout, ThemeState } from '@/shared/types';
+import type { CodeStyle, DashboardState, DiffLayout, ThemeState } from '@/shared/types';
 
 // monaco-env pulls Vite `?worker` modules that can't resolve under vitest (the
 // monaco-editor alias mangles their paths), so stub the worker wiring. The theme
@@ -12,6 +12,7 @@ vi.mock('@/lib/monaco-env', () => ({ setupMonacoEnv: vi.fn<() => void>() }));
 import App from '@/App.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
+import { useDashboardStore } from '@/stores/dashboard';
 
 type Unsub = () => void;
 
@@ -27,6 +28,7 @@ function stubApi() {
         flourishes: vi.fn<Unsub>(),
         codeStyle: vi.fn<Unsub>(),
         diffLayout: vi.fn<Unsub>(),
+        dashboard: vi.fn<Unsub>(),
     };
     const api = {
         getTheme: vi.fn<() => Promise<ThemeState>>().mockResolvedValue({
@@ -47,6 +49,9 @@ function stubApi() {
         getDiffLayout: vi.fn<() => Promise<DiffLayout>>().mockResolvedValue('single'),
         onDiffLayoutChanged: vi.fn<(cb: (layout: DiffLayout) => void) => Unsub>(
             () => unsub.diffLayout
+        ),
+        onDashboardChanged: vi.fn<(cb: (state: DashboardState) => void) => Unsub>(
+            () => unsub.dashboard
         ),
     };
     window.api = api as unknown as Window['api'];
@@ -143,6 +148,26 @@ describe('App', () => {
         expect(unsub.flourishes).toHaveBeenCalledTimes(1);
         expect(unsub.codeStyle).toHaveBeenCalledTimes(1);
         expect(unsub.diffLayout).toHaveBeenCalledTimes(1);
+        expect(unsub.dashboard).toHaveBeenCalledTimes(1);
+    });
+
+    it('applies dashboard updates pushed by the main process', async () => {
+        const { api } = stubApi();
+        const comparison = useComparisonStore();
+        vi.spyOn(comparison, 'restoreLastRepo').mockResolvedValue(undefined);
+        const applyState = vi.spyOn(useDashboardStore(), 'applyState');
+
+        mountApp();
+        await flushPromises();
+
+        const state: DashboardState = {
+            status: 'ok',
+            snapshot: null,
+            activity: [],
+            showDrafts: false,
+        };
+        api.onDashboardChanged.mock.calls[0]![0](state);
+        expect(applyState).toHaveBeenCalledWith(state);
     });
 
     it('does not touch the bridge when window.api is absent', async () => {

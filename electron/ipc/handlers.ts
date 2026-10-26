@@ -32,6 +32,18 @@ import {
 import { detectEditors, openWithEditor } from '../editors';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
+import type { DashboardState } from '../notifier';
+
+// The dashboard's data comes from the Notifier, which main.ts owns; main hands
+// these in so the handlers stay free of polling and Electron notification code.
+export interface DashboardBridge {
+    // The current state; fetches first when nothing has been fetched yet, so the
+    // dashboard has data even while background notifications are off.
+    get: () => Promise<DashboardState>;
+    // Poll now, then return the new state.
+    refresh: () => Promise<DashboardState>;
+    setShowDrafts: (show: boolean) => Promise<DashboardState>;
+}
 
 // ipcMain.handle that logs a handler rejection before it propagates. A git
 // operation that fails (a bad ref, a repo that moved) otherwise surfaces only as
@@ -98,7 +110,12 @@ async function isGitAvailable(
 function registerIpcHandlers({
     onRecentsChanged,
     onRepoOpened,
-}: { onRecentsChanged?: () => void; onRepoOpened?: (repoPath: string) => void } = {}): void {
+    dashboard,
+}: {
+    onRecentsChanged?: () => void;
+    onRepoOpened?: (repoPath: string) => void;
+    dashboard?: DashboardBridge;
+} = {}): void {
     handle('dialog:open-repo', async () => {
         const result = await dialog.showOpenDialog({
             title: 'Open repository',
@@ -162,6 +179,21 @@ function registerIpcHandlers({
     // The diff layout (single-file vs stacked all-files). Read on launch; the
     // View → Diff Layout menu pushes later changes via 'diff-layout:changed'.
     handle('diff-layout:get', () => getDiffLayout());
+
+    // The GitHub dashboard for the open repository (see electron/notifier.ts). Only
+    // reachable with a repository open; main pushes later updates via
+    // 'dashboard:changed'.
+    function requireDashboard(): DashboardBridge {
+        requireRepo();
+        if (!dashboard) {
+            throw new Error('The dashboard is not available.');
+        }
+        return dashboard;
+    }
+
+    handle('dashboard:get', () => requireDashboard().get());
+    handle('dashboard:refresh', () => requireDashboard().refresh());
+    handle('dashboard:set-show-drafts', (show: boolean) => requireDashboard().setShowDrafts(show));
 
     // Git-backed channels. Each operates on the currently open repo and has a
     // matching method in the preload bridge and an entry in MoireApi.

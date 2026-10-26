@@ -23,6 +23,11 @@ const state = vi.hoisted(() => ({
     logError: vi.fn<(context: string, error: unknown) => void>(),
     onRecentsChanged: vi.fn<() => void>(),
     onRepoOpened: vi.fn<(repoPath: string) => void>(),
+    dashboard: {
+        get: vi.fn<() => Promise<unknown>>(),
+        refresh: vi.fn<() => Promise<unknown>>(),
+        setShowDrafts: vi.fn<(show: boolean) => Promise<unknown>>(),
+    },
     getPullRequest: vi.fn<(repoPath: string, base: string, head: string) => Promise<unknown>>(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
     openPath: vi.fn<(p: string) => Promise<string>>(),
@@ -117,6 +122,7 @@ describe('registerIpcHandlers', () => {
         mod.registerIpcHandlers({
             onRecentsChanged: state.onRecentsChanged,
             onRepoOpened: state.onRepoOpened,
+            dashboard: state.dashboard as never,
         });
     });
 
@@ -138,6 +144,9 @@ describe('registerIpcHandlers', () => {
             'gh:pull-request',
             'shell:open-external',
             'shell:open-path',
+            'dashboard:get',
+            'dashboard:refresh',
+            'dashboard:set-show-drafts',
         ]) {
             expect(state.handlers.has(channel)).toBe(true);
         }
@@ -216,6 +225,24 @@ describe('registerIpcHandlers', () => {
 
         expect(state.getPullRequest).toHaveBeenCalledWith('/repos/moire', 'main', 'feature');
         expect(result).toBe(prResult);
+    });
+
+    it('rejects the dashboard channels before any repo is opened', async () => {
+        await expect(invoke('dashboard:get')).rejects.toThrow('No repository is open');
+        expect(state.dashboard.get).not.toHaveBeenCalled();
+    });
+
+    it('forwards the dashboard channels to the bridge once a repo is open', async () => {
+        await invoke('repo:open', '/repos/moire');
+        const dashboardState = { status: 'ok', snapshot: null, activity: [], showDrafts: true };
+        state.dashboard.get.mockResolvedValue(dashboardState);
+        state.dashboard.refresh.mockResolvedValue(dashboardState);
+        state.dashboard.setShowDrafts.mockResolvedValue(dashboardState);
+
+        expect(await invoke('dashboard:get')).toBe(dashboardState);
+        expect(await invoke('dashboard:refresh')).toBe(dashboardState);
+        expect(await invoke('dashboard:set-show-drafts', false)).toBe(dashboardState);
+        expect(state.dashboard.setShowDrafts).toHaveBeenCalledWith(false);
     });
 
     it('rejects the PR lookup before any repo is opened', async () => {

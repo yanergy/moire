@@ -66,6 +66,10 @@ describe('preload bridge', () => {
             'onMenuOpenRepo',
             'onMenuOpenRecent',
             'onRepoChanged',
+            'getDashboard',
+            'refreshDashboard',
+            'setDashboardShowDrafts',
+            'onDashboardChanged',
         ]) {
             expect(typeof api()[method]).toBe('function');
         }
@@ -104,6 +108,15 @@ describe('preload bridge', () => {
 
         await api().openFile!('src/a.ts');
         expect(bridge.invoke).toHaveBeenCalledWith('shell:open-path', 'src/a.ts');
+
+        await api().getDashboard!();
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:get');
+
+        await api().refreshDashboard!();
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:refresh');
+
+        await api().setDashboardShowDrafts!(false);
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:set-show-drafts', false);
     });
 
     it('subscribes and returns an unsubscribe that removes the same listener', () => {
@@ -125,5 +138,15 @@ describe('preload bridge', () => {
         listener({}, '/repos/x'); // (event, path)
 
         expect(cb).toHaveBeenCalledWith('/repos/x');
+    });
+
+    it('delivers dashboard updates to the callback', () => {
+        const cb = vi.fn<(state: unknown) => void>();
+        api().onDashboardChanged!(cb);
+
+        const listener = bridge.on.mock.calls.find((c) => c[0] === 'dashboard:changed')![1];
+        listener({}, { status: 'ok' });
+
+        expect(cb).toHaveBeenCalledWith({ status: 'ok' });
     });
 });

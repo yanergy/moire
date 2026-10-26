@@ -11,7 +11,7 @@ import path from 'node:path';
 import { registerIpcHandlers, isGitAvailable, getCurrentRepoPath } from './ipc/handlers';
 import { getAccounts, switchAccount } from './github/gh';
 import { fetchSnapshot, getRepoIdentity } from './github/notifications';
-import { Notifier, type NotificationContent } from './notifier';
+import { Notifier, type DashboardState, type NotificationContent } from './notifier';
 import { stopWatchingRepo } from './watcher/RepoWatcher';
 import { installAppMenu } from './menu';
 import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
@@ -88,8 +88,21 @@ const notifier = new Notifier({
     // Opening the PR inside Moiré lands with the dashboard; until then, GitHub.
     onOpenPr: (pr) => void shell.openExternal(pr.url),
     onOpenDashboard: () => void revealWindow(),
+    // Keep an open dashboard current after every poll.
+    onChange: () => {
+        void dashboardState().then((state) => {
+            for (const win of BrowserWindow.getAllWindows()) {
+                win.webContents.send('dashboard:changed', state);
+            }
+        });
+    },
     logError,
 });
+
+async function dashboardState(): Promise<DashboardState> {
+    const { showDrafts } = await getNotificationPrefs();
+    return { ...notifier.getView(), showDrafts };
+}
 
 async function createWindow(): Promise<void> {
     // Reopen at the last session's size/position (off-screen positions dropped).
@@ -255,6 +268,24 @@ app.whenReady().then(async () => {
     registerIpcHandlers({
         onRecentsChanged: () => void buildMenu(),
         onRepoOpened: (repoPath) => void notifier.setRepo(repoPath),
+        dashboard: {
+            get: async () => {
+                if (!notifier.getView().snapshot) {
+                    await notifier.poll();
+                }
+                return dashboardState();
+            },
+            refresh: async () => {
+                await notifier.poll();
+                return dashboardState();
+            },
+            // The badge also follows this toggle, so restart to recount it.
+            setShowDrafts: async (show) => {
+                await setNotificationPrefs({ showDrafts: show });
+                await notifier.restart();
+                return dashboardState();
+            },
+        },
     });
     // Catch up right after the Mac wakes instead of waiting for the next tick.
     powerMonitor.on('resume', () => notifier.onResume());

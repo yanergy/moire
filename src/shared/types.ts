@@ -244,6 +244,91 @@ export interface UpdateCheckResult {
     message?: string;
 }
 
+// --- GitHub dashboard ---
+//
+// Mirrors electron/github/notifications.ts and electron/notifier.ts (the process
+// split forbids importing across it); keep the two in sync. The dashboard covers
+// the repository open in Moiré and the active gh account only.
+
+// The overall CI state of a PR's head commit. 'none' means no checks ran.
+export type CiState = 'passing' | 'failing' | 'pending' | 'none';
+
+export type DashboardEventKind =
+    | 'review-requested'
+    | 'changes-requested'
+    | 'closed-unmerged'
+    | 'checks-failed'
+    | 'approved'
+    | 'merge-conflict'
+    | 'ready-to-merge'
+    | 'merged-by-other';
+
+// One reviewer's current stance on a PR (their latest review).
+export interface DashboardReview {
+    id: string;
+    author: string;
+    state: string;
+}
+
+export interface DashboardPr {
+    id: string;
+    number: number;
+    title: string;
+    url: string;
+    author: string;
+    isDraft: boolean;
+    state: 'OPEN' | 'CLOSED' | 'MERGED';
+    mergedBy: string;
+    baseRefName: string;
+    headRefName: string;
+    // A PR from a fork, whose head branch is not on this repository's remote.
+    isCrossRepository: boolean;
+    createdAt: string;
+    updatedAt: string;
+    closedAt: string;
+    additions: number;
+    deletions: number;
+    mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
+    reviewDecision: string; // '' | APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED
+    ci: CiState;
+    failedChecks: string[];
+    reviews: DashboardReview[];
+}
+
+export interface DashboardSnapshot {
+    login: string;
+    repo: string; // owner/name
+    fetchedAt: string;
+    // Open PRs that request the viewer's review personally.
+    toReview: DashboardPr[];
+    // The viewer's open PRs plus those closed in the last 7 days.
+    mine: DashboardPr[];
+    failureNotified: string[];
+}
+
+// One delivered notification, newest first in DashboardState.activity.
+export interface ActivityEntry {
+    kind: DashboardEventKind;
+    at: string;
+    number: number;
+    title: string;
+    url: string;
+    actor?: string;
+    checks?: string[];
+}
+
+// The dashboard for the open repository. `status` explains a missing or stale
+// snapshot (no gh, not signed in, no GitHub remote, ...); `snapshot` stays the
+// last good fetch when a later one fails. `showDrafts` is the dashboard's
+// "Show drafts" toggle, which also applies to notifications.
+export interface DashboardState {
+    status: PrStatus;
+    message?: string;
+    snapshot: DashboardSnapshot | null;
+    activity: ActivityEntry[];
+    showDrafts: boolean;
+}
+
 // Preload API surface, exposed on window.api once the git backend lands.
 export interface MoireApi {
     openRepoDialog(): Promise<string | null>;
@@ -335,4 +420,13 @@ export interface MoireApi {
     // Fired when a native File → Open Recent entry is chosen, with its path.
     // Returns an unsubscribe function.
     onMenuOpenRecent(cb: (path: string) => void): () => void;
+    // The GitHub dashboard for the open repository. `getDashboard` returns the
+    // current state (fetching first if nothing was fetched yet); `refreshDashboard`
+    // polls GitHub now; `setDashboardShowDrafts` persists the "Show drafts" toggle.
+    // All three reject when no repository is open. `onDashboardChanged` fires after
+    // every background poll, and returns an unsubscribe function.
+    getDashboard(): Promise<DashboardState>;
+    refreshDashboard(): Promise<DashboardState>;
+    setDashboardShowDrafts(show: boolean): Promise<DashboardState>;
+    onDashboardChanged(cb: (state: DashboardState) => void): () => void;
 }
