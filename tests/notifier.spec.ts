@@ -118,7 +118,7 @@ describe('Notifier', () => {
         vi.useRealTimers();
     });
 
-    it('stores the first poll as a silent baseline and sets the badge', async () => {
+    it('stores the first poll as a silent baseline, with an empty badge', async () => {
         const t = setup();
         t.respond(snapshot({ toReview: [request(5), request(6)] }));
 
@@ -131,7 +131,7 @@ describe('Notifier', () => {
         );
         expect(t.deps.notify).not.toHaveBeenCalled();
         expect(t.store.has('me|o/r')).toBe(true);
-        expect(t.deps.setBadge).toHaveBeenLastCalledWith(2);
+        expect(t.deps.setBadge).toHaveBeenLastCalledWith(0);
         expect(t.notifier.getView()).toMatchObject({ status: 'ok', activity: [] });
         t.notifier.stop();
     });
@@ -187,7 +187,7 @@ describe('Notifier', () => {
         t.notifier.stop();
     });
 
-    it('drops draft events and leaves drafts out of the badge when drafts are hidden', async () => {
+    it('drops draft events, and so leaves them out of the badge, when drafts are hidden', async () => {
         const t = setup({ showDrafts: false });
         t.respond(snapshot(), snapshot({ toReview: [request(5, { isDraft: true }), request(6)] }));
 
@@ -280,9 +280,10 @@ describe('Notifier', () => {
 
     it('clears the badge when the dock badge is off', async () => {
         const t = setup({ dockBadge: false });
-        t.respond(snapshot({ toReview: [request(5)] }));
+        t.respond(snapshot(), snapshot({ toReview: [request(5)] }));
 
         await t.notifier.setRepo('/repo');
+        await t.notifier.poll();
 
         expect(t.deps.setBadge).toHaveBeenLastCalledWith(0);
         t.notifier.stop();
@@ -372,15 +373,18 @@ describe('Notifier', () => {
             expect(t.notifier.getView().activity.map((e) => !!e.read)).toEqual([true, false]);
             const saved = t.store.get('me|o/r') as { activity: { read?: boolean }[] };
             expect(saved.activity.map((e) => !!e.read)).toEqual([true, false]);
+            expect(t.deps.setBadge).toHaveBeenLastCalledWith(1);
             t.notifier.stop();
         });
 
-        it('marks every notification read', async () => {
+        it('marks every notification read, clearing the badge', async () => {
             const { t } = await withActivity();
+            expect(t.deps.setBadge).toHaveBeenLastCalledWith(2);
 
             await t.notifier.markAllActivityRead();
 
             expect(t.notifier.getView().activity.every((e) => e.read)).toBe(true);
+            expect(t.deps.setBadge).toHaveBeenLastCalledWith(0);
             t.notifier.stop();
         });
 
@@ -390,6 +394,7 @@ describe('Notifier', () => {
             await t.notifier.deleteActivity(ids[1]!);
 
             expect(t.notifier.getView().activity.map((e) => e.number)).toEqual([5]);
+            expect(t.deps.setBadge).toHaveBeenLastCalledWith(1);
             t.notifier.stop();
         });
 

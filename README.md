@@ -109,8 +109,8 @@ the popup never appears.
    (this week or this month, under **Display > Merged**), and drafts. Click a card to list its PRs, then a PR to open it (or its **Open in browser** button
    to open it on GitHub). The cards count your own PRs; under **Display > Users**
    you can pick other authors, or **All**. The notifications you were sent are listed below the
-   cards. The count on the toolbar button is the number of unread notifications; the dock icon
-   shows the number of PRs waiting for your review. Moiré checks
+   cards. The count on the toolbar button and on the dock icon is the number of unread
+   notifications. Moiré checks
    GitHub every two minutes and sends a notification when something changes. Click a PR to open
    it in the PR view. Choose which events notify you under **Git > Notifications**.
 

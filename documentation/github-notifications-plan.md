@@ -116,8 +116,9 @@ notifier state.
 
 ### Dock badge
 
-The dock icon shows the number of PRs in the open repository waiting for your review, and is
-cleared when there are none or no repository is open. macOS only (`app.dock.setBadge`). It has its
+The dock icon shows the number of unread notifications for the open repository, the same count
+as the toolbar's dashboard button. Marking notifications read (or deleting them) lowers it, and it
+is cleared when there are none or no repository is open. macOS only (`app.dock.setBadge`). It has its
 own toggle in the Git → Notifications menu and follows the master switch.
 
 ### Opening a PR
@@ -276,4 +277,4 @@ remote prefix for remote tracking branches.
   notifications.
 - **Dashboard placement**: a third main view inside the main window, next to the diff and PR
   views. Not a separate window. It is a quick overview, so it stays compact.
-- **Dock badge**: yes, counting review requests in the open repository, with its own toggle.
+- **Dock badge**: yes, counting the unread notifications for the open repository, with its own toggle.

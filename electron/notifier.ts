@@ -251,6 +251,7 @@ export class Notifier {
             await this.deps.saveState(key, { ...saved, activity });
             if (key === this.stateKey) {
                 this.setView({ ...this.view, activity });
+                this.updateBadge(activity, await this.deps.getPrefs());
             }
         });
     }
@@ -298,7 +299,7 @@ export class Notifier {
             }
 
             this.stateKey = key;
-            this.updateBadge(state.snapshot, prefs);
+            this.updateBadge(state.activity, prefs);
             this.setView({ status: 'ok', snapshot: state.snapshot, activity: state.activity });
         } catch (error) {
             this.deps.logError('notifier poll', error);
@@ -369,14 +370,14 @@ export class Notifier {
         }
     }
 
-    private updateBadge(snapshot: DashboardSnapshot, prefs: NotificationPrefs): void {
+    // The dock badge counts the unread notifications, like the toolbar button.
+    private updateBadge(activity: ActivityEntry[], prefs: NotificationPrefs): void {
         if (!prefs.enabled || !prefs.dockBadge) {
             this.deps.setBadge(0);
             return;
         }
 
-        const count = snapshot.toReview.filter((pr) => prefs.showDrafts || !pr.isDraft).length;
-        this.deps.setBadge(count);
+        this.deps.setBadge(activity.filter((entry) => !entry.read).length);
     }
 
     private setView(view: NotifierView): void {
