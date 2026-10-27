@@ -239,10 +239,27 @@ Track bugs and limitations here.
   listing it in System Settings, Notifications. The log shows `notification: ... (UNErrorDomain
   error 1.)`. The dashboard list, the toolbar count and the dock badge still work. The packaged
   build (`npm run pack`) shows them.
+- **The sidebar header overflows when the change set is large (issue
+  [#13](https://github.com/yanergy/moire/issues/13)).** With a three digit file count, the
+  "Changed files" label, the count badge, the Filter button, the collapse button, and the "viewed"
+  counter no longer fit the sidebar width, so the viewed counter runs past the sidebar edge and
+  overlaps the diff header.
 
 ## Planned features
 
-Everything on the original roadmap has shipped. New ideas are tracked as open issues on GitHub.
+Everything on the original roadmap has shipped. These are the next features on the list:
+
+- **Branch recommendations in the branch picker.** A "Recommended" section at the top of each
+  picker, above the full branch list. For the base that is `origin/development` (falling back to
+  the default branch when it does not exist), and for the head it is the branch currently checked
+  out.
+- **Favorite branches.** Star a branch from the picker to pin it. Starred branches show a small star
+  and are always listed in a "Favorites" group at the top (below the recommendations), in both the
+  base and the head picker. Favorites are remembered per repository.
+- **Full code reviews from within the app.** Mirror GitHub's review flow: place inline comments on a
+  line or a range of lines in the diff (including suggested changes), collect them as a pending
+  review, and submit the review as Comment, Approve, or Request changes with an overall summary.
+  Pending comments stay visible and editable until the review is submitted or discarded.
 
 Possible expansions of the GitHub notifications and dashboard, not planned yet:
 
