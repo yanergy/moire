@@ -307,35 +307,6 @@ describe('dashboard store', () => {
         expect(store.categories.map((c) => c.key)).toContain('stale');
     });
 
-    // Debug only, with lib/test-notifications.ts.
-    it('adds hardcoded test notifications that stay local, and takes them away', async () => {
-        const markRead = vi
-            .fn<(id: string) => Promise<DashboardState>>()
-            .mockResolvedValue(state());
-        window.api = { markDashboardNotificationRead: markRead } as unknown as Window['api'];
-        const store = useDashboardStore();
-        store.applyState(state());
-
-        store.toggleTestNotifications();
-        expect(store.testMode).toBe(true);
-        expect(store.unreadCount).toBe(6);
-        expect(store.categories.filter((c) => c.unread > 0).map((c) => c.key)).toEqual([
-            'review',
-            'changes',
-            'ready',
-            'failing',
-            'merged',
-        ]);
-
-        await store.markRead(store.activity[0]!);
-        expect(markRead).not.toHaveBeenCalled();
-        expect(store.unreadCount).toBe(5);
-
-        store.toggleTestNotifications();
-        expect(store.activity).toEqual([]);
-        expect(store.categories.every((c) => c.prs.length === 0)).toBe(true);
-    });
-
     it('counts the PRs merged this week or this month, by the author filter', () => {
         const merged = (number: number, closedAt: string, author = 'me') =>
             pr({ id: `M${number}`, number, author, state: 'MERGED', closedAt });

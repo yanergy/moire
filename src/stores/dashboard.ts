@@ -3,7 +3,6 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { activityId } from '@/lib/dashboard';
-import { testNotifications, type TestNotifications } from '@/lib/test-notifications';
 import type {
     ActivityEntry,
     AuthorFilter,
@@ -131,31 +130,8 @@ function openPr(pr: DashboardPr) {
 export const useDashboardStore = defineStore('dashboard', () => {
     const status = ref<PrStatus>('ok');
     const message = ref<string | undefined>();
-    // What main last sent. `snapshot` and `activity` below add the test set to it
-    // while that is on.
-    const fetchedSnapshot = ref<DashboardSnapshot | null>(null);
-    const fetchedActivity = ref<ActivityEntry[]>([]);
-    // Debug only (dev builds): the hardcoded test notifications, kept in the
-    // renderer and never sent to main. Null while off.
-    const testSet = ref<TestNotifications | null>(null);
-    const testMode = computed(() => testSet.value !== null);
-
-    const snapshot = computed<DashboardSnapshot | null>(() => {
-        const fetched = fetchedSnapshot.value;
-        const test = testSet.value;
-        if (!test || !fetched) {
-            return fetched;
-        }
-        return {
-            ...fetched,
-            toReview: [...test.toReview, ...fetched.toReview],
-            mine: [...test.mine, ...fetched.mine],
-            open: [...test.mine.filter((pr) => pr.state === 'OPEN'), ...(fetched.open ?? [])],
-            merged: [...test.merged, ...(fetched.merged ?? [])],
-        };
-    });
-
-    const activity = computed(() => [...(testSet.value?.activity ?? []), ...fetchedActivity.value]);
+    const snapshot = ref<DashboardSnapshot | null>(null);
+    const activity = ref<ActivityEntry[]>([]);
     const showDrafts = ref(true);
     const authors = ref<AuthorFilter>('me');
     // The overview cards turned off in the Display menu, by key.
@@ -167,8 +143,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     function applyState(state: DashboardState) {
         status.value = state.status;
         message.value = state.message;
-        fetchedSnapshot.value = state.snapshot;
-        fetchedActivity.value = state.activity;
+        snapshot.value = state.snapshot;
+        activity.value = state.activity;
         showDrafts.value = state.showDrafts;
         authors.value = state.authors ?? 'me';
         hiddenCards.value = state.hiddenCards ?? [];
@@ -269,28 +245,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return filter.length === 1 ? filter[0]! : `${filter.length} users`;
     });
 
-    // Debug only: add the test notifications, or take them away again.
-    function toggleTestNotifications() {
-        const fetched = fetchedSnapshot.value;
-        testSet.value = testSet.value
-            ? null
-            : testNotifications(fetched?.login ?? 'you', fetched?.repo ?? 'owner/repo', Date.now());
-    }
-
     // The notification list's actions: change the list right away, then persist
     // through main, whose answer replaces it. A failed call keeps the local
-    // change until the next update from main. Test notifications only change
-    // locally (`call` is null for one of them).
+    // change until the next update from main.
     function editActivity(
         change: (list: ActivityEntry[]) => ActivityEntry[],
-        call: ((api: NonNullable<Window['api']>) => Promise<DashboardState>) | null
+        call: (api: NonNullable<Window['api']>) => Promise<DashboardState>
     ) {
-        fetchedActivity.value = change(fetchedActivity.value);
-        if (testSet.value) {
-            testSet.value = { ...testSet.value, activity: change(testSet.value.activity) };
-        }
+        activity.value = change(activity.value);
         const api = window.api;
-        if (!api || !call) {
+        if (!api) {
             return Promise.resolve();
         }
         let pending: Promise<DashboardState>;
@@ -304,15 +268,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     const unreadCount = computed(() => activity.value.filter((entry) => !entry.read).length);
 
-    function isTest(id: string): boolean {
-        return testSet.value?.activity.some((entry) => activityId(entry) === id) ?? false;
-    }
-
     function markRead(entry: ActivityEntry) {
         const id = activityId(entry);
         return editActivity(
             (list) => list.map((e) => (activityId(e) === id ? { ...e, read: true } : e)),
-            isTest(id) ? null : (api) => api.markDashboardNotificationRead(id)
+            (api) => api.markDashboardNotificationRead(id)
         );
     }
 
@@ -327,7 +287,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         const id = activityId(entry);
         return editActivity(
             (list) => list.filter((e) => activityId(e) !== id),
-            isTest(id) ? null : (api) => api.deleteDashboardNotification(id)
+            (api) => api.deleteDashboardNotification(id)
         );
     }
 
@@ -512,8 +472,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
         hiddenCards,
         cardOptions,
         toggleCard,
-        testMode,
-        toggleTestNotifications,
         knownAuthors,
         authorsLabel,
         loading,

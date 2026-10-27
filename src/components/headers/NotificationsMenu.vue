@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue';
-import { Bell, CheckCheck, FlaskConical } from '@lucide/vue';
+import { Bell, CheckCheck } from '@lucide/vue';
 import { useDashboardStore } from '@/stores/dashboard';
 import { activityId } from '@/lib/dashboard';
 import type { ActivityEntry } from '@/shared/types';
@@ -13,9 +13,6 @@ import NotificationRow from '@/components/headers/NotificationRow.vue';
 // repository (newest first), with mark read, delete and mark all read. The data
 // is the dashboard store's, which mirrors the notifier in the main process.
 const dashboard = useDashboardStore();
-
-// Debug only: the test notifications button shows in dev builds.
-const isDev = import.meta.env.DEV;
 
 const open = ref(false);
 
@@ -75,18 +72,6 @@ function openEntry(entry: ActivityEntry) {
             <div class="flex items-center gap-2 border-b border-moire-border py-2 pr-2 pl-3">
                 <h2 class="text-[13px] font-semibold text-moire-fg">Notifications</h2>
                 <div class="flex-1" />
-                <!-- Debug only, dev builds: hardcoded notifications to check the
-                     menu and the card dots (see lib/test-notifications.ts). -->
-                <Button
-                    v-if="isDev"
-                    variant="ghost"
-                    size="sm"
-                    class="h-7 gap-1.5 px-2 text-moire-warn hover:bg-moire-hover"
-                    @click="dashboard.toggleTestNotifications()"
-                >
-                    <FlaskConical :size="16" />
-                    {{ dashboard.testMode ? 'Remove test' : 'Add test' }}
-                </Button>
                 <Button
                     v-if="dashboard.unreadCount"
                     variant="ghost"

@@ -224,9 +224,6 @@ Track bugs and limitations here.
   context, is still reported as not installed. The effective PATH is logged on every launch, so
   Help, Open Log File is the first place to look.
 
-- **`npm run build` fails with `Task not found: "build-only"`.** The script calls a
-  `build-only` script that `package.json` does not define. `npm run pack` is unaffected, since it
-  runs `vite build` directly.
 - **GitHub notifications only arrive while Moiré is running.** Closing the window keeps the app
   running on macOS, quitting does not. They cover only the repository that is open, and only the
   active `gh` account.
