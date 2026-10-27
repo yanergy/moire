@@ -171,6 +171,8 @@ last branch range are remembered per repository.
 ## Development
 
 ```bash
+npm run dev           # start Vite and the Electron window with hot reload
+npm run pack          # build the renderer and package the app into release/
 npm run test:unit     # run the Vitest suite
 npm run type-check    # vue-tsc project type check
 npm run lint          # oxlint with autofix
