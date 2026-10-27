@@ -239,11 +239,11 @@ Track bugs and limitations here.
   listing it in System Settings, Notifications. The log shows `notification: ... (UNErrorDomain
   error 1.)`. The dashboard list, the toolbar count and the dock badge still work. The packaged
   build (`npm run pack`) shows them.
-- **The sidebar header overflows when the change set is large (issue
-  [#13](https://github.com/yanergy/moire/issues/13)).** With a three digit file count, the
+- **The sidebar header text overflows when the sidebar gets too narrow (issue
+  [#13](https://github.com/yanergy/moire/issues/13)).** Below a certain sidebar width, the
   "Changed files" label, the count badge, the Filter button, the collapse button, and the "viewed"
-  counter no longer fit the sidebar width, so the viewed counter runs past the sidebar edge and
-  overlaps the diff header.
+  counter no longer fit, so the viewed counter runs past the sidebar edge and overlaps the diff
+  header.
 
 ## Planned features
 
