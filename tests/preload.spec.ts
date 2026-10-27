@@ -48,6 +48,8 @@ describe('preload bridge', () => {
             'removeRecentRepo',
             'getBranchSelection',
             'setBranchSelection',
+            'getFavoriteBranches',
+            'setFavoriteBranches',
             'getBranches',
             'getChangedFiles',
             'getFilePair',

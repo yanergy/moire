@@ -367,6 +367,12 @@ describe('comparison store', () => {
                 setBranchSelection: vi
                     .fn<(path: string, base: string, head: string) => Promise<void>>()
                     .mockResolvedValue(undefined),
+                getFavoriteBranches: vi
+                    .fn<(path: string) => Promise<string[]>>()
+                    .mockResolvedValue([]),
+                setFavoriteBranches: vi
+                    .fn<(path: string, names: string[]) => Promise<void>>()
+                    .mockResolvedValue(undefined),
                 getBranches: vi.fn<() => Promise<BranchInfo[]>>().mockResolvedValue(BRANCHES),
                 getChangedFiles: vi
                     .fn<(base: string, head: string, mode: CompareMode) => Promise<ChangedFile[]>>()
@@ -793,6 +799,47 @@ describe('comparison store', () => {
                 'develop',
                 'main'
             );
+        });
+
+        it('loads the favorites of the opened repo and persists a toggle', async () => {
+            const api = stubApi({
+                getFavoriteBranches: vi
+                    .fn<(path: string) => Promise<string[]>>()
+                    .mockResolvedValue(['develop']),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(api.getFavoriteBranches).toHaveBeenCalledWith('/repos/moire');
+            expect(store.favoriteBranches).toEqual(['develop']);
+            expect(store.isFavorite('develop')).toBe(true);
+
+            store.toggleFavorite('main');
+            expect(store.favoriteBranches).toEqual(['develop', 'main']);
+            expect(api.setFavoriteBranches).toHaveBeenLastCalledWith('/repos/moire', [
+                'develop',
+                'main',
+            ]);
+
+            store.toggleFavorite('develop');
+            expect(store.favoriteBranches).toEqual(['main']);
+            expect(api.setFavoriteBranches).toHaveBeenLastCalledWith('/repos/moire', ['main']);
+        });
+
+        it('does not carry favorites over to another repo', async () => {
+            const api = stubApi({
+                getFavoriteBranches: vi
+                    .fn<(path: string) => Promise<string[]>>()
+                    .mockImplementation((path) =>
+                        Promise.resolve(path === '/repos/moire' ? ['develop'] : [])
+                    ),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.favoriteBranches).toEqual(['develop']);
+
+            await store.openRecent('/work/api-service');
+            expect(api.getFavoriteBranches).toHaveBeenLastCalledWith('/work/api-service');
+            expect(store.favoriteBranches).toEqual([]);
         });
 
         it('restores a remembered base and head that still exist', async () => {

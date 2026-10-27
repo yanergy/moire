@@ -33,6 +33,14 @@ const toggleAllButton = () =>
 const recommendedHeading = () =>
     document.querySelector('[data-slot="command-group-heading"]')?.textContent?.trim();
 
+const headingTexts = () =>
+    [...document.querySelectorAll('[data-slot="command-group-heading"]')].map((el) =>
+        el.textContent?.trim()
+    );
+
+const starButton = (fullName: string) =>
+    commandItem(fullName)?.querySelector('[data-slot="ref-favorite"]') as HTMLElement | null;
+
 const itemTitles = () =>
     [...document.querySelectorAll('[data-slot="command-item"] span[title]')].map((el) =>
         el.getAttribute('title')
@@ -214,5 +222,67 @@ describe('RefSelector', () => {
         await flushPromises();
         expect(commandItem('develop')?.classList.contains('hidden')).toBe(false);
         expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+    });
+
+    it('stars a branch into a Favorites group below the recommendations', async () => {
+        const wrapper = mountSide('base');
+        const store = useComparisonStore();
+        await open(wrapper);
+
+        expect(headingTexts()).toEqual(['Recommended']);
+        starButton('feat/monaco-spike')?.click();
+        await flushPromises();
+
+        // Starring does not pick the row or close the popover.
+        expect(store.base).toBe('main');
+        expect(commandInput()).not.toBeNull();
+        expect(store.favoriteBranches).toEqual(['feat/monaco-spike']);
+
+        // The favorite shows its full name under a static heading after the
+        // recommendations, and leaves its prefix group so it is listed once.
+        expect(headingTexts()).toEqual(['Recommended', 'Favorites']);
+        expect(itemTitles().slice(0, 3)).toEqual(['origin/main', 'main', 'feat/monaco-spike']);
+        expect(commandItem('feat/monaco-spike')?.textContent).toContain('feat/monaco-spike');
+        expect(itemTitles().filter((title) => title === 'feat/monaco-spike')).toHaveLength(1);
+        expect(starButton('feat/monaco-spike')?.getAttribute('aria-pressed')).toBe('true');
+
+        starButton('feat/monaco-spike')?.click();
+        await flushPromises();
+        expect(store.favoriteBranches).toEqual([]);
+        expect(headingTexts()).toEqual(['Recommended']);
+    });
+
+    it('lists the same favorites in the head picker', async () => {
+        const store = useComparisonStore();
+        store.favoriteBranches = ['develop'];
+        const wrapper = mountSide('head');
+        await open(wrapper);
+
+        expect(headingTexts()).toEqual(['Recommended', 'Favorites']);
+        expect(itemTitles().slice(0, 3)).toEqual(['WORKING TREE', 'main', 'develop']);
+        // The working tree is not a branch, so it cannot be starred.
+        expect(starButton('WORKING TREE')).toBeNull();
+    });
+
+    it('keeps a starred recommendation in the recommendations and skips deleted favorites', async () => {
+        const store = useComparisonStore();
+        store.favoriteBranches = ['main', 'feature/gone'];
+        const wrapper = mountSide('base');
+        await open(wrapper);
+
+        expect(headingTexts()).toEqual(['Recommended']);
+        expect(starButton('main')?.getAttribute('aria-pressed')).toBe('true');
+        expect(itemTitles()).not.toContain('feature/gone');
+    });
+
+    it('keeps the favorites visible when every group is collapsed', async () => {
+        const store = useComparisonStore();
+        store.favoriteBranches = ['develop'];
+        const wrapper = mountSide('base');
+        await open(wrapper);
+
+        toggleAllButton()?.click();
+        await flushPromises();
+        expect(commandItem('develop')?.classList.contains('hidden')).toBe(false);
     });
 });

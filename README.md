@@ -85,7 +85,8 @@ the popup never appears.
    The swap button between them flips the two. Each picker opens with a **Recommended** section at
    the top. For the base that is `origin/development` (when it exists), the remote's default
    branch, and the checked-out branch. For the head it is the working tree and the checked-out
-   branch.
+   branch. Click the star on any branch row to add it to a **Favorites** group listed below the
+   recommendations in both pickers.
 3. **Choose how to compare.** Toggle between:
     - **merge-base**: compares head to the point where it branched off base, showing only the changes
       head introduces. This matches what a GitHub pull request shows.
@@ -142,6 +143,10 @@ last branch range are remembered per repository.
 - Rename detection, binary-file notices, and inline image previews.
 - A large-file gate so oversized files never freeze the UI.
 - Searchable branch pickers that group branches by prefix and recommend a likely base and head.
+- Favorite branches. Star a branch in either picker to pin it in a "Favorites" group below the
+  recommendations, in both the base and the head picker. A starred branch that is already
+  recommended keeps its place there, so no branch is listed twice. Favorites are remembered per
+  repository.
 - Recent-repository list and a native folder picker.
 - Auto-refresh when the working tree changes, plus a manual refresh.
 - System, light, and dark themes, with theme and branch selections persisted per repository.
@@ -253,9 +258,6 @@ Track bugs and limitations here.
 
 Everything on the original roadmap has shipped. These are the next features on the list:
 
-- **Favorite branches.** Star a branch from the picker to pin it. Starred branches show a small star
-  and are always listed in a "Favorites" group at the top (below the recommendations), in both the
-  base and the head picker. Favorites are remembered per repository.
 - **Full code reviews from within the app.** Mirror GitHub's review flow: place inline comments on a
   line or a range of lines in the diff (including suggested changes), collect them as a pending
   review, and submit the review as Comment, Approve, or Request changes with an overall summary.

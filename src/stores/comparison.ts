@@ -218,6 +218,10 @@ export const useComparisonStore = defineStore('comparison', () => {
     // ref or dismisses it.
     const disappearedBranches = ref<string[]>([]);
 
+    // Branches starred in the ref pickers, remembered per repo. Kept in starring
+    // order; a name whose branch was deleted stays stored but is not listed.
+    const favoriteBranches = ref<string[]>([]);
+
     const selectedPath = ref('');
     const viewed = ref<Record<string, boolean>>({});
     const treeFilter = ref('');
@@ -1186,6 +1190,27 @@ export const useComparisonStore = defineStore('comparison', () => {
         void loadChangedFiles();
     }
 
+    function isFavorite(name: string): boolean {
+        return favoriteBranches.value.includes(name);
+    }
+
+    function toggleFavorite(name: string) {
+        favoriteBranches.value = isFavorite(name)
+            ? favoriteBranches.value.filter((entry) => entry !== name)
+            : [...favoriteBranches.value, name];
+
+        if (!repoPath.value) {
+            return;
+        }
+
+        // A copy, since a reactive proxy cannot be cloned across IPC.
+        void window.api?.setFavoriteBranches?.(repoPath.value, [...favoriteBranches.value]);
+    }
+
+    async function loadFavoriteBranches() {
+        favoriteBranches.value = (await window.api?.getFavoriteBranches?.(repoPath.value)) ?? [];
+    }
+
     function dismissMissingBranches() {
         disappearedBranches.value = [];
     }
@@ -1226,6 +1251,7 @@ export const useComparisonStore = defineStore('comparison', () => {
     function resetViewState() {
         viewed.value = {};
         collapsed.value = {};
+        favoriteBranches.value = [];
         treeFilter.value = '';
         clearFilters();
         selectedPath.value = '';
@@ -1312,6 +1338,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         // collapsed folders, or filter text from the previously open one.
         resetViewState();
         recentRepos.value = await api.getRecentRepos();
+        await loadFavoriteBranches();
         await loadBranches();
         return true;
     }
@@ -1471,6 +1498,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         head,
         compareMode,
         disappearedBranches,
+        favoriteBranches,
         selectedPath,
         viewed,
         treeFilter,
@@ -1546,6 +1574,8 @@ export const useComparisonStore = defineStore('comparison', () => {
         setHead,
         setCompareMode,
         dismissMissingBranches,
+        isFavorite,
+        toggleFavorite,
         swap,
         loadRecentRepos,
         removeRecent,
