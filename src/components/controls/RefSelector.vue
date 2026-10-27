@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import type { BranchInfo } from '@/shared/types';
-import { WORKING_TREE } from '@/shared/types';
+import { recommendedBase, recommendedHead } from '@/lib/branch-recommendations';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -64,8 +64,9 @@ interface RefGroup {
     label: string;
     items: RefItem[];
     // A pinned group renders its rows at the top with no collapsible header, for
-    // the working tree and the checked-out branch (the two most-picked refs).
+    // the recommendations. A pinned group with a heading shows it as a static label.
     pinned?: boolean;
+    heading?: string;
 }
 
 // Group branches by their path prefix so a long flat list stays scannable:
@@ -80,8 +81,8 @@ function groupByPrefix(list: BranchInfo[], topLabel: string): RefGroup[] {
         const item: RefItem = {
             name: branch.name,
             label: slash === -1 ? branch.name : branch.name.slice(slash + 1),
-            // No per-branch note here: the working-tree and current-branch rows
-            // are the only annotated ones, and both are special-cased in `groups`.
+            // No per-branch note here: the annotated refs are the recommendations,
+            // which are special-cased in `groups`.
             meta: '',
         };
         if (slash === -1) {
@@ -120,31 +121,25 @@ function groupByPrefix(list: BranchInfo[], topLabel: string): RefGroup[] {
 const groups = computed<RefGroup[]>(() => {
     const result: RefGroup[] = [];
 
-    // The working tree and the checked-out branch are the two most-picked refs, so
-    // they sit at the very top as plain rows (pinned: no collapsible header). The
-    // current branch shows its full name and is dropped from "Local branches"
-    // below so it never appears twice.
-    if (props.side === 'head') {
+    // The recommendations show their full names and are dropped from the lists
+    // below so none appears twice.
+    const recommended =
+        props.side === 'base'
+            ? recommendedBase(comparison.branches)
+            : recommendedHead(comparison.branches);
+    if (recommended.length > 0) {
         result.push({
-            label: 'Uncommitted',
+            label: 'Recommended',
+            heading: 'Recommended',
             pinned: true,
-            items: [{ name: WORKING_TREE, label: WORKING_TREE, meta: 'on disk' }],
+            items: recommended.map((r) => ({ name: r.name, label: r.name, meta: r.meta })),
         });
     }
 
-    const currentBranch = comparison.localBranches.find((b) => b.isCurrent);
-    if (currentBranch) {
-        result.push({
-            label: 'Current',
-            pinned: true,
-            // The "current" note makes clear why this row is pinned to the top.
-            items: [{ name: currentBranch.name, label: currentBranch.name, meta: 'current' }],
-        });
-    }
-
-    const locals = comparison.localBranches.filter((b) => !b.isCurrent);
-    result.push(...groupByPrefix(locals, 'Local branches'));
-    result.push(...groupByPrefix(comparison.remoteBranches, 'Remotes'));
+    const rest = (list: BranchInfo[]) =>
+        list.filter((b) => !recommended.some((r) => r.name === b.name));
+    result.push(...groupByPrefix(rest(comparison.localBranches), 'Local branches'));
+    result.push(...groupByPrefix(rest(comparison.remoteBranches), 'Remotes'));
 
     return result;
 });
@@ -242,7 +237,12 @@ function pick(name: string) {
                 </div>
                 <CommandList class="max-h-[322px]">
                     <CommandEmpty class="text-moire-faint">No refs found.</CommandEmpty>
-                    <CommandGroup v-for="group in groups" :key="group.label">
+                    <CommandGroup
+                        v-for="group in groups"
+                        :key="group.label"
+                        :heading="group.heading"
+                        class="**:data-[slot=command-group-heading]:text-moire-faint"
+                    >
                         <button
                             v-if="!group.pinned"
                             type="button"

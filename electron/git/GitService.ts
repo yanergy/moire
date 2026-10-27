@@ -28,6 +28,7 @@ interface BranchInfo {
     name: string;
     kind: 'local' | 'remote';
     isCurrent?: boolean;
+    isDefault?: boolean;
 }
 
 interface FilePair {
@@ -213,10 +214,22 @@ class GitService {
             return info;
         });
 
+        // The symbolic `origin/HEAD -> origin/main` pointer is not a branch of its
+        // own, but its target is the remote's default branch, so flag that one.
+        const defaultRemote = remote.all
+            .find((name) => name.startsWith('origin/HEAD -> '))
+            ?.slice('origin/HEAD -> '.length);
+
         const remotes: BranchInfo[] = remote.all
-            // Drop the symbolic `origin/HEAD -> origin/main` pointer.
             .filter((name) => !name.includes(' -> ') && !name.endsWith('/HEAD'))
-            .map((name) => ({ name, kind: 'remote' }));
+            .map((name) => {
+                const info: BranchInfo = { name, kind: 'remote' };
+                if (name === defaultRemote) {
+                    info.isDefault = true;
+                }
+
+                return info;
+            });
 
         return [...locals, ...remotes];
     }

@@ -30,8 +30,13 @@ const commandItem = (fullName: string) =>
 const toggleAllButton = () =>
     document.querySelector('[aria-label$="all groups"]') as HTMLElement | null;
 
-const firstItemTitle = () =>
-    document.querySelector('[data-slot="command-item"] span[title]')?.getAttribute('title');
+const recommendedHeading = () =>
+    document.querySelector('[data-slot="command-group-heading"]')?.textContent?.trim();
+
+const itemTitles = () =>
+    [...document.querySelectorAll('[data-slot="command-item"] span[title]')].map((el) =>
+        el.getAttribute('title')
+    );
 
 describe('RefSelector', () => {
     let pinia: Pinia;
@@ -77,28 +82,48 @@ describe('RefSelector', () => {
         expect(label?.textContent).toBe('monaco-spike');
     });
 
-    it('pins the checked-out branch as a plain top row, listed once', async () => {
+    it('recommends the default and current branches on the base side, listed once', async () => {
         const wrapper = mountSide('base');
         await open(wrapper);
 
-        // main is isCurrent in the fixture: it is the first row, with no group
-        // heading of its own, but carries a "current" note so its pinning is clear.
-        expect(headings()).not.toContain('Current');
-        expect(firstItemTitle()).toBe('main');
+        // The fixture has no origin/development and no origin/HEAD, so the default
+        // branch falls back to origin/main. Both sit under a static heading, not
+        // a collapsible group header.
+        expect(recommendedHeading()).toBe('Recommended');
+        expect(headings()).not.toContain('Recommended');
+        expect(itemTitles().slice(0, 2)).toEqual(['origin/main', 'main']);
+        expect(commandItem('origin/main')?.textContent).toContain('default');
         expect(commandItem('main')?.textContent).toContain('current');
 
-        // It is dropped from "Local branches", so it appears exactly once.
-        expect(document.querySelectorAll('span[title="main"]').length).toBe(1);
+        // They are dropped from the lists below, so each appears exactly once.
+        expect(itemTitles().filter((title) => title === 'origin/main')).toHaveLength(1);
+        expect(itemTitles().filter((title) => title === 'main')).toHaveLength(1);
     });
 
-    it('pins the working tree as a plain top row on the head side', async () => {
+    it('leads the base recommendations with origin/development', async () => {
+        const store = useComparisonStore();
+        const wrapper = mountSide('base');
+        store.branches = [
+            ...BRANCHES,
+            { name: 'origin/development', kind: 'remote' },
+            { name: 'origin/trunk', kind: 'remote', isDefault: true },
+        ];
+        await open(wrapper);
+
+        expect(itemTitles().slice(0, 3)).toEqual(['origin/development', 'origin/trunk', 'main']);
+        expect(itemTitles().filter((title) => title === 'origin/development')).toHaveLength(1);
+    });
+
+    it('recommends the working tree, then the current branch, on the head side', async () => {
         const wrapper = mountSide('head');
         await open(wrapper);
 
-        // The working tree leads the head side as a plain row, not an "Uncommitted"
-        // group with a header.
-        expect(headings()).not.toContain('Uncommitted');
-        expect(firstItemTitle()).toBe('WORKING TREE');
+        // The working tree sits under "Recommended", not in a group of its own.
+        expect(document.querySelectorAll('[data-slot="command-group-heading"]')).toHaveLength(1);
+        expect(recommendedHeading()).toBe('Recommended');
+        expect(itemTitles().slice(0, 2)).toEqual(['WORKING TREE', 'main']);
+        expect(commandItem('main')?.textContent).toContain('current');
+        expect(itemTitles().filter((title) => title === 'main')).toHaveLength(1);
     });
 
     it('offers the working tree entry only on the head side', async () => {
@@ -182,8 +207,8 @@ describe('RefSelector', () => {
         await flushPromises();
         expect(commandItem('develop')?.classList.contains('hidden')).toBe(true);
         expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(true);
-        // The pinned current branch has no collapsible header, so it stays visible.
-        expect(commandItem('main')?.classList.contains('hidden')).toBe(false);
+        // The recommendation has no collapsible header, so it stays visible.
+        expect(commandItem('origin/main')?.classList.contains('hidden')).toBe(false);
 
         toggleAllButton()?.click();
         await flushPromises();

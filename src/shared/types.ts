@@ -69,6 +69,7 @@ export interface BranchInfo {
     name: string;
     kind: 'local' | 'remote';
     isCurrent?: boolean; // the checked-out branch, marked in the ref selector
+    isDefault?: boolean; // the remote branch origin/HEAD points to
 }
 
 export interface RepoInfo {
