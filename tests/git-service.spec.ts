@@ -14,7 +14,7 @@ interface BranchSummary {
 }
 
 describe('GitService.branches', () => {
-    it('lists locals first (current flagged), then remotes, dropping origin/HEAD', async () => {
+    it('lists locals first (current flagged), then remotes, flagging the origin/HEAD target', async () => {
         const git = {
             branchLocal: vi
                 .fn<() => Promise<BranchSummary>>()
@@ -28,8 +28,25 @@ describe('GitService.branches', () => {
         expect(await service.branches()).toEqual([
             { name: 'main', kind: 'local', isCurrent: true },
             { name: 'feature', kind: 'local' },
-            { name: 'origin/main', kind: 'remote' },
+            { name: 'origin/main', kind: 'remote', isDefault: true },
             { name: 'origin/feature', kind: 'remote' },
+        ]);
+    });
+
+    it('flags no default when origin/HEAD is not set', async () => {
+        const git = {
+            branchLocal: vi
+                .fn<() => Promise<BranchSummary>>()
+                .mockResolvedValue({ all: ['main'], current: 'main' }),
+            branch: vi
+                .fn<(args: string[]) => Promise<{ all: string[] }>>()
+                .mockResolvedValue({ all: ['origin/main'] }),
+        };
+        const service = new GitService('/repo', git);
+
+        expect(await service.branches()).toEqual([
+            { name: 'main', kind: 'local', isCurrent: true },
+            { name: 'origin/main', kind: 'remote' },
         ]);
     });
 });

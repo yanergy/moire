@@ -82,7 +82,10 @@ the popup never appears.
    (`Cmd/Ctrl+O`).
 2. **Choose the two branches.** Set the **base** on the left and the **head** on the right. Base is
    the branch you compare against (often `main`); head is the branch whose changes you want to see.
-   The swap button between them flips the two.
+   The swap button between them flips the two. Each picker opens with a **Recommended** section at
+   the top. For the base that is `origin/development` (when it exists), the remote's default
+   branch, and the checked-out branch. For the head it is the working tree and the checked-out
+   branch.
 3. **Choose how to compare.** Toggle between:
     - **merge-base**: compares head to the point where it branched off base, showing only the changes
       head introduces. This matches what a GitHub pull request shows.
@@ -138,6 +141,7 @@ last branch range are remembered per repository.
   detected editor (auto-detected per machine and persisted across launches).
 - Rename detection, binary-file notices, and inline image previews.
 - A large-file gate so oversized files never freeze the UI.
+- Searchable branch pickers that group branches by prefix and recommend a likely base and head.
 - Recent-repository list and a native folder picker.
 - Auto-refresh when the working tree changes, plus a manual refresh.
 - System, light, and dark themes, with theme and branch selections persisted per repository.
@@ -249,17 +253,17 @@ Track bugs and limitations here.
 
 Everything on the original roadmap has shipped. These are the next features on the list:
 
-- **Branch recommendations in the branch picker.** A "Recommended" section at the top of each
-  picker, above the full branch list. For the base that is `origin/development` (falling back to
-  the default branch when it does not exist), and for the head it is the branch currently checked
-  out.
-- **Favorite branches.** Star a branch from the picker to pin it. Starred branches show a small star
-  and are always listed in a "Favorites" group at the top (below the recommendations), in both the
-  base and the head picker. Favorites are remembered per repository.
-- **Full code reviews from within the app.** Mirror GitHub's review flow: place inline comments on a
-  line or a range of lines in the diff (including suggested changes), collect them as a pending
-  review, and submit the review as Comment, Approve, or Request changes with an overall summary.
-  Pending comments stay visible and editable until the review is submitted or discarded.
+- [x] **Branch recommendations in the branch picker.** A "Recommended" section at the top of each
+  picker, above the full branch list. For the base that is `origin/development` (when it exists),
+  the remote's default branch, and the checked-out branch. For the head it is the working tree and
+  the checked-out branch. ([#17](https://github.com/yanergy/moire/pull/17))
+- [ ] **Favorite branches.** Star a branch from the picker to pin it. Starred branches show a small
+  star and are always listed in a "Favorites" group at the top (below the recommendations), in both
+  the base and the head picker. Favorites are remembered per repository.
+- [ ] **Full code reviews from within the app.** Mirror GitHub's review flow: place inline comments
+  on a line or a range of lines in the diff (including suggested changes), collect them as a
+  pending review, and submit the review as Comment, Approve, or Request changes with an overall
+  summary. Pending comments stay visible and editable until the review is submitted or discarded.
 
 Possible expansions of the GitHub notifications and dashboard, not planned yet:
 
