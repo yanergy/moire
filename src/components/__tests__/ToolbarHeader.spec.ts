@@ -1,11 +1,9 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, type VueWrapper } from '@vue/test-utils';
 import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import { useDashboardStore } from '@/stores/dashboard';
-import { dashboardState } from './fixtures';
 import type { PullRequest } from '@/shared/types';
 
 const PR: PullRequest = {
@@ -37,20 +35,9 @@ const PR: PullRequest = {
 // button. (The theme toggle moved to the native View menu; see tests/menu.spec.ts.)
 const stubs = { RepoPicker: true, RefSelector: true, SegmentedToggle: true };
 
-// A dashboard state with `count` unread notifications and one read one.
-function withUnread(count: number) {
-    return dashboardState({
-        activity: [
-            ...Array.from({ length: count }, (_, i) => ({
-                kind: 'review-requested' as const,
-                at: `T${i}`,
-                number: i + 1,
-                title: 'x',
-                url: 'u',
-            })),
-            { kind: 'approved' as const, at: 'TR', number: 9, title: 'y', url: 'u', read: true },
-        ],
-    });
+// The dashboard toggle, found by its label.
+function dashboardToggle(wrapper: VueWrapper) {
+    return wrapper.findAll('button').find((b) => b.text().startsWith('Dashboard'))!;
 }
 
 describe('ToolbarHeader', () => {
@@ -196,33 +183,26 @@ describe('ToolbarHeader', () => {
     });
 
     describe('dashboard toggle', () => {
-        it('is hidden without an open repo', () => {
+        it('is hidden, with the notifications menu, without an open repo', () => {
             const wrapper = mountToolbar();
-            expect(wrapper.find('[aria-label="Dashboard"]').exists()).toBe(false);
+            expect(wrapper.text()).not.toContain('Dashboard');
+            expect(wrapper.find('[aria-label="Notifications"]').exists()).toBe(false);
         });
 
-        it('shows the unread notification count and switches the main view', async () => {
+        it('switches the main view, next to a notifications menu', async () => {
             useComparisonStore().repoPath = '/repos/moire';
-            useDashboardStore().applyState(withUnread(2));
             const ui = useUiStore();
 
             const wrapper = mountToolbar();
-            const toggle = wrapper.get('[aria-label="Dashboard"]');
-            expect(toggle.text()).toBe('2');
+            const toggle = dashboardToggle(wrapper);
+            expect(toggle.text()).toBe('Dashboard');
+            expect(wrapper.find('[aria-label="Notifications"]').exists()).toBe(true);
 
             await toggle.trigger('click');
             expect(ui.mainView).toBe('dashboard');
 
             await toggle.trigger('click');
             expect(ui.mainView).toBe('diff');
-        });
-
-        it('shows no count when every notification is read', () => {
-            useComparisonStore().repoPath = '/repos/moire';
-            useDashboardStore().applyState(withUnread(0));
-
-            const wrapper = mountToolbar();
-            expect(wrapper.get('[aria-label="Dashboard"]').text()).toBe('');
         });
     });
 });

@@ -89,6 +89,12 @@ follows an account switch), and can pick any mix of the authors with an open PR 
 repository, or **All**. The captions follow the pick ("Any author", "By ann", "3 authors"), and
 "Your open PRs" reads "Open PRs" for anyone but yourself.
 
+A card with unread notifications about its PRs shows a green "N new" pill in its top right
+corner, the bell's unread tone (a pill, not a dot, so it does not read as a second status dot): a review request on Needs your review, changes requested on Changes
+requested, an approval or ready to merge on Ready to merge, failed checks on Failing checks, and
+merged by someone else on Merged. A notification only counts while its PR is still in the card,
+and the pill goes away once the notifications are read or deleted.
+
 The Merged card counts merged rather than open PRs, by the same Users pick. Its period is set in
 the **Merged** submenu of the Display menu: **This week** (since Monday, the default) or **This
 month** (since the 1st), both in local time and measured against the last refresh. The choice is
@@ -98,7 +104,8 @@ dashboard query: every PR in the repository merged in the last 31 days (capped a
 Clicking a card lists its PRs (title, author, branches, age, size and CI state), with a way back
 to the overview. Clicking a PR opens it in the PR view; an "Open in browser" button at the end of each row
 opens it on GitHub instead. The header shows how many PRs the cards cover, when the data was last refreshed,
-the **Display** menu (with "Show drafts", **Users** and **Merged**) and a refresh button. With drafts hidden,
+the **Display** menu (with "Show drafts", **Users**, **Cards** and **Merged**; **Cards** turns
+each overview card on or off, saved with the other preferences) and a refresh button. With drafts hidden,
 the Drafts card goes away and drafts are left out of every other card.
 
 The dashboard is a third main view next to the diff and PR views, reachable from the toolbar and
@@ -107,17 +114,21 @@ button and the menu item are not available. When the repository has no GitHub re
 missing or not signed in, the dashboard shows the reason using the existing `PrStatus` style
 messages.
 
-Below the cards, a **Notifications** list shows every notification sent for the repository (the
-recent activity list, newest first, up to 50), each with what happened, the PR, and how long ago.
+### Notifications menu
+
+A bell button at the right end of the toolbar, shown while a repository is open, opens a menu
+listing every notification sent for the repository (the recent activity list, newest first, up
+to 50), each with what happened, the PR, and how long ago.
 Clicking one opens its PR and marks it read. Each row ends in an Open in browser button (which
-also marks it read), and shows Mark as read and Delete buttons over its age on hover, unread notifications stand out and are counted in the heading, and a "Mark all
-as read" button clears them at once. The toolbar's dashboard button shows the same unread count. Read state and deletions are saved with the rest of the
+also marks it read), and shows Mark as read and Delete buttons over its age on hover, unread notifications stand out and are counted on the bell, and a "Mark all
+as read" button clears them at once. Opening a notification closes the menu. It used to sit below
+the dashboard's cards; it moved to the toolbar so it is reachable from every view. Read state and deletions are saved with the rest of the
 notifier state.
 
 ### Dock badge
 
 The dock icon shows the number of unread notifications for the open repository, the same count
-as the toolbar's dashboard button. Marking notifications read (or deleting them) lowers it, and it
+as the toolbar's bell. Marking notifications read (or deleting them) lowers it, and it
 is cleared when there are none or no repository is open. macOS only (`app.dock.setBadge`). It has its
 own toggle in the Git → Notifications menu and follows the master switch.
 

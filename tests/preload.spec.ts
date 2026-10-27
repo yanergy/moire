@@ -70,6 +70,7 @@ describe('preload bridge', () => {
             'refreshDashboard',
             'setDashboardShowDrafts',
             'setDashboardAuthors',
+            'setDashboardHiddenCards',
             'markDashboardNotificationRead',
             'markAllDashboardNotificationsRead',
             'deleteDashboardNotification',
@@ -126,6 +127,9 @@ describe('preload bridge', () => {
 
         await api().setDashboardAuthors!('all');
         expect(bridge.invoke).toHaveBeenCalledWith('dashboard:set-authors', 'all');
+
+        await api().setDashboardHiddenCards!(['stale']);
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:set-hidden-cards', ['stale']);
 
         await api().markDashboardNotificationRead!('id-1');
         expect(bridge.invoke).toHaveBeenCalledWith('dashboard:mark-read', 'id-1');

@@ -139,6 +139,7 @@ describe('settings: notifications', () => {
         expect(prefs.dockBadge).toBe(true);
         expect(prefs.showDrafts).toBe(true);
         expect(prefs.dashboardAuthors).toBe('me');
+        expect(prefs.dashboardHiddenCards).toEqual([]);
         expect(prefs.events['checks-failed']).toBe(true);
         expect(prefs.events['ready-to-merge']).toBe(false);
         expect(prefs.events['merged-by-other']).toBe(false);

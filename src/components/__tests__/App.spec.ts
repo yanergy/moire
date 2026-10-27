@@ -204,6 +204,7 @@ describe('App', () => {
             activity: [],
             showDrafts: false,
             authors: 'me',
+            hiddenCards: [],
         };
         api.onDashboardChanged.mock.calls[0]![0](state);
         expect(applyState).toHaveBeenCalledWith(state);

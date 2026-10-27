@@ -28,6 +28,7 @@ const state = vi.hoisted(() => ({
         refresh: vi.fn<() => Promise<unknown>>(),
         setShowDrafts: vi.fn<(show: boolean) => Promise<unknown>>(),
         setAuthors: vi.fn<(authors: unknown) => Promise<unknown>>(),
+        setHiddenCards: vi.fn<(keys: string[]) => Promise<unknown>>(),
         markRead: vi.fn<(id: string) => Promise<unknown>>(),
         markAllRead: vi.fn<() => Promise<unknown>>(),
         deleteNotification: vi.fn<(id: string) => Promise<unknown>>(),
@@ -152,6 +153,7 @@ describe('registerIpcHandlers', () => {
             'dashboard:refresh',
             'dashboard:set-show-drafts',
             'dashboard:set-authors',
+            'dashboard:set-hidden-cards',
             'dashboard:mark-read',
             'dashboard:mark-all-read',
             'dashboard:delete-notification',
@@ -255,6 +257,13 @@ describe('registerIpcHandlers', () => {
         state.dashboard.setAuthors.mockResolvedValue(dashboardState);
         expect(await invoke('dashboard:set-authors', ['ann'])).toBe(dashboardState);
         expect(state.dashboard.setAuthors).toHaveBeenCalledWith(['ann']);
+
+        // Anything but a list of keys is dropped before it reaches the settings.
+        state.dashboard.setHiddenCards.mockResolvedValue(dashboardState);
+        expect(await invoke('dashboard:set-hidden-cards', ['stale', 3])).toBe(dashboardState);
+        expect(state.dashboard.setHiddenCards).toHaveBeenCalledWith(['stale']);
+        await invoke('dashboard:set-hidden-cards', 'stale');
+        expect(state.dashboard.setHiddenCards).toHaveBeenLastCalledWith([]);
 
         state.dashboard.markRead.mockResolvedValue(dashboardState);
         state.dashboard.markAllRead.mockResolvedValue(dashboardState);

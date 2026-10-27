@@ -107,6 +107,7 @@ export function dashboardState(overrides: Partial<DashboardState> = {}): Dashboa
         activity: [],
         showDrafts: true,
         authors: 'me',
+        hiddenCards: [],
         ...overrides,
     };
 }

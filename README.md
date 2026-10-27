@@ -108,9 +108,10 @@ the popup never appears.
    your review, changes requested, ready to merge, failing checks, your open PRs, stale, merged
    (this week or this month, under **Display > Merged**), and drafts. Click a card to list its PRs, then a PR to open it (or its **Open in browser** button
    to open it on GitHub). The cards count your own PRs; under **Display > Users**
-   you can pick other authors, or **All**. The notifications you were sent are listed below the
-   cards. The count on the toolbar button and on the dock icon is the number of unread
-   notifications. Moiré checks
+   you can pick other authors, or **All**, and **Display > Cards** hides the cards you do not
+   need. The notifications you were sent are listed under the
+   bell button at the right of the toolbar. The count on the bell and on the dock icon is the
+   number of unread notifications. Moiré checks
    GitHub every two minutes and sends a notification when something changes. Click a PR to open
    it in the PR view. Choose which events notify you under **Git > Notifications**.
 
@@ -159,8 +160,10 @@ last branch range are remembered per repository.
   (no activity in 7 or more days), were merged this week or this month, or are drafts. Each card opens a list of its PRs. The
   **Display** menu holds a "Show drafts" toggle (which also applies to notifications) and a
   **Users** submenu that picks whose PRs the cards count: you by default, any mix of authors, or
-  all of them. Below the cards, a list shows the notifications sent for the repository, with
-  unread ones highlighted, and buttons to mark them read or delete them.
+  all of them.
+- A notifications menu (the bell at the right of the toolbar) listing the notifications sent for
+  the open repository, with unread ones highlighted and counted on the bell, and buttons to mark
+  them read or delete them.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
   the tree by filetype, mutation type, or marker (files carrying an error, warning, or review
   comment). Filters are multi-select and combine, and a reset clears them at once.
@@ -235,8 +238,8 @@ Track bugs and limitations here.
 - **Desktop notifications do not appear when running from the dev server.** The dev server runs
   the generic, ad-hoc signed Electron binary, and macOS refuses its notifications without ever
   listing it in System Settings, Notifications. The log shows `notification: ... (UNErrorDomain
-  error 1.)`. The dashboard list, the toolbar count and the dock badge still work. Whether the
-  unsigned packaged build can show them is unverified.
+  error 1.)`. The dashboard list, the toolbar count and the dock badge still work. The packaged
+  build (`npm run pack`) shows them.
 
 ## Planned features
 

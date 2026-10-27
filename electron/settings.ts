@@ -200,7 +200,9 @@ export type AuthorFilter = 'me' | 'all' | string[];
 // users can opt out); `events` holds one toggle per event kind; `dockBadge` shows
 // the review request count on the dock icon; `showDrafts` includes draft PRs in
 // the dashboard and in notifications; `dashboardAuthors` picks whose PRs the
-// dashboard cards count (it does not affect notifications). Stored values are
+// dashboard cards count (it does not affect notifications); `dashboardHiddenCards`
+// lists the overview cards turned off in its Display menu (the hidden ones, so a
+// card added later shows by default). Stored values are
 // merged over the defaults,
 // so an event kind added later starts at its default instead of off.
 export interface NotificationPrefs {
@@ -209,6 +211,7 @@ export interface NotificationPrefs {
     dockBadge: boolean;
     showDrafts: boolean;
     dashboardAuthors: AuthorFilter;
+    dashboardHiddenCards: string[];
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -226,6 +229,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
     dockBadge: true,
     showDrafts: true,
     dashboardAuthors: 'me',
+    dashboardHiddenCards: [],
 };
 
 export async function getNotificationPrefs(): Promise<NotificationPrefs> {

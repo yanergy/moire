@@ -1,16 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import {
-    ArrowLeft,
-    CheckCheck,
-    LoaderCircle,
-    RefreshCw,
-    SlidersHorizontal,
-    TriangleAlert,
-} from '@lucide/vue';
+import { ArrowLeft, LoaderCircle, RefreshCw, SlidersHorizontal, TriangleAlert } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useDashboardStore, type DashboardCategoryKey } from '@/stores/dashboard';
-import { activityId, dashboardNotice } from '@/lib/dashboard';
+import { dashboardNotice } from '@/lib/dashboard';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
 import { Button } from '@/components/ui/button';
@@ -30,7 +23,6 @@ import {
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import DashboardCard from '@/components/dashboard/DashboardCard.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
-import DashboardNotificationRow from '@/components/dashboard/DashboardNotificationRow.vue';
 
 // A quick overview of the open repository's pull requests: a grid of cards, each
 // counting one kind of PR (needs your review, changes requested, ...). Clicking a
@@ -108,6 +100,13 @@ const menuSurface = 'min-w-[180px] border-moire-border bg-moire-pop text-moire-f
 const menuSurfaceStyle = { boxShadow: 'var(--moire-pop-shadow)' };
 const menuRow = 'text-xs text-moire-file-fg focus:bg-moire-hover focus:text-moire-fg';
 
+// The Cards submenu trigger's summary: "All", or how many of the cards show.
+const cardsLabel = computed(() => {
+    const options = dashboard.cardOptions;
+    const shown = options.filter((card) => card.shown).length;
+    return shown === options.length ? 'All' : `${shown} of ${options.length}`;
+});
+
 const updated = computed(() =>
     dashboard.snapshot
         ? `Updated ${timeSince(Date.parse(dashboard.snapshot.fetchedAt), now.value)}`
@@ -118,7 +117,7 @@ const updated = computed(() =>
 <template>
     <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
         <ScrollArea class="dashboard-scroll-area min-h-0 flex-1">
-            <div class="w-full max-w-[1040px] px-6 pt-8 pb-8">
+            <div class="w-full max-w-[1200px] px-6 pt-8 pb-8">
                 <!-- Header: the overview title with the open count (or, in a list,
                      the way back and the card's label), then the controls. -->
                 <div class="flex min-h-8 items-center gap-3">
@@ -219,6 +218,30 @@ const updated = computed(() =>
                                     </DropdownMenuCheckboxItem>
                                 </DropdownMenuSubContent>
                             </DropdownMenuSub>
+                            <!-- Which overview cards show. -->
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger :class="menuRow">
+                                    Cards
+                                    <span class="ml-auto pl-3 text-moire-faint">
+                                        {{ cardsLabel }}
+                                    </span>
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent
+                                    :class="menuSurface"
+                                    :style="menuSurfaceStyle"
+                                >
+                                    <DropdownMenuCheckboxItem
+                                        v-for="card in dashboard.cardOptions"
+                                        :key="card.key"
+                                        :model-value="card.shown"
+                                        :class="menuRow"
+                                        @select="keepOpen"
+                                        @update:model-value="dashboard.toggleCard(card.key)"
+                                    >
+                                        {{ card.label }}
+                                    </DropdownMenuCheckboxItem>
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
                             <!-- The period the Merged card counts. -->
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger :class="menuRow">
@@ -297,9 +320,18 @@ const updated = computed(() =>
                 </div>
 
                 <!-- The overview: the card grid (as many columns as fit, four at
-                     full width), then every notification sent for this repository. -->
+                     full width). -->
                 <template v-else-if="dashboard.snapshot">
-                    <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5 pt-6">
+                    <p
+                        v-if="!dashboard.categories.length"
+                        class="py-10 text-[13px] text-moire-muted"
+                    >
+                        Every card is hidden. Turn them back on under Display, Cards.
+                    </p>
+                    <div
+                        v-else
+                        class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3 pt-6"
+                    >
                         <dashboard-card
                             v-for="category in dashboard.categories"
                             :key="category.key"
@@ -307,48 +339,6 @@ const updated = computed(() =>
                             @open="selectedKey = category.key"
                         />
                     </div>
-
-                    <section class="pt-8">
-                        <div class="flex items-center gap-2 pb-4">
-                            <h2 class="text-[13px] font-semibold text-moire-fg">Notifications</h2>
-                            <span
-                                v-if="dashboard.unreadCount"
-                                class="rounded-full bg-moire-chrome px-1.5 text-[11px] font-medium text-moire-muted"
-                                :title="`${dashboard.unreadCount} unread`"
-                            >
-                                {{ dashboard.unreadCount }}
-                            </span>
-                            <div class="flex-1" />
-                            <Button
-                                v-if="dashboard.unreadCount"
-                                variant="ghost"
-                                size="sm"
-                                class="h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                                @click="dashboard.markAllRead()"
-                            >
-                                <CheckCheck :size="16" />
-                                Mark all as read
-                            </Button>
-                        </div>
-                        <div
-                            v-if="dashboard.activity.length"
-                            class="divide-y divide-moire-border overflow-hidden rounded-lg border border-moire-border"
-                        >
-                            <dashboard-notification-row
-                                v-for="entry in dashboard.activity"
-                                :key="activityId(entry)"
-                                :entry="entry"
-                                :now="now"
-                                @open="dashboard.openActivity"
-                                @open-in-browser="dashboard.openActivityInBrowser"
-                                @mark-read="dashboard.markRead"
-                                @delete="dashboard.deleteNotification"
-                            />
-                        </div>
-                        <p v-else class="py-4 text-[13px] text-moire-muted">
-                            No notifications for this repository yet.
-                        </p>
-                    </section>
                 </template>
             </div>
         </ScrollArea>

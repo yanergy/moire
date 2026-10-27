@@ -45,6 +45,8 @@ export interface DashboardBridge {
     refresh: () => Promise<DashboardState>;
     setShowDrafts: (show: boolean) => Promise<DashboardState>;
     setAuthors: (authors: AuthorFilter) => Promise<DashboardState>;
+    // The overview cards turned off in the Display menu, by key.
+    setHiddenCards: (keys: string[]) => Promise<DashboardState>;
     // The dashboard's notification list: mark one read (by its activity id), all
     // read, or delete one.
     markRead: (id: string) => Promise<DashboardState>;
@@ -203,6 +205,11 @@ function registerIpcHandlers({
     handle('dashboard:set-show-drafts', (show: boolean) => requireDashboard().setShowDrafts(show));
     handle('dashboard:set-authors', (authors: AuthorFilter) =>
         requireDashboard().setAuthors(authors)
+    );
+    handle('dashboard:set-hidden-cards', (keys: unknown) =>
+        requireDashboard().setHiddenCards(
+            Array.isArray(keys) ? keys.filter((key) => typeof key === 'string') : []
+        )
     );
     handle('dashboard:mark-read', (id: string) => requireDashboard().markRead(id));
     handle('dashboard:mark-all-read', () => requireDashboard().markAllRead());

@@ -41,12 +41,13 @@ export interface NotifierView {
     activity: ActivityEntry[];
 }
 
-// What the renderer's dashboard receives: the view plus the "Show drafts" toggle
-// and the author filter, which the dashboard applies to its cards. Mirrored as
+// What the renderer's dashboard receives: the view plus the "Show drafts" toggle,
+// the author filter and the hidden cards, which the dashboard applies to its cards. Mirrored as
 // DashboardState in src/shared/types.ts; keep the two in sync.
 export interface DashboardState extends NotifierView {
     showDrafts: boolean;
     authors: AuthorFilter;
+    hiddenCards: string[];
 }
 
 export interface NotifierDeps {

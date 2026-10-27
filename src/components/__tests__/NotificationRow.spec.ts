@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import DashboardNotificationRow from '@/components/dashboard/DashboardNotificationRow.vue';
+import NotificationRow from '@/components/headers/NotificationRow.vue';
 import type { ActivityEntry } from '@/shared/types';
 
 const NOW = Date.parse('2026-10-26T12:00:00Z');
@@ -14,9 +14,9 @@ const entry: ActivityEntry = {
     url: 'https://github.com/o/r/pull/12',
 };
 
-describe('DashboardNotificationRow', () => {
+describe('NotificationRow', () => {
     it('shows what happened, the PR and how long ago', () => {
-        const wrapper = mount(DashboardNotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
 
         expect(wrapper.text()).toContain('ann requested changes');
         expect(wrapper.text()).toContain('#12 Fix login');
@@ -25,14 +25,14 @@ describe('DashboardNotificationRow', () => {
     });
 
     it('emits open with the entry when clicked', async () => {
-        const wrapper = mount(DashboardNotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
 
         await wrapper.findAll('button')[0]!.trigger('click');
         expect(wrapper.emitted('open')).toEqual([[entry]]);
     });
 
     it('offers Mark as read and Delete, emitting the entry', async () => {
-        const wrapper = mount(DashboardNotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
 
         await wrapper.get('[aria-label="Mark as read"]').trigger('click');
         await wrapper.get('[aria-label="Delete notification"]').trigger('click');
@@ -43,7 +43,7 @@ describe('DashboardNotificationRow', () => {
     });
 
     it('fades a read notification and drops Mark as read', () => {
-        const wrapper = mount(DashboardNotificationRow, {
+        const wrapper = mount(NotificationRow, {
             props: { entry: { ...entry, read: true }, now: NOW },
         });
 
@@ -54,7 +54,7 @@ describe('DashboardNotificationRow', () => {
     });
 
     it('always shows Open in browser at the end of the row', async () => {
-        const wrapper = mount(DashboardNotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
         const button = wrapper.get('[aria-label="Open in browser"]');
 
         expect(button.element.parentElement).toBe(wrapper.element);
@@ -66,7 +66,7 @@ describe('DashboardNotificationRow', () => {
     });
 
     it('colors the Delete icon red', () => {
-        const wrapper = mount(DashboardNotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
         const classes = wrapper.get('[aria-label="Delete notification"]').classes();
 
         expect(classes).toContain('text-moire-status-d');

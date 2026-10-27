@@ -3,6 +3,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { activityId } from '@/lib/dashboard';
+import { testNotifications, type TestNotifications } from '@/lib/test-notifications';
 import type {
     ActivityEntry,
     AuthorFilter,
@@ -30,7 +31,20 @@ export interface DashboardCategory {
     caption: string;
     dotClass: string;
     prs: DashboardPr[];
+    // Unread notifications about the card's PRs, for its "new" dot.
+    unread: number;
 }
+
+// The card each notification kind points at. Kinds without a card (a merge
+// conflict, a PR closed without merge) mark none.
+const CARD_FOR_KIND: Partial<Record<ActivityEntry['kind'], DashboardCategoryKey>> = {
+    'review-requested': 'review',
+    'changes-requested': 'changes',
+    approved: 'ready',
+    'ready-to-merge': 'ready',
+    'checks-failed': 'failing',
+    'merged-by-other': 'merged',
+};
 
 // An open PR with no activity for this long counts as stale.
 export const STALE_DAYS = 7;
@@ -117,10 +131,35 @@ function openPr(pr: DashboardPr) {
 export const useDashboardStore = defineStore('dashboard', () => {
     const status = ref<PrStatus>('ok');
     const message = ref<string | undefined>();
-    const snapshot = ref<DashboardSnapshot | null>(null);
-    const activity = ref<ActivityEntry[]>([]);
+    // What main last sent. `snapshot` and `activity` below add the test set to it
+    // while that is on.
+    const fetchedSnapshot = ref<DashboardSnapshot | null>(null);
+    const fetchedActivity = ref<ActivityEntry[]>([]);
+    // Debug only (dev builds): the hardcoded test notifications, kept in the
+    // renderer and never sent to main. Null while off.
+    const testSet = ref<TestNotifications | null>(null);
+    const testMode = computed(() => testSet.value !== null);
+
+    const snapshot = computed<DashboardSnapshot | null>(() => {
+        const fetched = fetchedSnapshot.value;
+        const test = testSet.value;
+        if (!test || !fetched) {
+            return fetched;
+        }
+        return {
+            ...fetched,
+            toReview: [...test.toReview, ...fetched.toReview],
+            mine: [...test.mine, ...fetched.mine],
+            open: [...test.mine.filter((pr) => pr.state === 'OPEN'), ...(fetched.open ?? [])],
+            merged: [...test.merged, ...(fetched.merged ?? [])],
+        };
+    });
+
+    const activity = computed(() => [...(testSet.value?.activity ?? []), ...fetchedActivity.value]);
     const showDrafts = ref(true);
     const authors = ref<AuthorFilter>('me');
+    // The overview cards turned off in the Display menu, by key.
+    const hiddenCards = ref<string[]>([]);
     // Kept in the renderer only, so it resets to this week on restart.
     const mergedPeriod = ref<MergedPeriod>('week');
     const loading = ref(false);
@@ -128,10 +167,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
     function applyState(state: DashboardState) {
         status.value = state.status;
         message.value = state.message;
-        snapshot.value = state.snapshot;
-        activity.value = state.activity;
+        fetchedSnapshot.value = state.snapshot;
+        fetchedActivity.value = state.activity;
         showDrafts.value = state.showDrafts;
         authors.value = state.authors ?? 'me';
+        hiddenCards.value = state.hiddenCards ?? [];
     }
 
     // Run one dashboard call with the loading flag set. A rejection (no repository
@@ -162,6 +202,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
         showDrafts.value = show;
         const api = window.api;
         return api ? run(() => api.setDashboardShowDrafts(show)) : Promise.resolve();
+    }
+
+    // Show or hide one overview card, right away, then persist the hidden list.
+    function toggleCard(key: DashboardCategoryKey) {
+        const hidden = hiddenCards.value.includes(key)
+            ? hiddenCards.value.filter((k) => k !== key)
+            : [...hiddenCards.value, key];
+        hiddenCards.value = hidden;
+        const api = window.api;
+        return api ? run(() => api.setDashboardHiddenCards(hidden)) : Promise.resolve();
     }
 
     function setAuthors(filter: AuthorFilter) {
@@ -219,16 +269,28 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return filter.length === 1 ? filter[0]! : `${filter.length} users`;
     });
 
+    // Debug only: add the test notifications, or take them away again.
+    function toggleTestNotifications() {
+        const fetched = fetchedSnapshot.value;
+        testSet.value = testSet.value
+            ? null
+            : testNotifications(fetched?.login ?? 'you', fetched?.repo ?? 'owner/repo', Date.now());
+    }
+
     // The notification list's actions: change the list right away, then persist
     // through main, whose answer replaces it. A failed call keeps the local
-    // change until the next update from main.
+    // change until the next update from main. Test notifications only change
+    // locally (`call` is null for one of them).
     function editActivity(
         change: (list: ActivityEntry[]) => ActivityEntry[],
-        call: (api: NonNullable<Window['api']>) => Promise<DashboardState>
+        call: ((api: NonNullable<Window['api']>) => Promise<DashboardState>) | null
     ) {
-        activity.value = change(activity.value);
+        fetchedActivity.value = change(fetchedActivity.value);
+        if (testSet.value) {
+            testSet.value = { ...testSet.value, activity: change(testSet.value.activity) };
+        }
         const api = window.api;
-        if (!api) {
+        if (!api || !call) {
             return Promise.resolve();
         }
         let pending: Promise<DashboardState>;
@@ -242,11 +304,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     const unreadCount = computed(() => activity.value.filter((entry) => !entry.read).length);
 
+    function isTest(id: string): boolean {
+        return testSet.value?.activity.some((entry) => activityId(entry) === id) ?? false;
+    }
+
     function markRead(entry: ActivityEntry) {
         const id = activityId(entry);
         return editActivity(
             (list) => list.map((e) => (activityId(e) === id ? { ...e, read: true } : e)),
-            (api) => api.markDashboardNotificationRead(id)
+            isTest(id) ? null : (api) => api.markDashboardNotificationRead(id)
         );
     }
 
@@ -261,7 +327,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         const id = activityId(entry);
         return editActivity(
             (list) => list.filter((e) => activityId(e) !== id),
-            (api) => api.deleteDashboardNotification(id)
+            isTest(id) ? null : (api) => api.deleteDashboardNotification(id)
         );
     }
 
@@ -334,10 +400,36 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return Number.isNaN(fetched) ? 0 : fetched - STALE_DAYS * 24 * 60 * 60 * 1000;
     });
 
-    const categories = computed<DashboardCategory[]>(() => {
+    // Every card the Display menu can turn on or off, shown or not.
+    const cardOptions = computed(() =>
+        baseCategories.value.map(({ key, label }) => ({
+            key,
+            label,
+            shown: !hiddenCards.value.includes(key),
+        }))
+    );
+
+    // The shown categories, with each one's unread notifications counted: an
+    // unread notification of its kind about a PR the card still holds.
+    const categories = computed<DashboardCategory[]>(() =>
+        baseCategories.value
+            .filter((category) => !hiddenCards.value.includes(category.key))
+            .map((category) => {
+                const numbers = new Set(category.prs.map((pr) => pr.number));
+                const unread = activity.value.filter(
+                    (entry) =>
+                        !entry.read &&
+                        CARD_FOR_KIND[entry.kind] === category.key &&
+                        numbers.has(entry.number)
+                ).length;
+                return { ...category, unread };
+            })
+    );
+
+    const baseCategories = computed<Omit<DashboardCategory, 'unread'>[]>(() => {
         const mine = authors.value === 'me';
         const author = authorScope.value.caption;
-        const list: DashboardCategory[] = [
+        const list: Omit<DashboardCategory, 'unread'>[] = [
             // Review requests are addressed to the viewer whatever the scope.
             {
                 key: 'review',
@@ -417,6 +509,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
         showDrafts,
         authors,
         mergedPeriod,
+        hiddenCards,
+        cardOptions,
+        toggleCard,
+        testMode,
+        toggleTestNotifications,
         knownAuthors,
         authorsLabel,
         loading,

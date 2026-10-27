@@ -5,7 +5,6 @@ import { nextTick } from 'vue';
 import DashboardView from '@/components/dashboard/DashboardView.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
 import DashboardCard from '@/components/dashboard/DashboardCard.vue';
-import DashboardNotificationRow from '@/components/dashboard/DashboardNotificationRow.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useDashboardStore } from '@/stores/dashboard';
 import type { DashboardState } from '@/shared/types';
@@ -67,57 +66,13 @@ describe('DashboardView', () => {
         expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
     });
 
-    it('lists the sent notifications under the cards, newest first', async () => {
+    it('leaves the notifications to the header menu', async () => {
         const { wrapper } = await mountView(
             dashboardState({
-                activity: [
-                    {
-                        kind: 'checks-failed',
-                        checks: ['lint'],
-                        at: '2026-10-26T12:00:00Z',
-                        number: 2,
-                        title: 'Second',
-                        url: 'https://github.com/o/r/pull/2',
-                    },
-                    {
-                        kind: 'review-requested',
-                        at: '2026-10-26T11:00:00Z',
-                        number: 1,
-                        title: 'First',
-                        url: 'https://github.com/o/r/pull/1',
-                    },
-                ],
+                activity: [{ kind: 'approved', at: 'T1', number: 1, title: 'a', url: 'u1' }],
             })
         );
-
-        expect(wrapper.text()).toContain('Notifications');
-        const rows = wrapper.findAllComponents(DashboardNotificationRow);
-        expect(rows.map((row) => row.props('entry').number)).toEqual([2, 1]);
-        expect(rows[0]!.text()).toContain('Checks failed: lint');
-    });
-
-    it('shows the unread count and marks all read', async () => {
-        const { wrapper } = await mountView(
-            dashboardState({
-                activity: [
-                    { kind: 'approved', at: 'T2', number: 2, title: 'b', url: 'u2' },
-                    { kind: 'approved', at: 'T1', number: 1, title: 'a', url: 'u1', read: true },
-                ],
-            })
-        );
-        const markAllRead = vi
-            .spyOn(useDashboardStore(), 'markAllRead')
-            .mockResolvedValue(undefined);
-
-        expect(wrapper.get('[title="1 unread"]').text()).toBe('1');
-        const button = wrapper.findAll('button').find((b) => b.text() === 'Mark all as read');
-        await button!.trigger('click');
-        expect(markAllRead).toHaveBeenCalledTimes(1);
-    });
-
-    it('says when no notifications were sent yet', async () => {
-        const { wrapper } = await mountView(dashboardState());
-        expect(wrapper.text()).toContain('No notifications for this repository yet.');
+        expect(wrapper.text()).not.toContain('Notifications');
     });
 
     it("lists a card's PRs when it is clicked, and goes back to the overview", async () => {
@@ -162,6 +117,25 @@ describe('DashboardView', () => {
         expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
     });
 
+    it('says so when every card is hidden', async () => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                hiddenCards: [
+                    'review',
+                    'changes',
+                    'ready',
+                    'failing',
+                    'open',
+                    'stale',
+                    'merged',
+                    'drafts',
+                ],
+            })
+        );
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(0);
+        expect(wrapper.text()).toContain('Every card is hidden.');
+    });
+
     it('refreshes through the store', async () => {
         const { api, wrapper } = await mountView(dashboardState());
 
@@ -184,11 +158,13 @@ describe('DashboardView', () => {
         const subTriggers = [
             ...document.querySelectorAll('[data-slot="dropdown-menu-sub-trigger"]'),
         ].map((el) => el.textContent ?? '');
-        expect(subTriggers).toHaveLength(2);
+        expect(subTriggers).toHaveLength(3);
         expect(subTrigger?.textContent).toContain('Users');
         expect(subTrigger?.textContent).toContain('You');
-        expect(subTriggers[1]).toContain('Merged');
-        expect(subTriggers[1]).toContain('Week');
+        expect(subTriggers[1]).toContain('Cards');
+        expect(subTriggers[1]).toContain('All');
+        expect(subTriggers[2]).toContain('Merged');
+        expect(subTriggers[2]).toContain('Week');
 
         items[0]!.click();
         await flushPromises();

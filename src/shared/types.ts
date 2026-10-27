@@ -341,6 +341,8 @@ export interface DashboardState {
     activity: ActivityEntry[];
     showDrafts: boolean;
     authors: AuthorFilter;
+    // The overview cards turned off in the Display menu, by key.
+    hiddenCards: string[];
 }
 
 // Preload API surface, exposed on window.api once the git backend lands.
@@ -436,14 +438,16 @@ export interface MoireApi {
     onMenuOpenRecent(cb: (path: string) => void): () => void;
     // The GitHub dashboard for the open repository. `getDashboard` returns the
     // current state (fetching first if nothing was fetched yet); `refreshDashboard`
-    // polls GitHub now; `setDashboardShowDrafts` and `setDashboardAuthors` persist
-    // the "Show drafts" toggle and the author filter.
+    // polls GitHub now; `setDashboardShowDrafts`, `setDashboardAuthors` and
+    // `setDashboardHiddenCards` persist the "Show drafts" toggle, the author filter
+    // and the cards turned off in the Display menu.
     // All three reject when no repository is open. `onDashboardChanged` fires after
     // every background poll, and returns an unsubscribe function.
     getDashboard(): Promise<DashboardState>;
     refreshDashboard(): Promise<DashboardState>;
     setDashboardShowDrafts(show: boolean): Promise<DashboardState>;
     setDashboardAuthors(authors: AuthorFilter): Promise<DashboardState>;
+    setDashboardHiddenCards(keys: string[]): Promise<DashboardState>;
     // The dashboard's notification list, by activity id (see activityId in
     // src/lib/dashboard.ts): mark one read, mark all read, or delete one.
     markDashboardNotificationRead(id: string): Promise<DashboardState>;

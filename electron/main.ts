@@ -118,8 +118,13 @@ const notifier = new Notifier({
 });
 
 async function dashboardState(): Promise<DashboardState> {
-    const { showDrafts, dashboardAuthors } = await getNotificationPrefs();
-    return { ...notifier.getView(), showDrafts, authors: dashboardAuthors };
+    const { showDrafts, dashboardAuthors, dashboardHiddenCards } = await getNotificationPrefs();
+    return {
+        ...notifier.getView(),
+        showDrafts,
+        authors: dashboardAuthors,
+        hiddenCards: dashboardHiddenCards,
+    };
 }
 
 async function createWindow(): Promise<BrowserWindow> {
@@ -309,6 +314,10 @@ app.whenReady().then(async () => {
             // Dashboard only: nothing in the notifier depends on it.
             setAuthors: async (authors) => {
                 await setNotificationPrefs({ dashboardAuthors: authors });
+                return dashboardState();
+            },
+            setHiddenCards: async (keys) => {
+                await setNotificationPrefs({ dashboardHiddenCards: keys });
                 return dashboardState();
             },
             markRead: async (id) => {

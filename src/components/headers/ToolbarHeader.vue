@@ -10,18 +10,17 @@ import {
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import { useDashboardStore } from '@/stores/dashboard';
 import type { CompareMode, ViewMode } from '@/shared/types';
 import RefSelector from '@/components/controls/RefSelector.vue';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
 import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
+import NotificationsMenu from '@/components/headers/NotificationsMenu.vue';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
 const ui = useUiStore();
-const dashboard = useDashboardStore();
 
 const compareOptions: { value: CompareMode; label: string; tooltip: string }[] = [
     {
@@ -49,10 +48,7 @@ function setPrView(on: boolean) {
     ui.setMainView(on ? 'pr' : 'diff');
 }
 
-// The dashboard toggle, shown while a repository is open. Its count is the number
-// of unread notifications in the dashboard's list, so it clears as they are read.
-const unreadCount = computed(() => dashboard.unreadCount);
-
+// The dashboard toggle and the notifications menu show while a repository is open.
 function setDashboardView(on: boolean) {
     ui.setMainView(on ? 'dashboard' : 'diff');
 }
@@ -85,139 +81,146 @@ const statusDotClass = computed(() => {
 
 <template>
     <TooltipProvider :delay-duration="300">
+        <!-- Three columns: the repository and range on the left, the dashboard
+             button in the middle and the diff options on the right. The equal
+             side columns keep the middle centered on the header; a side that
+             does not fit pushes it over rather than overlapping it. -->
         <div
-            class="flex h-13 flex-none items-center gap-2 border-b border-moire-border bg-moire-app px-3"
+            class="grid h-13 flex-none grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-moire-border bg-moire-app px-3"
         >
-            <repo-picker />
+            <div class="flex items-center gap-2">
+                <repo-picker />
 
-            <div class="mx-1 h-5 w-px bg-moire-border" />
+                <div class="mx-1 h-5 w-px bg-moire-border" />
 
-            <div class="flex items-center gap-1.5">
-                <ref-selector side="base" />
-                <Tooltip>
-                    <TooltipTrigger as-child>
-                        <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            class="size-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                            @click="comparison.swap()"
-                        >
-                            <ArrowRightLeft :size="16" />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Swap base and head</TooltipContent>
-                </Tooltip>
-                <ref-selector side="head" />
-            </div>
+                <div class="flex items-center gap-1.5">
+                    <ref-selector side="base" />
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                class="size-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                @click="comparison.swap()"
+                            >
+                                <ArrowRightLeft :size="16" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Swap base and head</TooltipContent>
+                    </Tooltip>
+                    <ref-selector side="head" />
+                </div>
 
-            <!-- While a lookup for a newly selected range is in flight, a spinner
+                <!-- While a lookup for a newly selected range is in flight, a spinner
                  stands in for the PR button so the previous branch's
                  open/merged/closed status isn't misread as the new one's before gh
                  returns (it can take a moment). -->
-            <Tooltip v-if="comparison.prLoading">
-                <TooltipTrigger as-child>
-                    <span class="inline-flex size-7 items-center justify-center text-moire-muted">
-                        <LoaderCircle :size="16" class="animate-spin" />
-                    </span>
-                </TooltipTrigger>
-                <TooltipContent>Checking for a pull request…</TooltipContent>
-            </Tooltip>
+                <Tooltip v-if="comparison.prLoading">
+                    <TooltipTrigger as-child>
+                        <span
+                            class="inline-flex size-7 items-center justify-center text-moire-muted"
+                        >
+                            <LoaderCircle :size="16" class="animate-spin" />
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Checking for a pull request…</TooltipContent>
+                </Tooltip>
 
-            <Tooltip v-else-if="comparison.hasPullRequest">
-                <TooltipTrigger as-child>
-                    <!-- The tooltip trigger wraps a span, not the Toggle: the trigger
+                <Tooltip v-else-if="comparison.hasPullRequest">
+                    <TooltipTrigger as-child>
+                        <!-- The tooltip trigger wraps a span, not the Toggle: the trigger
                          stamps its own data-state, which would otherwise clobber the
                          toggle's data-state=on and drop the pressed styling. -->
-                    <span class="inline-flex">
-                        <Toggle
-                            variant="outline"
-                            size="sm"
-                            :model-value="ui.mainView === 'pr'"
-                            :class="[
-                                'h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg',
-                                // A draft PR reads as provisional: a dashed border, as
-                                // GitHub renders draft state.
-                                { 'border-dashed': comparison.pullRequest?.isDraft },
-                            ]"
-                            @update:model-value="setPrView"
-                        >
-                            <span class="size-2.5 shrink-0 rounded-full" :class="statusDotClass" />
-                            <GitPullRequestDraft
-                                v-if="comparison.pullRequest?.isDraft"
-                                :size="16"
-                            />
-                            <GitPullRequest v-else :size="16" />
-                            PR #{{ comparison.pullRequest?.number }}
-                        </Toggle>
-                    </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                    {{ ui.mainView === 'pr' ? 'Back to the diff' : 'View the pull request' }}
-                </TooltipContent>
-            </Tooltip>
+                        <span class="inline-flex">
+                            <Toggle
+                                variant="outline"
+                                size="sm"
+                                :model-value="ui.mainView === 'pr'"
+                                :class="[
+                                    'h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg',
+                                    // A draft PR reads as provisional: a dashed border, as
+                                    // GitHub renders draft state.
+                                    { 'border-dashed': comparison.pullRequest?.isDraft },
+                                ]"
+                                @update:model-value="setPrView"
+                            >
+                                <span
+                                    class="size-2.5 shrink-0 rounded-full"
+                                    :class="statusDotClass"
+                                />
+                                <GitPullRequestDraft
+                                    v-if="comparison.pullRequest?.isDraft"
+                                    :size="16"
+                                />
+                                <GitPullRequest v-else :size="16" />
+                                PR #{{ comparison.pullRequest?.number }}
+                            </Toggle>
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        {{ ui.mainView === 'pr' ? 'Back to the diff' : 'View the pull request' }}
+                    </TooltipContent>
+                </Tooltip>
 
-            <!-- Shown in the PR button's place when the gh lookup failed (gh
+                <!-- Shown in the PR button's place when the gh lookup failed (gh
                  missing, signed out, or an access error), so a missing PR panel is
                  explained rather than silently absent. The reason, and how to fix
                  it, live in the tooltip. -->
-            <Tooltip v-else-if="comparison.prWarning">
-                <TooltipTrigger as-child>
-                    <span
-                        class="inline-flex size-7 cursor-pointer items-center justify-center text-moire-warn"
-                    >
-                        <TriangleAlert :size="18" />
-                    </span>
-                </TooltipTrigger>
-                <TooltipContent class="flex max-w-xs flex-col gap-2">
-                    <span v-for="(line, i) in comparison.prWarning" :key="i">{{ line }}</span>
-                </TooltipContent>
-            </Tooltip>
-
-            <Tooltip v-if="comparison.repoPath">
-                <TooltipTrigger as-child>
-                    <!-- Wrapped in a span for the same data-state reason as the PR
-                         toggle above. -->
-                    <span class="inline-flex">
-                        <Toggle
-                            variant="outline"
-                            size="sm"
-                            :model-value="ui.mainView === 'dashboard'"
-                            class="h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                            aria-label="Dashboard"
-                            @update:model-value="setDashboardView"
+                <Tooltip v-else-if="comparison.prWarning">
+                    <TooltipTrigger as-child>
+                        <span
+                            class="inline-flex size-7 cursor-pointer items-center justify-center text-moire-warn"
                         >
-                            <LayoutDashboard :size="16" />
-                            <span
-                                v-if="unreadCount"
-                                class="rounded-full bg-moire-pr-open px-1.5 text-[11px] leading-4 font-semibold text-moire-check-fg"
+                            <TriangleAlert :size="18" />
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent class="flex max-w-xs flex-col gap-2">
+                        <span v-for="(line, i) in comparison.prWarning" :key="i">{{ line }}</span>
+                    </TooltipContent>
+                </Tooltip>
+            </div>
+
+            <div class="flex justify-center">
+                <Tooltip v-if="comparison.repoPath">
+                    <TooltipTrigger as-child>
+                        <!-- Wrapped in a span for the same data-state reason as the PR
+                         toggle above. -->
+                        <span class="inline-flex">
+                            <Toggle
+                                variant="outline"
+                                size="sm"
+                                :model-value="ui.mainView === 'dashboard'"
+                                class="h-8 gap-2 px-3.5 text-[13px] font-medium text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                @update:model-value="setDashboardView"
                             >
-                                {{ unreadCount }}
-                            </span>
-                        </Toggle>
-                    </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                    {{
-                        unreadCount
-                            ? `${unreadCount} unread ${unreadCount === 1 ? 'notification' : 'notifications'}`
-                            : 'Dashboard'
-                    }}
-                </TooltipContent>
-            </Tooltip>
+                                <LayoutDashboard :size="18" />
+                                Dashboard
+                            </Toggle>
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        {{
+                            ui.mainView === 'dashboard' ? 'Back to the diff' : 'Open the dashboard'
+                        }}
+                    </TooltipContent>
+                </Tooltip>
+            </div>
 
-            <div class="flex-1" />
+            <div class="flex items-center justify-end gap-2">
+                <segmented-toggle
+                    :options="compareOptions"
+                    :model-value="comparison.compareMode"
+                    @update:model-value="comparison.setCompareMode"
+                />
 
-            <segmented-toggle
-                :options="compareOptions"
-                :model-value="comparison.compareMode"
-                @update:model-value="comparison.setCompareMode"
-            />
+                <segmented-toggle
+                    :options="viewOptions"
+                    :model-value="ui.viewMode"
+                    @update:model-value="ui.setViewMode"
+                />
 
-            <segmented-toggle
-                :options="viewOptions"
-                :model-value="ui.viewMode"
-                @update:model-value="ui.setViewMode"
-            />
+                <notifications-menu v-if="comparison.repoPath" />
+            </div>
         </div>
     </TooltipProvider>
 </template>

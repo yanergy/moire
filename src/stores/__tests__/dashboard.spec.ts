@@ -9,7 +9,13 @@ import {
 } from '@/stores/dashboard';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import type { AuthorFilter, DashboardPr, DashboardSnapshot, DashboardState } from '@/shared/types';
+import type {
+    ActivityEntry,
+    AuthorFilter,
+    DashboardPr,
+    DashboardSnapshot,
+    DashboardState,
+} from '@/shared/types';
 
 function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
     return {
@@ -57,6 +63,7 @@ function state(overrides: Partial<DashboardState> = {}): DashboardState {
         activity: [],
         showDrafts: true,
         authors: 'me',
+        hiddenCards: [],
         ...overrides,
     };
 }
@@ -238,6 +245,95 @@ describe('dashboard store', () => {
         expect(store.categories.find((c) => c.key === 'failing')?.caption).toBe('By bob');
         expect(store.openLabel).toBe('open by bob');
         expect(store.authorsLabel).toBe('bob');
+    });
+
+    it("counts each card's unread notifications about the PRs it holds", () => {
+        const store = useDashboardStore();
+        const entry = (kind: ActivityEntry['kind'], number: number, read = false) => ({
+            kind,
+            at: `T${number}${kind}`,
+            number,
+            title: 't',
+            url: 'u',
+            ...(read ? { read } : {}),
+        });
+        store.applyState(
+            state({
+                snapshot: scopedSnapshot(),
+                activity: [
+                    entry('review-requested', 9),
+                    entry('checks-failed', 5),
+                    entry('checks-failed', 5, true),
+                    // #2 is not failing: no dot on Failing checks for it.
+                    entry('checks-failed', 2),
+                    entry('approved', 2),
+                    entry('merge-conflict', 1),
+                ],
+            })
+        );
+
+        expect(Object.fromEntries(store.categories.map((c) => [c.key, c.unread]))).toEqual({
+            review: 1,
+            changes: 0,
+            ready: 1,
+            failing: 1,
+            open: 0,
+            stale: 0,
+            merged: 0,
+            drafts: 0,
+        });
+
+        void store.markAllRead();
+        expect(store.categories.every((c) => c.unread === 0)).toBe(true);
+    });
+
+    it('hides the cards turned off, and persists the change', async () => {
+        const setHidden = vi
+            .fn<(keys: string[]) => Promise<DashboardState>>()
+            .mockImplementation(async (keys) => state({ hiddenCards: keys }));
+        window.api = { setDashboardHiddenCards: setHidden } as unknown as Window['api'];
+        const store = useDashboardStore();
+        store.applyState(state({ hiddenCards: ['stale'] }));
+
+        expect(store.categories.map((c) => c.key)).not.toContain('stale');
+        expect(store.cardOptions.find((c) => c.key === 'stale')?.shown).toBe(false);
+
+        await store.toggleCard('drafts');
+        expect(setHidden).toHaveBeenCalledWith(['stale', 'drafts']);
+        expect(store.categories.map((c) => c.key)).not.toContain('drafts');
+
+        await store.toggleCard('stale');
+        expect(setHidden).toHaveBeenLastCalledWith(['drafts']);
+        expect(store.categories.map((c) => c.key)).toContain('stale');
+    });
+
+    // Debug only, with lib/test-notifications.ts.
+    it('adds hardcoded test notifications that stay local, and takes them away', async () => {
+        const markRead = vi
+            .fn<(id: string) => Promise<DashboardState>>()
+            .mockResolvedValue(state());
+        window.api = { markDashboardNotificationRead: markRead } as unknown as Window['api'];
+        const store = useDashboardStore();
+        store.applyState(state());
+
+        store.toggleTestNotifications();
+        expect(store.testMode).toBe(true);
+        expect(store.unreadCount).toBe(6);
+        expect(store.categories.filter((c) => c.unread > 0).map((c) => c.key)).toEqual([
+            'review',
+            'changes',
+            'ready',
+            'failing',
+            'merged',
+        ]);
+
+        await store.markRead(store.activity[0]!);
+        expect(markRead).not.toHaveBeenCalled();
+        expect(store.unreadCount).toBe(5);
+
+        store.toggleTestNotifications();
+        expect(store.activity).toEqual([]);
+        expect(store.categories.every((c) => c.prs.length === 0)).toBe(true);
     });
 
     it('counts the PRs merged this week or this month, by the author filter', () => {
