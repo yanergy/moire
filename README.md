@@ -253,13 +253,17 @@ Track bugs and limitations here.
 
 Everything on the original roadmap has shipped. These are the next features on the list:
 
-- **Favorite branches.** Star a branch from the picker to pin it. Starred branches show a small star
-  and are always listed in a "Favorites" group at the top (below the recommendations), in both the
-  base and the head picker. Favorites are remembered per repository.
-- **Full code reviews from within the app.** Mirror GitHub's review flow: place inline comments on a
-  line or a range of lines in the diff (including suggested changes), collect them as a pending
-  review, and submit the review as Comment, Approve, or Request changes with an overall summary.
-  Pending comments stay visible and editable until the review is submitted or discarded.
+- [x] **Branch recommendations in the branch picker.** A "Recommended" section at the top of each
+  picker, above the full branch list. For the base that is `origin/development` (when it exists),
+  the remote's default branch, and the checked-out branch. For the head it is the working tree and
+  the checked-out branch. ([#17](https://github.com/yanergy/moire/pull/17))
+- [ ] **Favorite branches.** Star a branch from the picker to pin it. Starred branches show a small
+  star and are always listed in a "Favorites" group at the top (below the recommendations), in both
+  the base and the head picker. Favorites are remembered per repository.
+- [ ] **Full code reviews from within the app.** Mirror GitHub's review flow: place inline comments
+  on a line or a range of lines in the diff (including suggested changes), collect them as a
+  pending review, and submit the review as Comment, Approve, or Request changes with an overall
+  summary. Pending comments stay visible and editable until the review is submitted or discarded.
 
 Possible expansions of the GitHub notifications and dashboard, not planned yet:
 
