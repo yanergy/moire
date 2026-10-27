@@ -324,6 +324,20 @@ describe('fetchSnapshot', () => {
         expect(result).toMatchObject({ status: 'not-authenticated', snapshot: null });
     });
 
+    // Debug only (temporary), with debugDetail in notifications.ts.
+    it("adds GitHub's response body and the exit code to an error", async () => {
+        const run = runnerFailing({
+            code: 1,
+            stderr: 'gh: HTTP 502',
+            stdout: '{"message": "Server Error",\n "documentation_url": "x"}',
+        });
+        const { status, message } = await fetchSnapshot('/repo', 'o/r', now, run);
+        expect(status).toBe('error');
+        expect(message).toMatch(
+            /^gh: HTTP 502 \[exit 1, after \d+ ms\] Response: \{"message": "Server Error", "documentation_url": "x"\}$/
+        );
+    });
+
     it('reports unreadable output as an error', async () => {
         expect((await fetchSnapshot('/repo', 'o/r', now, runnerReturning('nope'))).status).toBe(
             'error'
