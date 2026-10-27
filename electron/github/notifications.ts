@@ -1,7 +1,8 @@
 // The data layer behind GitHub notifications and the PR dashboard. Both are scoped
-// to the repository open in Moiré and the active gh account: one GraphQL query
-// fetches the PRs that request the viewer's review and the viewer's own PRs, and
-// the result is normalized into a snapshot. A pure diff of two snapshots yields
+// to the repository open in Moiré and the active gh account: a few GraphQL
+// searches fetch the PRs that request the viewer's review, the viewer's own PRs
+// and the repository's open and merged PRs, and the results are normalized into
+// a snapshot. A pure diff of two snapshots yields
 // the events the notifier turns into native notifications. Nothing here touches
 // Electron, so all of it is unit-testable with a fake gh runner.
 //
@@ -113,6 +114,10 @@ export interface SnapshotResult {
     status: PrStatus;
     snapshot: DashboardSnapshot | null;
     message?: string;
+    // The searches that failed, by name, with gh's message, for the log. With an
+    // ok status only optional ones failed, and their lists are left out of the
+    // snapshot (the caller keeps the previous ones).
+    failed?: { search: string; message: string }[];
 }
 
 export interface SnapshotDiff {
@@ -136,33 +141,27 @@ fragment Pr on PullRequest {
     ... on CheckRun { name status conclusion }
     ... on StatusContext { context state }
   } } } } } }
-}
+}`;
 
-# The Merged card only lists merged PRs, so it skips the reviews and checks. Those
-# are what make the full fragment heavy: with them, 100 merged PRs in a busy
-# repository time out on GitHub's side (HTTP 502).
-fragment MergedPr on PullRequest {
+// The Merged card only lists merged PRs, so it skips the reviews and checks,
+// which are what make the full fragment heavy.
+const MERGED_PR_FRAGMENT = `
+fragment Pr on PullRequest {
   id number title url isDraft state merged closedAt createdAt updatedAt
   isCrossRepository additions deletions
   author { login } mergedBy { login } baseRefName headRefName
 }`;
 
-// Five searches in one round trip. Search cannot OR "open" with "closed
-// recently", so the viewer's open and recently closed PRs are separate aliases.
-// `allOpen` is every open PR in the repository and `merged` every recently merged
-// one (each capped at 100, GitHub's page size; merged PRs carry fewer fields).
-const DASHBOARD_QUERY = `
-query(
-  $review: String!, $mineOpen: String!, $mineClosed: String!, $allOpen: String!, $merged: String!
-) {
+// One search, sent as its own request. One combined query for all of them timed
+// out on GitHub's side in busy repositories (HTTP 502), and took every card down
+// with it; separate requests are lighter and fail on their own.
+function searchQuery(first: number, fragment: string): string {
+    return `query($q: String!) {
   viewer { login }
-  review: search(query: $review, type: ISSUE, first: 50) { nodes { ...Pr } }
-  mineOpen: search(query: $mineOpen, type: ISSUE, first: 50) { nodes { ...Pr } }
-  mineClosed: search(query: $mineClosed, type: ISSUE, first: 50) { nodes { ...Pr } }
-  allOpen: search(query: $allOpen, type: ISSUE, first: 100) { nodes { ...Pr } }
-  merged: search(query: $merged, type: ISSUE, first: 100) { nodes { ...MergedPr } }
+  search(query: $q, type: ISSUE, first: ${first}) { nodes { ...Pr } }
 }
-${PR_FRAGMENT}`;
+${fragment}`;
+}
 
 // The raw GraphQL shape of one PR node; every field optional so a partial node
 // still parses. Search results that are not PRs come back as empty objects.
@@ -201,14 +200,10 @@ interface GqlPr {
     } | null;
 }
 
-interface GqlDashboard {
+interface GqlSearch {
     data?: {
         viewer?: { login?: string } | null;
-        review?: { nodes?: (GqlPr | null)[] | null } | null;
-        mineOpen?: { nodes?: (GqlPr | null)[] | null } | null;
-        mineClosed?: { nodes?: (GqlPr | null)[] | null } | null;
-        allOpen?: { nodes?: (GqlPr | null)[] | null } | null;
-        merged?: { nodes?: (GqlPr | null)[] | null } | null;
+        search?: { nodes?: (GqlPr | null)[] | null } | null;
     } | null;
 }
 
@@ -325,14 +320,63 @@ export async function getRepoIdentity(
     }
 }
 
+// The dashboard's searches. The required ones feed the notification diff, so a
+// snapshot without them would read as every review request and PR going away;
+// the others only feed dashboard cards.
+interface Search {
+    name: string;
+    query: string;
+    first: number;
+    fragment: string;
+    required: boolean;
+}
+
+// A failure GitHub may not repeat: a gateway timeout or a server error.
+function isTransient(error: unknown): boolean {
+    return /HTTP 5\d\d/.test(String((error as { stderr?: unknown }).stderr ?? ''));
+}
+
+// Run one search, retrying once after `retryDelayMs` when GitHub answers with a
+// 5xx. Resolves to the parsed response; rejects with gh's error.
+async function runSearch(
+    search: Search,
+    repoPath: string,
+    run: GhRunner,
+    retryDelayMs: number
+): Promise<GqlSearch> {
+    const args = [
+        'api',
+        'graphql',
+        '-f',
+        `query=${searchQuery(search.first, search.fragment)}`,
+        '-f',
+        `q=${search.query}`,
+    ];
+    let stdout: string;
+    try {
+        ({ stdout } = await run(args, repoPath));
+    } catch (error) {
+        if (!isTransient(error)) {
+            throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        ({ stdout } = await run(args, repoPath));
+    }
+    return JSON.parse(stdout) as GqlSearch;
+}
+
 // Fetch the dashboard snapshot for one repository. `now` is injectable so the
 // closed window is deterministic in tests. The returned snapshot carries no
-// failure flags yet; diffSnapshots carries them over. Never throws.
+// failure flags yet; diffSnapshots carries them over. Each search is its own
+// request, run in parallel. A failed required search fails the whole fetch; a
+// failed optional one leaves its list out and is reported in `failed`. Never
+// throws.
 export async function fetchSnapshot(
     repoPath: string,
     repo: string,
     now: Date = new Date(),
-    run: GhRunner = defaultRunner
+    run: GhRunner = defaultRunner,
+    retryDelayMs = 1000
 ): Promise<SnapshotResult> {
     if (!repoPath || !repo) {
         return { status: 'not-a-github-repo', snapshot: null };
@@ -340,53 +384,98 @@ export async function fetchSnapshot(
 
     const daysAgo = (days: number) =>
         new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const since = daysAgo(CLOSED_WINDOW_DAYS);
     const scope = `repo:${repo} is:pr`;
+    const full = { fragment: PR_FRAGMENT, required: true, first: 50 };
 
-    let stdout: string;
-    try {
-        ({ stdout } = await run(
-            [
-                'api',
-                'graphql',
-                '-f',
-                `query=${DASHBOARD_QUERY}`,
-                '-f',
-                `review=${scope} is:open archived:false user-review-requested:@me`,
-                '-f',
-                `mineOpen=${scope} is:open author:@me`,
-                '-f',
-                `mineClosed=${scope} is:closed author:@me closed:>=${since}`,
-                '-f',
-                `allOpen=${scope} is:open archived:false`,
-                '-f',
-                `merged=${scope} is:merged merged:>=${daysAgo(MERGED_WINDOW_DAYS)}`,
-            ],
-            repoPath
-        ));
-    } catch (error) {
-        const { status, message } = classifyFailure(error);
-        return { status, snapshot: null, message };
-    }
+    // Search cannot OR "open" with "closed recently", so the viewer's open and
+    // recently closed PRs are separate searches. `allOpen` is every open PR in
+    // the repository and `merged` every recently merged one (each capped at 100,
+    // GitHub's page size; merged PRs carry fewer fields).
+    const searches: Search[] = [
+        {
+            ...full,
+            name: 'review requests',
+            query: `${scope} is:open archived:false user-review-requested:@me`,
+        },
+        { ...full, name: 'your open PRs', query: `${scope} is:open author:@me` },
+        {
+            ...full,
+            name: 'your closed PRs',
+            query: `${scope} is:closed author:@me closed:>=${daysAgo(CLOSED_WINDOW_DAYS)}`,
+        },
+        {
+            ...full,
+            name: 'open PRs',
+            query: `${scope} is:open archived:false`,
+            first: 100,
+            required: false,
+        },
+        {
+            name: 'merged PRs',
+            query: `${scope} is:merged merged:>=${daysAgo(MERGED_WINDOW_DAYS)}`,
+            first: 100,
+            fragment: MERGED_PR_FRAGMENT,
+            required: false,
+        },
+    ];
 
-    let data: NonNullable<GqlDashboard['data']>;
-    try {
-        const parsed = JSON.parse(stdout) as GqlDashboard;
-        if (!parsed.data?.viewer?.login) {
-            return { status: 'error', snapshot: null, message: 'gh returned no dashboard data.' };
+    const settled = await Promise.allSettled(
+        searches.map((search) => runSearch(search, repoPath, run, retryDelayMs))
+    );
+
+    const failed: { search: string; message: string }[] = [];
+    const lists: (DashboardPr[] | undefined)[] = [];
+    let login = '';
+    let requiredFailure: { status: PrStatus; message: string } | null = null;
+
+    for (const [i, outcome] of settled.entries()) {
+        const search = searches[i]!;
+        let failure: { status: PrStatus; message: string } | null = null;
+        if (outcome.status === 'rejected') {
+            const { status, message } = classifyFailure(outcome.reason);
+            failure = {
+                status,
+                message:
+                    outcome.reason instanceof SyntaxError ? 'unreadable response' : (message ?? ''),
+            };
+        } else if (!outcome.value.data?.search) {
+            failure = { status: 'error', message: 'no data' };
         }
-        data = parsed.data;
-    } catch {
-        return { status: 'error', snapshot: null, message: 'Could not read the dashboard data.' };
+
+        if (failure) {
+            failed.push({ search: search.name, message: failure.message });
+            lists.push(undefined);
+            if (search.required && !requiredFailure) {
+                requiredFailure = failure;
+            }
+            continue;
+        }
+
+        const data = (outcome as PromiseFulfilledResult<GqlSearch>).value.data!;
+        login ||= data.viewer?.login ?? '';
+        lists.push(toPrList(data.search?.nodes));
     }
 
-    const login = data.viewer!.login!;
+    if (requiredFailure) {
+        const { status, message } = requiredFailure;
+        return {
+            status,
+            snapshot: null,
+            message: `${message || 'gh failed.'} (${failed[0]!.search})`,
+            failed,
+        };
+    }
+    if (!login) {
+        return { status: 'error', snapshot: null, message: 'gh returned no dashboard data.' };
+    }
+
+    const [review, mineOpen, mineClosed, open, merged] = lists;
 
     // A PR can show up in both of the viewer's searches while it is being closed;
     // keep the first (open) copy.
     const mine: DashboardPr[] = [];
     const seen = new Set<string>();
-    for (const pr of [...toPrList(data.mineOpen?.nodes), ...toPrList(data.mineClosed?.nodes)]) {
+    for (const pr of [...mineOpen!, ...mineClosed!]) {
         if (!seen.has(pr.id)) {
             seen.add(pr.id);
             mine.push(pr);
@@ -400,12 +489,13 @@ export async function fetchSnapshot(
             repo,
             fetchedAt: now.toISOString(),
             // GitHub does not let an author review their own PR, but guard anyway.
-            toReview: toPrList(data.review?.nodes).filter((pr) => pr.author !== login),
+            toReview: review!.filter((pr) => pr.author !== login),
             mine,
-            open: toPrList(data.allOpen?.nodes),
-            merged: toPrList(data.merged?.nodes),
+            ...(open ? { open } : {}),
+            ...(merged ? { merged } : {}),
             failureNotified: [],
         },
+        ...(failed.length ? { failed } : {}),
     };
 }
 

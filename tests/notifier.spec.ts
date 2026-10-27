@@ -278,6 +278,31 @@ describe('Notifier', () => {
         expect(t.deps.setBadge).toHaveBeenLastCalledWith(0);
     });
 
+    it('keeps the last dashboard-only lists when their searches fail, and logs them', async () => {
+        const t = setup();
+        const open = [request(7, { author: 'bob' })];
+        t.respond(snapshot({ open, merged: [] }));
+        const partial = snapshot();
+        delete partial.open;
+        delete partial.merged;
+        t.respondWith({
+            status: 'ok',
+            snapshot: partial,
+            failed: [
+                { search: 'open PRs', message: 'gh: HTTP 502' },
+                { search: 'merged PRs', message: 'gh: HTTP 502' },
+            ],
+        });
+
+        await t.notifier.setRepo('/repo');
+        await t.notifier.poll();
+
+        expect(t.notifier.getView().snapshot).toMatchObject({ open, merged: [] });
+        expect(t.deps.logError).toHaveBeenCalledWith('dashboard fetch', 'open PRs: gh: HTTP 502');
+        expect(t.deps.logError).toHaveBeenCalledWith('dashboard fetch', 'merged PRs: gh: HTTP 502');
+        t.notifier.stop();
+    });
+
     it('clears the badge when the dock badge is off', async () => {
         const t = setup({ dockBadge: false });
         t.respond(snapshot(), snapshot({ toReview: [request(5)] }));

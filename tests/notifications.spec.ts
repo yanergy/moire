@@ -38,18 +38,35 @@ function gqlPr(overrides: Record<string, unknown> = {}) {
     };
 }
 
-function gqlResponse(data: Record<string, unknown>) {
-    return JSON.stringify({
-        data: {
-            viewer: { login: 'me' },
-            review: { nodes: [] },
-            mineOpen: { nodes: [] },
-            mineClosed: { nodes: [] },
-            allOpen: { nodes: [] },
-            merged: { nodes: [] },
-            ...data,
-        },
+type SearchName = 'review' | 'mineOpen' | 'mineClosed' | 'allOpen' | 'merged';
+
+// Which dashboard search a `q=` argument is.
+function searchOf(args: string[]): SearchName {
+    const q = args.find((arg) => arg.startsWith('q='))!;
+    if (q.includes('user-review-requested')) return 'review';
+    if (q.includes('is:merged')) return 'merged';
+    if (q.includes('is:closed')) return 'mineClosed';
+    return q.includes('author:@me') ? 'mineOpen' : 'allOpen';
+}
+
+// A gh runner answering each dashboard search (its own request) with the given
+// nodes, or none. A search mapped to an Error object rejects with it instead.
+function searchRunner(results: Partial<Record<SearchName, unknown>> = {}) {
+    return vi.fn<GhRunner>(async (args) => {
+        const result = results[searchOf(args)] ?? { nodes: [] };
+        if (result instanceof Error) {
+            throw result;
+        }
+        return {
+            stdout: JSON.stringify({ data: { viewer: { login: 'me' }, search: result } }),
+            stderr: '',
+        };
     });
+}
+
+// A gh error with stderr, as execFile rejects.
+function ghError(stderr: string) {
+    return Object.assign(new Error(stderr), { stderr });
 }
 
 // The latestReviews connection for reviewers r0, r1, ... with the given states.
@@ -148,36 +165,76 @@ describe('getRepoIdentity', () => {
 describe('fetchSnapshot', () => {
     const now = new Date('2026-10-26T12:00:00Z');
 
-    it('scopes every search to the repository and the closed window', async () => {
-        const run = runnerReturning(gqlResponse({}));
+    it('sends each search as its own request, scoped to the repository and windows', async () => {
+        const run = searchRunner();
         await fetchSnapshot('/repo', 'o/r', now, run);
 
-        const args = run.mock.calls[0]![0];
-        expect(args.slice(0, 2)).toEqual(['api', 'graphql']);
-        expect(args).toContain(
-            'review=repo:o/r is:pr is:open archived:false user-review-requested:@me'
-        );
-        expect(args).toContain('mineOpen=repo:o/r is:pr is:open author:@me');
-        expect(args).toContain(
-            'mineClosed=repo:o/r is:pr is:closed author:@me closed:>=2026-10-19'
-        );
-        expect(args).toContain('allOpen=repo:o/r is:pr is:open archived:false');
-        expect(args).toContain('merged=repo:o/r is:pr is:merged merged:>=2026-09-25');
-        // Merged PRs skip the reviews and checks, which made the query time out.
-        const query = args.find((arg) => arg.startsWith('query='))!;
-        expect(query).toContain(
-            'merged: search(query: $merged, type: ISSUE, first: 100) { nodes { ...MergedPr } }'
-        );
-        expect(query.slice(query.indexOf('fragment MergedPr'))).not.toContain('statusCheckRollup');
+        expect(run).toHaveBeenCalledTimes(5);
+        const queries = run.mock.calls.map(([args]) => {
+            expect(args.slice(0, 2)).toEqual(['api', 'graphql']);
+            return args.find((arg) => arg.startsWith('q='));
+        });
+        expect(queries).toEqual([
+            'q=repo:o/r is:pr is:open archived:false user-review-requested:@me',
+            'q=repo:o/r is:pr is:open author:@me',
+            'q=repo:o/r is:pr is:closed author:@me closed:>=2026-10-19',
+            'q=repo:o/r is:pr is:open archived:false',
+            'q=repo:o/r is:pr is:merged merged:>=2026-09-25',
+        ]);
+        // Merged PRs skip the reviews and checks, which make a search heavy.
+        const query = (i: number) => run.mock.calls[i]![0].find((arg) => arg.startsWith('query='))!;
+        expect(query(3)).toContain('first: 100');
+        expect(query(3)).toContain('statusCheckRollup');
+        expect(query(4)).not.toContain('statusCheckRollup');
+    });
+
+    it('retries a search once when GitHub answers with a 5xx', async () => {
+        const run = searchRunner();
+        const answer = run.getMockImplementation()!;
+        let failures = 0;
+        run.mockImplementation(async (args, cwd) => {
+            if (searchOf(args) === 'allOpen' && failures++ === 0) {
+                throw ghError('gh: HTTP 502');
+            }
+            return answer(args, cwd);
+        });
+
+        const result = await fetchSnapshot('/repo', 'o/r', now, run, 0);
+        expect(result.status).toBe('ok');
+        expect(result.failed).toBeUndefined();
+        expect(run).toHaveBeenCalledTimes(6);
+    });
+
+    it('leaves out a dashboard-only list whose search keeps failing, and reports it', async () => {
+        const run = searchRunner({ allOpen: ghError('gh: HTTP 502') });
+        const { status, snapshot: snap, failed } = await fetchSnapshot('/repo', 'o/r', now, run, 0);
+
+        expect(status).toBe('ok');
+        expect(snap).not.toHaveProperty('open');
+        expect(snap!.merged).toEqual([]);
+        expect(failed).toEqual([{ search: 'open PRs', message: 'gh: HTTP 502' }]);
+    });
+
+    it('fails the fetch, naming the search, when a search the diff needs fails', async () => {
+        const run = searchRunner({ review: ghError('gh: HTTP 502') });
+        const result = await fetchSnapshot('/repo', 'o/r', now, run, 0);
+
+        expect(result).toMatchObject({
+            status: 'error',
+            snapshot: null,
+            message: 'gh: HTTP 502 (review requests)',
+        });
+        // Not a 5xx: no retry.
+        const auth = searchRunner({ review: ghError('please run:  gh auth login') });
+        await fetchSnapshot('/repo', 'o/r', now, auth, 0);
+        expect(auth).toHaveBeenCalledTimes(5);
     });
 
     it('normalizes the review requests and the viewer’s PRs', async () => {
-        const run = runnerReturning(
-            gqlResponse({
-                review: { nodes: [gqlPr({ id: 'PR_9', number: 9, author: { login: 'ann' } })] },
-                mineOpen: { nodes: [gqlPr()] },
-            })
-        );
+        const run = searchRunner({
+            review: { nodes: [gqlPr({ id: 'PR_9', number: 9, author: { login: 'ann' } })] },
+            mineOpen: { nodes: [gqlPr()] },
+        });
         const { status, snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
 
         expect(status).toBe('ok');
@@ -196,22 +253,20 @@ describe('fetchSnapshot', () => {
     });
 
     it('derives the review decision from the latest reviews when GitHub leaves it empty', async () => {
-        const run = runnerReturning(
-            gqlResponse({
-                mineOpen: {
-                    nodes: [
-                        gqlPr({ id: 'A', number: 1, latestReviews: reviews(['APPROVED']) }),
-                        gqlPr({
-                            id: 'B',
-                            number: 2,
-                            latestReviews: reviews(['APPROVED', 'CHANGES_REQUESTED']),
-                        }),
-                        gqlPr({ id: 'C', number: 3, latestReviews: reviews(['COMMENTED']) }),
-                        gqlPr({ id: 'D', number: 4, reviewDecision: 'REVIEW_REQUIRED' }),
-                    ],
-                },
-            })
-        );
+        const run = searchRunner({
+            mineOpen: {
+                nodes: [
+                    gqlPr({ id: 'A', number: 1, latestReviews: reviews(['APPROVED']) }),
+                    gqlPr({
+                        id: 'B',
+                        number: 2,
+                        latestReviews: reviews(['APPROVED', 'CHANGES_REQUESTED']),
+                    }),
+                    gqlPr({ id: 'C', number: 3, latestReviews: reviews(['COMMENTED']) }),
+                    gqlPr({ id: 'D', number: 4, reviewDecision: 'REVIEW_REQUIRED' }),
+                ],
+            },
+        });
         const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
 
         expect(snap!.mine.map((p) => p.reviewDecision)).toEqual([
@@ -223,40 +278,38 @@ describe('fetchSnapshot', () => {
     });
 
     it('maps the check rollup to a CI state with the failed check names', async () => {
-        const run = runnerReturning(
-            gqlResponse({
-                mineOpen: {
-                    nodes: [
-                        gqlPr({
-                            id: 'A',
-                            number: 1,
-                            commits: rollup('FAILURE', [
-                                {
-                                    __typename: 'CheckRun',
-                                    name: 'lint',
-                                    status: 'COMPLETED',
-                                    conclusion: 'FAILURE',
-                                },
-                                {
-                                    __typename: 'CheckRun',
-                                    name: 'test',
-                                    status: 'COMPLETED',
-                                    conclusion: 'SUCCESS',
-                                },
-                                {
-                                    __typename: 'StatusContext',
-                                    context: 'ci/legacy',
-                                    state: 'ERROR',
-                                },
-                            ]),
-                        }),
-                        gqlPr({ id: 'B', number: 2, commits: rollup('SUCCESS') }),
-                        gqlPr({ id: 'C', number: 3, commits: rollup('PENDING') }),
-                        gqlPr({ id: 'D', number: 4, commits: rollup('EXPECTED') }),
-                    ],
-                },
-            })
-        );
+        const run = searchRunner({
+            mineOpen: {
+                nodes: [
+                    gqlPr({
+                        id: 'A',
+                        number: 1,
+                        commits: rollup('FAILURE', [
+                            {
+                                __typename: 'CheckRun',
+                                name: 'lint',
+                                status: 'COMPLETED',
+                                conclusion: 'FAILURE',
+                            },
+                            {
+                                __typename: 'CheckRun',
+                                name: 'test',
+                                status: 'COMPLETED',
+                                conclusion: 'SUCCESS',
+                            },
+                            {
+                                __typename: 'StatusContext',
+                                context: 'ci/legacy',
+                                state: 'ERROR',
+                            },
+                        ]),
+                    }),
+                    gqlPr({ id: 'B', number: 2, commits: rollup('SUCCESS') }),
+                    gqlPr({ id: 'C', number: 3, commits: rollup('PENDING') }),
+                    gqlPr({ id: 'D', number: 4, commits: rollup('EXPECTED') }),
+                ],
+            },
+        });
         const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
 
         expect(snap!.mine.map((p) => p.ci)).toEqual(['failing', 'passing', 'pending', 'pending']);
@@ -264,24 +317,22 @@ describe('fetchSnapshot', () => {
     });
 
     it('merges the open and closed searches without duplicates and marks merged PRs', async () => {
-        const run = runnerReturning(
-            gqlResponse({
-                mineOpen: { nodes: [gqlPr({ id: 'A', number: 1 })] },
-                mineClosed: {
-                    nodes: [
-                        gqlPr({ id: 'A', number: 1, state: 'CLOSED' }),
-                        gqlPr({
-                            id: 'B',
-                            number: 2,
-                            state: 'MERGED',
-                            merged: true,
-                            mergedBy: { login: 'ann' },
-                        }),
-                        gqlPr({ id: 'C', number: 3, state: 'CLOSED' }),
-                    ],
-                },
-            })
-        );
+        const run = searchRunner({
+            mineOpen: { nodes: [gqlPr({ id: 'A', number: 1 })] },
+            mineClosed: {
+                nodes: [
+                    gqlPr({ id: 'A', number: 1, state: 'CLOSED' }),
+                    gqlPr({
+                        id: 'B',
+                        number: 2,
+                        state: 'MERGED',
+                        merged: true,
+                        mergedBy: { login: 'ann' },
+                    }),
+                    gqlPr({ id: 'C', number: 3, state: 'CLOSED' }),
+                ],
+            },
+        });
         const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
 
         expect(snap!.mine.map((p) => [p.number, p.state, p.mergedBy])).toEqual([
@@ -292,16 +343,14 @@ describe('fetchSnapshot', () => {
     });
 
     it('lists every open PR in the repository, by any author', async () => {
-        const run = runnerReturning(
-            gqlResponse({
-                allOpen: {
-                    nodes: [
-                        gqlPr({ id: 'A', number: 1, author: { login: 'ann' } }),
-                        gqlPr({ id: 'B', number: 2 }),
-                    ],
-                },
-            })
-        );
+        const run = searchRunner({
+            allOpen: {
+                nodes: [
+                    gqlPr({ id: 'A', number: 1, author: { login: 'ann' } }),
+                    gqlPr({ id: 'B', number: 2 }),
+                ],
+            },
+        });
         const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
 
         expect(snap!.open?.map((p) => [p.number, p.author])).toEqual([
@@ -311,7 +360,7 @@ describe('fetchSnapshot', () => {
     });
 
     it('skips search results that are not pull requests', async () => {
-        const run = runnerReturning(gqlResponse({ review: { nodes: [{}, null] } }));
+        const run = searchRunner({ review: { nodes: [{}, null] } });
         const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
         expect(snap!.toReview).toEqual([]);
     });

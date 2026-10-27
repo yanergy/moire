@@ -98,8 +98,8 @@ and the pill goes away once the notifications are read or deleted.
 The Merged card counts merged rather than open PRs, by the same Users pick. Its period is set in
 the **Merged** submenu of the Display menu: **This week** (since Monday, the default) or **This
 month** (since the 1st), both in local time and measured against the last refresh. The choice is
-not saved, so it is back to this week after a restart. The data comes from a fifth search in the
-dashboard query: every PR in the repository merged in the last 31 days (capped at 100).
+not saved, so it is back to this week after a restart. The data comes from its own search in each
+poll: every PR in the repository merged in the last 31 days (capped at 100).
 
 Clicking a card lists its PRs (title, author, branches, age, size and CI state), with a way back
 to the overview. Clicking a PR opens it in the PR view; an "Open in browser" button at the end of each row
@@ -219,7 +219,15 @@ open. The summary rule above keeps that to a single notification when a lot happ
 - Polls immediately after the Mac wakes from sleep (`powerMonitor` `resume`).
 - The dashboard's refresh button triggers an immediate poll.
 - Failures (offline, `gh` missing or not authenticated, no GitHub remote) are logged and skipped.
-- Cost: one GraphQL query per poll, a negligible share of the 5,000 points per hour limit.
+- Each poll runs five GraphQL searches as separate requests, in parallel: review requests, your
+  open PRs, your recently closed PRs, every open PR (dashboard only) and every PR merged in the
+  last 31 days (dashboard only). They used to be one combined query, which timed out on GitHub's
+  side (HTTP 502) in busy repositories and took the whole dashboard down with it.
+- A search that gets a 5xx is retried once, after a second. If one of the first three still
+  fails, the poll fails and the dashboard names the search ("gh: HTTP 502 (review requests)"),
+  since the notification diff needs all three. If a dashboard only search fails, the poll goes
+  on and those cards keep their previous data. Every failed search is logged.
+- Cost: five searches per poll, a negligible share of the 5,000 points per hour limit.
 
 ### Process split
 

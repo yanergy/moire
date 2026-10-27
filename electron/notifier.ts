@@ -285,6 +285,9 @@ export class Notifier {
             if (generation !== this.generation) {
                 return;
             }
+            for (const { search, message } of result.failed ?? []) {
+                this.deps.logError('dashboard fetch', `${search}: ${message}`);
+            }
             if (result.status !== 'ok' || !result.snapshot) {
                 // Keep the last good data on screen; just report why it is stale.
                 this.setView({ ...this.view, status: result.status, message: result.message });
@@ -311,11 +314,19 @@ export class Notifier {
     // save the result. Runs under the lock.
     private async advance(
         key: string,
-        fetched: DashboardSnapshot,
+        raw: DashboardSnapshot,
         prefs: NotificationPrefs,
         now: Date
     ): Promise<NotifierRepoState> {
         const saved = await this.deps.loadState(key);
+        // A failed dashboard-only search leaves its list out; keep the last one.
+        const fetched: DashboardSnapshot = saved
+            ? {
+                  ...raw,
+                  open: raw.open ?? saved.snapshot.open,
+                  merged: raw.merged ?? saved.snapshot.merged,
+              }
+            : raw;
 
         let state: NotifierRepoState;
         if (saved) {
