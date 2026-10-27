@@ -7,6 +7,7 @@
 // The data itself (fetching, diffing) lives in github/notifications.ts.
 
 import {
+    activityId,
     diffSnapshots,
     type ActivityEntry,
     type DashboardEvent,
@@ -135,6 +136,12 @@ export class Notifier {
     private generation = 0;
     private inFlight: Promise<void> | null = null;
     private view: NotifierView = EMPTY_VIEW;
+    // The saved state's key (`login|owner/name`) of the last good poll, which the
+    // dashboard's mark read and delete actions edit.
+    private stateKey: string | null = null;
+    // Serializes every read-modify-write of the saved state, so a poll and a mark
+    // read never overwrite each other's change.
+    private lock: Promise<unknown> = Promise.resolve();
 
     constructor(private readonly deps: NotifierDeps) {}
 
@@ -153,6 +160,7 @@ export class Notifier {
         this.repoPath = repoPath;
         this.repo = null;
         this.inFlight = null;
+        this.stateKey = null;
         this.setView(EMPTY_VIEW);
         await this.restart();
     }
@@ -201,6 +209,60 @@ export class Notifier {
         return this.inFlight;
     }
 
+    // Mark one notification read, every notification read, or delete one. Each
+    // edits the saved state of the repository the dashboard shows.
+    markActivityRead(id: string): Promise<void> {
+        return this.updateActivity((activity) =>
+            activity.map((entry) => (activityId(entry) === id ? { ...entry, read: true } : entry))
+        );
+    }
+
+    markAllActivityRead(): Promise<void> {
+        return this.updateActivity((activity) =>
+            activity.map((entry) => (entry.read ? entry : { ...entry, read: true }))
+        );
+    }
+
+    // Debug only (the dashboard shows its button in dev builds): undo every read
+    // mark, to test the unread flow again. Temporary.
+    markAllActivityUnread(): Promise<void> {
+        return this.updateActivity((activity) =>
+            activity.map(({ read: _read, ...entry }) => entry)
+        );
+    }
+
+    deleteActivity(id: string): Promise<void> {
+        return this.updateActivity((activity) =>
+            activity.filter((entry) => activityId(entry) !== id)
+        );
+    }
+
+    private exclusive<T>(task: () => Promise<T>): Promise<T> {
+        const run = this.lock.then(task, task);
+        this.lock = run.catch(() => undefined);
+        return run;
+    }
+
+    private updateActivity(change: (activity: ActivityEntry[]) => ActivityEntry[]): Promise<void> {
+        const key = this.stateKey;
+        if (!key) {
+            return Promise.resolve();
+        }
+
+        return this.exclusive(async () => {
+            const saved = await this.deps.loadState(key);
+            if (!saved) {
+                return;
+            }
+
+            const activity = change(saved.activity);
+            await this.deps.saveState(key, { ...saved, activity });
+            if (key === this.stateKey) {
+                this.setView({ ...this.view, activity });
+            }
+        });
+    }
+
     private async runPoll(): Promise<void> {
         const { generation, repoPath } = this;
         if (!repoPath) {
@@ -237,51 +299,64 @@ export class Notifier {
 
             const prefs = await this.deps.getPrefs();
             const key = `${result.snapshot.login}|${result.snapshot.repo}`;
-            const saved = await this.deps.loadState(key);
-
-            let state: NotifierRepoState;
-            if (saved) {
-                const diff = diffSnapshots(saved.snapshot, result.snapshot);
-                // Events are diffed (and so recorded as seen) even when they are
-                // not shown, so turning a toggle on later does not replay them.
-                const delivered = diff.events.filter(
-                    (e) =>
-                        prefs.enabled && prefs.events[e.kind] && (prefs.showDrafts || !e.pr.isDraft)
-                );
-                const at = now.toISOString();
-                state = {
-                    snapshot: diff.snapshot,
-                    activity: [
-                        ...delivered.map((e) => toActivity(e, at)).toReversed(),
-                        ...saved.activity,
-                    ].slice(0, MAX_ACTIVITY),
-                };
-                this.deliver(delivered, result.snapshot.repo);
-            } else {
-                // First poll for this login and repository: a silent baseline.
-                // Carry the CI flags for PRs already failing, so they do not all
-                // notify on the next poll.
-                state = {
-                    snapshot: {
-                        ...result.snapshot,
-                        failureNotified: result.snapshot.mine
-                            .filter((pr) => pr.state === 'OPEN' && pr.ci === 'failing')
-                            .map((pr) => pr.id),
-                    },
-                    activity: [],
-                };
-            }
-
-            await this.deps.saveState(key, state);
+            const snapshot = result.snapshot;
+            const state = await this.exclusive(() => this.advance(key, snapshot, prefs, now));
             if (generation !== this.generation) {
                 return;
             }
 
+            this.stateKey = key;
             this.updateBadge(state.snapshot, prefs);
             this.setView({ status: 'ok', snapshot: state.snapshot, activity: state.activity });
         } catch (error) {
             this.deps.logError('notifier poll', error);
         }
+    }
+
+    // Diff a fresh snapshot against the saved state, deliver the new events, and
+    // save the result. Runs under the lock.
+    private async advance(
+        key: string,
+        fetched: DashboardSnapshot,
+        prefs: NotificationPrefs,
+        now: Date
+    ): Promise<NotifierRepoState> {
+        const saved = await this.deps.loadState(key);
+
+        let state: NotifierRepoState;
+        if (saved) {
+            const diff = diffSnapshots(saved.snapshot, fetched);
+            // Events are diffed (and so recorded as seen) even when they are
+            // not shown, so turning a toggle on later does not replay them.
+            const delivered = diff.events.filter(
+                (e) => prefs.enabled && prefs.events[e.kind] && (prefs.showDrafts || !e.pr.isDraft)
+            );
+            const at = now.toISOString();
+            state = {
+                snapshot: diff.snapshot,
+                activity: [
+                    ...delivered.map((e) => toActivity(e, at)).toReversed(),
+                    ...saved.activity,
+                ].slice(0, MAX_ACTIVITY),
+            };
+            this.deliver(delivered, fetched.repo);
+        } else {
+            // First poll for this login and repository: a silent baseline.
+            // Carry the CI flags for PRs already failing, so they do not all
+            // notify on the next poll.
+            state = {
+                snapshot: {
+                    ...fetched,
+                    failureNotified: fetched.mine
+                        .filter((pr) => pr.state === 'OPEN' && pr.ci === 'failing')
+                        .map((pr) => pr.id),
+                },
+                activity: [],
+            };
+        }
+
+        await this.deps.saveState(key, state);
+        return state;
     }
 
     private deliver(events: DashboardEvent[], repo: string): void {

@@ -45,6 +45,13 @@ export interface DashboardBridge {
     refresh: () => Promise<DashboardState>;
     setShowDrafts: (show: boolean) => Promise<DashboardState>;
     setAuthors: (authors: AuthorFilter) => Promise<DashboardState>;
+    // The dashboard's notification list: mark one read (by its activity id), all
+    // read, or delete one.
+    markRead: (id: string) => Promise<DashboardState>;
+    markAllRead: () => Promise<DashboardState>;
+    // Debug only (the dashboard's dev build button): undo every read mark.
+    markAllUnread: () => Promise<DashboardState>;
+    deleteNotification: (id: string) => Promise<DashboardState>;
 }
 
 // ipcMain.handle that logs a handler rejection before it propagates. A git
@@ -198,6 +205,12 @@ function registerIpcHandlers({
     handle('dashboard:set-show-drafts', (show: boolean) => requireDashboard().setShowDrafts(show));
     handle('dashboard:set-authors', (authors: AuthorFilter) =>
         requireDashboard().setAuthors(authors)
+    );
+    handle('dashboard:mark-read', (id: string) => requireDashboard().markRead(id));
+    handle('dashboard:mark-all-read', () => requireDashboard().markAllRead());
+    handle('dashboard:mark-all-unread', () => requireDashboard().markAllUnread());
+    handle('dashboard:delete-notification', (id: string) =>
+        requireDashboard().deleteNotification(id)
     );
 
     // Git-backed channels. Each operates on the currently open repo and has a

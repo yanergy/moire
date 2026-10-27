@@ -110,6 +110,13 @@ contextBridge.exposeInMainWorld('api', {
     setDashboardShowDrafts: (show: boolean) =>
         ipcRenderer.invoke('dashboard:set-show-drafts', show),
     setDashboardAuthors: (authors: unknown) => ipcRenderer.invoke('dashboard:set-authors', authors),
+    // The dashboard's notification list: mark one read or all read, or delete one.
+    markDashboardNotificationRead: (id: string) => ipcRenderer.invoke('dashboard:mark-read', id),
+    markAllDashboardNotificationsRead: () => ipcRenderer.invoke('dashboard:mark-all-read'),
+    // Debug only: undo every read mark (the dashboard shows it in dev builds).
+    markAllDashboardNotificationsUnread: () => ipcRenderer.invoke('dashboard:mark-all-unread'),
+    deleteDashboardNotification: (id: string) =>
+        ipcRenderer.invoke('dashboard:delete-notification', id),
     onDashboardChanged: (callback: (state: unknown) => void) => {
         const listener = (_event: IpcRendererEvent, state: unknown) => callback(state);
         ipcRenderer.on('dashboard:changed', listener);

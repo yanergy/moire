@@ -6,6 +6,34 @@ import type { Component } from 'vue';
 import { CircleCheck, CircleDot, CircleX } from '@lucide/vue';
 import type { ActivityEntry, DashboardEventKind, DashboardPr, PrStatus } from '@/shared/types';
 
+// The outlined icon buttons at the end of a dashboard row (Open in browser on PR
+// rows; Mark as read and Delete on notification rows). Their outline lifts to the ring tone on a hovered row: its
+// hover fill is the same tone as the regular border, which would otherwise
+// vanish. The outline variant carries its own dark: border and fill, so the
+// tokens are repeated under dark: to win there too.
+export const ROW_ACTION_CLASS = [
+    'size-7 shrink-0 text-moire-muted hover:text-moire-fg',
+    'border-moire-border bg-moire-app group-hover:border-moire-ring hover:bg-moire-chrome',
+    'dark:border-moire-border dark:bg-moire-app dark:group-hover:border-moire-ring dark:hover:bg-moire-chrome',
+].join(' ');
+
+// The strip holding a notification row's Mark as read and Delete. It overlays the
+// row's age instead of reserving space, and shows only while the
+// row is hovered or a button has keyboard focus. It carries the row's hover fill
+// (rows take it on focus too), so the text it covers does not show between the
+// buttons. While hidden it lets clicks through, so a click on the marker can never
+// hit an invisible Delete.
+export const ROW_ACTIONS_CLASS =
+    'pointer-events-none absolute inset-y-0 right-0 flex items-center gap-1.5 bg-moire-hover pl-2 opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100';
+
+// A notification row's container: keeps the hover fill while a button has
+// keyboard focus, so the actions strip's fill matches it.
+export const ROW_CLASS =
+    'group relative flex items-center hover:bg-moire-hover focus-within:bg-moire-hover';
+
+// The age the actions overlay, hidden while they show.
+export const ROW_MARKER_CLASS = 'group-focus-within:invisible group-hover:invisible';
+
 // The status dot before a PR row, in the toolbar PR button's colors: gray draft,
 // purple merged, red closed, yellow changes requested, green open.
 export function prDotClass(pr: DashboardPr): string {
@@ -35,6 +63,12 @@ export function ciVisual(pr: DashboardPr): { icon: Component; cls: string; label
         default:
             return null;
     }
+}
+
+// A stable id for a notification, to mark it read or delete it. Restated from
+// activityId in electron/github/notifications.ts; keep the two in sync.
+export function activityId(entry: ActivityEntry): string {
+    return `${entry.at}|${entry.kind}|${entry.number}`;
 }
 
 // What a notification said, for its row in the dashboard's notification list.

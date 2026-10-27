@@ -80,6 +80,7 @@ dot, a label, the PR count and a caption saying what is counted:
 | Failing checks (red) | Open PRs with failing checks | On your PRs |
 | Your open PRs (purple) | Open PRs | Authored by you |
 | Stale (gray) | Open PRs with no activity in 7 or more days | No activity in 7+ days |
+| Merged (purple) | PRs merged since Monday, or since the 1st of the month | This week |
 | Drafts (gray) | Open draft PRs | Not ready for review |
 
 Every card but the first counts the open PRs of the authors picked in the **Users** submenu of
@@ -88,9 +89,16 @@ follows an account switch), and can pick any mix of the authors with an open PR 
 repository, or **All**. The captions follow the pick ("Any author", "By ann", "3 authors"), and
 "Your open PRs" reads "Open PRs" for anyone but yourself.
 
+The Merged card counts merged rather than open PRs, by the same Users pick. Its period is set in
+the **Merged** submenu of the Display menu: **This week** (since Monday, the default) or **This
+month** (since the 1st), both in local time and measured against the last refresh. The choice is
+not saved, so it is back to this week after a restart. The data comes from a fifth search in the
+dashboard query: every PR in the repository merged in the last 31 days (capped at 100).
+
 Clicking a card lists its PRs (title, author, branches, age, size and CI state), with a way back
-to the overview. The header shows how many PRs the cards cover, when the data was last refreshed,
-the **Display** menu (with "Show drafts" and **Users**) and a refresh button. With drafts hidden,
+to the overview. Clicking a PR opens it in the PR view; an "Open in browser" button at the end of each row
+opens it on GitHub instead. The header shows how many PRs the cards cover, when the data was last refreshed,
+the **Display** menu (with "Show drafts", **Users** and **Merged**) and a refresh button. With drafts hidden,
 the Drafts card goes away and drafts are left out of every other card.
 
 The dashboard is a third main view next to the diff and PR views, reachable from the toolbar and
@@ -101,7 +109,10 @@ messages.
 
 Below the cards, a **Notifications** list shows every notification sent for the repository (the
 recent activity list, newest first, up to 50), each with what happened, the PR, and how long ago.
-Clicking one opens its PR.
+Clicking one opens its PR and marks it read. Each row ends in an Open in browser button (which
+also marks it read), and shows Mark as read and Delete buttons over its age on hover, unread notifications stand out and are counted in the heading, and a "Mark all
+as read" button clears them at once. The toolbar's dashboard button shows the same unread count. Read state and deletions are saved with the rest of the
+notifier state.
 
 ### Dock badge
 

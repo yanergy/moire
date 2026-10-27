@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+    activityId,
     diffSnapshots,
     fetchSnapshot,
     getRepoIdentity,
@@ -45,6 +46,7 @@ function gqlResponse(data: Record<string, unknown>) {
             mineOpen: { nodes: [] },
             mineClosed: { nodes: [] },
             allOpen: { nodes: [] },
+            merged: { nodes: [] },
             ...data,
         },
     });
@@ -160,6 +162,13 @@ describe('fetchSnapshot', () => {
             'mineClosed=repo:o/r is:pr is:closed author:@me closed:>=2026-10-19'
         );
         expect(args).toContain('allOpen=repo:o/r is:pr is:open archived:false');
+        expect(args).toContain('merged=repo:o/r is:pr is:merged merged:>=2026-09-25');
+        // Merged PRs skip the reviews and checks, which made the query time out.
+        const query = args.find((arg) => arg.startsWith('query='))!;
+        expect(query).toContain(
+            'merged: search(query: $merged, type: ISSUE, first: 100) { nodes { ...MergedPr } }'
+        );
+        expect(query.slice(query.indexOf('fragment MergedPr'))).not.toContain('statusCheckRollup');
     });
 
     it('normalizes the review requests and the viewer’s PRs', async () => {
@@ -175,6 +184,7 @@ describe('fetchSnapshot', () => {
         expect(snap).toMatchObject({ login: 'me', repo: 'o/r', fetchedAt: now.toISOString() });
         expect(snap!.toReview.map((p) => p.number)).toEqual([9]);
         expect(snap!.open).toEqual([]);
+        expect(snap!.merged).toEqual([]);
         expect(snap!.mine[0]).toMatchObject({
             number: 1,
             author: 'me',
@@ -496,5 +506,19 @@ describe('diffSnapshots', () => {
             ],
         });
         expect(kinds(before, after)).toEqual([]);
+    });
+});
+
+describe('activityId', () => {
+    it('combines the time, kind and PR number', () => {
+        expect(
+            activityId({
+                kind: 'approved',
+                at: '2026-10-26T12:00:00.000Z',
+                number: 5,
+                title: 'x',
+                url: 'u',
+            })
+        ).toBe('2026-10-26T12:00:00.000Z|approved|5');
     });
 });

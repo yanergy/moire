@@ -16,9 +16,13 @@ import {
     type PrStatus,
 } from './gh';
 
-// How far back the viewer's closed PRs are fetched, for the dashboard's "recently
-// closed without merge" section and the closed/merged events.
+// How far back the viewer's closed PRs are fetched, for the closed and merged
+// events.
 const CLOSED_WINDOW_DAYS = 7;
+
+// How far back merged PRs (by any author) are fetched, for the dashboard's Merged
+// card. 31 days covers both of its periods: this week and this month.
+const MERGED_WINDOW_DAYS = 31;
 
 // The overall CI state of a PR's head commit. 'none' means no checks ran.
 export type CiState = 'passing' | 'failing' | 'pending' | 'none';
@@ -72,6 +76,9 @@ export interface DashboardSnapshot {
     // repository wide cards (failing checks, stale). Not diffed. Optional because
     // snapshots saved before it existed lack it.
     open?: DashboardPr[];
+    // PRs merged in the last MERGED_WINDOW_DAYS, by any author, for the Merged card
+    // (its closedAt is the merge time). Not diffed. Optional for the same reason.
+    merged?: DashboardPr[];
     // Ids of the viewer's PRs that already got a "checks failed" notification and
     // have not passed since. CI is notified once per PR, not per commit.
     failureNotified: string[];
@@ -129,18 +136,31 @@ fragment Pr on PullRequest {
     ... on CheckRun { name status conclusion }
     ... on StatusContext { context state }
   } } } } } }
+}
+
+# The Merged card only lists merged PRs, so it skips the reviews and checks. Those
+# are what make the full fragment heavy: with them, 100 merged PRs in a busy
+# repository time out on GitHub's side (HTTP 502).
+fragment MergedPr on PullRequest {
+  id number title url isDraft state merged closedAt createdAt updatedAt
+  isCrossRepository additions deletions
+  author { login } mergedBy { login } baseRefName headRefName
 }`;
 
-// Four searches in one round trip. Search cannot OR "open" with "closed
+// Five searches in one round trip. Search cannot OR "open" with "closed
 // recently", so the viewer's open and recently closed PRs are separate aliases.
-// `allOpen` is every open PR in the repository (capped at 100, GitHub's page size).
+// `allOpen` is every open PR in the repository and `merged` every recently merged
+// one (each capped at 100, GitHub's page size; merged PRs carry fewer fields).
 const DASHBOARD_QUERY = `
-query($review: String!, $mineOpen: String!, $mineClosed: String!, $allOpen: String!) {
+query(
+  $review: String!, $mineOpen: String!, $mineClosed: String!, $allOpen: String!, $merged: String!
+) {
   viewer { login }
   review: search(query: $review, type: ISSUE, first: 50) { nodes { ...Pr } }
   mineOpen: search(query: $mineOpen, type: ISSUE, first: 50) { nodes { ...Pr } }
   mineClosed: search(query: $mineClosed, type: ISSUE, first: 50) { nodes { ...Pr } }
   allOpen: search(query: $allOpen, type: ISSUE, first: 100) { nodes { ...Pr } }
+  merged: search(query: $merged, type: ISSUE, first: 100) { nodes { ...MergedPr } }
 }
 ${PR_FRAGMENT}`;
 
@@ -188,6 +208,7 @@ interface GqlDashboard {
         mineOpen?: { nodes?: (GqlPr | null)[] | null } | null;
         mineClosed?: { nodes?: (GqlPr | null)[] | null } | null;
         allOpen?: { nodes?: (GqlPr | null)[] | null } | null;
+        merged?: { nodes?: (GqlPr | null)[] | null } | null;
     } | null;
 }
 
@@ -317,9 +338,9 @@ export async function fetchSnapshot(
         return { status: 'not-a-github-repo', snapshot: null };
     }
 
-    const since = new Date(now.getTime() - CLOSED_WINDOW_DAYS * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
+    const daysAgo = (days: number) =>
+        new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const since = daysAgo(CLOSED_WINDOW_DAYS);
     const scope = `repo:${repo} is:pr`;
 
     let stdout: string;
@@ -338,6 +359,8 @@ export async function fetchSnapshot(
                 `mineClosed=${scope} is:closed author:@me closed:>=${since}`,
                 '-f',
                 `allOpen=${scope} is:open archived:false`,
+                '-f',
+                `merged=${scope} is:merged merged:>=${daysAgo(MERGED_WINDOW_DAYS)}`,
             ],
             repoPath
         ));
@@ -380,6 +403,7 @@ export async function fetchSnapshot(
             toReview: toPrList(data.review?.nodes).filter((pr) => pr.author !== login),
             mine,
             open: toPrList(data.allOpen?.nodes),
+            merged: toPrList(data.merged?.nodes),
             failureNotified: [],
         },
     };
@@ -481,7 +505,8 @@ export function diffSnapshots(prev: DashboardSnapshot, next: DashboardSnapshot):
 }
 
 // One delivered event in a repository's recent activity list, so a notification
-// that was missed can still be found on the dashboard. `at` is when it was seen.
+// that was missed can still be found on the dashboard. `at` is when it was seen;
+// `read` is set once it is marked read (or opened) on the dashboard.
 export interface ActivityEntry {
     kind: DashboardEventKind;
     at: string;
@@ -490,4 +515,13 @@ export interface ActivityEntry {
     url: string;
     actor?: string;
     checks?: string[];
+    read?: boolean;
+}
+
+// A stable id for an activity entry, to mark it read or delete it. One poll
+// records at most one event of a kind per PR, so time, kind and number are
+// unique. Derived rather than stored, so entries saved before ids existed work.
+// Restated in src/lib/dashboard.ts; keep the two in sync.
+export function activityId(entry: ActivityEntry): string {
+    return `${entry.at}|${entry.kind}|${entry.number}`;
 }

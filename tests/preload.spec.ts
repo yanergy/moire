@@ -70,6 +70,9 @@ describe('preload bridge', () => {
             'refreshDashboard',
             'setDashboardShowDrafts',
             'setDashboardAuthors',
+            'markDashboardNotificationRead',
+            'markAllDashboardNotificationsRead',
+            'deleteDashboardNotification',
             'onDashboardChanged',
             'onShowDashboard',
             'onOpenPr',
@@ -123,6 +126,13 @@ describe('preload bridge', () => {
 
         await api().setDashboardAuthors!('all');
         expect(bridge.invoke).toHaveBeenCalledWith('dashboard:set-authors', 'all');
+
+        await api().markDashboardNotificationRead!('id-1');
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:mark-read', 'id-1');
+        await api().markAllDashboardNotificationsRead!();
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:mark-all-read');
+        await api().deleteDashboardNotification!('id-2');
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:delete-notification', 'id-2');
     });
 
     it('subscribes and returns an unsubscribe that removes the same listener', () => {

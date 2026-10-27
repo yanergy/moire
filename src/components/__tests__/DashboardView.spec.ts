@@ -64,7 +64,7 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('Overview');
         expect(wrapper.text()).toContain('2 open by you in o/r');
         expect(wrapper.text()).toContain('Updated 5m ago');
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
     });
 
     it('lists the sent notifications under the cards, newest first', async () => {
@@ -96,6 +96,25 @@ describe('DashboardView', () => {
         expect(rows[0]!.text()).toContain('Checks failed: lint');
     });
 
+    it('shows the unread count and marks all read', async () => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                activity: [
+                    { kind: 'approved', at: 'T2', number: 2, title: 'b', url: 'u2' },
+                    { kind: 'approved', at: 'T1', number: 1, title: 'a', url: 'u1', read: true },
+                ],
+            })
+        );
+        const markAllRead = vi
+            .spyOn(useDashboardStore(), 'markAllRead')
+            .mockResolvedValue(undefined);
+
+        expect(wrapper.get('[title="1 unread"]').text()).toBe('1');
+        const button = wrapper.findAll('button').find((b) => b.text() === 'Mark all as read');
+        await button!.trigger('click');
+        expect(markAllRead).toHaveBeenCalledTimes(1);
+    });
+
     it('says when no notifications were sent yet', async () => {
         const { wrapper } = await mountView(dashboardState());
         expect(wrapper.text()).toContain('No notifications for this repository yet.');
@@ -120,7 +139,7 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('2 · Requested from you');
 
         await wrapper.get('button').trigger('click'); // Overview
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
     });
 
     it('says so when a card has no PRs', async () => {
@@ -140,7 +159,7 @@ describe('DashboardView', () => {
 
         expect(wrapper.text()).toContain('gh is not signed in to GitHub');
         expect(wrapper.text()).toContain('Showing data from 5m ago');
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
     });
 
     it('refreshes through the store', async () => {
@@ -150,7 +169,7 @@ describe('DashboardView', () => {
         expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
     });
 
-    it('offers Show drafts and a Users submenu in the Display menu', async () => {
+    it('offers Show drafts, a Users submenu and a Merged period submenu in the Display menu', async () => {
         const { api, wrapper } = await mountView(dashboardState());
 
         await wrapper.get('[aria-label="Display options"]').trigger('click');
@@ -162,8 +181,14 @@ describe('DashboardView', () => {
         ] as HTMLElement[];
         const subTrigger = document.querySelector('[data-slot="dropdown-menu-sub-trigger"]');
         expect(items.map((el) => el.textContent?.trim())).toEqual(['Show drafts']);
+        const subTriggers = [
+            ...document.querySelectorAll('[data-slot="dropdown-menu-sub-trigger"]'),
+        ].map((el) => el.textContent ?? '');
+        expect(subTriggers).toHaveLength(2);
         expect(subTrigger?.textContent).toContain('Users');
         expect(subTrigger?.textContent).toContain('You');
+        expect(subTriggers[1]).toContain('Merged');
+        expect(subTriggers[1]).toContain('Week');
 
         items[0]!.click();
         await flushPromises();
@@ -183,6 +208,17 @@ describe('DashboardView', () => {
         expect(openPr).toHaveBeenCalledWith(pr);
     });
 
+    it('opens a PR on GitHub from its Open in browser button', async () => {
+        const pr = dashboardPr({ author: 'ann' });
+        const { api, wrapper } = await mountView(
+            dashboardState({ snapshot: dashboardSnapshot({ toReview: [pr] }) })
+        );
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        await wrapper.get('[aria-label="Open in browser"]').trigger('click');
+        expect(api.openExternal).toHaveBeenCalledWith(pr.url);
+    });
+
     it('reloads, back on the overview, when another repository opens', async () => {
         const { api, wrapper } = await mountView(dashboardState());
         await wrapper.getComponent(DashboardCard).trigger('click');
@@ -191,6 +227,6 @@ describe('DashboardView', () => {
         await flushPromises();
 
         expect(api.getDashboard).toHaveBeenCalledTimes(2);
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(7);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
     });
 });

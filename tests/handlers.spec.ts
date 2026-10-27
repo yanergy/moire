@@ -28,6 +28,9 @@ const state = vi.hoisted(() => ({
         refresh: vi.fn<() => Promise<unknown>>(),
         setShowDrafts: vi.fn<(show: boolean) => Promise<unknown>>(),
         setAuthors: vi.fn<(authors: unknown) => Promise<unknown>>(),
+        markRead: vi.fn<(id: string) => Promise<unknown>>(),
+        markAllRead: vi.fn<() => Promise<unknown>>(),
+        deleteNotification: vi.fn<(id: string) => Promise<unknown>>(),
     },
     getPullRequest: vi.fn<(repoPath: string, base: string, head: string) => Promise<unknown>>(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
@@ -149,6 +152,9 @@ describe('registerIpcHandlers', () => {
             'dashboard:refresh',
             'dashboard:set-show-drafts',
             'dashboard:set-authors',
+            'dashboard:mark-read',
+            'dashboard:mark-all-read',
+            'dashboard:delete-notification',
         ]) {
             expect(state.handlers.has(channel)).toBe(true);
         }
@@ -249,6 +255,16 @@ describe('registerIpcHandlers', () => {
         state.dashboard.setAuthors.mockResolvedValue(dashboardState);
         expect(await invoke('dashboard:set-authors', ['ann'])).toBe(dashboardState);
         expect(state.dashboard.setAuthors).toHaveBeenCalledWith(['ann']);
+
+        state.dashboard.markRead.mockResolvedValue(dashboardState);
+        state.dashboard.markAllRead.mockResolvedValue(dashboardState);
+        state.dashboard.deleteNotification.mockResolvedValue(dashboardState);
+        await invoke('dashboard:mark-read', 'id-1');
+        await invoke('dashboard:mark-all-read');
+        await invoke('dashboard:delete-notification', 'id-2');
+        expect(state.dashboard.markRead).toHaveBeenCalledWith('id-1');
+        expect(state.dashboard.markAllRead).toHaveBeenCalledTimes(1);
+        expect(state.dashboard.deleteNotification).toHaveBeenCalledWith('id-2');
     });
 
     it('rejects the PR lookup before any repo is opened', async () => {

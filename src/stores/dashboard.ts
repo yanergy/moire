@@ -2,6 +2,7 @@ import { computed, ref } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
+import { activityId } from '@/lib/dashboard';
 import type {
     ActivityEntry,
     AuthorFilter,
@@ -20,7 +21,8 @@ export type DashboardCategoryKey =
     | 'failing'
     | 'open'
     | 'stale'
-    | 'drafts';
+    | 'drafts'
+    | 'merged';
 
 export interface DashboardCategory {
     key: DashboardCategoryKey;
@@ -32,6 +34,21 @@ export interface DashboardCategory {
 
 // An open PR with no activity for this long counts as stale.
 export const STALE_DAYS = 7;
+
+// The Merged card counts PRs merged since the start of this week (Monday) or
+// this month, in local time.
+export type MergedPeriod = 'week' | 'month';
+
+export function periodStart(period: MergedPeriod, at: Date): number {
+    const start = new Date(at.getFullYear(), at.getMonth(), at.getDate());
+    if (period === 'month') {
+        start.setDate(1);
+    } else {
+        // getDay() is 0 for Sunday; count Monday as the first day.
+        start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    }
+    return start.getTime();
+}
 
 // Approved, checks passing (or none configured), no conflicts, not a draft.
 // Restated from isReadyToMerge in electron/github/notifications.ts (the process
@@ -104,6 +121,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const activity = ref<ActivityEntry[]>([]);
     const showDrafts = ref(true);
     const authors = ref<AuthorFilter>('me');
+    // Kept in the renderer only, so it resets to this week on restart.
+    const mergedPeriod = ref<MergedPeriod>('week');
     const loading = ref(false);
 
     function applyState(state: DashboardState) {
@@ -153,11 +172,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     const me = computed(() => snapshot.value?.login ?? '');
 
-    // Everyone with an open PR in the repository, the viewer first, for the Users
-    // submenu. The viewer is listed even without an open PR.
+    // Everyone with an open or recently merged PR in the repository, the viewer
+    // first, for the Users submenu. The viewer is listed even without a PR.
     const knownAuthors = computed(() => {
         const others = new Set<string>();
-        for (const pr of snapshot.value?.open ?? []) {
+        for (const pr of [...(snapshot.value?.open ?? []), ...(snapshot.value?.merged ?? [])]) {
             if (pr.author && pr.author !== me.value) others.add(pr.author);
         }
         // oxlint-disable-next-line unicorn/no-array-sort
@@ -200,18 +219,87 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return filter.length === 1 ? filter[0]! : `${filter.length} users`;
     });
 
-    // A notification only carries its PR's number; open the full PR when the
-    // snapshot still has it, otherwise its GitHub page.
-    function openActivity(entry: ActivityEntry) {
-        const snap = snapshot.value;
-        const pr = [...(snap?.toReview ?? []), ...(snap?.mine ?? []), ...(snap?.open ?? [])].find(
-            (candidate) => candidate.number === entry.number
+    // The notification list's actions: change the list right away, then persist
+    // through main, whose answer replaces it. A failed call keeps the local
+    // change until the next update from main.
+    function editActivity(
+        change: (list: ActivityEntry[]) => ActivityEntry[],
+        call: (api: NonNullable<Window['api']>) => Promise<DashboardState>
+    ) {
+        activity.value = change(activity.value);
+        const api = window.api;
+        if (!api) {
+            return Promise.resolve();
+        }
+        let pending: Promise<DashboardState>;
+        try {
+            pending = call(api);
+        } catch {
+            return Promise.resolve();
+        }
+        return pending.then(applyState).catch(() => undefined);
+    }
+
+    const unreadCount = computed(() => activity.value.filter((entry) => !entry.read).length);
+
+    function markRead(entry: ActivityEntry) {
+        const id = activityId(entry);
+        return editActivity(
+            (list) => list.map((e) => (activityId(e) === id ? { ...e, read: true } : e)),
+            (api) => api.markDashboardNotificationRead(id)
         );
+    }
+
+    function markAllRead() {
+        return editActivity(
+            (list) => list.map((e) => (e.read ? e : { ...e, read: true })),
+            (api) => api.markAllDashboardNotificationsRead()
+        );
+    }
+
+    // Debug only (a dev build button on the dashboard): undo every read mark.
+    function markAllUnread() {
+        return editActivity(
+            (list) => list.map(({ read: _read, ...entry }) => entry),
+            (api) => api.markAllDashboardNotificationsUnread()
+        );
+    }
+
+    function deleteNotification(entry: ActivityEntry) {
+        const id = activityId(entry);
+        return editActivity(
+            (list) => list.filter((e) => activityId(e) !== id),
+            (api) => api.deleteDashboardNotification(id)
+        );
+    }
+
+    // Opening a notification marks it read. It only carries its PR's number; open
+    // the full PR when the snapshot still has it, otherwise its GitHub page.
+    function openActivity(entry: ActivityEntry) {
+        if (!entry.read) {
+            void markRead(entry);
+        }
+
+        const snap = snapshot.value;
+        const pr = [
+            ...(snap?.toReview ?? []),
+            ...(snap?.mine ?? []),
+            ...(snap?.open ?? []),
+            ...(snap?.merged ?? []),
+        ].find((candidate) => candidate.number === entry.number);
         if (pr) {
             openPr(pr);
         } else {
             void window.api?.openExternal(entry.url);
         }
+    }
+
+    // Open a notification's PR on GitHub, marking it read like opening it in Moiré.
+    function openActivityInBrowser(entry: ActivityEntry) {
+        if (!entry.read) {
+            void markRead(entry);
+        }
+        void window.api?.openExternal(entry.url);
     }
 
     function visible(prs: DashboardPr[]): DashboardPr[] {
@@ -231,6 +319,20 @@ export const useDashboardStore = defineStore('dashboard', () => {
         const selected = selectedAuthors(filter, me.value);
         const open = snapshot.value?.open ?? [];
         return visible(selected ? open.filter((pr) => selected.has(pr.author)) : open);
+    });
+
+    // The merged PRs in the period, by the author filter. Measured against the
+    // fetch time, like Stale. A merged PR is never a draft.
+    const merged = computed(() => {
+        const fetched = Date.parse(snapshot.value?.fetchedAt ?? '');
+        if (Number.isNaN(fetched)) {
+            return [];
+        }
+        const since = periodStart(mergedPeriod.value, new Date(fetched));
+        const selected = selectedAuthors(authors.value, me.value);
+        return (snapshot.value?.merged ?? []).filter(
+            (pr) => Date.parse(pr.closedAt) >= since && (!selected || selected.has(pr.author))
+        );
     });
 
     // Stale is measured against the fetch time, so it does not drift while the
@@ -289,6 +391,14 @@ export const useDashboardStore = defineStore('dashboard', () => {
             },
         ];
 
+        list.push({
+            key: 'merged',
+            label: 'Merged',
+            caption: mergedPeriod.value === 'week' ? 'This week' : 'This month',
+            dotClass: 'bg-moire-pr-merged',
+            prs: merged.value,
+        });
+
         // The card goes away with "Show drafts" off.
         if (showDrafts.value) {
             list.push({
@@ -314,6 +424,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         activity,
         showDrafts,
         authors,
+        mergedPeriod,
         knownAuthors,
         authorsLabel,
         loading,
@@ -331,6 +442,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
         toggleAllAuthors,
         openPr,
         openActivity,
+        openActivityInBrowser,
+        unreadCount,
+        markRead,
+        markAllRead,
+        markAllUnread,
+        deleteNotification,
     };
 });
 

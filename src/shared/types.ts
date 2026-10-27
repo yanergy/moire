@@ -306,10 +306,13 @@ export interface DashboardSnapshot {
     // Every open PR in the repository, by any author. Optional because snapshots
     // saved before it existed lack it.
     open?: DashboardPr[];
+    // PRs merged in the last 31 days, by any author, for the Merged card.
+    merged?: DashboardPr[];
     failureNotified: string[];
 }
 
-// One delivered notification, newest first in DashboardState.activity.
+// One delivered notification, newest first in DashboardState.activity. `read` is
+// set once it is marked read (or opened) on the dashboard.
 export interface ActivityEntry {
     kind: DashboardEventKind;
     at: string;
@@ -318,6 +321,7 @@ export interface ActivityEntry {
     url: string;
     actor?: string;
     checks?: string[];
+    read?: boolean;
 }
 
 // Whose PRs the dashboard cards count: 'me' is the signed in gh account (kept
@@ -440,6 +444,13 @@ export interface MoireApi {
     refreshDashboard(): Promise<DashboardState>;
     setDashboardShowDrafts(show: boolean): Promise<DashboardState>;
     setDashboardAuthors(authors: AuthorFilter): Promise<DashboardState>;
+    // The dashboard's notification list, by activity id (see activityId in
+    // src/lib/dashboard.ts): mark one read, mark all read, or delete one.
+    markDashboardNotificationRead(id: string): Promise<DashboardState>;
+    markAllDashboardNotificationsRead(): Promise<DashboardState>;
+    // Debug only (the dashboard shows its button in dev builds): undo every read mark.
+    markAllDashboardNotificationsUnread(): Promise<DashboardState>;
+    deleteDashboardNotification(id: string): Promise<DashboardState>;
     onDashboardChanged(cb: (state: DashboardState) => void): () => void;
     // Fired by View → Dashboard and the summary notification, to switch the main
     // area to the dashboard. Returns an unsubscribe function.

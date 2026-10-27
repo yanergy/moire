@@ -5,7 +5,7 @@ import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
-import { dashboardPr, dashboardSnapshot, dashboardState } from './fixtures';
+import { dashboardState } from './fixtures';
 import type { PullRequest } from '@/shared/types';
 
 const PR: PullRequest = {
@@ -37,14 +37,19 @@ const PR: PullRequest = {
 // button. (The theme toggle moved to the native View menu; see tests/menu.spec.ts.)
 const stubs = { RepoPicker: true, RefSelector: true, SegmentedToggle: true };
 
-// A dashboard state with `count` PRs waiting for review.
-function withRequests(count: number) {
+// A dashboard state with `count` unread notifications and one read one.
+function withUnread(count: number) {
     return dashboardState({
-        snapshot: dashboardSnapshot({
-            toReview: Array.from({ length: count }, (_, i) =>
-                dashboardPr({ id: `R${i}`, number: i + 1, author: 'ann' })
-            ),
-        }),
+        activity: [
+            ...Array.from({ length: count }, (_, i) => ({
+                kind: 'review-requested' as const,
+                at: `T${i}`,
+                number: i + 1,
+                title: 'x',
+                url: 'u',
+            })),
+            { kind: 'approved' as const, at: 'TR', number: 9, title: 'y', url: 'u', read: true },
+        ],
     });
 }
 
@@ -196,9 +201,9 @@ describe('ToolbarHeader', () => {
             expect(wrapper.find('[aria-label="Dashboard"]').exists()).toBe(false);
         });
 
-        it('shows the review count and switches the main view', async () => {
+        it('shows the unread notification count and switches the main view', async () => {
             useComparisonStore().repoPath = '/repos/moire';
-            useDashboardStore().applyState(withRequests(2));
+            useDashboardStore().applyState(withUnread(2));
             const ui = useUiStore();
 
             const wrapper = mountToolbar();
@@ -212,9 +217,9 @@ describe('ToolbarHeader', () => {
             expect(ui.mainView).toBe('diff');
         });
 
-        it('shows no count when nothing waits for review', () => {
+        it('shows no count when every notification is read', () => {
             useComparisonStore().repoPath = '/repos/moire';
-            useDashboardStore().applyState(withRequests(0));
+            useDashboardStore().applyState(withUnread(0));
 
             const wrapper = mountToolbar();
             expect(wrapper.get('[aria-label="Dashboard"]').text()).toBe('');

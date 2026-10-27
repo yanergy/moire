@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowLeft, LoaderCircle, RefreshCw, SlidersHorizontal, TriangleAlert } from '@lucide/vue';
+import {
+    ArrowLeft,
+    CheckCheck,
+    LoaderCircle,
+    RefreshCw,
+    SlidersHorizontal,
+    TriangleAlert,
+} from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useDashboardStore, type DashboardCategoryKey } from '@/stores/dashboard';
-import { dashboardNotice } from '@/lib/dashboard';
+import { activityId, dashboardNotice } from '@/lib/dashboard';
 import { timeSince } from '@/lib/status-bar';
+import type { DashboardPr } from '@/shared/types';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
     DropdownMenuSeparator,
     DropdownMenuSub,
     DropdownMenuSubContent,
@@ -28,6 +38,9 @@ import DashboardNotificationRow from '@/components/dashboard/DashboardNotificati
 // the main process (see stores/dashboard.ts).
 const comparison = useComparisonStore();
 const dashboard = useDashboardStore();
+
+// Debug only: the temporary "Mark all as unread" button shows in dev builds.
+const isDev = import.meta.env.DEV;
 
 // The card whose PR list is showing, or null for the overview grid.
 const selectedKey = ref<DashboardCategoryKey | null>(null);
@@ -74,6 +87,10 @@ const notice = computed(() => {
         cls: 'border-moire-changes-edge bg-moire-changes-bg',
     };
 });
+
+function openInBrowser(pr: DashboardPr) {
+    void window.api?.openExternal(pr.url);
+}
 
 const subtitle = computed(() => {
     const snapshot = dashboard.snapshot;
@@ -205,6 +222,36 @@ const updated = computed(() =>
                                     </DropdownMenuCheckboxItem>
                                 </DropdownMenuSubContent>
                             </DropdownMenuSub>
+                            <!-- The period the Merged card counts. -->
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger :class="menuRow">
+                                    Merged
+                                    <span class="ml-auto pl-3 text-moire-faint">
+                                        {{ dashboard.mergedPeriod === 'week' ? 'Week' : 'Month' }}
+                                    </span>
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent
+                                    :class="menuSurface"
+                                    :style="menuSurfaceStyle"
+                                >
+                                    <DropdownMenuRadioGroup v-model="dashboard.mergedPeriod">
+                                        <DropdownMenuRadioItem
+                                            value="week"
+                                            :class="menuRow"
+                                            @select="keepOpen"
+                                        >
+                                            This week
+                                        </DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem
+                                            value="month"
+                                            :class="menuRow"
+                                            @select="keepOpen"
+                                        >
+                                            This month
+                                        </DropdownMenuRadioItem>
+                                    </DropdownMenuRadioGroup>
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
                         </DropdownMenuContent>
                     </DropdownMenu>
                     <Button
@@ -244,6 +291,7 @@ const updated = computed(() =>
                             :pr="pr"
                             :now="now"
                             @open="dashboard.openPr"
+                            @open-in-browser="openInBrowser"
                         />
                     </div>
                     <div v-else class="py-10 text-[13px] text-moire-muted">
@@ -264,27 +312,51 @@ const updated = computed(() =>
                     </div>
 
                     <section class="pt-8">
-                        <h2
-                            class="flex items-center pb-4 gap-2 text-[13px] font-semibold text-moire-fg"
-                        >
-                            Notifications
+                        <div class="flex items-center gap-2 pb-4">
+                            <h2 class="text-[13px] font-semibold text-moire-fg">Notifications</h2>
                             <span
-                                v-if="dashboard.activity.length"
+                                v-if="dashboard.unreadCount"
                                 class="rounded-full bg-moire-chrome px-1.5 text-[11px] font-medium text-moire-muted"
+                                :title="`${dashboard.unreadCount} unread`"
                             >
-                                {{ dashboard.activity.length }}
+                                {{ dashboard.unreadCount }}
                             </span>
-                        </h2>
+                            <div class="flex-1" />
+                            <!-- Debug only, dev builds: undo every read mark to test the
+                                 unread flow again. Temporary. -->
+                            <Button
+                                v-if="isDev && dashboard.activity.length"
+                                variant="ghost"
+                                size="sm"
+                                class="h-7 gap-1.5 px-2 text-moire-warn hover:bg-moire-hover"
+                                @click="dashboard.markAllUnread()"
+                            >
+                                Mark all as unread (debug)
+                            </Button>
+                            <Button
+                                v-if="dashboard.unreadCount"
+                                variant="ghost"
+                                size="sm"
+                                class="h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                @click="dashboard.markAllRead()"
+                            >
+                                <CheckCheck :size="16" />
+                                Mark all as read
+                            </Button>
+                        </div>
                         <div
                             v-if="dashboard.activity.length"
                             class="divide-y divide-moire-border overflow-hidden rounded-lg border border-moire-border"
                         >
                             <dashboard-notification-row
-                                v-for="(entry, i) in dashboard.activity"
-                                :key="`${entry.at}-${entry.kind}-${entry.number}-${i}`"
+                                v-for="entry in dashboard.activity"
+                                :key="activityId(entry)"
                                 :entry="entry"
                                 :now="now"
                                 @open="dashboard.openActivity"
+                                @open-in-browser="dashboard.openActivityInBrowser"
+                                @mark-read="dashboard.markRead"
+                                @delete="dashboard.deleteNotification"
                             />
                         </div>
                         <p v-else class="py-4 text-[13px] text-moire-muted">

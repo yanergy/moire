@@ -27,7 +27,49 @@ describe('DashboardNotificationRow', () => {
     it('emits open with the entry when clicked', async () => {
         const wrapper = mount(DashboardNotificationRow, { props: { entry, now: NOW } });
 
-        await wrapper.get('button').trigger('click');
+        await wrapper.findAll('button')[0]!.trigger('click');
         expect(wrapper.emitted('open')).toEqual([[entry]]);
+    });
+
+    it('offers Mark as read and Delete, emitting the entry', async () => {
+        const wrapper = mount(DashboardNotificationRow, { props: { entry, now: NOW } });
+
+        await wrapper.get('[aria-label="Mark as read"]').trigger('click');
+        await wrapper.get('[aria-label="Delete notification"]').trigger('click');
+
+        expect(wrapper.emitted('markRead')).toEqual([[entry]]);
+        expect(wrapper.emitted('delete')).toEqual([[entry]]);
+        expect(wrapper.emitted('open')).toBeUndefined();
+    });
+
+    it('fades a read notification and drops Mark as read', () => {
+        const wrapper = mount(DashboardNotificationRow, {
+            props: { entry: { ...entry, read: true }, now: NOW },
+        });
+
+        expect(wrapper.find('[aria-label="Mark as read"]').exists()).toBe(false);
+        expect(wrapper.find('.opacity-40').exists()).toBe(true);
+        expect(wrapper.text()).toContain('ann requested changes');
+        expect(wrapper.find('span.text-moire-muted').text()).toBe('ann requested changes');
+    });
+
+    it('always shows Open in browser at the end of the row', async () => {
+        const wrapper = mount(DashboardNotificationRow, { props: { entry, now: NOW } });
+        const button = wrapper.get('[aria-label="Open in browser"]');
+
+        expect(button.element.parentElement).toBe(wrapper.element);
+        expect(wrapper.element.lastElementChild).toBe(button.element);
+
+        await button.trigger('click');
+        expect(wrapper.emitted('openInBrowser')).toEqual([[entry]]);
+        expect(wrapper.emitted('open')).toBeUndefined();
+    });
+
+    it('colors the Delete icon red', () => {
+        const wrapper = mount(DashboardNotificationRow, { props: { entry, now: NOW } });
+        const classes = wrapper.get('[aria-label="Delete notification"]').classes();
+
+        expect(classes).toContain('text-moire-status-d');
+        expect(classes).not.toContain('text-moire-muted');
     });
 });

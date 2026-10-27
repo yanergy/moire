@@ -2,6 +2,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import {
     isReadyToMerge,
+    periodStart,
     selectedAuthors,
     toggleAuthor,
     useDashboardStore,
@@ -81,6 +82,19 @@ describe('author filter helpers', () => {
 
     it('keeps a selected login that no longer has an open PR', () => {
         expect(toggleAuthor(['gone'], 'ann', 'me', known)).toEqual(['ann', 'gone']);
+    });
+});
+
+describe('periodStart', () => {
+    it('starts the week on Monday and the month on the 1st, at local midnight', () => {
+        // Wednesday 28 October 2026.
+        const at = new Date(2026, 9, 28, 15, 30);
+        expect(periodStart('week', at)).toBe(new Date(2026, 9, 26).getTime());
+        expect(periodStart('month', at)).toBe(new Date(2026, 9, 1).getTime());
+    });
+
+    it('counts a Sunday as the end of the week', () => {
+        expect(periodStart('week', new Date(2026, 10, 1, 9))).toBe(new Date(2026, 9, 26).getTime());
     });
 });
 
@@ -180,6 +194,7 @@ describe('dashboard store', () => {
             'failing',
             'open',
             'stale',
+            'merged',
             'drafts',
         ]);
         expect(counts(store)).toEqual({
@@ -189,6 +204,7 @@ describe('dashboard store', () => {
             failing: [5],
             open: [1, 2, 3, 5],
             stale: [5],
+            merged: [],
             drafts: [3],
         });
         expect(store.categories.find((c) => c.key === 'open')?.label).toBe('Your open PRs');
@@ -222,6 +238,38 @@ describe('dashboard store', () => {
         expect(store.categories.find((c) => c.key === 'failing')?.caption).toBe('By bob');
         expect(store.openLabel).toBe('open by bob');
         expect(store.authorsLabel).toBe('bob');
+    });
+
+    it('counts the PRs merged this week or this month, by the author filter', () => {
+        const merged = (number: number, closedAt: string, author = 'me') =>
+            pr({ id: `M${number}`, number, author, state: 'MERGED', closedAt });
+        const store = useDashboardStore();
+        store.applyState(
+            state({
+                snapshot: snapshot({
+                    // Wednesday; the week started on Monday the 26th.
+                    fetchedAt: '2026-10-28T12:00:00Z',
+                    merged: [
+                        merged(1, '2026-10-27T12:00:00Z'),
+                        merged(2, '2026-10-15T12:00:00Z'),
+                        merged(3, '2026-09-20T12:00:00Z'),
+                        merged(4, '2026-10-27T12:00:00Z', 'bob'),
+                    ],
+                }),
+            })
+        );
+        const card = () => store.categories.find((c) => c.key === 'merged')!;
+
+        expect(card().prs.map((p) => p.number)).toEqual([1]);
+        expect(card().caption).toBe('This week');
+
+        store.mergedPeriod = 'month';
+        expect(card().prs.map((p) => p.number)).toEqual([1, 2]);
+        expect(card().caption).toBe('This month');
+
+        store.authors = 'all';
+        expect(card().prs.map((p) => p.number)).toEqual([1, 2, 4]);
+        expect(store.knownAuthors).toEqual(['me', 'bob']);
     });
 
     it('lists the viewer first, then every other author with an open PR', () => {
@@ -306,6 +354,40 @@ describe('dashboard store', () => {
             expect(store.authors).toBe('me');
         });
 
+        it('marks notifications read and deletes them, right away and through main', async () => {
+            const entries = [
+                { kind: 'approved' as const, at: 'T2', number: 2, title: 'b', url: 'u2' },
+                { kind: 'approved' as const, at: 'T1', number: 1, title: 'a', url: 'u1' },
+            ];
+            stubApi(state({ activity: entries }));
+            const api = window.api as unknown as Record<string, ReturnType<typeof vi.fn>>;
+            const pending = new Promise<DashboardState>(() => {});
+            api.markDashboardNotificationRead = vi
+                .fn<(id: string) => Promise<DashboardState>>()
+                .mockReturnValue(pending);
+            api.markAllDashboardNotificationsRead = vi
+                .fn<() => Promise<DashboardState>>()
+                .mockReturnValue(pending);
+            api.deleteDashboardNotification = vi
+                .fn<(id: string) => Promise<DashboardState>>()
+                .mockReturnValue(pending);
+            const store = useDashboardStore();
+            await store.load();
+            expect(store.unreadCount).toBe(2);
+
+            void store.markRead(store.activity[0]!);
+            expect(store.unreadCount).toBe(1);
+            expect(api.markDashboardNotificationRead).toHaveBeenCalledWith('T2|approved|2');
+
+            void store.deleteNotification(store.activity[1]!);
+            expect(store.activity.map((e) => e.number)).toEqual([2]);
+            expect(api.deleteDashboardNotification).toHaveBeenCalledWith('T1|approved|1');
+
+            void store.markAllRead();
+            expect(store.unreadCount).toBe(0);
+            expect(api.markAllDashboardNotificationsRead).toHaveBeenCalledTimes(1);
+        });
+
         it('swallows a rejection when no repository is open', async () => {
             const api = stubApi();
             api.getDashboard.mockRejectedValue(new Error('No repository is open.'));
@@ -363,6 +445,30 @@ describe('dashboard store', () => {
 
             store.openActivity({ ...entry, number: 99, url: 'https://github.com/o/r/pull/99' });
             expect(openExternal).toHaveBeenCalledWith('https://github.com/o/r/pull/99');
+        });
+
+        it('opens a notification on GitHub and marks it read', () => {
+            const openExternal = openApi();
+            const markRead = vi.fn<(id: string) => Promise<DashboardState>>(
+                () => new Promise(() => {})
+            );
+            (window.api as unknown as Record<string, unknown>).markDashboardNotificationRead =
+                markRead;
+            const store = useDashboardStore();
+            const entry = {
+                kind: 'approved' as const,
+                at: 'T1',
+                number: 5,
+                title: 'Add notifications',
+                url: 'https://github.com/o/r/pull/5',
+            };
+            store.applyState(state({ activity: [entry] }));
+
+            store.openActivityInBrowser(entry);
+
+            expect(openExternal).toHaveBeenCalledWith(entry.url);
+            expect(markRead).toHaveBeenCalledWith('T1|approved|5');
+            expect(store.unreadCount).toBe(0);
         });
 
         it('opens a fork PR, or one with unavailable branches, on GitHub', () => {

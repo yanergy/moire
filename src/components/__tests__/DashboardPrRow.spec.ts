@@ -34,7 +34,24 @@ describe('DashboardPrRow', () => {
         const pr = dashboardPr();
         const wrapper = mount(DashboardPrRow, { props: { pr, now: NOW } });
 
-        await wrapper.get('button').trigger('click');
+        await wrapper.findAll('button')[0]!.trigger('click');
         expect(wrapper.emitted('open')).toEqual([[pr]]);
+    });
+
+    it('emits openInBrowser, not open, from the Open in browser button', async () => {
+        const pr = dashboardPr();
+        const wrapper = mount(DashboardPrRow, { props: { pr, now: NOW } });
+
+        await wrapper.get('[aria-label="Open in browser"]').trigger('click');
+        expect(wrapper.emitted('openInBrowser')).toEqual([[pr]]);
+        expect(wrapper.emitted('open')).toBeUndefined();
+    });
+
+    it('always shows Open in browser at the end of the row', () => {
+        const wrapper = mount(DashboardPrRow, { props: { pr: dashboardPr(), now: NOW } });
+        const button = wrapper.get('[aria-label="Open in browser"]');
+
+        expect(button.classes()).not.toContain('opacity-0');
+        expect(button.element.parentElement!.lastElementChild).toBe(button.element);
     });
 });

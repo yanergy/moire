@@ -50,8 +50,8 @@ function setPrView(on: boolean) {
 }
 
 // The dashboard toggle, shown while a repository is open. Its count is the number
-// of PRs waiting for the viewer's review, matching the dock badge.
-const reviewCount = computed(() => dashboard.toReview.length);
+// of unread notifications in the dashboard's list, so it clears as they are read.
+const unreadCount = computed(() => dashboard.unreadCount);
 
 function setDashboardView(on: boolean) {
     ui.setMainView(on ? 'dashboard' : 'diff');
@@ -188,18 +188,18 @@ const statusDotClass = computed(() => {
                         >
                             <LayoutDashboard :size="16" />
                             <span
-                                v-if="reviewCount"
+                                v-if="unreadCount"
                                 class="rounded-full bg-moire-pr-open px-1.5 text-[11px] leading-4 font-semibold text-moire-check-fg"
                             >
-                                {{ reviewCount }}
+                                {{ unreadCount }}
                             </span>
                         </Toggle>
                     </span>
                 </TooltipTrigger>
                 <TooltipContent>
                     {{
-                        reviewCount
-                            ? `${reviewCount} ${reviewCount === 1 ? 'PR' : 'PRs'} to review`
+                        unreadCount
+                            ? `${unreadCount} unread ${unreadCount === 1 ? 'notification' : 'notifications'}`
                             : 'Dashboard'
                     }}
                 </TooltipContent>

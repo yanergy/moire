@@ -7,10 +7,11 @@ import {
     type NotifierDeps,
 } from '../electron/notifier';
 import { DEFAULT_NOTIFICATION_PREFS, type NotificationPrefs } from '../electron/settings';
-import type {
-    DashboardPr,
-    DashboardSnapshot,
-    SnapshotResult,
+import {
+    activityId,
+    type DashboardPr,
+    type DashboardSnapshot,
+    type SnapshotResult,
 } from '../electron/github/notifications';
 
 function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
@@ -345,6 +346,72 @@ describe('Notifier', () => {
         expect(t.deps.notify).not.toHaveBeenCalled();
         expect(t.store.has('other|o/r')).toBe(true);
         t.notifier.stop();
+    });
+
+    describe('notification list actions', () => {
+        // A repository with two delivered notifications: #5 (newest) and #6.
+        async function withActivity() {
+            const t = setup();
+            t.respond(
+                snapshot(),
+                snapshot({ toReview: [request(6)] }),
+                snapshot({ toReview: [request(5), request(6)] })
+            );
+            await t.notifier.setRepo('/repo');
+            await t.notifier.poll();
+            await t.notifier.poll();
+            const ids = t.notifier.getView().activity.map(activityId);
+            return { t, ids };
+        }
+
+        it('marks one notification read and saves it', async () => {
+            const { t, ids } = await withActivity();
+
+            await t.notifier.markActivityRead(ids[0]!);
+
+            expect(t.notifier.getView().activity.map((e) => !!e.read)).toEqual([true, false]);
+            const saved = t.store.get('me|o/r') as { activity: { read?: boolean }[] };
+            expect(saved.activity.map((e) => !!e.read)).toEqual([true, false]);
+            t.notifier.stop();
+        });
+
+        it('marks every notification read', async () => {
+            const { t } = await withActivity();
+
+            await t.notifier.markAllActivityRead();
+
+            expect(t.notifier.getView().activity.every((e) => e.read)).toBe(true);
+            t.notifier.stop();
+        });
+
+        it('deletes one notification', async () => {
+            const { t, ids } = await withActivity();
+
+            await t.notifier.deleteActivity(ids[1]!);
+
+            expect(t.notifier.getView().activity.map((e) => e.number)).toEqual([5]);
+            t.notifier.stop();
+        });
+
+        it('keeps a mark read made while a poll is saving', async () => {
+            const { t, ids } = await withActivity();
+
+            // Start a poll and mark read before it finishes: the lock orders them,
+            // so neither overwrites the other.
+            const poll = t.notifier.poll();
+            const mark = t.notifier.markActivityRead(ids[1]!);
+            await Promise.all([poll, mark]);
+
+            const saved = t.store.get('me|o/r') as { activity: { read?: boolean }[] };
+            expect(saved.activity.map((e) => !!e.read)).toEqual([false, true]);
+            t.notifier.stop();
+        });
+
+        it('does nothing before a poll has succeeded', async () => {
+            const t = setup();
+            await t.notifier.markAllActivityRead();
+            expect(t.deps.saveState).not.toHaveBeenCalled();
+        });
     });
 
     it('logs instead of throwing when a dependency fails', async () => {

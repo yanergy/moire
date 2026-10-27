@@ -305,6 +305,22 @@ app.whenReady().then(async () => {
                 await setNotificationPrefs({ dashboardAuthors: authors });
                 return dashboardState();
             },
+            markRead: async (id) => {
+                await notifier.markActivityRead(id);
+                return dashboardState();
+            },
+            markAllRead: async () => {
+                await notifier.markAllActivityRead();
+                return dashboardState();
+            },
+            markAllUnread: async () => {
+                await notifier.markAllActivityUnread();
+                return dashboardState();
+            },
+            deleteNotification: async (id) => {
+                await notifier.deleteActivity(id);
+                return dashboardState();
+            },
         },
     });
     // Catch up right after the Mac wakes instead of waiting for the next tick.
