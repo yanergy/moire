@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from '@lucide/vue';
+import {
+    Check,
+    ChevronDown,
+    ChevronRight,
+    ChevronsDownUp,
+    ChevronsUpDown,
+    Star,
+} from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
-import type { BranchInfo } from '@/shared/types';
+import { WORKING_TREE, type BranchInfo } from '@/shared/types';
 import { recommendedBase, recommendedHead } from '@/lib/branch-recommendations';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -64,7 +71,8 @@ interface RefGroup {
     label: string;
     items: RefItem[];
     // A pinned group renders its rows at the top with no collapsible header, for
-    // the recommendations. A pinned group with a heading shows it as a static label.
+    // the recommendations and favorites. A pinned group with a heading shows it as
+    // a static label.
     pinned?: boolean;
     heading?: string;
 }
@@ -136,8 +144,24 @@ const groups = computed<RefGroup[]>(() => {
         });
     }
 
+    // Favorites follow in starring order. One that is also recommended stays in
+    // the recommendations (starred there), and one whose branch was deleted is
+    // not listed.
+    const isRecommended = (name: string) => recommended.some((r) => r.name === name);
+    const favorites = comparison.favoriteBranches.filter(
+        (name) => !isRecommended(name) && comparison.branches.some((b) => b.name === name)
+    );
+    if (favorites.length > 0) {
+        result.push({
+            label: 'Favorites',
+            heading: 'Favorites',
+            pinned: true,
+            items: favorites.map((name) => ({ name, label: name, meta: '' })),
+        });
+    }
+
     const rest = (list: BranchInfo[]) =>
-        list.filter((b) => !recommended.some((r) => r.name === b.name));
+        list.filter((b) => !isRecommended(b.name) && !favorites.includes(b.name));
     result.push(...groupByPrefix(rest(comparison.localBranches), 'Local branches'));
     result.push(...groupByPrefix(rest(comparison.remoteBranches), 'Remotes'));
 
@@ -268,7 +292,7 @@ function pick(name: string) {
                             :key="item.name"
                             :value="item.name"
                             :disabled="isCollapsed(group.label)"
-                            class="gap-2 font-mono text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                            class="group/ref gap-2 font-mono text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
                             :class="{ hidden: isCollapsed(group.label) }"
                             @select="pick(item.name)"
                         >
@@ -285,6 +309,34 @@ function pick(name: string) {
                             <span class="text-[11px] whitespace-nowrap text-moire-faint">
                                 {{ item.meta }}
                             </span>
+                            <!-- Stops the click so starring does not also pick the
+                                 row. Unstarred, the star only shows on the hovered or
+                                 highlighted row to keep the list quiet. -->
+                            <Button
+                                v-if="item.name !== WORKING_TREE"
+                                variant="ghost"
+                                size="icon-xs"
+                                data-slot="ref-favorite"
+                                :aria-pressed="comparison.isFavorite(item.name)"
+                                :aria-label="
+                                    comparison.isFavorite(item.name)
+                                        ? `Unstar ${item.name}`
+                                        : `Star ${item.name}`
+                                "
+                                :title="comparison.isFavorite(item.name) ? 'Unstar' : 'Star'"
+                                class="-my-1 size-5 hover:bg-transparent dark:hover:bg-transparent"
+                                :class="
+                                    comparison.isFavorite(item.name)
+                                        ? 'text-moire-warn'
+                                        : 'text-moire-faint opacity-0 group-hover/ref:opacity-100 group-data-[highlighted]/ref:opacity-100 hover:text-moire-fg'
+                                "
+                                @click.stop="comparison.toggleFavorite(item.name)"
+                            >
+                                <Star
+                                    class="size-3 text-current"
+                                    :class="comparison.isFavorite(item.name) ? 'fill-current' : ''"
+                                />
+                            </Button>
                         </CommandItem>
                     </CommandGroup>
                 </CommandList>

@@ -53,6 +53,7 @@ function getStore(): Promise<SettingsStore> {
                         codeStyle: 'github',
                         editor: 'auto',
                         branchSelections: {},
+                        favoriteBranches: {},
                         windowState: null,
                         flourishes: true,
                         diffLayout: 'single',
@@ -81,8 +82,8 @@ export async function addRecentRepo(repoPath: string): Promise<string[]> {
     return next;
 }
 
-// Drop one entry, along with any branch selection remembered for it, so a
-// removed repo leaves nothing behind. Returns the new list.
+// Drop one entry, along with any branch selection and favorites remembered for
+// it, so a removed repo leaves nothing behind. Returns the new list.
 export async function removeRecentRepo(repoPath: string): Promise<string[]> {
     const store = await getStore();
     const next = store.get<string[]>('recentRepos', []).filter((entry) => entry !== repoPath);
@@ -92,6 +93,12 @@ export async function removeRecentRepo(repoPath: string): Promise<string[]> {
     if (repoPath in selections) {
         delete selections[repoPath];
         store.set('branchSelections', selections);
+    }
+
+    const favorites = store.get<Record<string, string[]>>('favoriteBranches', {});
+    if (repoPath in favorites) {
+        delete favorites[repoPath];
+        store.set('favoriteBranches', favorites);
     }
 
     return next;
@@ -114,6 +121,26 @@ export async function setBranchSelection(
     const selections = store.get<Record<string, BranchSelection>>('branchSelections', {});
     selections[repoPath] = { base, head };
     store.set('branchSelections', selections);
+}
+
+// The branches starred in the ref pickers, keyed by repo path so each repo keeps
+// its own. A starred branch that was since deleted stays stored (the renderer
+// only lists the ones that exist), so it reappears if the branch comes back.
+export async function getFavoriteBranches(repoPath: string): Promise<string[]> {
+    const store = await getStore();
+    return store.get<Record<string, string[]>>('favoriteBranches', {})[repoPath] ?? [];
+}
+
+export async function setFavoriteBranches(repoPath: string, names: string[]): Promise<void> {
+    const store = await getStore();
+    const favorites = store.get<Record<string, string[]>>('favoriteBranches', {});
+    if (names.length === 0) {
+        delete favorites[repoPath];
+    } else {
+        favorites[repoPath] = names;
+    }
+
+    store.set('favoriteBranches', favorites);
 }
 
 // Theme preference ('system' | 'light' | 'dark'). Restored on launch to seed

@@ -354,6 +354,8 @@ export interface MoireApi {
     removeRecentRepo(path: string): Promise<string[]>; // returns the updated list
     getBranchSelection(path: string): Promise<BranchSelection | null>; // null when none is remembered
     setBranchSelection(path: string, base: string, head: string): Promise<void>;
+    getFavoriteBranches(path: string): Promise<string[]>; // empty when none are starred
+    setFavoriteBranches(path: string, names: string[]): Promise<void>;
     getBranches(): Promise<BranchInfo[]>;
     getChangedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]>;
     // `full` refetches a large file's withheld content when the "Load diff" gate

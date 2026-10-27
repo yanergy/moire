@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.invoke('settings:branch-selection:get', repoPath),
     setBranchSelection: (repoPath: string, base: string, head: string) =>
         ipcRenderer.invoke('settings:branch-selection:set', repoPath, base, head),
+    getFavoriteBranches: (repoPath: string) =>
+        ipcRenderer.invoke('settings:favorite-branches:get', repoPath),
+    setFavoriteBranches: (repoPath: string, names: string[]) =>
+        ipcRenderer.invoke('settings:favorite-branches:set', repoPath, names),
     getBranches: () => ipcRenderer.invoke('git:branches'),
     getChangedFiles: (base: string, head: string, mode: string) =>
         ipcRenderer.invoke('git:changed-files', base, head, mode),

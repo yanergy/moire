@@ -16,6 +16,8 @@ const state = vi.hoisted(() => ({
     removeRecentRepo: vi.fn<(repoPath: string) => Promise<string[]>>(),
     getBranchSelection: vi.fn<(repoPath: string) => Promise<unknown>>(),
     setBranchSelection: vi.fn<() => Promise<void>>(),
+    getFavoriteBranches: vi.fn<(repoPath: string) => Promise<string[]>>(),
+    setFavoriteBranches: vi.fn<(repoPath: string, names: string[]) => Promise<void>>(),
     getFlourishes: vi.fn<() => Promise<boolean>>(),
     getCodeStyle: vi.fn<() => Promise<string>>(),
     getDiffLayout: vi.fn<() => Promise<string>>(),
@@ -81,6 +83,8 @@ vi.mock('../electron/settings', () => ({
     removeRecentRepo: state.removeRecentRepo,
     getBranchSelection: state.getBranchSelection,
     setBranchSelection: state.setBranchSelection,
+    getFavoriteBranches: state.getFavoriteBranches,
+    setFavoriteBranches: state.setFavoriteBranches,
     getFlourishes: state.getFlourishes,
     getCodeStyle: state.getCodeStyle,
     getEditorPreference: state.getEditorPreference,
@@ -112,6 +116,8 @@ describe('registerIpcHandlers', () => {
         state.removeRecentRepo.mockResolvedValue([]);
         state.getBranchSelection.mockResolvedValue(null);
         state.setBranchSelection.mockResolvedValue(undefined);
+        state.getFavoriteBranches.mockResolvedValue([]);
+        state.setFavoriteBranches.mockResolvedValue(undefined);
         state.getFlourishes.mockResolvedValue(true);
         state.getCodeStyle.mockResolvedValue('github');
         state.getDiffLayout.mockResolvedValue('single');
@@ -139,6 +145,8 @@ describe('registerIpcHandlers', () => {
             'repo:remove-recent',
             'settings:branch-selection:get',
             'settings:branch-selection:set',
+            'settings:favorite-branches:get',
+            'settings:favorite-branches:set',
             'theme:get',
             'flourishes:get',
             'code-style:get',

@@ -24,6 +24,8 @@ import {
     removeRecentRepo,
     getBranchSelection,
     setBranchSelection,
+    getFavoriteBranches,
+    setFavoriteBranches,
     getFlourishes,
     getCodeStyle,
     getEditorPreference,
@@ -171,6 +173,13 @@ function registerIpcHandlers({
 
     handle('settings:branch-selection:set', (repoPath: string, base: string, head: string) =>
         setBranchSelection(repoPath, base, head)
+    );
+
+    // Per-repo starred branches, pinned in a Favorites group of both ref pickers.
+    handle('settings:favorite-branches:get', (repoPath: string) => getFavoriteBranches(repoPath));
+
+    handle('settings:favorite-branches:set', (repoPath: string, names: string[]) =>
+        setFavoriteBranches(repoPath, names)
     );
 
     // Theme is owned by nativeTheme in the main process; the renderer reads the

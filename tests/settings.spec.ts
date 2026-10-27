@@ -55,17 +55,19 @@ describe('settings: recent repos', () => {
         expect(list).not.toContain('/repo-0'); // oldest evicted
     });
 
-    it('removes an entry and cascades to its branch selection', async () => {
+    it('removes an entry and cascades to its branch selection and favorites', async () => {
         const settings = await loadSettings();
         await settings.addRecentRepo('/a');
         await settings.addRecentRepo('/b');
         await settings.setBranchSelection('/a', 'main', 'feature');
+        await settings.setFavoriteBranches('/a', ['main']);
 
         const next = await settings.removeRecentRepo('/a');
 
         expect(next).toEqual(['/b']);
         expect(await settings.getRecentRepos()).toEqual(['/b']);
         expect(await settings.getBranchSelection('/a')).toBeNull(); // selection dropped too
+        expect(await settings.getFavoriteBranches('/a')).toEqual([]); // favorites too
     });
 });
 
@@ -77,6 +79,20 @@ describe('settings: branch selection', () => {
         await setBranchSelection('/a', 'main', 'WORKING TREE');
         expect(await getBranchSelection('/a')).toEqual({ base: 'main', head: 'WORKING TREE' });
         expect(await getBranchSelection('/b')).toBeNull(); // isolated per repo
+    });
+});
+
+describe('settings: favorite branches', () => {
+    it('round-trips favorites per repo and is empty when none are stored', async () => {
+        const { setFavoriteBranches, getFavoriteBranches } = await loadSettings();
+        expect(await getFavoriteBranches('/a')).toEqual([]);
+
+        await setFavoriteBranches('/a', ['main', 'origin/develop']);
+        expect(await getFavoriteBranches('/a')).toEqual(['main', 'origin/develop']);
+        expect(await getFavoriteBranches('/b')).toEqual([]); // isolated per repo
+
+        await setFavoriteBranches('/a', []);
+        expect(await getFavoriteBranches('/a')).toEqual([]);
     });
 });
 
