@@ -232,8 +232,11 @@ Track bugs and limitations here.
 - **Clicking a notification while the window is closed may open the PR on GitHub.** The window
   reopens, but the repository's branches may not be loaded yet when the PR arrives, so it falls
   back to the browser.
-- **Notification permission is unverified on the packaged build.** macOS may require the app to
-  be signed before it shows notifications. If none appear, check System Settings, Notifications.
+- **Desktop notifications do not appear when running from the dev server.** The dev server runs
+  the generic, ad-hoc signed Electron binary, and macOS refuses its notifications without ever
+  listing it in System Settings, Notifications. The log shows `notification: ... (UNErrorDomain
+  error 1.)`. The dashboard list, the toolbar count and the dock badge still work. Whether the
+  unsigned packaged build can show them is unverified.
 
 ## Planned features
 

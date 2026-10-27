@@ -58,6 +58,12 @@ function showNotification(content: NotificationContent, onClick: () => void): vo
         onClick();
     });
     notification.on('close', () => liveNotifications.delete(notification));
+    // macOS refuses a notification it is not allowed to show (notifications off
+    // for the app, or an unsigned build); log it instead of failing silently.
+    notification.on('failed', (_event, error) => {
+        liveNotifications.delete(notification);
+        logError('notification', error);
+    });
     notification.show();
 }
 
