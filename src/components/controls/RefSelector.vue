@@ -203,6 +203,20 @@ function toggleAll() {
     collapseAll();
 }
 
+// Hides a row's note while its star shows over it: always for a starred row,
+// and on hover or highlight for one that can be starred.
+function metaClass(name: string): string {
+    if (name === WORKING_TREE) {
+        return '';
+    }
+
+    if (comparison.isFavorite(name)) {
+        return 'invisible';
+    }
+
+    return 'group-hover/ref:invisible group-data-[highlighted]/ref:invisible';
+}
+
 function pick(name: string) {
     if (props.side === 'base') {
         comparison.setBase(name);
@@ -306,11 +320,18 @@ function pick(name: string) {
                             <!-- Full path, hidden but kept in the text so Command
                                  searches match the prefix as well as the leaf. -->
                             <span class="sr-only">{{ item.name }}</span>
-                            <span class="text-[11px] whitespace-nowrap text-moire-faint">
+                            <!-- The note gives way to the star wherever the star shows,
+                                 since the star sits on top of it. -->
+                            <span
+                                class="text-[11px] whitespace-nowrap text-moire-faint"
+                                :class="metaClass(item.name)"
+                            >
                                 {{ item.meta }}
                             </span>
-                            <!-- Stops the click so starring does not also pick the
-                                 row. Unstarred, the star only shows on the hovered or
+                            <!-- Overlaid on the row's right edge so it takes no space
+                                 and every note lines up whether or not the row can be
+                                 starred. Stops the click so starring does not also pick
+                                 the row. Unstarred, it only shows on the hovered or
                                  highlighted row to keep the list quiet. -->
                             <Button
                                 v-if="item.name !== WORKING_TREE"
@@ -324,7 +345,7 @@ function pick(name: string) {
                                         : `Star ${item.name}`
                                 "
                                 :title="comparison.isFavorite(item.name) ? 'Unstar' : 'Star'"
-                                class="-my-1 size-5 hover:bg-transparent dark:hover:bg-transparent"
+                                class="absolute top-1/2 right-1 size-5 -translate-y-1/2 hover:bg-transparent dark:hover:bg-transparent"
                                 :class="
                                     comparison.isFavorite(item.name)
                                         ? 'text-moire-warn'
