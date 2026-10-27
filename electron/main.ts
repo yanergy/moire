@@ -1,7 +1,17 @@
-import { app, BrowserWindow, dialog, nativeImage, shell } from 'electron';
+import {
+    app,
+    BrowserWindow,
+    dialog,
+    nativeImage,
+    Notification,
+    powerMonitor,
+    shell,
+} from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers, isGitAvailable, getCurrentRepoPath } from './ipc/handlers';
 import { getAccounts, switchAccount } from './github/gh';
+import { fetchSnapshot, getRepoIdentity } from './github/notifications';
+import { Notifier, type DashboardState, type NotificationContent } from './notifier';
 import { stopWatchingRepo } from './watcher/RepoWatcher';
 import { installAppMenu } from './menu';
 import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
@@ -18,6 +28,10 @@ import {
     setEditorPreference,
     getDiffLayout,
     setDiffLayout,
+    getNotificationPrefs,
+    setNotificationPrefs,
+    getNotifierState,
+    setNotifierState,
 } from './settings';
 import { detectEditors } from './editors';
 import { promptUpdateIfAvailable } from './updates';
@@ -28,7 +42,92 @@ function sendToFocused(channel: string, ...args: unknown[]): void {
     win?.webContents.send(channel, ...args);
 }
 
-async function createWindow(): Promise<void> {
+// Native notifications are garbage collected once nothing references them, which
+// silently drops their click handler. Hold each one until it is clicked or closed.
+const liveNotifications = new Set<Notification>();
+
+function showNotification(content: NotificationContent, onClick: () => void): void {
+    if (!Notification.isSupported()) {
+        return;
+    }
+
+    const notification = new Notification(content);
+    liveNotifications.add(notification);
+    notification.on('click', () => {
+        liveNotifications.delete(notification);
+        onClick();
+    });
+    notification.on('close', () => liveNotifications.delete(notification));
+    // macOS refuses a notification it is not allowed to show (notifications off
+    // for the app, or an unsigned build); log it instead of failing silently.
+    notification.on('failed', (_event, error) => {
+        liveNotifications.delete(notification);
+        logError('notification', error);
+    });
+    notification.show();
+}
+
+// Bring the main window to the front, recreating it when it was closed (the app
+// stays alive on macOS), for a notification click that needs the app.
+async function revealWindow(): Promise<BrowserWindow> {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) {
+        const created = await createWindow();
+        // A fresh renderer cannot receive messages until it has loaded.
+        await new Promise<void>((resolve) => created.webContents.once('did-finish-load', resolve));
+        return created;
+    }
+
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    return win;
+}
+
+// Switch the main window to the dashboard (the summary notification and View →
+// Dashboard).
+async function showDashboard(): Promise<void> {
+    const win = await revealWindow();
+    win.webContents.send('dashboard:show');
+}
+
+// Polls GitHub for the open repository. See notifier.ts and
+// documentation/github-notifications-plan.md.
+const notifier = new Notifier({
+    getRepoIdentity: (repoPath) => getRepoIdentity(repoPath),
+    fetchSnapshot: (repoPath, repo, now) => fetchSnapshot(repoPath, repo, now),
+    getPrefs: getNotificationPrefs,
+    loadState: getNotifierState,
+    saveState: setNotifierState,
+    notify: showNotification,
+    setBadge: (count) => app.dock?.setBadge(count > 0 ? String(count) : ''),
+    // The renderer opens it in the PR view, or on GitHub when it cannot.
+    onOpenPr: (pr) => {
+        void revealWindow().then((win) => win.webContents.send('dashboard:open-pr', pr));
+    },
+    onOpenDashboard: () => void showDashboard(),
+    // Keep an open dashboard current after every poll.
+    onChange: () => {
+        void dashboardState().then((state) => {
+            for (const win of BrowserWindow.getAllWindows()) {
+                win.webContents.send('dashboard:changed', state);
+            }
+        });
+    },
+    logError,
+});
+
+async function dashboardState(): Promise<DashboardState> {
+    const { showDrafts, dashboardAuthors, dashboardHiddenCards } = await getNotificationPrefs();
+    return {
+        ...notifier.getView(),
+        showDrafts,
+        authors: dashboardAuthors,
+        hiddenCards: dashboardHiddenCards,
+    };
+}
+
+async function createWindow(): Promise<BrowserWindow> {
     // Reopen at the last session's size/position (off-screen positions dropped).
     const { bounds, maximized } = await restoreWindowState();
     const win = new BrowserWindow({
@@ -60,6 +159,8 @@ async function createWindow(): Promise<void> {
     } else {
         win.loadFile(path.join(app.getAppPath(), 'dist/index.html'));
     }
+
+    return win;
 }
 
 app.whenReady().then(async () => {
@@ -134,6 +235,7 @@ app.whenReady().then(async () => {
             // The store owns the git re-read / the open flow, so these items just
             // poke the focused window; the renderer acts on the message.
             onRefresh: () => sendToFocused('menu:refresh'),
+            onShowDashboard: () => void showDashboard(),
             onOpenRepo: () => sendToFocused('menu:open-repo'),
             onOpenRecent: (repoPath) => sendToFocused('menu:open-recent', repoPath),
             // Help → Open Log File opens the log in the OS default text viewer.
@@ -147,6 +249,25 @@ app.whenReady().then(async () => {
                 sendToFocused('flourishes:changed', enabled);
             },
             accounts,
+            notificationPrefs: await getNotificationPrefs(),
+            // The master switch starts or stops background polling (and clears
+            // the badge); the menu is rebuilt so the per event items enable or
+            // disable with it.
+            onToggleNotifications: (enabled) => {
+                void (async () => {
+                    await setNotificationPrefs({ enabled });
+                    await buildMenu();
+                    await notifier.restart();
+                })();
+            },
+            onToggleNotificationEvent: (kind, enabled) =>
+                void setNotificationPrefs({ events: { [kind]: enabled } }),
+            onToggleDockBadge: (enabled) => {
+                void (async () => {
+                    await setNotificationPrefs({ dockBadge: enabled });
+                    await notifier.restart();
+                })();
+            },
             // Switch gh's active account, then rebuild the menu (to move the
             // checkmark) and refresh the renderer so the PR view reflects the
             // newly active account. A failure surfaces as a native error box.
@@ -162,12 +283,59 @@ app.whenReady().then(async () => {
 
                     await buildMenu();
                     sendToFocused('menu:refresh');
+                    // The notifier follows the active account: re-poll, which
+                    // starts a fresh baseline for the new login.
+                    await notifier.restart();
                 })();
             },
         });
     };
 
-    registerIpcHandlers({ onRecentsChanged: () => void buildMenu() });
+    registerIpcHandlers({
+        onRecentsChanged: () => void buildMenu(),
+        onRepoOpened: (repoPath) => void notifier.setRepo(repoPath),
+        dashboard: {
+            get: async () => {
+                if (!notifier.getView().snapshot) {
+                    await notifier.poll();
+                }
+                return dashboardState();
+            },
+            refresh: async () => {
+                await notifier.poll();
+                return dashboardState();
+            },
+            // The badge also follows this toggle, so restart to recount it.
+            setShowDrafts: async (show) => {
+                await setNotificationPrefs({ showDrafts: show });
+                await notifier.restart();
+                return dashboardState();
+            },
+            // Dashboard only: nothing in the notifier depends on it.
+            setAuthors: async (authors) => {
+                await setNotificationPrefs({ dashboardAuthors: authors });
+                return dashboardState();
+            },
+            setHiddenCards: async (keys) => {
+                await setNotificationPrefs({ dashboardHiddenCards: keys });
+                return dashboardState();
+            },
+            markRead: async (id) => {
+                await notifier.markActivityRead(id);
+                return dashboardState();
+            },
+            markAllRead: async () => {
+                await notifier.markAllActivityRead();
+                return dashboardState();
+            },
+            deleteNotification: async (id) => {
+                await notifier.deleteActivity(id);
+                return dashboardState();
+            },
+        },
+    });
+    // Catch up right after the Mac wakes instead of waiting for the next tick.
+    powerMonitor.on('resume', () => notifier.onResume());
     await buildMenu();
     await createWindow();
 
@@ -195,4 +363,7 @@ app.on('window-all-closed', () => {
 // Close the repo watcher's file handles on the way out. It is otherwise only ever
 // replaced when a new repo opens, so a clean quit would leave the last one open
 // (the OS reclaims it anyway, but the teardown path should be complete).
-app.on('before-quit', () => stopWatchingRepo());
+app.on('before-quit', () => {
+    stopWatchingRepo();
+    notifier.stop();
+});

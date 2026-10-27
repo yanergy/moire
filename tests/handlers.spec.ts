@@ -22,6 +22,17 @@ const state = vi.hoisted(() => ({
     currentThemeState: vi.fn<() => { preference: string; isDark: boolean }>(),
     logError: vi.fn<(context: string, error: unknown) => void>(),
     onRecentsChanged: vi.fn<() => void>(),
+    onRepoOpened: vi.fn<(repoPath: string) => void>(),
+    dashboard: {
+        get: vi.fn<() => Promise<unknown>>(),
+        refresh: vi.fn<() => Promise<unknown>>(),
+        setShowDrafts: vi.fn<(show: boolean) => Promise<unknown>>(),
+        setAuthors: vi.fn<(authors: unknown) => Promise<unknown>>(),
+        setHiddenCards: vi.fn<(keys: string[]) => Promise<unknown>>(),
+        markRead: vi.fn<(id: string) => Promise<unknown>>(),
+        markAllRead: vi.fn<() => Promise<unknown>>(),
+        deleteNotification: vi.fn<(id: string) => Promise<unknown>>(),
+    },
     getPullRequest: vi.fn<(repoPath: string, base: string, head: string) => Promise<unknown>>(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
     openPath: vi.fn<(p: string) => Promise<string>>(),
@@ -113,7 +124,11 @@ describe('registerIpcHandlers', () => {
         // Fresh module each test so the internal currentRepo starts unset.
         vi.resetModules();
         mod = await import('../electron/ipc/handlers');
-        mod.registerIpcHandlers({ onRecentsChanged: state.onRecentsChanged });
+        mod.registerIpcHandlers({
+            onRecentsChanged: state.onRecentsChanged,
+            onRepoOpened: state.onRepoOpened,
+            dashboard: state.dashboard as never,
+        });
     });
 
     it('registers every IPC channel', () => {
@@ -134,6 +149,14 @@ describe('registerIpcHandlers', () => {
             'gh:pull-request',
             'shell:open-external',
             'shell:open-path',
+            'dashboard:get',
+            'dashboard:refresh',
+            'dashboard:set-show-drafts',
+            'dashboard:set-authors',
+            'dashboard:set-hidden-cards',
+            'dashboard:mark-read',
+            'dashboard:mark-all-read',
+            'dashboard:delete-notification',
         ]) {
             expect(state.handlers.has(channel)).toBe(true);
         }
@@ -152,6 +175,7 @@ describe('registerIpcHandlers', () => {
         expect(state.addRecentRepo).toHaveBeenCalledWith('/repos/moire');
         expect(state.watchRepo).toHaveBeenCalledWith('/repos/moire');
         expect(state.onRecentsChanged).toHaveBeenCalledTimes(1);
+        expect(state.onRepoOpened).toHaveBeenCalledWith('/repos/moire');
         expect(mod.getCurrentRepoPath()).toBe('/repos/moire');
 
         // A git channel now resolves instead of throwing the guard.
@@ -166,6 +190,7 @@ describe('registerIpcHandlers', () => {
         expect(result).toBeNull();
         expect(state.showErrorBox).toHaveBeenCalled();
         expect(state.addRecentRepo).not.toHaveBeenCalled();
+        expect(state.onRepoOpened).not.toHaveBeenCalled();
         expect(mod.getCurrentRepoPath()).toBeNull();
     });
 
@@ -210,6 +235,45 @@ describe('registerIpcHandlers', () => {
 
         expect(state.getPullRequest).toHaveBeenCalledWith('/repos/moire', 'main', 'feature');
         expect(result).toBe(prResult);
+    });
+
+    it('rejects the dashboard channels before any repo is opened', async () => {
+        await expect(invoke('dashboard:get')).rejects.toThrow('No repository is open');
+        expect(state.dashboard.get).not.toHaveBeenCalled();
+    });
+
+    it('forwards the dashboard channels to the bridge once a repo is open', async () => {
+        await invoke('repo:open', '/repos/moire');
+        const dashboardState = { status: 'ok', snapshot: null, activity: [], showDrafts: true };
+        state.dashboard.get.mockResolvedValue(dashboardState);
+        state.dashboard.refresh.mockResolvedValue(dashboardState);
+        state.dashboard.setShowDrafts.mockResolvedValue(dashboardState);
+
+        expect(await invoke('dashboard:get')).toBe(dashboardState);
+        expect(await invoke('dashboard:refresh')).toBe(dashboardState);
+        expect(await invoke('dashboard:set-show-drafts', false)).toBe(dashboardState);
+        expect(state.dashboard.setShowDrafts).toHaveBeenCalledWith(false);
+
+        state.dashboard.setAuthors.mockResolvedValue(dashboardState);
+        expect(await invoke('dashboard:set-authors', ['ann'])).toBe(dashboardState);
+        expect(state.dashboard.setAuthors).toHaveBeenCalledWith(['ann']);
+
+        // Anything but a list of keys is dropped before it reaches the settings.
+        state.dashboard.setHiddenCards.mockResolvedValue(dashboardState);
+        expect(await invoke('dashboard:set-hidden-cards', ['stale', 3])).toBe(dashboardState);
+        expect(state.dashboard.setHiddenCards).toHaveBeenCalledWith(['stale']);
+        await invoke('dashboard:set-hidden-cards', 'stale');
+        expect(state.dashboard.setHiddenCards).toHaveBeenLastCalledWith([]);
+
+        state.dashboard.markRead.mockResolvedValue(dashboardState);
+        state.dashboard.markAllRead.mockResolvedValue(dashboardState);
+        state.dashboard.deleteNotification.mockResolvedValue(dashboardState);
+        await invoke('dashboard:mark-read', 'id-1');
+        await invoke('dashboard:mark-all-read');
+        await invoke('dashboard:delete-notification', 'id-2');
+        expect(state.dashboard.markRead).toHaveBeenCalledWith('id-1');
+        expect(state.dashboard.markAllRead).toHaveBeenCalledTimes(1);
+        expect(state.dashboard.deleteNotification).toHaveBeenCalledWith('id-2');
     });
 
     it('rejects the PR lookup before any repo is opened', async () => {

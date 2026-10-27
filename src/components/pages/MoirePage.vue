@@ -8,6 +8,7 @@ import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import DiffPane from '@/components/diff/DiffPane.vue';
 import StackedDiffPane from '@/components/diff/StackedDiffPane.vue';
 import PrView from '@/components/pr/PrView.vue';
+import DashboardView from '@/components/dashboard/DashboardView.vue';
 
 const comparison = useComparisonStore();
 const ui = useUiStore();
@@ -15,6 +16,9 @@ const ui = useUiStore();
 // The PR view is only reachable while a PR is detected for the range; any other
 // time the diff fills the pane.
 const showPrView = computed(() => ui.mainView === 'pr' && comparison.hasPullRequest);
+
+// The dashboard is always about the open repository, so it needs one.
+const showDashboard = computed(() => ui.mainView === 'dashboard' && !!comparison.repoPath);
 
 // If the PR disappears while it is being viewed (a range change to a branch with
 // no PR), fall back to the diff so the toggle and the pane stay in step.
@@ -34,7 +38,10 @@ watch(
     >
         <toolbar-header />
         <missing-branch-notice />
-        <div class="flex min-h-0 flex-1">
+        <!-- The dashboard is a repository-wide overview, so it takes the full
+             width; the file tree only belongs to the diff and PR views. -->
+        <dashboard-view v-if="showDashboard" />
+        <div v-else class="flex min-h-0 flex-1">
             <file-tree-sidebar />
             <pr-view v-if="showPrView" />
             <!-- The diff area follows the View → Diff Layout setting: the single-file

@@ -11,7 +11,7 @@ export type CompareMode = 'merge-base' | 'direct';
 export type ViewMode = 'split' | 'unified';
 // Which pane fills the main area: the diff, or the pull-request view (reachable
 // only when a PR is detected for the compared branches). Renderer-only state.
-export type MainView = 'diff' | 'pr';
+export type MainView = 'diff' | 'pr' | 'dashboard';
 // The concrete theme the UI resolves to. `ThemePreference` is what the user
 // picks; `system` follows the OS and resolves to one of these.
 export type ThemeName = 'dark' | 'light';
@@ -244,6 +244,107 @@ export interface UpdateCheckResult {
     message?: string;
 }
 
+// --- GitHub dashboard ---
+//
+// Mirrors electron/github/notifications.ts and electron/notifier.ts (the process
+// split forbids importing across it); keep the two in sync. The dashboard covers
+// the repository open in Moiré and the active gh account only.
+
+// The overall CI state of a PR's head commit. 'none' means no checks ran.
+export type CiState = 'passing' | 'failing' | 'pending' | 'none';
+
+export type DashboardEventKind =
+    | 'review-requested'
+    | 'changes-requested'
+    | 'closed-unmerged'
+    | 'checks-failed'
+    | 'approved'
+    | 'merge-conflict'
+    | 'ready-to-merge'
+    | 'merged-by-other';
+
+// One reviewer's current stance on a PR (their latest review).
+export interface DashboardReview {
+    id: string;
+    author: string;
+    state: string;
+}
+
+export interface DashboardPr {
+    id: string;
+    number: number;
+    title: string;
+    url: string;
+    author: string;
+    isDraft: boolean;
+    state: 'OPEN' | 'CLOSED' | 'MERGED';
+    mergedBy: string;
+    baseRefName: string;
+    headRefName: string;
+    // A PR from a fork, whose head branch is not on this repository's remote.
+    isCrossRepository: boolean;
+    createdAt: string;
+    updatedAt: string;
+    closedAt: string;
+    additions: number;
+    deletions: number;
+    mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
+    reviewDecision: string; // '' | APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED
+    ci: CiState;
+    failedChecks: string[];
+    reviews: DashboardReview[];
+}
+
+export interface DashboardSnapshot {
+    login: string;
+    repo: string; // owner/name
+    fetchedAt: string;
+    // Open PRs that request the viewer's review personally.
+    toReview: DashboardPr[];
+    // The viewer's open PRs plus those closed in the last 7 days.
+    mine: DashboardPr[];
+    // Every open PR in the repository, by any author. Optional because snapshots
+    // saved before it existed lack it.
+    open?: DashboardPr[];
+    // PRs merged in the last 31 days, by any author, for the Merged card.
+    merged?: DashboardPr[];
+    failureNotified: string[];
+}
+
+// One delivered notification, newest first in DashboardState.activity. `read` is
+// set once it is marked read (or opened) on the dashboard.
+export interface ActivityEntry {
+    kind: DashboardEventKind;
+    at: string;
+    number: number;
+    title: string;
+    url: string;
+    actor?: string;
+    checks?: string[];
+    read?: boolean;
+}
+
+// Whose PRs the dashboard cards count: 'me' is the signed in gh account (kept
+// symbolic so it follows an account switch), 'all' is every author, and a list
+// names specific logins. Mirrors AuthorFilter in electron/settings.ts.
+export type AuthorFilter = 'me' | 'all' | string[];
+
+// The dashboard for the open repository. `status` explains a missing or stale
+// snapshot (no gh, not signed in, no GitHub remote, ...); `snapshot` stays the
+// last good fetch when a later one fails. `showDrafts` is the dashboard's
+// "Show drafts" toggle, which also applies to notifications. `authors` is its
+// author filter: whose open PRs the cards count.
+export interface DashboardState {
+    status: PrStatus;
+    message?: string;
+    snapshot: DashboardSnapshot | null;
+    activity: ActivityEntry[];
+    showDrafts: boolean;
+    authors: AuthorFilter;
+    // The overview cards turned off in the Display menu, by key.
+    hiddenCards: string[];
+}
+
 // Preload API surface, exposed on window.api once the git backend lands.
 export interface MoireApi {
     openRepoDialog(): Promise<string | null>;
@@ -335,4 +436,29 @@ export interface MoireApi {
     // Fired when a native File → Open Recent entry is chosen, with its path.
     // Returns an unsubscribe function.
     onMenuOpenRecent(cb: (path: string) => void): () => void;
+    // The GitHub dashboard for the open repository. `getDashboard` returns the
+    // current state (fetching first if nothing was fetched yet); `refreshDashboard`
+    // polls GitHub now; `setDashboardShowDrafts`, `setDashboardAuthors` and
+    // `setDashboardHiddenCards` persist the "Show drafts" toggle, the author filter
+    // and the cards turned off in the Display menu.
+    // All three reject when no repository is open. `onDashboardChanged` fires after
+    // every background poll, and returns an unsubscribe function.
+    getDashboard(): Promise<DashboardState>;
+    refreshDashboard(): Promise<DashboardState>;
+    setDashboardShowDrafts(show: boolean): Promise<DashboardState>;
+    setDashboardAuthors(authors: AuthorFilter): Promise<DashboardState>;
+    setDashboardHiddenCards(keys: string[]): Promise<DashboardState>;
+    // The dashboard's notification list, by activity id (see activityId in
+    // src/lib/dashboard.ts): mark one read, mark all read, or delete one.
+    markDashboardNotificationRead(id: string): Promise<DashboardState>;
+    markAllDashboardNotificationsRead(): Promise<DashboardState>;
+    deleteDashboardNotification(id: string): Promise<DashboardState>;
+    onDashboardChanged(cb: (state: DashboardState) => void): () => void;
+    // Fired by View → Dashboard and the summary notification, to switch the main
+    // area to the dashboard. Returns an unsubscribe function.
+    onShowDashboard(cb: () => void): () => void;
+    // Fired when a PR notification is clicked, with the PR to open in the PR view
+    // (or on GitHub when its branches are not available). Returns an unsubscribe
+    // function.
+    onOpenPr(cb: (pr: DashboardPr) => void): () => void;
 }

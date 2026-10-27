@@ -1,0 +1,110 @@
+import { setActivePinia, createPinia, type Pinia } from 'pinia';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { flushPromises, mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
+import NotificationsMenu from '@/components/headers/NotificationsMenu.vue';
+import NotificationRow from '@/components/headers/NotificationRow.vue';
+import { useDashboardStore } from '@/stores/dashboard';
+import type { ActivityEntry } from '@/shared/types';
+import { dashboardState } from './fixtures';
+
+const ACTIVITY: ActivityEntry[] = [
+    {
+        kind: 'checks-failed',
+        checks: ['lint'],
+        at: '2026-10-26T12:00:00Z',
+        number: 2,
+        title: 'Second',
+        url: 'https://github.com/o/r/pull/2',
+    },
+    {
+        kind: 'review-requested',
+        at: '2026-10-26T11:00:00Z',
+        number: 1,
+        title: 'First',
+        url: 'https://github.com/o/r/pull/1',
+        read: true,
+    },
+];
+
+describe('NotificationsMenu', () => {
+    let pinia: Pinia;
+
+    beforeEach(() => {
+        pinia = createPinia();
+        setActivePinia(pinia);
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    // Attached so the menu, which teleports to the body, can open.
+    function mountMenu(activity: ActivityEntry[]) {
+        useDashboardStore().applyState(dashboardState({ activity }));
+        return mount(NotificationsMenu, {
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
+    }
+
+    async function openMenu(wrapper: ReturnType<typeof mountMenu>) {
+        await wrapper.get('[aria-label="Notifications"]').trigger('click');
+        await flushPromises();
+        await nextTick();
+    }
+
+    it('shows the unread count on the bell', async () => {
+        const wrapper = mountMenu(ACTIVITY);
+        const bell = wrapper.get('[aria-label="Notifications"]');
+        expect(bell.text()).toBe('1');
+        expect(bell.attributes('title')).toBe('1 unread notification');
+        wrapper.unmount();
+    });
+
+    it('shows no count when every notification is read', async () => {
+        const wrapper = mountMenu([{ ...ACTIVITY[0]!, read: true }]);
+        expect(wrapper.get('[aria-label="Notifications"]').text()).toBe('');
+        wrapper.unmount();
+    });
+
+    it('lists the notifications newest first and marks all read', async () => {
+        const wrapper = mountMenu(ACTIVITY);
+        const markAllRead = vi
+            .spyOn(useDashboardStore(), 'markAllRead')
+            .mockResolvedValue(undefined);
+        await openMenu(wrapper);
+
+        const rows = wrapper.findAllComponents(NotificationRow);
+        expect(rows.map((row) => row.props('entry').number)).toEqual([2, 1]);
+        expect(document.body.textContent).toContain('Checks failed: lint');
+
+        const button = [...document.querySelectorAll('button')].find(
+            (b) => b.textContent?.trim() === 'Mark all as read'
+        );
+        button!.click();
+        expect(markAllRead).toHaveBeenCalledTimes(1);
+        wrapper.unmount();
+    });
+
+    it('opens a notification and closes the menu', async () => {
+        const wrapper = mountMenu(ACTIVITY);
+        const openActivity = vi
+            .spyOn(useDashboardStore(), 'openActivity')
+            .mockImplementation(() => {});
+        await openMenu(wrapper);
+
+        wrapper.findAllComponents(NotificationRow)[0]!.vm.$emit('open', ACTIVITY[0]);
+        await flushPromises();
+        expect(openActivity).toHaveBeenCalledWith(ACTIVITY[0]);
+        expect(wrapper.findAllComponents(NotificationRow)).toHaveLength(0);
+        wrapper.unmount();
+    });
+
+    it('says when no notifications were sent yet', async () => {
+        const wrapper = mountMenu([]);
+        await openMenu(wrapper);
+        expect(document.body.textContent).toContain('No notifications for this repository yet.');
+        wrapper.unmount();
+    });
+});

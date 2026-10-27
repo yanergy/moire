@@ -10,6 +10,13 @@ style, the strict Electron process separation and preload bridge rules, the shad
 component standard, the `--moire-*` design tokens, testing rules, and component naming. Follow it
 for every change.
 
+## Git workflow
+
+Never commit on `main`. Start every new feature or fix on its own branch off `main`, commit
+there, push the branch, and open a pull request for it with `gh` (using the `yanergy`
+account). Name branches `feat/<name>` for features and `fix/<name>` for fixes, with a short
+kebab-case name (for example `feat/github-notifications`).
+
 ## Tracking status
 
 The five-phase plan is complete, so the README no longer carries a per-task checklist. When you

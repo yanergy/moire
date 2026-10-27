@@ -6,6 +6,7 @@ import { windowTitle } from '@/lib/window-title';
 import { setFlourishesEnabled } from '@/lib/celebrate';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
+import { useDashboardStore } from '@/stores/dashboard';
 import MoirePage from '@/components/pages/MoirePage.vue';
 
 setupMonacoEnv();
@@ -13,6 +14,7 @@ defineMonacoThemes();
 
 const comparison = useComparisonStore();
 const ui = useUiStore();
+const dashboard = useDashboardStore();
 
 let stopThemeSync: (() => void) | undefined;
 let stopMenuRefresh: (() => void) | undefined;
@@ -22,6 +24,9 @@ let stopRepoChanged: (() => void) | undefined;
 let stopFlourishes: (() => void) | undefined;
 let stopCodeStyle: (() => void) | undefined;
 let stopDiffLayout: (() => void) | undefined;
+let stopDashboard: (() => void) | undefined;
+let stopShowDashboard: (() => void) | undefined;
+let stopOpenPr: (() => void) | undefined;
 
 // Electron mirrors document.title into the native window title bar, so the open
 // repo shows there. This replaces the in-app title the removed fake title bar
@@ -70,6 +75,11 @@ onMounted(async () => {
     // The RepoWatcher pushes a coalesced event when the open repo's refs or
     // working tree change on disk, so the diff refreshes without a manual poke.
     stopRepoChanged = api.onRepoChanged(() => void comparison.refresh());
+
+    // The GitHub notifier in main pushes the dashboard state after every poll.
+    stopDashboard = api.onDashboardChanged((state) => dashboard.applyState(state));
+    stopShowDashboard = api.onShowDashboard(() => ui.setMainView('dashboard'));
+    stopOpenPr = api.onOpenPr((pr) => dashboard.openPr(pr));
 });
 
 onUnmounted(() => {
@@ -81,6 +91,9 @@ onUnmounted(() => {
     stopFlourishes?.();
     stopCodeStyle?.();
     stopDiffLayout?.();
+    stopDashboard?.();
+    stopShowDashboard?.();
+    stopOpenPr?.();
 });
 </script>
 

@@ -1,6 +1,6 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, type VueWrapper } from '@vue/test-utils';
 import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
@@ -34,6 +34,11 @@ const PR: PullRequest = {
 // Stub them here and exercise the piece ToolbarHeader owns directly: the swap
 // button. (The theme toggle moved to the native View menu; see tests/menu.spec.ts.)
 const stubs = { RepoPicker: true, RefSelector: true, SegmentedToggle: true };
+
+// The dashboard toggle, found by its label.
+function dashboardToggle(wrapper: VueWrapper) {
+    return wrapper.findAll('button').find((b) => b.text().startsWith('Dashboard'))!;
+}
 
 describe('ToolbarHeader', () => {
     let pinia: Pinia;
@@ -175,5 +180,29 @@ describe('ToolbarHeader', () => {
 
         const wrapper = mountToolbar();
         expect(wrapper.find('.lucide-triangle-alert').exists()).toBe(false);
+    });
+
+    describe('dashboard toggle', () => {
+        it('is hidden, with the notifications menu, without an open repo', () => {
+            const wrapper = mountToolbar();
+            expect(wrapper.text()).not.toContain('Dashboard');
+            expect(wrapper.find('[aria-label="Notifications"]').exists()).toBe(false);
+        });
+
+        it('switches the main view, next to a notifications menu', async () => {
+            useComparisonStore().repoPath = '/repos/moire';
+            const ui = useUiStore();
+
+            const wrapper = mountToolbar();
+            const toggle = dashboardToggle(wrapper);
+            expect(toggle.text()).toBe('Dashboard');
+            expect(wrapper.find('[aria-label="Notifications"]').exists()).toBe(true);
+
+            await toggle.trigger('click');
+            expect(ui.mainView).toBe('dashboard');
+
+            await toggle.trigger('click');
+            expect(ui.mainView).toBe('diff');
+        });
     });
 });

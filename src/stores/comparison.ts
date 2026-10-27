@@ -498,6 +498,45 @@ export const useComparisonStore = defineStore('comparison', () => {
         return request;
     }
 
+    // The branch name GitHub knows a ref by. A remote tracking branch is listed as
+    // `<remote>/<branch>`, but a PR's head is just `<branch>`, so the remote prefix
+    // is dropped; a local branch is used as is (even one with a slash in its name).
+    function prBranchName(refName: string): string {
+        const isLocal = branches.value.some((b) => b.kind === 'local' && b.name === refName);
+        const isRemote = branches.value.some((b) => b.kind === 'remote' && b.name === refName);
+        return !isLocal && isRemote ? refName.slice(refName.indexOf('/') + 1) : refName;
+    }
+
+    // The ref to select for a branch name from GitHub: the local branch when there is
+    // one, else its remote tracking branch (preferring origin). Null when the branch
+    // is in neither, e.g. not fetched yet.
+    function refForBranch(name: string): string | null {
+        if (branches.value.some((b) => b.kind === 'local' && b.name === name)) {
+            return name;
+        }
+        const remotes = branches.value
+            .filter((b) => b.kind === 'remote' && b.name.endsWith(`/${name}`))
+            .map((b) => b.name);
+        return remotes.find((refName) => refName === `origin/${name}`) ?? remotes[0] ?? null;
+    }
+
+    // Select a PR's base and head (by their GitHub branch names) as the compared
+    // range. Returns false, leaving the range alone, when either branch is not
+    // available locally or as a remote tracking branch.
+    function selectPullRequestRange(baseBranch: string, headBranch: string): boolean {
+        const baseRef = refForBranch(baseBranch);
+        const headRef = refForBranch(headBranch);
+        if (!baseRef || !headRef) {
+            return false;
+        }
+
+        base.value = baseRef;
+        head.value = headRef;
+        disappearedBranches.value = [];
+        void loadChangedFiles();
+        return true;
+    }
+
     // Monotonic token so an out-of-order PR lookup (the range moved before gh
     // resolved) is dropped rather than overwriting a newer result.
     let prRequest = 0;
@@ -532,7 +571,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
 
         try {
-            const result = await api.getPullRequest(base.value, head.value);
+            const result = await api.getPullRequest(base.value, prBranchName(head.value));
             if (token !== prRequest) {
                 return;
             }
@@ -1468,6 +1507,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         isViewed,
         localBranches,
         remoteBranches,
+        selectPullRequestRange,
         fileCount,
         viewedCount,
         totalAdditions,

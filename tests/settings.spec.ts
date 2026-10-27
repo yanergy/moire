@@ -129,3 +129,51 @@ describe('settings: theme and window state', () => {
         expect(await getDiffLayout()).toBe('stacked');
     });
 });
+
+describe('settings: notifications', () => {
+    it('defaults to on, with ready to merge and merged by someone else off', async () => {
+        const { getNotificationPrefs } = await loadSettings();
+        const prefs = await getNotificationPrefs();
+
+        expect(prefs.enabled).toBe(true);
+        expect(prefs.dockBadge).toBe(true);
+        expect(prefs.showDrafts).toBe(true);
+        expect(prefs.dashboardAuthors).toBe('me');
+        expect(prefs.dashboardHiddenCards).toEqual([]);
+        expect(prefs.events['checks-failed']).toBe(true);
+        expect(prefs.events['ready-to-merge']).toBe(false);
+        expect(prefs.events['merged-by-other']).toBe(false);
+    });
+
+    it('merges a single toggle into the stored preferences', async () => {
+        const { getNotificationPrefs, setNotificationPrefs } = await loadSettings();
+        await setNotificationPrefs({ events: { approved: false } });
+        await setNotificationPrefs({ enabled: false });
+
+        const prefs = await getNotificationPrefs();
+        expect(prefs.enabled).toBe(false);
+        expect(prefs.events.approved).toBe(false);
+        expect(prefs.events['review-requested']).toBe(true);
+    });
+
+    it('keeps notifier state per key, null until stored', async () => {
+        const { getNotifierState, setNotifierState } = await loadSettings();
+        expect(await getNotifierState('me|o/r')).toBeNull();
+
+        const state = {
+            snapshot: {
+                login: 'me',
+                repo: 'o/r',
+                fetchedAt: '2026-10-26T00:00:00Z',
+                toReview: [],
+                mine: [],
+                failureNotified: [],
+            },
+            activity: [],
+        };
+        await setNotifierState('me|o/r', state);
+
+        expect(await getNotifierState('me|o/r')).toEqual(state);
+        expect(await getNotifierState('me|o/other')).toBeNull();
+    });
+});

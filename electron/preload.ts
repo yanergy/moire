@@ -102,6 +102,40 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('menu:open-recent', listener);
         return () => ipcRenderer.removeListener('menu:open-recent', listener);
     },
+    // The GitHub dashboard for the open repository, backed by the notifier in the
+    // main process. `onDashboardChanged` fires after every background poll and
+    // returns an unsubscribe function.
+    getDashboard: () => ipcRenderer.invoke('dashboard:get'),
+    refreshDashboard: () => ipcRenderer.invoke('dashboard:refresh'),
+    setDashboardShowDrafts: (show: boolean) =>
+        ipcRenderer.invoke('dashboard:set-show-drafts', show),
+    setDashboardAuthors: (authors: unknown) => ipcRenderer.invoke('dashboard:set-authors', authors),
+    setDashboardHiddenCards: (keys: string[]) =>
+        ipcRenderer.invoke('dashboard:set-hidden-cards', keys),
+    // The dashboard's notification list: mark one read or all read, or delete one.
+    markDashboardNotificationRead: (id: string) => ipcRenderer.invoke('dashboard:mark-read', id),
+    markAllDashboardNotificationsRead: () => ipcRenderer.invoke('dashboard:mark-all-read'),
+    deleteDashboardNotification: (id: string) =>
+        ipcRenderer.invoke('dashboard:delete-notification', id),
+    onDashboardChanged: (callback: (state: unknown) => void) => {
+        const listener = (_event: IpcRendererEvent, state: unknown) => callback(state);
+        ipcRenderer.on('dashboard:changed', listener);
+        return () => ipcRenderer.removeListener('dashboard:changed', listener);
+    },
+    // Fired when a PR notification is clicked, with the PR to open. Returns an
+    // unsubscribe function.
+    onOpenPr: (callback: (pr: unknown) => void) => {
+        const listener = (_event: IpcRendererEvent, pr: unknown) => callback(pr);
+        ipcRenderer.on('dashboard:open-pr', listener);
+        return () => ipcRenderer.removeListener('dashboard:open-pr', listener);
+    },
+    // Fired by View → Dashboard and the summary notification, to switch the main
+    // area to the dashboard. Returns an unsubscribe function.
+    onShowDashboard: (callback: () => void) => {
+        const listener = () => callback();
+        ipcRenderer.on('dashboard:show', listener);
+        return () => ipcRenderer.removeListener('dashboard:show', listener);
+    },
     // Fired when the RepoWatcher (main process) sees the open repo's refs or
     // working tree change, so the renderer can auto-refresh. Returns an
     // unsubscribe function so the caller can drop the listener.

@@ -32,6 +32,27 @@ import {
 import { detectEditors, openWithEditor } from '../editors';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
+import type { DashboardState } from '../notifier';
+import type { AuthorFilter } from '../settings';
+
+// The dashboard's data comes from the Notifier, which main.ts owns; main hands
+// these in so the handlers stay free of polling and Electron notification code.
+export interface DashboardBridge {
+    // The current state; fetches first when nothing has been fetched yet, so the
+    // dashboard has data even while background notifications are off.
+    get: () => Promise<DashboardState>;
+    // Poll now, then return the new state.
+    refresh: () => Promise<DashboardState>;
+    setShowDrafts: (show: boolean) => Promise<DashboardState>;
+    setAuthors: (authors: AuthorFilter) => Promise<DashboardState>;
+    // The overview cards turned off in the Display menu, by key.
+    setHiddenCards: (keys: string[]) => Promise<DashboardState>;
+    // The dashboard's notification list: mark one read (by its activity id), all
+    // read, or delete one.
+    markRead: (id: string) => Promise<DashboardState>;
+    markAllRead: () => Promise<DashboardState>;
+    deleteNotification: (id: string) => Promise<DashboardState>;
+}
 
 // ipcMain.handle that logs a handler rejection before it propagates. A git
 // operation that fails (a bad ref, a repo that moved) otherwise surfaces only as
@@ -93,8 +114,17 @@ async function isGitAvailable(
 }
 
 // onRecentsChanged fires after the recent-repos list changes (an open or a
-// removal) so main can rebuild the app menu's "Open Recent" submenu.
-function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => void } = {}): void {
+// removal) so main can rebuild the app menu's "Open Recent" submenu. onRepoOpened
+// fires after a successful open, so main can point the GitHub notifier at it.
+function registerIpcHandlers({
+    onRecentsChanged,
+    onRepoOpened,
+    dashboard,
+}: {
+    onRecentsChanged?: () => void;
+    onRepoOpened?: (repoPath: string) => void;
+    dashboard?: DashboardBridge;
+} = {}): void {
     handle('dialog:open-repo', async () => {
         const result = await dialog.showOpenDialog({
             title: 'Open repository',
@@ -123,6 +153,7 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
         watchRepo(repoPath);
         // After currentRepo is set, so the rebuilt menu can mark it active.
         onRecentsChanged?.();
+        onRepoOpened?.(repoPath);
         return { path: repoPath, name: path.basename(repoPath) };
     });
 
@@ -157,6 +188,34 @@ function registerIpcHandlers({ onRecentsChanged }: { onRecentsChanged?: () => vo
     // The diff layout (single-file vs stacked all-files). Read on launch; the
     // View → Diff Layout menu pushes later changes via 'diff-layout:changed'.
     handle('diff-layout:get', () => getDiffLayout());
+
+    // The GitHub dashboard for the open repository (see electron/notifier.ts). Only
+    // reachable with a repository open; main pushes later updates via
+    // 'dashboard:changed'.
+    function requireDashboard(): DashboardBridge {
+        requireRepo();
+        if (!dashboard) {
+            throw new Error('The dashboard is not available.');
+        }
+        return dashboard;
+    }
+
+    handle('dashboard:get', () => requireDashboard().get());
+    handle('dashboard:refresh', () => requireDashboard().refresh());
+    handle('dashboard:set-show-drafts', (show: boolean) => requireDashboard().setShowDrafts(show));
+    handle('dashboard:set-authors', (authors: AuthorFilter) =>
+        requireDashboard().setAuthors(authors)
+    );
+    handle('dashboard:set-hidden-cards', (keys: unknown) =>
+        requireDashboard().setHiddenCards(
+            Array.isArray(keys) ? keys.filter((key) => typeof key === 'string') : []
+        )
+    );
+    handle('dashboard:mark-read', (id: string) => requireDashboard().markRead(id));
+    handle('dashboard:mark-all-read', () => requireDashboard().markAllRead());
+    handle('dashboard:delete-notification', (id: string) =>
+        requireDashboard().deleteNotification(id)
+    );
 
     // Git-backed channels. Each operates on the currently open repo and has a
     // matching method in the preload bridge and an entry in MoireApi.

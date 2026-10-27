@@ -103,6 +103,17 @@ the popup never appears.
    review comments and check annotations show on their lines in the diff. An optional edit mode lets
    you reply to and resolve threads, post and edit your own comments, edit the description, and tick
    task-list boxes.
+7. **Keep track of pull requests.** The dashboard button in the toolbar (or **View > Dashboard**,
+   `Cmd/Ctrl+Shift+D`) shows an overview of the open repository's pull requests as cards: needs
+   your review, changes requested, ready to merge, failing checks, your open PRs, stale, merged
+   (this week or this month, under **Display > Merged**), and drafts. Click a card to list its PRs, then a PR to open it (or its **Open in browser** button
+   to open it on GitHub). The cards count your own PRs; under **Display > Users**
+   you can pick other authors, or **All**, and **Display > Cards** hides the cards you do not
+   need. The notifications you were sent are listed under the
+   bell button at the right of the toolbar. The count on the bell and on the dock icon is the
+   number of unread notifications. Moiré checks
+   GitHub every two minutes and sends a notification when something changes. Click a PR to open
+   it in the PR view. Choose which events notify you under **Git > Notifications**.
 
 The diff refreshes on its own when the repository changes on disk. Use **View > Refresh**
 (`Cmd/Ctrl+R`) to re-scan manually. Set the appearance under **View > Theme** (System, Light, or
@@ -138,6 +149,21 @@ last branch range are remembered per repository.
   ticking task-list checkboxes. Inline review threads and CI check annotations show on their lines
   in the diff, and you can reply to and resolve threads in place. The file tree flags each file that
   carries review threads or annotations.
+- GitHub notifications for the open repository and the active `gh` account: a review requested
+  from you, changes requested on your PR, your PR closed without merge, failed checks (once per PR
+  until they pass again), an approval, a merge conflict, and optionally ready to merge and merged
+  by someone else. Each event has its own toggle under **Git > Notifications**, next to a master
+  switch (on by default) and a dock badge toggle. More than three updates at once arrive as one
+  summary notification.
+- A dashboard for the open repository: an overview of cards counting the PRs that need your
+  review, have changes requested, are ready to merge, have failing checks, are open, are stale
+  (no activity in 7 or more days), were merged this week or this month, or are drafts. Each card opens a list of its PRs. The
+  **Display** menu holds a "Show drafts" toggle (which also applies to notifications) and a
+  **Users** submenu that picks whose PRs the cards count: you by default, any mix of authors, or
+  all of them.
+- A notifications menu (the bell at the right of the toolbar) listing the notifications sent for
+  the open repository, with unread ones highlighted and counted on the bell, and buttons to mark
+  them read or delete them.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
   the tree by filetype, mutation type, or marker (files carrying an error, warning, or review
   comment). Filters are multi-select and combine, and a reset clears them at once.
@@ -198,13 +224,35 @@ Track bugs and limitations here.
   context, is still reported as not installed. The effective PATH is logged on every launch, so
   Help, Open Log File is the first place to look.
 
+- **GitHub notifications only arrive while Moiré is running.** Closing the window keeps the app
+  running on macOS, quitting does not. They cover only the repository that is open, and only the
+  active `gh` account.
+- **The Git > Notifications menu needs a connected `gh`.** It lives in the Git menu, which only
+  appears when `gh` is signed in, so it shares that menu's refresh limitation above.
+- **Clicking a notification while the window is closed may open the PR on GitHub.** The window
+  reopens, but the repository's branches may not be loaded yet when the PR arrives, so it falls
+  back to the browser.
+- **Desktop notifications do not appear when running from the dev server.** The dev server runs
+  the generic, ad-hoc signed Electron binary, and macOS refuses its notifications without ever
+  listing it in System Settings, Notifications. The log shows `notification: ... (UNErrorDomain
+  error 1.)`. The dashboard list, the toolbar count and the dock badge still work. The packaged
+  build (`npm run pack`) shows them.
+
 ## Planned features
 
-No features are planned at the moment. Everything on the original roadmap has shipped. New ideas
-are tracked as open issues on GitHub.
+Everything on the original roadmap has shipped. New ideas are tracked as open issues on GitHub.
+
+Possible expansions of the GitHub notifications and dashboard, not planned yet:
+
+- Count review requests made to a team you belong to, not only requests addressed to you.
+- Notify when a review with comments is submitted on your PR.
+- Notify when you are mentioned in a PR.
+- Watch several repositories at once, not only the one that is open.
 
 ## Documentation
 
 - `documentation/code-conventions.md`: code conventions and project rules. Read this before making
   changes.
 - `documentation/moire-plan.md`: the full project plan.
+- `documentation/github-notifications-plan.md`: the design of the GitHub notifications and the
+  dashboard.
