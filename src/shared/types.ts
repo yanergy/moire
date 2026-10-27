@@ -448,8 +448,6 @@ export interface MoireApi {
     // src/lib/dashboard.ts): mark one read, mark all read, or delete one.
     markDashboardNotificationRead(id: string): Promise<DashboardState>;
     markAllDashboardNotificationsRead(): Promise<DashboardState>;
-    // Debug only (the dashboard shows its button in dev builds): undo every read mark.
-    markAllDashboardNotificationsUnread(): Promise<DashboardState>;
     deleteDashboardNotification(id: string): Promise<DashboardState>;
     onDashboardChanged(cb: (state: DashboardState) => void): () => void;
     // Fired by View → Dashboard and the summary notification, to switch the main

@@ -299,24 +299,6 @@ function toPrList(nodes: (GqlPr | null)[] | null | undefined): DashboardPr[] {
         .filter((pr) => pr.id && pr.number);
 }
 
-// Debug only (temporary): add the response body gh printed to stdout (GitHub's
-// error JSON or page), the exit code and the elapsed time to a failure message.
-function debugDetail(message: string | undefined, error: unknown, started: number): string {
-    const err = error as { code?: string | number; stdout?: string | Buffer; killed?: boolean };
-    const body = String(err.stdout ?? '')
-        .replaceAll(/\s+/g, ' ')
-        .trim()
-        .slice(0, 600);
-    const parts = [
-        message ?? 'gh failed.',
-        `[exit ${err.code ?? '?'}${err.killed ? ', killed by timeout' : ''}, after ${Date.now() - started} ms]`,
-    ];
-    if (body) {
-        parts.push(`Response: ${body}`);
-    }
-    return parts.join(' ');
-}
-
 // Resolve the open repository's GitHub identity (owner/name). gh picks the
 // repository from the git remotes, as it does for the PR view. Never throws.
 export async function getRepoIdentity(
@@ -362,10 +344,6 @@ export async function fetchSnapshot(
     const scope = `repo:${repo} is:pr`;
 
     let stdout: string;
-    // Debug only: when the call took and what GitHub answered, for the error
-    // message below. Temporary, while the HTTP 502 on large repositories is
-    // investigated.
-    const started = Date.now();
     try {
         ({ stdout } = await run(
             [
@@ -388,7 +366,7 @@ export async function fetchSnapshot(
         ));
     } catch (error) {
         const { status, message } = classifyFailure(error);
-        return { status, snapshot: null, message: debugDetail(message, error, started) };
+        return { status, snapshot: null, message };
     }
 
     let data: NonNullable<GqlDashboard['data']>;

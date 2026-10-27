@@ -49,8 +49,6 @@ export interface DashboardBridge {
     // read, or delete one.
     markRead: (id: string) => Promise<DashboardState>;
     markAllRead: () => Promise<DashboardState>;
-    // Debug only (the dashboard's dev build button): undo every read mark.
-    markAllUnread: () => Promise<DashboardState>;
     deleteNotification: (id: string) => Promise<DashboardState>;
 }
 
@@ -208,7 +206,6 @@ function registerIpcHandlers({
     );
     handle('dashboard:mark-read', (id: string) => requireDashboard().markRead(id));
     handle('dashboard:mark-all-read', () => requireDashboard().markAllRead());
-    handle('dashboard:mark-all-unread', () => requireDashboard().markAllUnread());
     handle('dashboard:delete-notification', (id: string) =>
         requireDashboard().deleteNotification(id)
     );

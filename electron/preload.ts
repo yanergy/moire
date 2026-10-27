@@ -113,8 +113,6 @@ contextBridge.exposeInMainWorld('api', {
     // The dashboard's notification list: mark one read or all read, or delete one.
     markDashboardNotificationRead: (id: string) => ipcRenderer.invoke('dashboard:mark-read', id),
     markAllDashboardNotificationsRead: () => ipcRenderer.invoke('dashboard:mark-all-read'),
-    // Debug only: undo every read mark (the dashboard shows it in dev builds).
-    markAllDashboardNotificationsUnread: () => ipcRenderer.invoke('dashboard:mark-all-unread'),
     deleteDashboardNotification: (id: string) =>
         ipcRenderer.invoke('dashboard:delete-notification', id),
     onDashboardChanged: (callback: (state: unknown) => void) => {

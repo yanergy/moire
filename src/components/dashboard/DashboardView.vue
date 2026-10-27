@@ -39,9 +39,6 @@ import DashboardNotificationRow from '@/components/dashboard/DashboardNotificati
 const comparison = useComparisonStore();
 const dashboard = useDashboardStore();
 
-// Debug only: the temporary "Mark all as unread" button shows in dev builds.
-const isDev = import.meta.env.DEV;
-
 // The card whose PR list is showing, or null for the overview grid.
 const selectedKey = ref<DashboardCategoryKey | null>(null);
 const selected = computed(
@@ -322,17 +319,6 @@ const updated = computed(() =>
                                 {{ dashboard.unreadCount }}
                             </span>
                             <div class="flex-1" />
-                            <!-- Debug only, dev builds: undo every read mark to test the
-                                 unread flow again. Temporary. -->
-                            <Button
-                                v-if="isDev && dashboard.activity.length"
-                                variant="ghost"
-                                size="sm"
-                                class="h-7 gap-1.5 px-2 text-moire-warn hover:bg-moire-hover"
-                                @click="dashboard.markAllUnread()"
-                            >
-                                Mark all as unread (debug)
-                            </Button>
                             <Button
                                 v-if="dashboard.unreadCount"
                                 variant="ghost"

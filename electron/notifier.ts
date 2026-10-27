@@ -223,14 +223,6 @@ export class Notifier {
         );
     }
 
-    // Debug only (the dashboard shows its button in dev builds): undo every read
-    // mark, to test the unread flow again. Temporary.
-    markAllActivityUnread(): Promise<void> {
-        return this.updateActivity((activity) =>
-            activity.map(({ read: _read, ...entry }) => entry)
-        );
-    }
-
     deleteActivity(id: string): Promise<void> {
         return this.updateActivity((activity) =>
             activity.filter((entry) => activityId(entry) !== id)

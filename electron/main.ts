@@ -313,10 +313,6 @@ app.whenReady().then(async () => {
                 await notifier.markAllActivityRead();
                 return dashboardState();
             },
-            markAllUnread: async () => {
-                await notifier.markAllActivityUnread();
-                return dashboardState();
-            },
             deleteNotification: async (id) => {
                 await notifier.deleteActivity(id);
                 return dashboardState();

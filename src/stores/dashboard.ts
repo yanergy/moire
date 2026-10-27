@@ -257,14 +257,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
         );
     }
 
-    // Debug only (a dev build button on the dashboard): undo every read mark.
-    function markAllUnread() {
-        return editActivity(
-            (list) => list.map(({ read: _read, ...entry }) => entry),
-            (api) => api.markAllDashboardNotificationsUnread()
-        );
-    }
-
     function deleteNotification(entry: ActivityEntry) {
         const id = activityId(entry);
         return editActivity(
@@ -446,7 +438,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
         unreadCount,
         markRead,
         markAllRead,
-        markAllUnread,
         deleteNotification,
     };
 });
