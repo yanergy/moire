@@ -511,17 +511,20 @@ export const useComparisonStore = defineStore('comparison', () => {
         return !isLocal && isRemote ? refName.slice(refName.indexOf('/') + 1) : refName;
     }
 
-    // The ref to select for a branch name from GitHub: the local branch when there is
-    // one, else its remote tracking branch (preferring origin). Null when the branch
-    // is in neither, e.g. not fetched yet.
+    // The ref to select for a branch name from GitHub: its remote tracking branch
+    // (preferring origin), since that is what the PR shows, while a local branch can
+    // lag behind or run ahead of it. The local branch only when there is no remote
+    // one, e.g. not fetched yet. Null when the branch is in neither.
     function refForBranch(name: string): string | null {
-        if (branches.value.some((b) => b.kind === 'local' && b.name === name)) {
-            return name;
-        }
         const remotes = branches.value
             .filter((b) => b.kind === 'remote' && b.name.endsWith(`/${name}`))
             .map((b) => b.name);
-        return remotes.find((refName) => refName === `origin/${name}`) ?? remotes[0] ?? null;
+        const remote = remotes.find((refName) => refName === `origin/${name}`) ?? remotes[0];
+        if (remote) {
+            return remote;
+        }
+
+        return branches.value.some((b) => b.kind === 'local' && b.name === name) ? name : null;
     }
 
     // Select a PR's base and head (by their GitHub branch names) as the compared
