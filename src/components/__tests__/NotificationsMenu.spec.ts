@@ -28,6 +28,11 @@ const ACTIVITY: ActivityEntry[] = [
     },
 ];
 
+// A button in the menu, which teleports to the body, by its aria label.
+function button(label: string) {
+    return document.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
+}
+
 describe('NotificationsMenu', () => {
     let pinia: Pinia;
 
@@ -139,8 +144,6 @@ describe('NotificationsMenu', () => {
     it('swaps the list for the settings and back, starting on the list each time', async () => {
         const wrapper = mountMenu(ACTIVITY);
         await openMenu(wrapper);
-        const button = (label: string) =>
-            document.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
 
         button('Notification settings')!.click();
         await flushPromises();
