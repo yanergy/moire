@@ -87,7 +87,8 @@ const statusDotClass = computed(() => {
 <template>
     <TooltipProvider :delay-duration="300">
         <!-- Three columns: the repository and range on the left, the dashboard
-             button in the middle and the diff options on the right. The equal
+             and notifications buttons in the middle and the diff options on the
+             right. The equal
              side columns keep the middle centered on the header; a side that
              does not fit pushes it over rather than overlapping it. -->
         <div
@@ -185,7 +186,8 @@ const statusDotClass = computed(() => {
                 </Tooltip>
             </div>
 
-            <div class="flex justify-center">
+            <!-- The two repository wide pages, side by side. -->
+            <div class="flex justify-center gap-2">
                 <Tooltip v-if="comparison.repoPath">
                     <TooltipTrigger as-child>
                         <!-- Wrapped in a span for the same data-state reason as the PR
@@ -209,6 +211,7 @@ const statusDotClass = computed(() => {
                         }}
                     </TooltipContent>
                 </Tooltip>
+                <notifications-button v-if="comparison.repoPath" />
             </div>
 
             <div class="flex items-center justify-end gap-2">
@@ -223,8 +226,6 @@ const statusDotClass = computed(() => {
                     :model-value="ui.viewMode"
                     @update:model-value="ui.setViewMode"
                 />
-
-                <notifications-button v-if="comparison.repoPath" />
             </div>
         </div>
     </TooltipProvider>

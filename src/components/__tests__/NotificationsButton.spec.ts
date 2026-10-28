@@ -1,6 +1,6 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { afterEach, beforeEach, describe, it, expect } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type DOMWrapper, type VueWrapper } from '@vue/test-utils';
 import NotificationsButton from '@/components/headers/NotificationsButton.vue';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useDashboardStore } from '@/stores/dashboard';
@@ -17,8 +17,13 @@ const UNREAD: ActivityEntry = {
     url: 'https://github.com/o/r/pull/2',
 };
 
-// The tooltip's text, shown once the bell is hovered.
-async function hoverTooltip(bell: ReturnType<ReturnType<typeof mount>['get']>) {
+// The toggle, found by its label.
+function toggle(wrapper: VueWrapper) {
+    return wrapper.findAll('button').find((b) => b.text().startsWith('Notifications'))!;
+}
+
+// The tooltip's text, shown once the toggle is hovered.
+async function hoverTooltip(bell: DOMWrapper<Element>) {
     await bell.trigger('pointermove', { pointerType: 'mouse' });
     await new Promise((resolve) => setTimeout(resolve, 50));
     await flushPromises();
@@ -51,24 +56,24 @@ describe('NotificationsButton', () => {
         );
     }
 
-    it('shows the unread count on the bell and in its tooltip', async () => {
+    it('shows the unread count on the toggle and in its tooltip', async () => {
         const wrapper = mountButton([UNREAD, { ...UNREAD, number: 1, read: true }]);
-        const bell = wrapper.get('[aria-label="Notifications"]');
-        expect(bell.text()).toBe('1');
+        const bell = toggle(wrapper);
+        expect(bell.get('[aria-label="1 unread notification"]').text()).toBe('1');
         expect(await hoverTooltip(bell)).toContain('1 unread notification');
         wrapper.unmount();
     });
 
     it('shows no count when every notification is read', () => {
         const wrapper = mountButton([{ ...UNREAD, read: true }]);
-        expect(wrapper.get('[aria-label="Notifications"]').text()).toBe('');
+        expect(toggle(wrapper).text()).toBe('Notifications');
         wrapper.unmount();
     });
 
     it('toggles the notifications page', async () => {
         const wrapper = mountButton([]);
         const ui = useUiStore();
-        const bell = wrapper.get('[aria-label="Notifications"]');
+        const bell = toggle(wrapper);
 
         await bell.trigger('click');
         expect(ui.mainView).toBe('notifications');

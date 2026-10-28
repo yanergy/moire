@@ -92,7 +92,7 @@ repository, or **All**. The captions follow the pick ("Any author", "By ann", "3
 "Your open PRs" reads "Open PRs" for anyone but yourself.
 
 A card with unread notifications about its PRs shows a green "N new" pill in its top right
-corner, the bell's unread tone (a pill, not a dot, so it does not read as a second status dot): a review request on Needs your review, changes requested on Changes
+corner, the Notifications toggle's unread tone (a pill, not a dot, so it does not read as a second status dot): a review request on Needs your review, changes requested on Changes
 requested, an approval or ready to merge on Ready to merge, failed checks on Failing checks, and
 merged by someone else on Merged. A notification only counts while its PR is still in the card,
 and the pill goes away once the notifications are read or deleted.
@@ -116,21 +116,23 @@ button and the menu item are not available. When the repository has no GitHub re
 missing or not signed in, the dashboard shows the reason using the existing `PrStatus` style
 messages.
 
-### Notifications menu
+### Notifications page
 
-A bell button at the right end of the toolbar, shown while a repository is open, opens a menu
-listing every notification sent for the repository (the recent activity list, newest first, up
-to 50), each with what happened, the PR, and how long ago.
-Clicking one opens its PR and marks it read. Each row ends in an Open in browser button (which
-also marks it read), and shows Mark as read and Delete buttons over its age on hover, unread notifications stand out and are counted on the bell, and a "Mark all
-as read" button clears them at once. Opening a notification closes the menu. It used to sit below
-the dashboard's cards; it moved to the toolbar so it is reachable from every view. Read state and deletions are saved with the rest of the
-notifier state.
+A **Notifications** toggle beside the toolbar's **Dashboard** toggle, shown while a repository is
+open, opens a full width page listing every notification sent for the repository (the recent
+activity list, newest first, grouped by day, up to 500 and rendered a page at a time as it
+scrolls), each with what happened, the PR, and how long ago. Clicking one opens its PR and marks
+it read. Each row ends in an Open in browser button (which also marks it read), and shows Mark as
+read and Delete buttons over its age on hover. Unread notifications stand out and are counted on
+the toggle, and a "Mark all as read" button clears them at once. The page header also holds the
+**Notification settings** menu. The list first sat below the dashboard's cards, then in a menu
+under a bell at the right end of the toolbar, before it became a page of its own. Read state and
+deletions are saved with the rest of the notifier state.
 
 ### Dock badge
 
 The dock icon shows the number of unread notifications for the open repository, the same count
-as the toolbar's bell. Marking notifications read (or deleting them) lowers it, and it
+as the toolbar's Notifications toggle. Marking notifications read (or deleting them) lowers it, and it
 is cleared when there are none or no repository is open. macOS only (`app.dock.setBadge`). It has its
 own toggle in the Git → Notifications menu and follows the master switch.
 

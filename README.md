@@ -113,8 +113,8 @@ the popup never appears.
    (this week or this month, under **Dashboard settings > Merged**), and drafts. Click a card to list its PRs, then a PR to open it (or its **Open in browser** button
    to open it on GitHub). The cards count your own PRs; under **Dashboard settings > Users**
    you can pick other authors, or **All**, and **Dashboard settings > Cards** hides the cards you do not
-   need. The bell button at the right of the toolbar opens the notifications page, which lists
-   the notifications you were sent. The count on the bell and on the dock icon is the
+   need. The **Notifications** button next to it opens the notifications page, which lists the
+   notifications you were sent. The count on that button and on the dock icon is the
    number of unread notifications. Moiré checks
    GitHub every two minutes and sends a notification when something changes. Click a PR to open
    it in the PR view. Choose which events notify you, and whether draft PRs do, under
@@ -172,10 +172,10 @@ last branch range are remembered per repository.
   **Dashboard settings** menu holds a "Show drafts" toggle (for the dashboard only; notifications
   have their own) and a **Users** submenu that picks whose PRs the cards count: you by default, any
   mix of authors, or all of them.
-- A notifications page (opened with the bell at the right of the toolbar) listing the
+- A notifications page (opened with the **Notifications** button next to **Dashboard**) listing the
   notifications sent for the open repository (the last 500, grouped by day and loaded as you
   scroll), with unread ones highlighted and counted on the
-  bell, and buttons to mark them read or delete them. A **Notification settings** menu sits in
+  button, and buttons to mark them read or delete them. A **Notification settings** menu sits in
   the page header, as **Dashboard settings** does on the dashboard.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
   the tree by filetype, mutation type, or marker (files carrying an error, warning, or review

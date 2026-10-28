@@ -6,23 +6,19 @@ import { useUiStore } from '@/stores/ui';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-// The bell at the right of the toolbar: its count is the number of unread
-// notifications, and it toggles the notifications page, as the Dashboard button
-// toggles the dashboard. The count is the dashboard store's, which mirrors the
-// notifier in the main process. Renders inside the toolbar's TooltipProvider.
+// The Notifications toggle beside the toolbar's Dashboard toggle, and styled
+// like it: it toggles the notifications page, and counts the unread
+// notifications. The count is the dashboard store's, which mirrors the notifier
+// in the main process. Renders inside the toolbar's TooltipProvider.
 const dashboard = useDashboardStore();
 const ui = useUiStore();
 
 const isOpen = computed(() => ui.mainView === 'notifications');
 
-const label = computed(() => {
-    if (isOpen.value) {
-        return 'Back to the diff';
-    }
-    return dashboard.unreadCount
-        ? `${dashboard.unreadCount} unread ${dashboard.unreadCount === 1 ? 'notification' : 'notifications'}`
-        : 'Notifications';
-});
+const unreadLabel = computed(
+    () =>
+        `${dashboard.unreadCount} unread ${dashboard.unreadCount === 1 ? 'notification' : 'notifications'}`
+);
 
 function setOpen(on: boolean) {
     ui.setMainView(on ? 'notifications' : 'diff');
@@ -39,20 +35,25 @@ function setOpen(on: boolean) {
                     variant="outline"
                     size="sm"
                     :model-value="isOpen"
-                    class="relative size-7 min-w-7 border-moire-border p-0 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                    aria-label="Notifications"
+                    class="h-8 gap-2 px-3.5 text-[13px] font-medium text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                     @update:model-value="setOpen"
                 >
-                    <Bell :size="16" />
+                    <Bell :size="18" />
+                    Notifications
                     <span
                         v-if="dashboard.unreadCount"
-                        class="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-moire-pr-open px-1 text-center text-[10px] leading-4 font-semibold text-moire-check-fg"
+                        class="min-w-4 rounded-full bg-moire-pr-open px-1.5 text-center text-[11px] leading-4 font-semibold text-moire-check-fg"
+                        :aria-label="unreadLabel"
                     >
                         {{ dashboard.unreadCount }}
                     </span>
                 </Toggle>
             </span>
         </TooltipTrigger>
-        <TooltipContent>{{ label }}</TooltipContent>
+        <TooltipContent>
+            <template v-if="isOpen">Back to the diff</template>
+            <template v-else-if="dashboard.unreadCount">{{ unreadLabel }}</template>
+            <template v-else>Open the notifications</template>
+        </TooltipContent>
     </Tooltip>
 </template>
