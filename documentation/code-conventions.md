@@ -125,6 +125,11 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
   (`:size="16"`) for every icon button. An icon that sits inside a small fixed container
   (for example the 15px viewed checkbox) sizes down only as far as needed to fit. Keep
   new icon buttons at 16px.
+- Every icon only button (an icon with no visible text) gets a shadcn-vue `Tooltip` that names
+  what the button does, in addition to its `aria-label`. A native `title` attribute is not a
+  substitute, so do not add one alongside the tooltip. Buttons that show text, alone or next to
+  an icon, need no tooltip. The tooltip needs a `TooltipProvider` above it; reuse the one the
+  surrounding view already has, or add one where the component is rendered outside any.
 
 ## Testing
 
