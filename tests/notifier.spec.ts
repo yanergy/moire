@@ -42,6 +42,11 @@ function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
     };
 }
 
+// A comment by ann.
+function comment(id: string) {
+    return { id, author: 'ann' };
+}
+
 // A PR by someone else that requests the viewer's review.
 function request(n: number, overrides: Partial<DashboardPr> = {}): DashboardPr {
     return pr({ id: `REQ_${n}`, number: n, author: 'ann', ...overrides });
@@ -173,7 +178,6 @@ describe('Notifier', () => {
 
     it('records how many comments a commented notification stands for', async () => {
         const t = setup();
-        const comment = (id: string) => ({ id, author: 'ann' });
         t.respond(
             snapshot({ mine: [pr({ comments: [] })] }),
             snapshot({ mine: [pr({ comments: [comment('C1'), comment('C2')] })] })

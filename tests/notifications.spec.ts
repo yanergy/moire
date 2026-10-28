@@ -98,6 +98,16 @@ function runnerFailing(error: object) {
     });
 }
 
+// A GraphQL author.
+function author(login: string) {
+    return { login };
+}
+
+// A normalized comment by ann.
+function ann(id: string) {
+    return { id, author: 'ann' };
+}
+
 // A normalized PR, for the diff tests.
 function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
     return {
@@ -406,7 +416,6 @@ describe('fetchSnapshot', () => {
     });
 
     it('collects the comments on the viewer’s open PRs, skipping approvals and changes requests', async () => {
-        const author = (login: string) => ({ login });
         const node = gqlPr({
             comments: { nodes: [{ id: 'C1', author: author('ann') }, null] },
             reviews: {
@@ -636,8 +645,6 @@ describe('diffSnapshots', () => {
     });
 
     describe('commented', () => {
-        const ann = (id: string) => ({ id, author: 'ann' });
-
         it('fires once per PR for the new comments, naming the commenter', () => {
             const { events } = diffSnapshots(
                 snapshot({ mine: [pr({ comments: [ann('C1')] })] }),
