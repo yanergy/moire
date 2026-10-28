@@ -66,7 +66,7 @@ const menuRow = 'text-xs text-moire-file-fg focus:bg-moire-hover focus:text-moir
                     @select="keepOpen"
                     @update:model-value="dashboard.setNotificationSettings({ enabled: $event })"
                 >
-                    GitHub notifications
+                    Enable notifications
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem
                     :model-value="settings.notifyDrafts"

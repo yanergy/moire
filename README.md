@@ -163,7 +163,7 @@ last branch range are remembered per repository.
   from you, changes requested on your PR, your PR closed without merge, failed checks (once per PR
   until they pass again), an approval, a merge conflict, and optionally ready to merge and merged
   by someone else. Each event has its own toggle in the **Notification settings** menu (on
-  the notifications page), next to a master switch (on by default) and a toggle for whether draft PRs notify.
+  the notifications page), next to an **Enable notifications** switch (on by default) and a toggle for whether draft PRs notify.
   **Git > Notifications** holds the same toggles plus a dock badge toggle, and the two stay in
   step. More than three updates at once arrive as one summary notification.
 - A dashboard for the open repository: an overview of cards counting the PRs that need your

@@ -14,7 +14,7 @@ Branch: `feat/github-notifications`.
 
 ### Master switch
 
-A "GitHub Notifications" toggle in the Git → Notifications menu, **on by default**. Turning it off
+An "Enable Notifications" toggle in the Git → Notifications menu, **on by default**. Turning it off
 stops polling, notifications and the dock badge. The dashboard keeps working when it is off
 (it fetches on open and on refresh instead of in the background).
 

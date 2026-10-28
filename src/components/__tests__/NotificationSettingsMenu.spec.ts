@@ -48,7 +48,7 @@ describe('NotificationSettingsMenu', () => {
         const { wrapper } = await openMenu(notificationSettings());
 
         expect(items().map((el) => el.textContent?.trim())).toEqual([
-            'GitHub notifications',
+            'Enable notifications',
             'Notify about draft PRs',
             'Review requested',
             'Changes requested',
@@ -77,7 +77,7 @@ describe('NotificationSettingsMenu', () => {
         await flushPromises();
         expect(set).toHaveBeenLastCalledWith({ notifyDrafts: false });
 
-        item('GitHub notifications').click();
+        item('Enable notifications').click();
         await flushPromises();
         expect(set).toHaveBeenLastCalledWith({ enabled: false });
         wrapper.unmount();
@@ -86,7 +86,7 @@ describe('NotificationSettingsMenu', () => {
     it('disables everything but the master switch while notifications are off', async () => {
         const { wrapper } = await openMenu(notificationSettings({ enabled: false }));
 
-        expect(item('GitHub notifications').hasAttribute('data-disabled')).toBe(false);
+        expect(item('Enable notifications').hasAttribute('data-disabled')).toBe(false);
         expect(item('Notify about draft PRs').hasAttribute('data-disabled')).toBe(true);
         expect(item('Approved').hasAttribute('data-disabled')).toBe(true);
         wrapper.unmount();
