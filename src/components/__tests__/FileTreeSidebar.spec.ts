@@ -154,29 +154,44 @@ describe('FileTreeSidebar', () => {
         expect(wrapper.find('[data-path="electron/git/parsers.ts"]').exists()).toBe(false);
     });
 
-    it('resizes the sidebar when its border handle is dragged, clamping to the max', async () => {
+    it('resizes the sidebar when its border handle is dragged, clamping to the min and max', async () => {
         const wrapper = mountTree();
         await flushPromises();
 
         const handle = wrapper.find('[aria-label="Resize sidebar"]');
         const sidebar = handle.element.parentElement as HTMLElement;
-        expect(sidebar.style.width).toBe('312px'); // default
+        expect(sidebar.style.width).toBe('360px'); // default
 
         // clientX is read-only on the event, so dispatch through the constructor
         // rather than test-utils' trigger, which assigns props onto the event.
         handle.element.dispatchEvent(
-            new MouseEvent('pointerdown', { clientX: 312, bubbles: true, cancelable: true })
+            new MouseEvent('pointerdown', { clientX: 360, bubbles: true, cancelable: true })
         );
-        window.dispatchEvent(new MouseEvent('pointermove', { clientX: 412 }));
+        window.dispatchEvent(new MouseEvent('pointermove', { clientX: 460 }));
         await nextTick();
-        expect(sidebar.style.width).toBe('412px');
+        expect(sidebar.style.width).toBe('460px');
 
         // Dragging past the maximum clamps rather than growing without bound.
         window.dispatchEvent(new MouseEvent('pointermove', { clientX: 1200 }));
         await nextTick();
         expect(sidebar.style.width).toBe('640px');
 
+        // And the minimum keeps the header on one line.
+        window.dispatchEvent(new MouseEvent('pointermove', { clientX: 0 }));
+        await nextTick();
+        expect(sidebar.style.width).toBe('360px');
+
         window.dispatchEvent(new MouseEvent('pointerup'));
+    });
+
+    it('falls back to the minimum when a narrower width was remembered', async () => {
+        localStorage.setItem('moire:sidebar-width', '300');
+        const wrapper = mountTree();
+        await flushPromises();
+
+        const handle = wrapper.find('[aria-label="Resize sidebar"]');
+        expect((handle.element.parentElement as HTMLElement).style.width).toBe('360px');
+        localStorage.removeItem('moire:sidebar-width');
     });
 
     it('ignores key events that bubble up from the row checkbox', async () => {
