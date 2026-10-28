@@ -2,7 +2,7 @@
 import type { TooltipContentEmits, TooltipContentProps } from 'reka-ui';
 import type { HTMLAttributes } from 'vue';
 import { reactiveOmit } from '@vueuse/core';
-import { TooltipContent, TooltipPortal, useForwardPropsEmits } from 'reka-ui';
+import { TooltipArrow, TooltipContent, TooltipPortal, useForwardPropsEmits } from 'reka-ui';
 import { cn } from '@/lib/utils';
 
 defineOptions({
@@ -30,15 +30,16 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
             :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
             :class="
                 cn(
-                    'bg-moire-pop text-moire-fg border border-moire-border animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit rounded-md px-3 py-1.5 text-xs text-balance',
+                    'bg-moire-pop text-moire-fg animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit rounded-md px-3 py-1.5 text-xs text-balance',
                     props.class
                 )
             "
         >
-            <!-- No arrow, deviating from stock shadcn: its rotated square has no
-                 border, so it cut a notch out of this bordered surface. The app's
-                 popovers and menus carry no arrow either. -->
             <slot />
+
+            <TooltipArrow
+                class="bg-moire-pop fill-moire-pop z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-xs"
+            />
         </TooltipContent>
     </TooltipPortal>
 </template>
