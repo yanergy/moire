@@ -79,11 +79,7 @@ const menuRow = 'text-xs text-moire-file-fg focus:bg-moire-hover focus:text-moir
                 >
                     Notify about draft PRs
                 </DropdownMenuCheckboxItem>
-                <!-- Padding, not margin, around the rule: the unlayered
-                     `* { margin: 0 }` reset in base.css zeroes margin utilities. -->
-                <div class="py-1.5">
-                    <DropdownMenuSeparator class="bg-moire-border" />
-                </div>
+                <DropdownMenuSeparator class="my-1.5 bg-moire-border" />
                 <DropdownMenuLabel
                     class="text-[11px] font-medium tracking-wider text-moire-faint uppercase"
                 >

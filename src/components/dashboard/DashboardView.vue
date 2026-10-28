@@ -187,7 +187,7 @@ const updated = computed(() =>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger :class="menuRow">
                                     Users
-                                    <span class="ml-auto pl-3 text-moire-faint">
+                                    <span class="flex-1 pl-3 text-right text-moire-faint">
                                         {{ dashboard.authorsLabel }}
                                     </span>
                                 </DropdownMenuSubTrigger>
@@ -226,7 +226,7 @@ const updated = computed(() =>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger :class="menuRow">
                                     Cards
-                                    <span class="ml-auto pl-3 text-moire-faint">
+                                    <span class="flex-1 pl-3 text-right text-moire-faint">
                                         {{ cardsLabel }}
                                     </span>
                                 </DropdownMenuSubTrigger>
@@ -250,7 +250,7 @@ const updated = computed(() =>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger :class="menuRow">
                                     Merged
-                                    <span class="ml-auto pl-3 text-moire-faint">
+                                    <span class="flex-1 pl-3 text-right text-moire-faint">
                                         {{ dashboard.mergedPeriod === 'week' ? 'Week' : 'Month' }}
                                     </span>
                                 </DropdownMenuSubTrigger>
