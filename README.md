@@ -173,7 +173,8 @@ last branch range are remembered per repository.
   have their own) and a **Users** submenu that picks whose PRs the cards count: you by default, any
   mix of authors, or all of them.
 - A notifications page (opened with the bell at the right of the toolbar) listing the
-  notifications sent for the open repository, with unread ones highlighted and counted on the
+  notifications sent for the open repository (the last 500, grouped by day and loaded as you
+  scroll), with unread ones highlighted and counted on the
   bell, and buttons to mark them read or delete them. The notification settings sit beside the
   list.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows

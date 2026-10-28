@@ -87,6 +87,58 @@ describe('NotificationsView', () => {
         expect(load).not.toHaveBeenCalled();
     });
 
+    it('groups the notifications by day', () => {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const wrapper = mountView([
+            { ...ACTIVITY[0]!, at: today.toISOString() },
+            { ...ACTIVITY[1]!, at: yesterday.toISOString() },
+        ]);
+
+        const sections = wrapper
+            .findAll('section')
+            .filter((section) => section.find('h3').exists());
+        expect(sections.map((section) => section.get('h3').text())).toEqual(['Today', 'Yesterday']);
+        expect(sections[0]!.findAllComponents(NotificationRow)).toHaveLength(1);
+    });
+
+    it('renders a page at a time, adding the next as the end scrolls into view', async () => {
+        // Records the observer, so the test can report the sentinel in view.
+        let report: ((entries: Partial<IntersectionObserverEntry>[]) => void) | undefined;
+        const observed: Element[] = [];
+        vi.stubGlobal(
+            'IntersectionObserver',
+            class {
+                constructor(callback: (entries: Partial<IntersectionObserverEntry>[]) => void) {
+                    report = callback;
+                }
+                observe(element: Element) {
+                    observed.push(element);
+                }
+                disconnect() {}
+            }
+        );
+        const activity = Array.from({ length: 70 }, (_, i) => ({
+            ...ACTIVITY[0]!,
+            number: i + 1,
+        }));
+        const wrapper = mountView(activity);
+        await flushPromises();
+        expect(wrapper.findAllComponents(NotificationRow)).toHaveLength(30);
+        expect(observed.length).toBeGreaterThan(0);
+
+        report!([{ isIntersecting: true }]);
+        await flushPromises();
+        expect(wrapper.findAllComponents(NotificationRow)).toHaveLength(60);
+
+        report!([{ isIntersecting: true }]);
+        await flushPromises();
+        expect(wrapper.findAllComponents(NotificationRow)).toHaveLength(70);
+        expect(wrapper.find('.h-px').exists()).toBe(false);
+        vi.unstubAllGlobals();
+    });
+
     it('says when no notifications were sent yet', () => {
         const wrapper = mountView([]);
         expect(wrapper.text()).toContain('No notifications for this repository yet.');

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import {
     describeEvent,
+    MAX_ACTIVITY,
     Notifier,
     POLL_INTERVAL_MS,
     type NotificationContent,
@@ -233,9 +234,9 @@ describe('Notifier', () => {
         t.notifier.stop();
     });
 
-    it('keeps the newest activity first, capped at 50', async () => {
+    it('keeps the newest activity first, capped', async () => {
         const t = setup({ events: { ...DEFAULT_NOTIFICATION_PREFS.events } });
-        const polls = Array.from({ length: 55 }, (_, i) =>
+        const polls = Array.from({ length: MAX_ACTIVITY + 5 }, (_, i) =>
             snapshot({ toReview: i === 0 ? [] : [request(i)] })
         );
         t.respond(...polls);
@@ -248,8 +249,8 @@ describe('Notifier', () => {
         }
 
         const { activity } = t.notifier.getView();
-        expect(activity).toHaveLength(50);
-        expect(activity[0]!.number).toBe(54);
+        expect(activity).toHaveLength(MAX_ACTIVITY);
+        expect(activity[0]!.number).toBe(MAX_ACTIVITY + 4);
         t.notifier.stop();
     });
 

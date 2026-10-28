@@ -26,7 +26,9 @@ export const POLL_INTERVAL_MS = 2 * 60 * 1000;
 // so reopening a repository after a busy week does not flood the screen.
 const SUMMARY_THRESHOLD = 3;
 
-const MAX_ACTIVITY = 50;
+// How many sent notifications a repository keeps. The notifications page renders
+// them a page at a time as it scrolls.
+export const MAX_ACTIVITY = 500;
 
 export interface NotificationContent {
     title: string;
