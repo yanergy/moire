@@ -24,7 +24,7 @@ const WORKING_TREE = 'WORKING TREE';
 const PR_FIELDS =
     'id,number,title,body,state,url,isDraft,author,baseRefName,headRefName,headRefOid,createdAt,' +
     'additions,deletions,changedFiles,commits,comments,reviews,labels,mergeable,mergeStateStatus,' +
-    'reviewDecision,statusCheckRollup';
+    'reviewDecision,reviewRequests,statusCheckRollup';
 
 // Why a PR view is empty, so the renderer can show the right hint instead of a
 // bare "nothing here". Mirrors PrStatus in src/shared/types.ts.
@@ -135,6 +135,12 @@ interface GhReview {
     submittedAt: string;
 }
 
+// A pending review request: a user (login) or a team (slug).
+interface GhReviewRequest {
+    login?: string;
+    slug?: string;
+}
+
 interface GhLabel {
     name: string;
     color: string;
@@ -223,6 +229,7 @@ interface GhPr {
     mergeable: string;
     mergeStateStatus: string;
     reviewDecision: string | null;
+    reviewRequests: GhReviewRequest[] | null;
     statusCheckRollup: GhCheckNode[] | null;
 }
 
@@ -287,16 +294,35 @@ function buildComments(pr: GhPr): PrComment[] {
     return out;
 }
 
+// GitHub keeps a reviewer's "changes requested" review, and the PR's
+// reviewDecision, until they submit a new review, even after the author
+// re-requests their review. Once every reviewer who requested changes has a
+// pending request again, the PR waits on the reviewers, so it is no longer
+// CHANGES_REQUESTED: REVIEW_REQUIRED when GitHub tracks the decision (required
+// reviews), else no decision. Shared with the dashboard (notifications.ts).
+export function settleReRequestedChanges(
+    decision: string,
+    changesRequestedBy: string[],
+    requested: string[],
+    fromGitHub: boolean
+): string {
+    if (decision !== 'CHANGES_REQUESTED' || changesRequestedBy.length === 0) {
+        return decision;
+    }
+    if (!changesRequestedBy.every((login) => requested.includes(login))) {
+        return decision;
+    }
+
+    return fromGitHub ? 'REVIEW_REQUIRED' : '';
+}
+
 // The effective review decision. gh fills `reviewDecision` only when the repo
 // requires reviews (branch protection); otherwise it is empty even after a
 // "changes requested" review. So when it is empty, derive the decision from the
 // latest review per author: changes requested outranks an approval, as on GitHub,
-// and COMMENTED/DISMISSED/PENDING states carry no decision.
+// and COMMENTED/DISMISSED/PENDING states carry no decision. Either way, a
+// re-requested review settles changes requested (see settleReRequestedChanges).
 function reviewDecisionOf(pr: GhPr): string {
-    if (pr.reviewDecision) {
-        return pr.reviewDecision;
-    }
-
     // Sort by time so the last entry per author is their current stance.
     const reviews = (pr.reviews ?? []).toSorted((a, b) =>
         (a.submittedAt ?? '').localeCompare(b.submittedAt ?? '')
@@ -309,9 +335,20 @@ function reviewDecisionOf(pr: GhPr): string {
         }
     }
 
+    const changesRequestedBy = [...latest]
+        .filter(([, state]) => state === 'CHANGES_REQUESTED')
+        .map(([login]) => login);
+    const requested = (pr.reviewRequests ?? []).map((r) => r.login ?? '').filter(Boolean);
+    const settle = (decision: string, fromGitHub: boolean) =>
+        settleReRequestedChanges(decision, changesRequestedBy, requested, fromGitHub);
+
+    if (pr.reviewDecision) {
+        return settle(pr.reviewDecision, true);
+    }
+
     const states = new Set(latest.values());
     if (states.has('CHANGES_REQUESTED')) {
-        return 'CHANGES_REQUESTED';
+        return settle('CHANGES_REQUESTED', false);
     }
     if (states.has('APPROVED')) {
         return 'APPROVED';

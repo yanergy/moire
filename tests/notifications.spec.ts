@@ -277,6 +277,46 @@ describe('fetchSnapshot', () => {
         ]);
     });
 
+    // GitHub keeps the changes-requested review until the reviewer reviews again;
+    // a pending re-request from each of them moves the PR off Changes requested.
+    it('settles changes requested once the review is re-requested from those reviewers', async () => {
+        const requests = (logins: string[]) => ({
+            nodes: logins.map((login) => ({ requestedReviewer: { login } })),
+        });
+        const run = searchRunner({
+            mineOpen: {
+                nodes: [
+                    gqlPr({
+                        id: 'A',
+                        number: 1,
+                        reviewDecision: 'CHANGES_REQUESTED',
+                        latestReviews: reviews(['CHANGES_REQUESTED']),
+                        reviewRequests: requests(['r0']),
+                    }),
+                    gqlPr({
+                        id: 'B',
+                        number: 2,
+                        latestReviews: reviews(['APPROVED', 'CHANGES_REQUESTED']),
+                        reviewRequests: requests(['r1']),
+                    }),
+                    gqlPr({
+                        id: 'C',
+                        number: 3,
+                        latestReviews: reviews(['CHANGES_REQUESTED', 'CHANGES_REQUESTED']),
+                        reviewRequests: requests(['r1']),
+                    }),
+                ],
+            },
+        });
+        const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
+
+        expect(snap!.mine.map((p) => p.reviewDecision)).toEqual([
+            'REVIEW_REQUIRED',
+            '',
+            'CHANGES_REQUESTED',
+        ]);
+    });
+
     it('maps the check rollup to a CI state with the failed check names', async () => {
         const run = searchRunner({
             mineOpen: {
