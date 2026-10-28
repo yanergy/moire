@@ -357,6 +357,13 @@ const updated = computed(() =>
      viewport wraps the slot in a width-less block, so force it full width and
      center the content column. Keyed to this view's scroll area. -->
 <style>
+/* An opaque viewport, so Chromium paints the scroll layer in one color. Left
+   transparent, the area below short content showed the parent through it and,
+   on macOS, rendered a shade apart from the content, a seam across the view. */
+.dashboard-scroll-area [data-reka-scroll-area-viewport] {
+    background-color: var(--moire-app);
+}
+
 .dashboard-scroll-area [data-reka-scroll-area-viewport] > div {
     display: flex;
     width: 100%;
