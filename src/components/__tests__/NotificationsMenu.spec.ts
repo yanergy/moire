@@ -29,7 +29,7 @@ const ACTIVITY: ActivityEntry[] = [
 ];
 
 // A button in the menu, which teleports to the body, by its aria label.
-function button(label: string) {
+function menuButton(label: string) {
     return document.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
 }
 
@@ -145,18 +145,18 @@ describe('NotificationsMenu', () => {
         const wrapper = mountMenu(ACTIVITY);
         await openMenu(wrapper);
 
-        button('Notification settings')!.click();
+        menuButton('Notification settings')!.click();
         await flushPromises();
         expect(wrapper.findComponent(NotificationSettings).exists()).toBe(true);
         expect(wrapper.findAllComponents(NotificationRow)).toHaveLength(0);
         expect(document.body.textContent).toContain('Notification settings');
 
-        button('Back to notifications')!.click();
+        menuButton('Back to notifications')!.click();
         await flushPromises();
         expect(wrapper.findComponent(NotificationSettings).exists()).toBe(false);
         expect(wrapper.findAllComponents(NotificationRow)).toHaveLength(2);
 
-        button('Notification settings')!.click();
+        menuButton('Notification settings')!.click();
         await flushPromises();
         await wrapper.get('[aria-label="Notifications"]').trigger('click');
         await openMenu(wrapper);
