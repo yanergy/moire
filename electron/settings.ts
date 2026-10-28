@@ -257,6 +257,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
         'merge-conflict': true,
         'ready-to-merge': false,
         'merged-by-other': false,
+        commented: true,
     },
     dockBadge: true,
     notifyDrafts: true,

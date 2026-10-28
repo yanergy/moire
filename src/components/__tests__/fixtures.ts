@@ -132,6 +132,7 @@ export function notificationSettings(
             'merge-conflict': true,
             'ready-to-merge': false,
             'merged-by-other': false,
+            commented: true,
         },
         ...overrides,
     };

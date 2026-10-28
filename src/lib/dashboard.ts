@@ -71,6 +71,14 @@ export function activityId(entry: ActivityEntry): string {
     return `${entry.at}|${entry.kind}|${entry.number}`;
 }
 
+// Restates commentTitle in electron/notifier.ts; keep the two in step.
+function commentLabel(count: number, actor?: string): string {
+    if (!actor) {
+        return count === 1 ? 'New comment' : `${count} new comments`;
+    }
+    return count === 1 ? `${actor} commented` : `${actor} left ${count} comments`;
+}
+
 // What a notification said, for its row in the dashboard's notification list.
 // Restates the notification titles in electron/notifier.ts (describeEvent); keep
 // the wording in step.
@@ -94,12 +102,14 @@ export function activityLabel(entry: ActivityEntry): string {
             return 'Ready to merge';
         case 'merged-by-other':
             return entry.actor ? `Merged by ${entry.actor}` : 'Merged';
+        case 'commented':
+            return commentLabel(entry.count ?? 1, entry.actor);
     }
 }
 
 // The dot before a notification row, in the colors the overview cards use for the
 // same kind of thing: blue review, orange changes, green good news, red trouble,
-// purple merged.
+// purple merged, grey for a plain comment.
 const ACTIVITY_DOTS: Record<DashboardEventKind, string> = {
     'review-requested': 'bg-moire-accent',
     'changes-requested': 'bg-moire-changes-fg',
@@ -109,6 +119,7 @@ const ACTIVITY_DOTS: Record<DashboardEventKind, string> = {
     'merge-conflict': 'bg-moire-pr-closed',
     'ready-to-merge': 'bg-moire-pr-open',
     'merged-by-other': 'bg-moire-pr-merged',
+    commented: 'bg-moire-muted',
 };
 
 export function activityDotClass(entry: ActivityEntry): string {
@@ -171,6 +182,7 @@ const NOTIFICATION_TYPE_LABELS: [DashboardEventKind, string][] = [
     ['merge-conflict', 'Merge conflict'],
     ['ready-to-merge', 'Ready to merge'],
     ['merged-by-other', 'Merged by someone else'],
+    ['commented', 'New comments'],
 ];
 
 export const NOTIFICATION_TYPES = NOTIFICATION_TYPE_LABELS.map(([kind, label]) => ({

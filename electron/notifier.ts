@@ -92,6 +92,15 @@ function prLine(pr: DashboardPr): string {
     return `#${pr.number} ${pr.title}`;
 }
 
+// "ann commented", "ann left 3 comments" or, from several people, "3 new
+// comments". Restated in src/lib/dashboard.ts; keep the two in step.
+export function commentTitle(count: number, actor?: string): string {
+    if (!actor) {
+        return count === 1 ? 'New comment' : `${count} new comments`;
+    }
+    return count === 1 ? `${actor} commented` : `${actor} left ${count} comments`;
+}
+
 // The notification text for one event. The repository goes in the subtitle so
 // the body can stay about the PR.
 export function describeEvent(event: DashboardEvent, repo: string): NotificationContent {
@@ -128,6 +137,9 @@ export function describeEvent(event: DashboardEvent, repo: string): Notification
         case 'merged-by-other':
             title = event.actor ? `Merged by ${event.actor}` : 'Merged';
             break;
+        case 'commented':
+            title = commentTitle(event.count ?? 1, event.actor);
+            break;
     }
 
     return { title, subtitle: repo, body };
@@ -142,6 +154,7 @@ function toActivity(event: DashboardEvent, at: string): ActivityEntry {
         url: event.pr.url,
         ...(event.actor ? { actor: event.actor } : {}),
         ...(event.checks ? { checks: event.checks } : {}),
+        ...(event.count ? { count: event.count } : {}),
     };
 }
 

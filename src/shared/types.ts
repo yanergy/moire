@@ -262,7 +262,8 @@ export type DashboardEventKind =
     | 'approved'
     | 'merge-conflict'
     | 'ready-to-merge'
-    | 'merged-by-other';
+    | 'merged-by-other'
+    | 'commented';
 
 // One reviewer's current stance on a PR (their latest review).
 export interface DashboardReview {
@@ -294,6 +295,8 @@ export interface DashboardPr {
     ci: CiState;
     failedChecks: string[];
     reviews: DashboardReview[];
+    // The recent comments, fetched on the viewer's open PRs only.
+    comments?: { id: string; author: string }[];
 }
 
 export interface DashboardSnapshot {
@@ -322,6 +325,8 @@ export interface ActivityEntry {
     url: string;
     actor?: string;
     checks?: string[];
+    // How many new comments a 'commented' notification stands for.
+    count?: number;
     read?: boolean;
 }
 
