@@ -106,19 +106,20 @@ describe('dashboardNotice', () => {
     });
 });
 
+// A notification sent at a local time.
+function sentAt(...date: [number, number, number, number]): ActivityEntry {
+    return {
+        kind: 'approved',
+        at: new Date(...date).toISOString(),
+        number: 1,
+        title: 'Add notifications',
+        url: 'https://github.com/o/r/pull/1',
+    };
+}
+
 describe('groupActivityByDay', () => {
     // Local times, so the days hold in any time zone. Now is Wednesday afternoon.
     const NOW = new Date(2026, 9, 28, 15, 0).getTime();
-
-    function sentAt(...date: [number, number, number, number]): ActivityEntry {
-        return {
-            kind: 'approved',
-            at: new Date(...date).toISOString(),
-            number: 1,
-            title: 'Add notifications',
-            url: 'https://github.com/o/r/pull/1',
-        };
-    }
 
     it('groups by local day, newest first, as Today, Yesterday, the weekday and the date', () => {
         const activity = [
