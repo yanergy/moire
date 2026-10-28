@@ -6,6 +6,7 @@ import { activityId } from '@/lib/dashboard';
 import type { ActivityEntry } from '@/shared/types';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import NotificationRow from '@/components/headers/NotificationRow.vue';
 
 // The bell at the right of the toolbar: its count is the number of unread
@@ -94,21 +95,20 @@ function openEntry(entry: ActivityEntry) {
                     Mark all as read
                 </Button>
             </div>
-            <div
-                v-if="dashboard.activity.length"
-                class="max-h-[560px] divide-y divide-moire-border overflow-y-auto"
-            >
-                <notification-row
-                    v-for="entry in dashboard.activity"
-                    :key="activityId(entry)"
-                    :entry="entry"
-                    :now="now"
-                    @open="openEntry"
-                    @open-in-browser="dashboard.openActivityInBrowser"
-                    @mark-read="dashboard.markRead"
-                    @delete="dashboard.deleteNotification"
-                />
-            </div>
+            <TooltipProvider v-if="dashboard.activity.length" :delay-duration="300">
+                <div class="max-h-[560px] divide-y divide-moire-border overflow-y-auto">
+                    <notification-row
+                        v-for="entry in dashboard.activity"
+                        :key="activityId(entry)"
+                        :entry="entry"
+                        :now="now"
+                        @open="openEntry"
+                        @open-in-browser="dashboard.openActivityInBrowser"
+                        @mark-read="dashboard.markRead"
+                        @delete="dashboard.deleteNotification"
+                    />
+                </div>
+            </TooltipProvider>
             <p v-else class="px-3 py-4 text-[13px] text-moire-muted">
                 No notifications for this repository yet.
             </p>
