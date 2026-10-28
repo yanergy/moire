@@ -101,6 +101,17 @@ describe('NotificationsMenu', () => {
         wrapper.unmount();
     });
 
+    it('focuses the menu, not its first notification, on open', async () => {
+        const wrapper = mountMenu([{ ...ACTIVITY[0]!, read: true }]);
+        await openMenu(wrapper);
+
+        const rows = wrapper.findAllComponents(NotificationRow);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.element.contains(document.activeElement)).toBe(false);
+        expect(document.activeElement?.getAttribute('data-slot')).toBe('popover-content');
+        wrapper.unmount();
+    });
+
     it('says when no notifications were sent yet', async () => {
         const wrapper = mountMenu([]);
         await openMenu(wrapper);

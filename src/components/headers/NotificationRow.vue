@@ -38,13 +38,16 @@ defineEmits<{
                 class="size-2 shrink-0 rounded-full"
                 :class="[activityDotClass(entry), { 'opacity-40': entry.read }]"
             />
-            <span class="min-w-0 flex-1 truncate text-[13px]">
+            <!-- The title's color sits on the truncating span, since the ellipsis
+                 takes that span's color, and a cut off title is what it ends. -->
+            <span
+                class="min-w-0 flex-1 truncate text-[13px]"
+                :class="entry.read ? 'text-moire-faint' : 'text-moire-muted'"
+            >
                 <span :class="entry.read ? 'text-moire-muted' : 'font-medium text-moire-fg'">
                     {{ activityLabel(entry) }}
                 </span>
-                <span :class="entry.read ? 'text-moire-faint' : 'text-moire-muted'">
-                    · #{{ entry.number }} {{ entry.title }}
-                </span>
+                · #{{ entry.number }} {{ entry.title }}
             </span>
         </button>
         <!-- The age, with Mark as read and Delete laid over it on hover. -->

@@ -32,6 +32,16 @@ watch(open, (isOpen) => {
 
 onBeforeUnmount(() => clearInterval(clock));
 
+// Focus the menu itself on open rather than its first focusable element: that
+// is in the first row, which would then show its actions as if it were selected.
+// Focus stays inside the menu, so Tab moves into the list and Escape closes it.
+function focusMenu(event: Event) {
+    event.preventDefault();
+    (event.target as HTMLElement)
+        .querySelector<HTMLElement>('[data-slot="popover-content"]')
+        ?.focus();
+}
+
 // Opening a notification leaves the menu, for the PR view or the browser.
 function openEntry(entry: ActivityEntry) {
     open.value = false;
@@ -68,6 +78,7 @@ function openEntry(entry: ActivityEntry) {
             :side-offset="6"
             class="w-[560px] overflow-hidden border-moire-border bg-moire-pop p-0"
             :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
+            @open-auto-focus="focusMenu"
         >
             <div class="flex items-center gap-2 border-b border-moire-border py-2 pr-2 pl-3">
                 <h2 class="text-[13px] font-semibold text-moire-fg">Notifications</h2>

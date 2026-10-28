@@ -53,6 +53,17 @@ describe('NotificationRow', () => {
         expect(wrapper.find('span.text-moire-muted').text()).toBe('ann requested changes');
     });
 
+    // The ellipsis of a cut off title takes the truncating span's color.
+    it('colors the truncating span like the title', () => {
+        const unread = mount(NotificationRow, { props: { entry, now: NOW } });
+        expect(unread.get('.truncate').classes()).toContain('text-moire-muted');
+
+        const read = mount(NotificationRow, {
+            props: { entry: { ...entry, read: true }, now: NOW },
+        });
+        expect(read.get('.truncate').classes()).toContain('text-moire-faint');
+    });
+
     it('always shows Open in browser at the end of the row', async () => {
         const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
         const button = wrapper.get('[aria-label="Open in browser"]');
