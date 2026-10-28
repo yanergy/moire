@@ -32,6 +32,7 @@ Native macOS notifications, sent by the main process, for these events:
 | Merge conflict | One of your PRs changes to conflicting, usually because the base branch moved | On |
 | Ready to merge | One of your PRs is approved, has passing checks and has no conflicts, all at once | Off |
 | Merged by someone else | One of your PRs is merged by another account (your own merges never notify) | Off |
+| New comments | Someone else comments on one of your open PRs (see "Comments" below) | On |
 
 Each event type has its own toggle in the Git → Notifications menu. That menu lives under Git
 because, like the account switcher there, it needs a connected `gh`. Clicking a notification opens the
@@ -50,6 +51,21 @@ the failing state, and then stays quiet for that PR until its checks have passed
 fix that fails again therefore does not notify a second time, and several failed jobs produce a
 single notification that lists their names.
 
+#### Comments
+
+"New comments" covers every way to comment on a PR: a comment in its conversation, a review
+submitted as Comment (its summary and its inline comments each count), and an inline comment or
+a reply in a review thread. Your own comments never notify. All new comments on one PR in one
+poll become a single notification: "ann commented", "ann left 3 comments", or "3 new comments"
+when several people commented. An approval or a changes request already notifies on its own, so
+its summary and inline comments do not notify again.
+
+Only your open PRs fetch comments, and only the newest 10 conversation comments and the newest 10
+reviews (with up to 10 inline comments each), since the poll runs every two minutes and few
+comments land between two polls. Comments are tracked by id, so an edited comment does not
+notify again. A PR saved before comments were fetched counts as a baseline, so upgrading does not
+replay its old comments.
+
 #### Drafts
 
 Draft PRs are included by default, in the dashboard and in notifications. Each has its own
@@ -61,11 +77,9 @@ the split carry the old shared value over to both.
 
 Not part of this branch, but candidates for a later round:
 
-- **Review with comments**: one notification per submitted review on your PR (never per
-  individual comment). Needs comment reviews added to the query.
 - **Mentioned**: someone mentions you in a PR. Needs an extra search.
 
-Deliberately left out: every new comment (too noisy, GitHub email covers it), CI results on other
+Deliberately left out: CI results on other
 people's PRs, new pushes to PRs you review (re-requests cover this), and "checks passed" (frequent,
 and "Ready to merge" is the more useful version).
 
@@ -198,10 +212,13 @@ A pure function compares the previous snapshot with the new one and returns even
   draft) produces "Ready to merge".
 - A PR of yours that changes to merged, with a merger other than the signed in account, produces
   "Merged by someone else".
+- New comments by someone else on one of your open PRs (by comment id) produce one "New
+  comments" event for that PR, carrying the count and, when one person wrote them all, their
+  name.
 
 Events whose type is toggled off, and events for drafts while "Notify about draft PRs" is off,
 are dropped.
-The rest become native notifications and are appended to the recent activity list (capped at 50
+The rest become native notifications and are appended to the recent activity list (capped at 500
 per repository).
 
 ### Persistence

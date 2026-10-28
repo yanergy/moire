@@ -161,8 +161,9 @@ last branch range are remembered per repository.
   carries review threads or annotations.
 - GitHub notifications for the open repository and the active `gh` account: a review requested
   from you, changes requested on your PR, your PR closed without merge, failed checks (once per PR
-  until they pass again), an approval, a merge conflict, and optionally ready to merge and merged
-  by someone else. Each event has its own toggle in the **Notification settings** menu (on
+  until they pass again), an approval, a merge conflict, new comments by someone else on your
+  open PRs (several at once collapse into one notification), and optionally ready to merge and
+  merged by someone else. Each event has its own toggle in the **Notification settings** menu (on
   the notifications page), next to an **Enable notifications** switch (on by default) and a toggle for whether draft PRs notify.
   **Git > Notifications** holds the same toggles plus a dock badge toggle, and the two stay in
   step. More than three updates at once arrive as one summary notification.
@@ -271,7 +272,6 @@ Everything on the original roadmap has shipped. These are the next features on t
 Possible expansions of the GitHub notifications and dashboard, not planned yet:
 
 - Count review requests made to a team you belong to, not only requests addressed to you.
-- Notify when a review with comments is submitted on your PR.
 - Notify when you are mentioned in a PR.
 - Watch several repositories at once, not only the one that is open.
 

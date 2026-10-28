@@ -85,6 +85,16 @@ describe('activityLabel', () => {
         );
         expect(activityLabel(entry({ kind: 'closed-unmerged' }))).toBe('Closed without merge');
     });
+
+    it('counts the comments, naming the commenter when there is one', () => {
+        expect(activityLabel(entry({ kind: 'commented', actor: 'ann', count: 1 }))).toBe(
+            'ann commented'
+        );
+        expect(activityLabel(entry({ kind: 'commented', actor: 'ann', count: 4 }))).toBe(
+            'ann left 4 comments'
+        );
+        expect(activityLabel(entry({ kind: 'commented', count: 4 }))).toBe('4 new comments');
+    });
 });
 
 describe('activityDotClass', () => {

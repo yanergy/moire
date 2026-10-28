@@ -58,6 +58,7 @@ describe('NotificationSettingsMenu', () => {
             'Merge conflict',
             'Ready to merge',
             'Merged by someone else',
+            'New comments',
         ]);
         expect(document.body.textContent).toContain('Notify me when');
         expect(item('Approved').getAttribute('data-state')).toBe('checked');
@@ -71,7 +72,7 @@ describe('NotificationSettingsMenu', () => {
         item('Ready to merge').click();
         await flushPromises();
         expect(set).toHaveBeenLastCalledWith({ events: { 'ready-to-merge': true } });
-        expect(items()).toHaveLength(10);
+        expect(items()).toHaveLength(11);
 
         item('Notify about draft PRs').click();
         await flushPromises();

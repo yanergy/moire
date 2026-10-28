@@ -54,6 +54,7 @@ export const NOTIFICATION_EVENT_OPTIONS: NotificationEventOption[] = [
     { label: 'Merge Conflict', kind: 'merge-conflict' },
     { label: 'Ready to Merge', kind: 'ready-to-merge' },
     { label: 'Merged by Someone Else', kind: 'merged-by-other' },
+    { label: 'New Comments', kind: 'commented' },
 ];
 
 export interface MenuOptions {

@@ -295,6 +295,7 @@ describe('application menu', () => {
                 false,
                 false,
                 true,
+                true,
             ]);
         });
 

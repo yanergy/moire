@@ -42,6 +42,11 @@ function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
     };
 }
 
+// A comment by ann.
+function comment(id: string) {
+    return { id, author: 'ann' };
+}
+
 // A PR by someone else that requests the viewer's review.
 function request(n: number, overrides: Partial<DashboardPr> = {}): DashboardPr {
     return pr({ id: `REQ_${n}`, number: n, author: 'ann', ...overrides });
@@ -168,6 +173,23 @@ describe('Notifier', () => {
 
         t.clicks[0]!();
         expect(t.deps.onOpenPr).toHaveBeenCalledWith(expect.objectContaining({ number: 5 }));
+        t.notifier.stop();
+    });
+
+    it('records how many comments a commented notification stands for', async () => {
+        const t = setup();
+        t.respond(
+            snapshot({ mine: [pr({ comments: [] })] }),
+            snapshot({ mine: [pr({ comments: [comment('C1'), comment('C2')] })] })
+        );
+
+        await t.notifier.setRepo('/repo');
+        await t.notifier.poll();
+
+        expect(t.deps.notify.mock.calls[0]![0].title).toBe('ann left 2 comments');
+        expect(t.notifier.getView().activity).toMatchObject([
+            { kind: 'commented', actor: 'ann', count: 2 },
+        ]);
         t.notifier.stop();
     });
 
@@ -495,6 +517,19 @@ describe('describeEvent', () => {
         ).toBe('Merged by bob');
     });
 
+    it('counts the new comments, naming the commenter when there is one', () => {
+        const title = (count: number, actor?: string) =>
+            describeEvent(
+                { kind: 'commented', pr: pr(), count, ...(actor ? { actor } : {}) },
+                'o/r'
+            ).title;
+
+        expect(title(1, 'ann')).toBe('ann commented');
+        expect(title(3, 'ann')).toBe('ann left 3 comments');
+        expect(title(3)).toBe('3 new comments');
+        expect(title(1)).toBe('New comment');
+    });
+
     it('has a title for every event kind', () => {
         const kinds = [
             'review-requested',
@@ -505,6 +540,7 @@ describe('describeEvent', () => {
             'merge-conflict',
             'ready-to-merge',
             'merged-by-other',
+            'commented',
         ] as const;
 
         for (const kind of kinds) {

@@ -164,6 +164,7 @@ describe('settings: notifications', () => {
         expect(prefs.events['checks-failed']).toBe(true);
         expect(prefs.events['ready-to-merge']).toBe(false);
         expect(prefs.events['merged-by-other']).toBe(false);
+        expect(prefs.events.commented).toBe(true);
     });
 
     it('merges a single toggle into the stored preferences', async () => {

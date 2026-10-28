@@ -98,6 +98,16 @@ function runnerFailing(error: object) {
     });
 }
 
+// A GraphQL author.
+function author(login: string) {
+    return { login };
+}
+
+// A normalized comment by ann.
+function ann(id: string) {
+    return { id, author: 'ann' };
+}
+
 // A normalized PR, for the diff tests.
 function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
     return {
@@ -191,6 +201,10 @@ describe('fetchSnapshot', () => {
         expect(query(3)).toContain('first: 100');
         expect(query(3)).toContain('statusCheckRollup');
         expect(query(4)).not.toContain('statusCheckRollup');
+        // Only the viewer's open PRs fetch their comments.
+        expect(query(1)).toContain('comments(last: 10)');
+        expect(query(0)).not.toContain('comments(last');
+        expect(query(3)).not.toContain('comments(last');
     });
 
     it('retries a search once when GitHub answers with a 5xx', async () => {
@@ -401,6 +415,56 @@ describe('fetchSnapshot', () => {
         ]);
     });
 
+    it('collects the comments on the viewer’s open PRs, skipping approvals and changes requests', async () => {
+        const node = gqlPr({
+            comments: { nodes: [{ id: 'C1', author: author('ann') }, null] },
+            reviews: {
+                nodes: [
+                    // A comment review with a summary and an inline comment.
+                    {
+                        id: 'R1',
+                        state: 'COMMENTED',
+                        body: 'Looks close',
+                        author: author('bob'),
+                        comments: { nodes: [{ id: 'RC1', author: author('bob') }] },
+                    },
+                    // A thread reply: a comment review without a summary.
+                    {
+                        id: 'R2',
+                        state: 'COMMENTED',
+                        body: '',
+                        author: author('cat'),
+                        comments: { nodes: [{ id: 'RC2', author: author('cat') }] },
+                    },
+                    {
+                        id: 'R3',
+                        state: 'CHANGES_REQUESTED',
+                        body: 'Please fix',
+                        author: author('dan'),
+                        comments: { nodes: [{ id: 'RC3', author: author('dan') }] },
+                    },
+                    { id: 'R4', state: 'APPROVED', body: 'Nice', author: author('eve') },
+                    // A deleted account has no author.
+                    { id: 'R5', state: 'COMMENTED', body: 'Gone', author: null },
+                ],
+            },
+        });
+        const run = searchRunner({
+            mineOpen: { nodes: [node] },
+            review: { nodes: [gqlPr({ id: 'PR_2', author: { login: 'ann' } })] },
+        });
+        const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
+
+        expect(snap!.mine[0]!.comments).toEqual([
+            { id: 'C1', author: 'ann' },
+            { id: 'R1', author: 'bob' },
+            { id: 'RC1', author: 'bob' },
+            { id: 'RC2', author: 'cat' },
+        ]);
+        // PRs from searches that do not fetch comments leave the field out.
+        expect(snap!.toReview[0]).not.toHaveProperty('comments');
+    });
+
     it('skips search results that are not pull requests', async () => {
         const run = searchRunner({ review: { nodes: [{}, null] } });
         const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
@@ -577,6 +641,53 @@ describe('diffSnapshots', () => {
             expect(kinds(passed.snapshot, snapshot({ mine: [failing] }))).toEqual([
                 'checks-failed',
             ]);
+        });
+    });
+
+    describe('commented', () => {
+        it('fires once per PR for the new comments, naming the commenter', () => {
+            const { events } = diffSnapshots(
+                snapshot({ mine: [pr({ comments: [ann('C1')] })] }),
+                snapshot({ mine: [pr({ comments: [ann('C1'), ann('C2'), ann('C3')] })] })
+            );
+            expect(events).toHaveLength(1);
+            expect(events[0]).toMatchObject({ kind: 'commented', actor: 'ann', count: 2 });
+        });
+
+        it('leaves out the commenter when several people commented', () => {
+            const { events } = diffSnapshots(
+                snapshot({ mine: [pr({ comments: [] })] }),
+                snapshot({ mine: [pr({ comments: [ann('C1'), { id: 'C2', author: 'bob' }] })] })
+            );
+            expect(events[0]).toMatchObject({ kind: 'commented', count: 2 });
+            expect(events[0]).not.toHaveProperty('actor');
+        });
+
+        it('never fires for your own comments', () => {
+            const mine = { id: 'C1', author: 'me' };
+            expect(
+                kinds(
+                    snapshot({ mine: [pr({ comments: [] })] }),
+                    snapshot({ mine: [pr({ comments: [mine] })] })
+                )
+            ).toEqual([]);
+        });
+
+        it('treats a PR saved before comments were fetched as a baseline', () => {
+            expect(
+                kinds(
+                    snapshot({ mine: [pr()] }),
+                    snapshot({ mine: [pr({ comments: [ann('C1')] })] })
+                )
+            ).toEqual([]);
+        });
+
+        it('stays quiet on a PR that is no longer open', () => {
+            const closed = (comments: { id: string; author: string }[]) =>
+                pr({ state: 'CLOSED', comments });
+            expect(
+                kinds(snapshot({ mine: [closed([])] }), snapshot({ mine: [closed([ann('C1')])] }))
+            ).toEqual([]);
         });
     });
 
