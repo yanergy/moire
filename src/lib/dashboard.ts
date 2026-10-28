@@ -115,6 +115,26 @@ export function activityDotClass(entry: ActivityEntry): string {
     return ACTIVITY_DOTS[entry.kind];
 }
 
+// The notification types, in the order the notification settings list them, with
+// the dot of their notification rows. Restates NOTIFICATION_EVENT_OPTIONS in
+// electron/menu.ts (the Git > Notifications menu); keep the two in step.
+const NOTIFICATION_TYPE_LABELS: [DashboardEventKind, string][] = [
+    ['review-requested', 'Review requested'],
+    ['changes-requested', 'Changes requested'],
+    ['closed-unmerged', 'Closed without merge'],
+    ['checks-failed', 'Checks failed'],
+    ['approved', 'Approved'],
+    ['merge-conflict', 'Merge conflict'],
+    ['ready-to-merge', 'Ready to merge'],
+    ['merged-by-other', 'Merged by someone else'],
+];
+
+export const NOTIFICATION_TYPES = NOTIFICATION_TYPE_LABELS.map(([kind, label]) => ({
+    kind,
+    label,
+    dotClass: ACTIVITY_DOTS[kind],
+}));
+
 // Why the dashboard has no (fresh) data, as a title and a hint. Null when the
 // last load succeeded.
 export function dashboardNotice(

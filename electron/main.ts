@@ -107,24 +107,32 @@ const notifier = new Notifier({
     },
     onOpenDashboard: () => void showDashboard(),
     // Keep an open dashboard current after every poll.
-    onChange: () => {
-        void dashboardState().then((state) => {
-            for (const win of BrowserWindow.getAllWindows()) {
-                win.webContents.send('dashboard:changed', state);
-            }
-        });
-    },
+    onChange: () => void broadcastDashboard(),
     logError,
 });
 
 async function dashboardState(): Promise<DashboardState> {
-    const { showDrafts, dashboardAuthors, dashboardHiddenCards } = await getNotificationPrefs();
+    const prefs = await getNotificationPrefs();
     return {
         ...notifier.getView(),
-        showDrafts,
-        authors: dashboardAuthors,
-        hiddenCards: dashboardHiddenCards,
+        showDrafts: prefs.dashboardShowDrafts,
+        authors: prefs.dashboardAuthors,
+        hiddenCards: prefs.dashboardHiddenCards,
+        notifications: {
+            enabled: prefs.enabled,
+            notifyDrafts: prefs.notifyDrafts,
+            events: prefs.events,
+        },
     };
+}
+
+// Push the dashboard state to every window: after a poll, and after a change made
+// outside the renderer (the Git > Notifications menu) that its settings show.
+async function broadcastDashboard(): Promise<void> {
+    const state = await dashboardState();
+    for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send('dashboard:changed', state);
+    }
 }
 
 async function createWindow(): Promise<BrowserWindow> {
@@ -260,8 +268,12 @@ app.whenReady().then(async () => {
                     await notifier.restart();
                 })();
             },
-            onToggleNotificationEvent: (kind, enabled) =>
-                void setNotificationPrefs({ events: { [kind]: enabled } }),
+            onToggleNotificationEvent: (kind, enabled) => {
+                void (async () => {
+                    await setNotificationPrefs({ events: { [kind]: enabled } });
+                    await broadcastDashboard();
+                })();
+            },
             onToggleDockBadge: (enabled) => {
                 void (async () => {
                     await setNotificationPrefs({ dockBadge: enabled });
@@ -305,10 +317,9 @@ app.whenReady().then(async () => {
                 await notifier.poll();
                 return dashboardState();
             },
-            // The badge also follows this toggle, so restart to recount it.
+            // Dashboard only: whether draft PRs send notifications is its own setting.
             setShowDrafts: async (show) => {
-                await setNotificationPrefs({ showDrafts: show });
-                await notifier.restart();
+                await setNotificationPrefs({ dashboardShowDrafts: show });
                 return dashboardState();
             },
             // Dashboard only: nothing in the notifier depends on it.
@@ -318,6 +329,17 @@ app.whenReady().then(async () => {
             },
             setHiddenCards: async (keys) => {
                 await setNotificationPrefs({ dashboardHiddenCards: keys });
+                return dashboardState();
+            },
+            // The notifications menu's settings. The Git > Notifications menu is
+            // rebuilt to match; the master switch also starts or stops polling.
+            setNotificationSettings: async (change) => {
+                const before = await getNotificationPrefs();
+                await setNotificationPrefs(change);
+                await buildMenu();
+                if (change.enabled !== undefined && change.enabled !== before.enabled) {
+                    await notifier.restart();
+                }
                 return dashboardState();
             },
             markRead: async (id) => {

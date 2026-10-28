@@ -10,6 +10,7 @@ import {
     activityId,
     diffSnapshots,
     type ActivityEntry,
+    type DashboardEventKind,
     type DashboardEvent,
     type DashboardPr,
     type DashboardSnapshot,
@@ -41,13 +42,30 @@ export interface NotifierView {
     activity: ActivityEntry[];
 }
 
-// What the renderer's dashboard receives: the view plus the "Show drafts" toggle,
-// the author filter and the hidden cards, which the dashboard applies to its cards. Mirrored as
-// DashboardState in src/shared/types.ts; keep the two in sync.
+// The notification settings the app's notifications menu shows and changes: the
+// master switch, whether draft PRs notify, and one toggle per event kind.
+export interface NotificationSettings {
+    enabled: boolean;
+    notifyDrafts: boolean;
+    events: Record<DashboardEventKind, boolean>;
+}
+
+// A partial change to them, as one toggle sends it.
+export interface NotificationSettingsChange {
+    enabled?: boolean;
+    notifyDrafts?: boolean;
+    events?: Partial<Record<DashboardEventKind, boolean>>;
+}
+
+// What the renderer's dashboard receives: the view plus its own "Show drafts"
+// toggle, the author filter and the hidden cards, which the dashboard applies to
+// its cards, and the notification settings. Mirrored as DashboardState in
+// src/shared/types.ts; keep the two in sync.
 export interface DashboardState extends NotifierView {
     showDrafts: boolean;
     authors: AuthorFilter;
     hiddenCards: string[];
+    notifications: NotificationSettings;
 }
 
 export interface NotifierDeps {
@@ -334,7 +352,8 @@ export class Notifier {
             // Events are diffed (and so recorded as seen) even when they are
             // not shown, so turning a toggle on later does not replay them.
             const delivered = diff.events.filter(
-                (e) => prefs.enabled && prefs.events[e.kind] && (prefs.showDrafts || !e.pr.isDraft)
+                (e) =>
+                    prefs.enabled && prefs.events[e.kind] && (prefs.notifyDrafts || !e.pr.isDraft)
             );
             const at = now.toISOString();
             state = {

@@ -9,12 +9,14 @@ import {
 } from '@/stores/dashboard';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
+import { notificationSettings } from '@/components/__tests__/fixtures';
 import type {
     ActivityEntry,
     AuthorFilter,
     DashboardPr,
     DashboardSnapshot,
     DashboardState,
+    NotificationSettingsChange,
 } from '@/shared/types';
 
 function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
@@ -64,6 +66,7 @@ function state(overrides: Partial<DashboardState> = {}): DashboardState {
         showDrafts: true,
         authors: 'me',
         hiddenCards: [],
+        notifications: notificationSettings(),
         ...overrides,
     };
 }
@@ -126,6 +129,9 @@ function stubApi(result: DashboardState = state()) {
         setDashboardAuthors: vi
             .fn<(authors: AuthorFilter) => Promise<DashboardState>>()
             .mockImplementation(async (authors) => ({ ...result, authors })),
+        setNotificationSettings: vi
+            .fn<(change: NotificationSettingsChange) => Promise<DashboardState>>()
+            .mockResolvedValue(result),
     };
     window.api = api as unknown as Window['api'];
     return api;
@@ -404,6 +410,23 @@ describe('dashboard store', () => {
             await pending;
 
             expect(api.setDashboardShowDrafts).toHaveBeenCalledWith(false);
+        });
+
+        it('applies a notification settings toggle right away and persists it', async () => {
+            const api = stubApi();
+            const store = useDashboardStore();
+            await store.load();
+
+            const pending = store.setNotificationSettings({ events: { approved: false } });
+            expect(store.notificationSettings?.events.approved).toBe(false);
+            expect(store.notificationSettings?.events['review-requested']).toBe(true);
+            // Showing drafts on the dashboard is its own setting.
+            expect(store.showDrafts).toBe(true);
+            await pending;
+
+            expect(api.setNotificationSettings).toHaveBeenCalledWith({
+                events: { approved: false },
+            });
         });
 
         it('persists author picks, and All toggles back to the viewer', async () => {

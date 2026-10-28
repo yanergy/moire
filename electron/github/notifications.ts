@@ -96,6 +96,18 @@ export type DashboardEventKind =
     | 'ready-to-merge'
     | 'merged-by-other';
 
+// Every event kind, in the order the notification settings list them.
+export const NOTIFICATION_EVENT_KINDS: DashboardEventKind[] = [
+    'review-requested',
+    'changes-requested',
+    'closed-unmerged',
+    'checks-failed',
+    'approved',
+    'merge-conflict',
+    'ready-to-merge',
+    'merged-by-other',
+];
+
 export interface DashboardEvent {
     kind: DashboardEventKind;
     pr: DashboardPr;

@@ -19,6 +19,7 @@ import App from '@/App.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
+import { notificationSettings } from './fixtures';
 
 type Unsub = () => void;
 
@@ -227,6 +228,7 @@ describe('App', () => {
             showDrafts: false,
             authors: 'me',
             hiddenCards: [],
+            notifications: notificationSettings(),
         };
         api.onDashboardChanged.mock.calls[0]![0](state);
         expect(applyState).toHaveBeenCalledWith(state);

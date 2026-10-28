@@ -153,17 +153,18 @@ const updated = computed(() =>
                     <div class="flex-1" />
 
                     <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
-                    <!-- Display options: drafts, and whose PRs the cards count. -->
+                    <!-- Dashboard settings: drafts, whose PRs the cards count, which cards show,
+                         and the merged period. Notifications have their own, in the bell menu. -->
                     <DropdownMenu>
                         <DropdownMenuTrigger as-child>
                             <Button
                                 variant="outline"
                                 size="sm"
                                 class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                aria-label="Display options"
+                                aria-label="Dashboard settings"
                             >
                                 <SlidersHorizontal :size="16" />
-                                Display
+                                Dashboard settings
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -175,7 +176,7 @@ const updated = computed(() =>
                             <DropdownMenuCheckboxItem
                                 :model-value="dashboard.showDrafts"
                                 :class="menuRow"
-                                title="Include draft PRs in the dashboard and in notifications"
+                                title="Include draft PRs in the dashboard"
                                 @select="keepOpen"
                                 @update:model-value="dashboard.setShowDrafts($event)"
                             >
@@ -336,7 +337,7 @@ const updated = computed(() =>
                         v-if="!dashboard.categories.length"
                         class="py-10 text-[13px] text-moire-muted"
                     >
-                        Every card is hidden. Turn them back on under Display, Cards.
+                        Every card is hidden. Turn them back on under Dashboard settings, Cards.
                     </p>
                     <div
                         v-else

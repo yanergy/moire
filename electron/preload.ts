@@ -116,6 +116,8 @@ contextBridge.exposeInMainWorld('api', {
     setDashboardAuthors: (authors: unknown) => ipcRenderer.invoke('dashboard:set-authors', authors),
     setDashboardHiddenCards: (keys: string[]) =>
         ipcRenderer.invoke('dashboard:set-hidden-cards', keys),
+    setNotificationSettings: (change: unknown) =>
+        ipcRenderer.invoke('dashboard:set-notification-settings', change),
     // The dashboard's notification list: mark one read or all read, or delete one.
     markDashboardNotificationRead: (id: string) => ipcRenderer.invoke('dashboard:mark-read', id),
     markAllDashboardNotificationsRead: () => ipcRenderer.invoke('dashboard:mark-all-read'),

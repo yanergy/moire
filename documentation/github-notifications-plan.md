@@ -52,8 +52,10 @@ single notification that lists their names.
 
 #### Drafts
 
-Draft PRs are included by default, in the dashboard and in notifications. A "Show drafts" toggle
-in the dashboard header turns them off in both places. The toggle is persisted.
+Draft PRs are included by default, in the dashboard and in notifications. Each has its own
+toggle, both persisted: "Show drafts" in the dashboard's **Dashboard settings** menu, and "Notify
+about draft PRs" in the notification settings (the gear in the bell's menu). Settings saved before
+the split carry the old shared value over to both.
 
 #### Later
 
@@ -84,7 +86,7 @@ dot, a label, the PR count and a caption saying what is counted:
 | Drafts (gray) | Open draft PRs | Not ready for review |
 
 Every card but the first counts the open PRs of the authors picked in the **Users** submenu of
-the header's **Display** menu. It defaults to the signed in account (stored as "me", so it
+the header's **Dashboard settings** menu. It defaults to the signed in account (stored as "me", so it
 follows an account switch), and can pick any mix of the authors with an open PR in the
 repository, or **All**. The captions follow the pick ("Any author", "By ann", "3 authors"), and
 "Your open PRs" reads "Open PRs" for anyone but yourself.
@@ -96,7 +98,7 @@ merged by someone else on Merged. A notification only counts while its PR is sti
 and the pill goes away once the notifications are read or deleted.
 
 The Merged card counts merged rather than open PRs, by the same Users pick. Its period is set in
-the **Merged** submenu of the Display menu: **This week** (since Monday, the default) or **This
+the **Merged** submenu of the Dashboard settings menu: **This week** (since Monday, the default) or **This
 month** (since the 1st), both in local time and measured against the last refresh. The choice is
 not saved, so it is back to this week after a restart. The data comes from its own search in each
 poll: every PR in the repository merged in the last 31 days (capped at 100).
@@ -104,7 +106,7 @@ poll: every PR in the repository merged in the last 31 days (capped at 100).
 Clicking a card lists its PRs (title, author, branches, age, size and CI state), with a way back
 to the overview. Clicking a PR opens it in the PR view; an "Open in browser" button at the end of each row
 opens it on GitHub instead. The header shows how many PRs the cards cover, when the data was last refreshed,
-the **Display** menu (with "Show drafts", **Users**, **Cards** and **Merged**; **Cards** turns
+the **Dashboard settings** menu (with "Show drafts", **Users**, **Cards** and **Merged**; **Cards** turns
 each overview card on or off, saved with the other preferences) and a refresh button. With drafts hidden,
 the Drafts card goes away and drafts are left out of every other card.
 
@@ -194,7 +196,8 @@ A pure function compares the previous snapshot with the new one and returns even
 - A PR of yours that changes to merged, with a merger other than the signed in account, produces
   "Merged by someone else".
 
-Events whose type is toggled off, and events for drafts while "Show drafts" is off, are dropped.
+Events whose type is toggled off, and events for drafts while "Notify about draft PRs" is off,
+are dropped.
 The rest become native notifications and are appended to the recent activity list (capped at 50
 per repository).
 
@@ -248,7 +251,7 @@ Following `documentation/code-conventions.md`:
 |---|---|
 | `electron/github/notifications.ts` (new) | Repository and login lookup, GraphQL query, parsing into a snapshot, the pure diff function |
 | `electron/notifier.ts` (new) | Poll loop tied to the open repository, wake handling, native notifications, summary notification, click handling, dock badge, recent activity |
-| `electron/settings.ts` | Master switch, per event toggles, dock badge toggle, "Show drafts", saved snapshot and recent activity per login and repository |
+| `electron/settings.ts` | Master switch, per event toggles, dock badge toggle, the two drafts toggles (dashboard and notifications), saved snapshot and recent activity per login and repository |
 | `electron/menu.ts` | Git → "Notifications" submenu with the master switch, a checkbox per event type and one for the dock badge; "Dashboard" item under View, enabled only while a repository is open |
 | `electron/main.ts` | Start, restart and stop the notifier as repositories open and close |
 | `electron/ipc/handlers.ts`, `electron/preload.ts`, `src/shared/types.ts` | Dashboard IPC channels and types |
@@ -292,8 +295,7 @@ remote prefix for remote tracking branches.
 - **Master switch**: on by default, users can opt out.
 - **Team review requests** are left out. Only requests addressed to you personally count
   (`user-review-requested:@me`). Team requests are listed as a possible expansion in the README.
-- **Drafts**: shown by default, with a "Show drafts" toggle in the dashboard that also applies to
-  notifications.
+- **Drafts**: shown by default, with separate toggles for the dashboard and for notifications.
 - **Dashboard placement**: a third main view inside the main window, next to the diff and PR
   views. Not a separate window. It is a quick overview, so it stays compact.
 - **Dock badge**: yes, counting the unread notifications for the open repository, with its own toggle.

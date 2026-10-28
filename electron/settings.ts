@@ -225,21 +225,26 @@ export type AuthorFilter = 'me' | 'all' | string[];
 
 // GitHub notification preferences. `enabled` is the master switch (on by default,
 // users can opt out); `events` holds one toggle per event kind; `dockBadge` shows
-// the review request count on the dock icon; `showDrafts` includes draft PRs in
-// the dashboard and in notifications; `dashboardAuthors` picks whose PRs the
-// dashboard cards count (it does not affect notifications); `dashboardHiddenCards`
-// lists the overview cards turned off in its Display menu (the hidden ones, so a
-// card added later shows by default). Stored values are
-// merged over the defaults,
-// so an event kind added later starts at its default instead of off.
+// the review request count on the dock icon; `notifyDrafts` lets draft PRs send
+// notifications. The dashboard's own settings live here too: `dashboardShowDrafts`
+// includes draft PRs in its cards, `dashboardAuthors` picks whose PRs the cards
+// count, and `dashboardHiddenCards` lists the overview cards turned off in its
+// settings menu (the hidden ones, so a card added later shows by default). None
+// of the dashboard ones affect notifications. Stored values are merged over the
+// defaults, so an event kind added later starts at its default instead of off.
 export interface NotificationPrefs {
     enabled: boolean;
     events: Record<DashboardEventKind, boolean>;
     dockBadge: boolean;
-    showDrafts: boolean;
+    notifyDrafts: boolean;
+    dashboardShowDrafts: boolean;
     dashboardAuthors: AuthorFilter;
     dashboardHiddenCards: string[];
 }
+
+// Before the dashboard and notifications had their own drafts toggle, one
+// `showDrafts` covered both. A stored value still seeds the two new ones.
+type StoredNotificationPrefs = Partial<NotificationPrefs> & { showDrafts?: boolean };
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
     enabled: true,
@@ -254,16 +259,20 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
         'merged-by-other': false,
     },
     dockBadge: true,
-    showDrafts: true,
+    notifyDrafts: true,
+    dashboardShowDrafts: true,
     dashboardAuthors: 'me',
     dashboardHiddenCards: [],
 };
 
 export async function getNotificationPrefs(): Promise<NotificationPrefs> {
     const store = await getStore();
-    const stored = store.get<Partial<NotificationPrefs>>('notifications', {});
+    const { showDrafts, ...stored } = store.get<StoredNotificationPrefs>('notifications', {});
     return {
         ...DEFAULT_NOTIFICATION_PREFS,
+        ...(showDrafts === undefined
+            ? {}
+            : { notifyDrafts: showDrafts, dashboardShowDrafts: showDrafts }),
         ...stored,
         events: { ...DEFAULT_NOTIFICATION_PREFS.events, ...stored.events },
     };

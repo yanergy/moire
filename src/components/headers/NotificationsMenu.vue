@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { Bell, CheckCheck } from '@lucide/vue';
+import { ArrowLeft, Bell, CheckCheck, Settings } from '@lucide/vue';
 import { useDashboardStore } from '@/stores/dashboard';
 import { activityId } from '@/lib/dashboard';
 import type { ActivityEntry } from '@/shared/types';
@@ -8,14 +8,26 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationRow from '@/components/headers/NotificationRow.vue';
+import NotificationSettings from '@/components/headers/NotificationSettings.vue';
 
 // The bell at the right of the toolbar: its count is the number of unread
 // notifications, and it opens the list of every notification sent for the open
-// repository (newest first), with mark read, delete and mark all read. The data
-// is the dashboard store's, which mirrors the notifier in the main process.
+// repository (newest first), with mark read, delete and mark all read. Its gear
+// swaps the list for the notification settings. The data is the dashboard
+// store's, which mirrors the notifier in the main process.
 const dashboard = useDashboardStore();
 
 const open = ref(false);
+const showSettings = ref(false);
+
+// The settings come with the dashboard state, which nothing may have loaded yet
+// (notifications off, dashboard never opened), so load it when they are asked for.
+function openSettings() {
+    showSettings.value = true;
+    if (!dashboard.notificationSettings) {
+        void dashboard.load();
+    }
+}
 
 const bellLabel = computed(() =>
     dashboard.unreadCount
@@ -30,6 +42,8 @@ let clock: ReturnType<typeof setInterval> | undefined;
 watch(open, (isOpen) => {
     clearInterval(clock);
     if (isOpen) {
+        // Every open starts on the list.
+        showSettings.value = false;
         now.value = Date.now();
         clock = setInterval(() => {
             now.value = Date.now();
@@ -96,21 +110,57 @@ function openEntry(entry: ActivityEntry) {
                 @open-auto-focus="focusMenu"
             >
                 <div class="flex items-center gap-2 border-b border-moire-border py-2 pr-2 pl-3">
-                    <h2 class="text-[13px] font-semibold text-moire-fg">Notifications</h2>
-                    <div class="flex-1" />
-                    <Button
-                        v-if="dashboard.unreadCount"
-                        variant="ghost"
-                        size="sm"
-                        class="h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                        @click="dashboard.markAllRead()"
-                    >
-                        <CheckCheck :size="16" />
-                        Mark all as read
-                    </Button>
+                    <template v-if="showSettings">
+                        <Tooltip>
+                            <TooltipTrigger as-child>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    class="-ml-1.5 size-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                    aria-label="Back to notifications"
+                                    @click="showSettings = false"
+                                >
+                                    <ArrowLeft :size="16" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Back to notifications</TooltipContent>
+                        </Tooltip>
+                        <h2 class="text-[13px] font-semibold text-moire-fg">
+                            Notification settings
+                        </h2>
+                    </template>
+                    <template v-else>
+                        <h2 class="text-[13px] font-semibold text-moire-fg">Notifications</h2>
+                        <div class="flex-1" />
+                        <Button
+                            v-if="dashboard.unreadCount"
+                            variant="ghost"
+                            size="sm"
+                            class="h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                            @click="dashboard.markAllRead()"
+                        >
+                            <CheckCheck :size="16" />
+                            Mark all as read
+                        </Button>
+                        <Tooltip>
+                            <TooltipTrigger as-child>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    class="size-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                    aria-label="Notification settings"
+                                    @click="openSettings"
+                                >
+                                    <Settings :size="16" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Notification settings</TooltipContent>
+                        </Tooltip>
+                    </template>
                 </div>
+                <notification-settings v-if="showSettings" />
                 <div
-                    v-if="dashboard.activity.length"
+                    v-else-if="dashboard.activity.length"
                     class="max-h-[560px] divide-y divide-moire-border overflow-y-auto"
                 >
                     <notification-row

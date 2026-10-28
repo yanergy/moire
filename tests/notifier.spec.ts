@@ -187,8 +187,19 @@ describe('Notifier', () => {
         t.notifier.stop();
     });
 
-    it('drops draft events, and so leaves them out of the badge, when drafts are hidden', async () => {
-        const t = setup({ showDrafts: false });
+    it('still notifies about drafts when only the dashboard hides them', async () => {
+        const t = setup({ dashboardShowDrafts: false });
+        t.respond(snapshot(), snapshot({ toReview: [request(5, { isDraft: true })] }));
+
+        await t.notifier.setRepo('/repo');
+        await t.notifier.poll();
+
+        expect(t.deps.notify).toHaveBeenCalledTimes(1);
+        t.notifier.stop();
+    });
+
+    it('drops draft events, and so leaves them out of the badge, when drafts do not notify', async () => {
+        const t = setup({ notifyDrafts: false });
         t.respond(snapshot(), snapshot({ toReview: [request(5, { isDraft: true }), request(6)] }));
 
         await t.notifier.setRepo('/repo');

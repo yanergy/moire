@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import NotificationsMenu from '@/components/headers/NotificationsMenu.vue';
 import NotificationRow from '@/components/headers/NotificationRow.vue';
+import NotificationSettings from '@/components/headers/NotificationSettings.vue';
 import { useDashboardStore } from '@/stores/dashboard';
 import type { ActivityEntry } from '@/shared/types';
 import { dashboardState } from './fixtures';
@@ -132,6 +133,44 @@ describe('NotificationsMenu', () => {
         const content = document.querySelector('[data-slot="popover-content"]');
         expect(content).not.toBeNull();
         expect((content!.parentElement as HTMLElement).style.transform).not.toContain('-200%');
+        wrapper.unmount();
+    });
+
+    it('swaps the list for the settings and back, starting on the list each time', async () => {
+        const wrapper = mountMenu(ACTIVITY);
+        await openMenu(wrapper);
+        const button = (label: string) =>
+            document.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
+
+        button('Notification settings')!.click();
+        await flushPromises();
+        expect(wrapper.findComponent(NotificationSettings).exists()).toBe(true);
+        expect(wrapper.findAllComponents(NotificationRow)).toHaveLength(0);
+        expect(document.body.textContent).toContain('Notification settings');
+
+        button('Back to notifications')!.click();
+        await flushPromises();
+        expect(wrapper.findComponent(NotificationSettings).exists()).toBe(false);
+        expect(wrapper.findAllComponents(NotificationRow)).toHaveLength(2);
+
+        button('Notification settings')!.click();
+        await flushPromises();
+        await wrapper.get('[aria-label="Notifications"]').trigger('click');
+        await openMenu(wrapper);
+        expect(wrapper.findAllComponents(NotificationRow)).toHaveLength(2);
+        wrapper.unmount();
+    });
+
+    it('loads the dashboard state for the settings when nothing loaded it yet', async () => {
+        const wrapper = mountMenu(ACTIVITY);
+        const dashboard = useDashboardStore();
+        dashboard.notificationSettings = null;
+        const load = vi.spyOn(dashboard, 'load').mockResolvedValue(undefined);
+        await openMenu(wrapper);
+
+        document.querySelector<HTMLButtonElement>('[aria-label="Notification settings"]')!.click();
+        await flushPromises();
+        expect(load).toHaveBeenCalledTimes(1);
         wrapper.unmount();
     });
 

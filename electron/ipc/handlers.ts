@@ -34,7 +34,8 @@ import {
 import { detectEditors, openWithEditor } from '../editors';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
-import type { DashboardState } from '../notifier';
+import type { DashboardState, NotificationSettingsChange } from '../notifier';
+import { NOTIFICATION_EVENT_KINDS } from '../github/notifications';
 import type { AuthorFilter } from '../settings';
 
 // The dashboard's data comes from the Notifier, which main.ts owns; main hands
@@ -47,8 +48,10 @@ export interface DashboardBridge {
     refresh: () => Promise<DashboardState>;
     setShowDrafts: (show: boolean) => Promise<DashboardState>;
     setAuthors: (authors: AuthorFilter) => Promise<DashboardState>;
-    // The overview cards turned off in the Display menu, by key.
+    // The overview cards turned off in the Dashboard settings menu, by key.
     setHiddenCards: (keys: string[]) => Promise<DashboardState>;
+    // The notification settings changed in the app's notifications menu.
+    setNotificationSettings: (change: NotificationSettingsChange) => Promise<DashboardState>;
     // The dashboard's notification list: mark one read (by its activity id), all
     // read, or delete one.
     markRead: (id: string) => Promise<DashboardState>;
@@ -118,6 +121,33 @@ async function isGitAvailable(
 // onRecentsChanged fires after the recent-repos list changes (an open or a
 // removal) so main can rebuild the app menu's "Open Recent" submenu. onRepoOpened
 // fires after a successful open, so main can point the GitHub notifier at it.
+// Keep only the known fields of a notification settings change from the renderer,
+// each a boolean, and only known event kinds.
+function notificationSettingsChange(value: unknown): NotificationSettingsChange {
+    if (typeof value !== 'object' || value === null) {
+        return {};
+    }
+
+    const input = value as Record<string, unknown>;
+    const change: NotificationSettingsChange = {};
+    if (typeof input.enabled === 'boolean') {
+        change.enabled = input.enabled;
+    }
+    if (typeof input.notifyDrafts === 'boolean') {
+        change.notifyDrafts = input.notifyDrafts;
+    }
+    if (typeof input.events === 'object' && input.events !== null) {
+        const events = input.events as Record<string, unknown>;
+        change.events = Object.fromEntries(
+            NOTIFICATION_EVENT_KINDS.filter((kind) => typeof events[kind] === 'boolean').map(
+                (kind) => [kind, events[kind] as boolean]
+            )
+        );
+    }
+
+    return change;
+}
+
 function registerIpcHandlers({
     onRecentsChanged,
     onRepoOpened,
@@ -219,6 +249,9 @@ function registerIpcHandlers({
         requireDashboard().setHiddenCards(
             Array.isArray(keys) ? keys.filter((key) => typeof key === 'string') : []
         )
+    );
+    handle('dashboard:set-notification-settings', (change: unknown) =>
+        requireDashboard().setNotificationSettings(notificationSettingsChange(change))
     );
     handle('dashboard:mark-read', (id: string) => requireDashboard().markRead(id));
     handle('dashboard:mark-all-read', () => requireDashboard().markAllRead());

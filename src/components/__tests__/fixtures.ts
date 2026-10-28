@@ -11,6 +11,7 @@ import type {
     DashboardPr,
     DashboardSnapshot,
     DashboardState,
+    NotificationSettings,
 } from '@/shared/types';
 
 // Tooltip primitives that render their trigger and drop the content. Components
@@ -115,6 +116,27 @@ export function dashboardSnapshot(overrides: Partial<DashboardSnapshot> = {}): D
     };
 }
 
+// The notification settings at their defaults, with optional changes.
+export function notificationSettings(
+    overrides: Partial<NotificationSettings> = {}
+): NotificationSettings {
+    return {
+        enabled: true,
+        notifyDrafts: true,
+        events: {
+            'review-requested': true,
+            'changes-requested': true,
+            'closed-unmerged': true,
+            'checks-failed': true,
+            approved: true,
+            'merge-conflict': true,
+            'ready-to-merge': false,
+            'merged-by-other': false,
+        },
+        ...overrides,
+    };
+}
+
 export function dashboardState(overrides: Partial<DashboardState> = {}): DashboardState {
     return {
         status: 'ok',
@@ -123,6 +145,7 @@ export function dashboardState(overrides: Partial<DashboardState> = {}): Dashboa
         showDrafts: true,
         authors: 'me',
         hiddenCards: [],
+        notifications: notificationSettings(),
         ...overrides,
     };
 }
