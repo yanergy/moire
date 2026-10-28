@@ -30,15 +30,19 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
             :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
             :class="
                 cn(
-                    'bg-moire-pop text-moire-fg animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit rounded-md px-3 py-1.5 text-xs text-balance',
+                    'bg-moire-pop text-moire-fg border border-moire-border animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit rounded-md px-3 py-1.5 text-xs text-balance',
                     props.class
                 )
             "
         >
             <slot />
 
+            <!-- Bordered on its two outer edges, deviating from stock shadcn, so the
+                 tooltip's border runs around the point instead of being cut by it.
+                 Reka draws the arrow pointing down and rotates it for the other
+                 sides, so the right and bottom edges are always the outer ones. -->
             <TooltipArrow
-                class="bg-moire-pop fill-moire-pop z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-xs"
+                class="bg-moire-pop fill-moire-pop z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-xs border-r border-b border-moire-border"
             />
         </TooltipContent>
     </TooltipPortal>
