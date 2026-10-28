@@ -58,7 +58,15 @@ describe('NotificationsMenu', () => {
         const wrapper = mountMenu(ACTIVITY);
         const bell = wrapper.get('[aria-label="Notifications"]');
         expect(bell.text()).toBe('1');
-        expect(bell.attributes('title')).toBe('1 unread notification');
+        expect(bell.attributes('title')).toBeUndefined();
+
+        // Hovered, as the menu's tooltips ignore focus that is not from the keyboard.
+        await bell.trigger('pointermove', { pointerType: 'mouse' });
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        await flushPromises();
+        expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+            '1 unread notification'
+        );
         wrapper.unmount();
     });
 
@@ -109,6 +117,21 @@ describe('NotificationsMenu', () => {
         expect(rows).toHaveLength(1);
         expect(rows[0]!.element.contains(document.activeElement)).toBe(false);
         expect(document.activeElement?.getAttribute('data-slot')).toBe('popover-content');
+        wrapper.unmount();
+    });
+
+    // Popover and Tooltip both build on Reka's Popper. Nested in the tooltip, the
+    // popover trigger anchored the tooltip instead, and the menu stayed parked at
+    // its unpositioned placeholder offscreen.
+    it('positions the menu against the bell', async () => {
+        const wrapper = mountMenu(ACTIVITY);
+        await openMenu(wrapper);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        await flushPromises();
+
+        const content = document.querySelector('[data-slot="popover-content"]');
+        expect(content).not.toBeNull();
+        expect((content!.parentElement as HTMLElement).style.transform).not.toContain('-200%');
         wrapper.unmount();
     });
 

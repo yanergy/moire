@@ -5,6 +5,7 @@ import type { ChangedFile, FilePair, FileStatus } from '@/shared/types';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import BinaryFileNotice from '@/components/diff/BinaryFileNotice.vue';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
 import ImagePreview from '@/components/diff/ImagePreview.vue';
@@ -109,14 +110,19 @@ function openInEditor() {
             class="sticky top-0 z-10 flex h-9 items-center gap-2 border-b border-moire-border px-3 font-mono text-xs"
             :class="viewed ? 'bg-moire-viewed' : 'bg-moire-chrome'"
         >
-            <button
-                type="button"
-                :aria-label="collapsed ? 'Expand file' : 'Collapse file'"
-                class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                @click="toggleCollapsed"
-            >
-                <component :is="collapsed ? ChevronRight : ChevronDown" :size="14" />
-            </button>
+            <Tooltip>
+                <TooltipTrigger as-child>
+                    <button
+                        type="button"
+                        :aria-label="collapsed ? 'Expand file' : 'Collapse file'"
+                        class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                        @click="toggleCollapsed"
+                    >
+                        <component :is="collapsed ? ChevronRight : ChevronDown" :size="14" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent>{{ collapsed ? 'Expand file' : 'Collapse file' }}</TooltipContent>
+            </Tooltip>
             <Badge
                 variant="outline"
                 :class="['px-[7px] font-mono text-[10px] font-bold', STATUS_BADGE[file.status]]"

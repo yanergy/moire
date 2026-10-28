@@ -9,6 +9,7 @@ import DiffPane from '@/components/diff/DiffPane.vue';
 import StackedDiffPane from '@/components/diff/StackedDiffPane.vue';
 import PrView from '@/components/pr/PrView.vue';
 import DashboardView from '@/components/dashboard/DashboardView.vue';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
 const ui = useUiStore();
@@ -36,18 +37,23 @@ watch(
     <div
         class="flex h-screen min-h-[640px] flex-col overflow-hidden bg-moire-app text-[13px] text-moire-fg"
     >
-        <toolbar-header />
-        <missing-branch-notice />
-        <!-- The dashboard is a repository-wide overview, so it takes the full
-             width; the file tree only belongs to the diff and PR views. -->
-        <dashboard-view v-if="showDashboard" />
-        <div v-else class="flex min-h-0 flex-1">
-            <file-tree-sidebar />
-            <pr-view v-if="showPrView" />
-            <!-- The diff area follows the View → Diff Layout setting: the single-file
-                 pane, or the GitHub-style stacked all-files list. -->
-            <diff-pane v-else-if="ui.diffLayout === 'single'" />
-            <stacked-diff-pane v-else />
-        </div>
+        <!-- One provider for the views' icon button tooltips. Keyboard focus only:
+             a menu that closes hands focus back to its trigger, which would
+             otherwise pop that trigger's tooltip open. -->
+        <TooltipProvider :delay-duration="300" ignore-non-keyboard-focus>
+            <toolbar-header />
+            <missing-branch-notice />
+            <!-- The dashboard is a repository-wide overview, so it takes the full
+                 width; the file tree only belongs to the diff and PR views. -->
+            <dashboard-view v-if="showDashboard" />
+            <div v-else class="flex min-h-0 flex-1">
+                <file-tree-sidebar />
+                <pr-view v-if="showPrView" />
+                <!-- The diff area follows the View → Diff Layout setting: the single-file
+                     pane, or the GitHub-style stacked all-files list. -->
+                <diff-pane v-else-if="ui.diffLayout === 'single'" />
+                <stacked-diff-pane v-else />
+            </div>
+        </TooltipProvider>
     </div>
 </template>

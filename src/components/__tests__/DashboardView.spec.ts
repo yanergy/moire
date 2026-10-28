@@ -8,7 +8,9 @@ import DashboardCard from '@/components/dashboard/DashboardCard.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useDashboardStore } from '@/stores/dashboard';
 import type { DashboardState } from '@/shared/types';
-import { dashboardPr, dashboardSnapshot, dashboardState } from './fixtures';
+import { dashboardPr, dashboardSnapshot, dashboardState, stubTooltips } from './fixtures';
+
+stubTooltips();
 
 function stubApi(state: DashboardState) {
     const api = {

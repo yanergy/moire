@@ -125,6 +125,20 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
   (`:size="16"`) for every icon button. An icon that sits inside a small fixed container
   (for example the 15px viewed checkbox) sizes down only as far as needed to fit. Keep
   new icon buttons at 16px.
+- Every icon only button (an icon with no visible text) gets a shadcn-vue `Tooltip` that names
+  what the button does, in addition to its `aria-label`. A native `title` attribute is not a
+  substitute, so do not add one alongside the tooltip. Buttons that show text, alone or next to
+  an icon, need no tooltip. `MoirePage` wraps the app in a `TooltipProvider`, so a new tooltip
+  needs no provider of its own. In a spec that mounts a component on its own, call
+  `stubTooltips()` from the test fixtures.
+- A tooltip on a popover's trigger needs a `PopoverAnchor` outside the `Tooltip`
+  (`Popover` > `PopoverAnchor as-child` > wrapper element > `Tooltip` > `TooltipTrigger as-child` >
+  `PopoverTrigger as-child` > `Button`). Both build on Reka's Popper, so a `PopoverTrigger` nested
+  in a `Tooltip` anchors the tooltip instead, and the popover opens unpositioned and invisible.
+  The same trap applies to every other Popper based trigger (`DropdownMenu`, `Combobox`, `Select`,
+  `HoverCard`). `Combobox` has a `ComboboxAnchor` for the same fix; `DropdownMenu` has no anchor
+  component, so give its trigger a tooltip only after checking that the menu still opens in the
+  real app. jsdom does no layout, so a unit test will not catch it.
 
 ## Testing
 

@@ -4,6 +4,7 @@
 // viewed state seed them from here instead. Not a *.spec file, so vitest does
 // not run it as a suite.
 
+import { config } from '@vue/test-utils';
 import type {
     BranchInfo,
     ChangedFile,
@@ -11,6 +12,20 @@ import type {
     DashboardSnapshot,
     DashboardState,
 } from '@/shared/types';
+
+// Tooltip primitives that render their trigger and drop the content. Components
+// that rely on a parent's TooltipProvider (the page's, the toolbar's) are mounted
+// alone in tests, where the real Tooltip would find no provider. Call at the top
+// of a spec file; vitest isolates each file, so it does not leak into others.
+export function stubTooltips() {
+    config.global.stubs = {
+        ...config.global.stubs,
+        TooltipProvider: { template: '<slot />' },
+        Tooltip: { template: '<slot />' },
+        TooltipTrigger: { template: '<slot />' },
+        TooltipContent: { render: () => null },
+    };
+}
 
 export const BRANCHES: BranchInfo[] = [
     { name: 'main', kind: 'local', isCurrent: true },

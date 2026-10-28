@@ -5,6 +5,7 @@ import { useComparisonStore } from '@/stores/comparison';
 import { repoLabel } from '@/lib/repo-path';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     Command,
     CommandGroup,
@@ -73,15 +74,20 @@ async function openRecent(path: string) {
                         >
                             <FolderGit2 :size="14" class="shrink-0 text-moire-faint" />
                             <span class="flex-1 truncate">{{ repoLabel(path) }}</span>
-                            <button
-                                type="button"
-                                aria-label="Remove from recents"
-                                class="shrink-0 rounded-sm p-0.5 text-moire-faint opacity-0 group-hover:opacity-100 group-data-[highlighted]:opacity-100 hover:bg-moire-border hover:text-moire-fg"
-                                @click.stop="comparison.removeRecent(path)"
-                                @pointerdown.stop
-                            >
-                                <X :size="13" />
-                            </button>
+                            <Tooltip>
+                                <TooltipTrigger as-child>
+                                    <button
+                                        type="button"
+                                        aria-label="Remove from recents"
+                                        class="shrink-0 rounded-sm p-0.5 text-moire-faint opacity-0 group-hover:opacity-100 group-data-[highlighted]:opacity-100 hover:bg-moire-border hover:text-moire-fg"
+                                        @click.stop="comparison.removeRecent(path)"
+                                        @pointerdown.stop
+                                    >
+                                        <X :size="13" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Remove from recents</TooltipContent>
+                            </Tooltip>
                         </CommandItem>
                     </CommandGroup>
 

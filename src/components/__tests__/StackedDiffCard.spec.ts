@@ -8,6 +8,9 @@ import BinaryFileNotice from '@/components/diff/BinaryFileNotice.vue';
 import ImagePreview from '@/components/diff/ImagePreview.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import type { ChangedFile, FilePair } from '@/shared/types';
+import { stubTooltips } from './fixtures';
+
+stubTooltips();
 
 const textFile: ChangedFile = {
     path: 'src/app.ts',

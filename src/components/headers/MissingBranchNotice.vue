@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { TriangleAlert, X } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
 
@@ -33,14 +34,19 @@ const message = computed(() => {
     >
         <TriangleAlert :size="14" class="shrink-0 text-moire-status-d" />
         <span class="flex-1 truncate">{{ message }}</span>
-        <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Dismiss"
-            class="text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
-            @click="comparison.dismissMissingBranches()"
-        >
-            <X :size="14" />
-        </Button>
+        <Tooltip>
+            <TooltipTrigger as-child>
+                <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Dismiss"
+                    class="text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
+                    @click="comparison.dismissMissingBranches()"
+                >
+                    <X :size="14" />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent>Dismiss</TooltipContent>
+        </Tooltip>
     </div>
 </template>
