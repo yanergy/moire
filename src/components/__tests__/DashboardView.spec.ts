@@ -6,6 +6,7 @@ import DashboardView from '@/components/dashboard/DashboardView.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
 import DashboardCard from '@/components/dashboard/DashboardCard.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
 import type { DashboardState } from '@/shared/types';
 import { dashboardPr, dashboardSnapshot, dashboardState, stubTooltips } from './fixtures';
@@ -197,14 +198,23 @@ describe('DashboardView', () => {
         expect(api.openExternal).toHaveBeenCalledWith(pr.url);
     });
 
-    it('reloads, back on the overview, when another repository opens', async () => {
-        const { api, wrapper } = await mountView(dashboardState());
-        await wrapper.getComponent(DashboardCard).trigger('click');
+    // Back to the overview is the page's job (MoirePage resets the navigation).
+    it('reloads when another repository opens', async () => {
+        const { api } = await mountView(dashboardState());
 
         useComparisonStore().repoPath = '/repos/other';
         await flushPromises();
 
         expect(api.getDashboard).toHaveBeenCalledTimes(2);
+    });
+
+    it('steps back from a card to the overview through the history', async () => {
+        const { wrapper } = await mountView(dashboardState());
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(0);
+
+        useUiStore().goBack();
+        await flushPromises();
         expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
     });
 });

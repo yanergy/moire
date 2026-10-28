@@ -145,4 +145,18 @@ describe('MoirePage', () => {
         expect(wrapper.findComponent(DiffPane).exists()).toBe(true);
         expect(wrapper.findComponent(PrView).exists()).toBe(false);
     });
+
+    it('resets the history and the open dashboard card when another repository opens', async () => {
+        mount(MoirePage, { global: { plugins: [pinia], stubs } });
+        const ui = useUiStore();
+        ui.openDashboard();
+        ui.setDashboardCard('changes');
+
+        useComparisonStore().repoPath = '/repos/other';
+        await nextTick();
+
+        expect(ui.dashboardCard).toBeNull();
+        ui.goBack();
+        expect(ui.mainView).toBe('dashboard');
+    });
 });

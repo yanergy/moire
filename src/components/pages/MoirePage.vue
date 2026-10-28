@@ -21,6 +21,13 @@ const showPrView = computed(() => ui.mainView === 'pr' && comparison.hasPullRequ
 // The dashboard is always about the open repository, so it needs one.
 const showDashboard = computed(() => ui.mainView === 'dashboard' && !!comparison.repoPath);
 
+// Another repository opened: the back/forward history and the open dashboard
+// card belonged to the old one.
+watch(
+    () => comparison.repoPath,
+    () => ui.resetNavigation()
+);
+
 // If the PR disappears while it is being viewed (a range change to a branch with
 // no PR), fall back to the diff so the toggle and the pane stay in step.
 watch(

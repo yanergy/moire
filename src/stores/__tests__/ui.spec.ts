@@ -61,4 +61,67 @@ describe('ui store', () => {
         store.setCodeStyle('vscode');
         expect(store.codeStyle).toBe('vscode');
     });
+
+    describe('back/forward history', () => {
+        it('steps back and forward through view changes, as in a browser', () => {
+            const store = useUiStore();
+            store.openDashboard();
+            store.setDashboardCard('changes');
+            store.setMainView('pr');
+
+            store.goBack();
+            expect([store.mainView, store.dashboardCard]).toEqual(['dashboard', 'changes']);
+            store.goBack();
+            expect([store.mainView, store.dashboardCard]).toEqual(['dashboard', null]);
+            store.goBack();
+            expect(store.mainView).toBe('diff');
+            store.goBack();
+            expect(store.mainView).toBe('diff');
+
+            store.goForward();
+            store.goForward();
+            expect([store.mainView, store.dashboardCard]).toEqual(['dashboard', 'changes']);
+        });
+
+        it('drops the forward pages once a new page is visited', () => {
+            const store = useUiStore();
+            store.setMainView('pr');
+            store.goBack();
+            store.openDashboard();
+
+            store.goForward();
+            expect(store.mainView).toBe('dashboard');
+        });
+
+        it('opens the dashboard on its overview, not the last card left open', () => {
+            const store = useUiStore();
+            store.openDashboard();
+            store.setDashboardCard('changes');
+            store.setMainView('diff');
+
+            store.openDashboard();
+            expect(store.dashboardCard).toBeNull();
+        });
+
+        it('records nothing when the page does not change', () => {
+            const store = useUiStore();
+            store.setMainView('diff');
+
+            store.setMainView('pr');
+            store.goBack();
+            store.goBack();
+            expect(store.mainView).toBe('diff');
+        });
+
+        it('forgets the history and the open card on reset', () => {
+            const store = useUiStore();
+            store.openDashboard();
+            store.setDashboardCard('changes');
+
+            store.resetNavigation();
+            expect(store.dashboardCard).toBeNull();
+            store.goBack();
+            expect(store.mainView).toBe('dashboard');
+        });
+    });
 });
