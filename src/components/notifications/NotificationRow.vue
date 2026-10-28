@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, CircleDot, ExternalLink, Trash2 } from '@lucide/vue';
+import { ExternalLink, Mail, MailOpen, Trash2 } from '@lucide/vue';
 import type { ActivityEntry } from '@/shared/types';
 import {
     activityDotClass,
@@ -53,7 +53,9 @@ defineEmits<{
                 · #{{ entry.number }} {{ entry.title }}
             </span>
         </button>
-        <!-- The age, with Mark as read (or unread) and Delete laid over it on hover. -->
+        <!-- The age, with Mark as read (or unread) and Delete laid over it on hover.
+             The envelope shows the state a click leads to: open for read, closed
+             for unread. -->
         <span class="relative flex shrink-0 items-center self-stretch">
             <span class="text-[12px] text-moire-faint" :class="ROW_MARKER_CLASS">
                 {{ timeSince(Date.parse(entry.at), now) }}
@@ -68,7 +70,7 @@ defineEmits<{
                             aria-label="Mark as read"
                             @click="$emit('markRead', entry)"
                         >
-                            <Check :size="16" />
+                            <MailOpen :size="16" />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent>Mark as read</TooltipContent>
@@ -82,7 +84,7 @@ defineEmits<{
                             aria-label="Mark as unread"
                             @click="$emit('markUnread', entry)"
                         >
-                            <CircleDot :size="16" />
+                            <Mail :size="16" />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent>Mark as unread</TooltipContent>
