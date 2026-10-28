@@ -6,6 +6,7 @@ import { activityId } from '@/lib/dashboard';
 import type { ActivityEntry } from '@/shared/types';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import NotificationRow from '@/components/headers/NotificationRow.vue';
 
 // The bell at the right of the toolbar: its count is the number of unread
@@ -31,6 +32,16 @@ watch(open, (isOpen) => {
 });
 
 onBeforeUnmount(() => clearInterval(clock));
+
+// Focus the menu itself on open rather than its first focusable element: that
+// is in the first row, which would then show its actions as if it were selected.
+// Focus stays inside the menu, so Tab moves into the list and Escape closes it.
+function focusMenu(event: Event) {
+    event.preventDefault();
+    (event.target as HTMLElement)
+        .querySelector<HTMLElement>('[data-slot="popover-content"]')
+        ?.focus();
+}
 
 // Opening a notification leaves the menu, for the PR view or the browser.
 function openEntry(entry: ActivityEntry) {
@@ -68,6 +79,7 @@ function openEntry(entry: ActivityEntry) {
             :side-offset="6"
             class="w-[560px] overflow-hidden border-moire-border bg-moire-pop p-0"
             :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
+            @open-auto-focus="focusMenu"
         >
             <div class="flex items-center gap-2 border-b border-moire-border py-2 pr-2 pl-3">
                 <h2 class="text-[13px] font-semibold text-moire-fg">Notifications</h2>
@@ -83,21 +95,20 @@ function openEntry(entry: ActivityEntry) {
                     Mark all as read
                 </Button>
             </div>
-            <div
-                v-if="dashboard.activity.length"
-                class="max-h-[560px] divide-y divide-moire-border overflow-y-auto"
-            >
-                <notification-row
-                    v-for="entry in dashboard.activity"
-                    :key="activityId(entry)"
-                    :entry="entry"
-                    :now="now"
-                    @open="openEntry"
-                    @open-in-browser="dashboard.openActivityInBrowser"
-                    @mark-read="dashboard.markRead"
-                    @delete="dashboard.deleteNotification"
-                />
-            </div>
+            <TooltipProvider v-if="dashboard.activity.length" :delay-duration="300">
+                <div class="max-h-[560px] divide-y divide-moire-border overflow-y-auto">
+                    <notification-row
+                        v-for="entry in dashboard.activity"
+                        :key="activityId(entry)"
+                        :entry="entry"
+                        :now="now"
+                        @open="openEntry"
+                        @open-in-browser="dashboard.openActivityInBrowser"
+                        @mark-read="dashboard.markRead"
+                        @delete="dashboard.deleteNotification"
+                    />
+                </div>
+            </TooltipProvider>
             <p v-else class="px-3 py-4 text-[13px] text-moire-muted">
                 No notifications for this repository yet.
             </p>
