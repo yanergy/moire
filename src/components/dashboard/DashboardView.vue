@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowLeft, LoaderCircle, RefreshCw, SlidersHorizontal, TriangleAlert } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
-import { useDashboardStore, type DashboardCategoryKey } from '@/stores/dashboard';
+import { useUiStore } from '@/stores/ui';
+import { useDashboardStore } from '@/stores/dashboard';
 import { dashboardNotice } from '@/lib/dashboard';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
@@ -31,11 +32,12 @@ import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
 // the main process (see stores/dashboard.ts).
 const comparison = useComparisonStore();
 const dashboard = useDashboardStore();
+const ui = useUiStore();
 
-// The card whose PR list is showing, or null for the overview grid.
-const selectedKey = ref<DashboardCategoryKey | null>(null);
+// The card whose PR list is showing (null for the overview grid). Kept in the ui
+// store, so the back/forward history can step between the overview and a card.
 const selected = computed(
-    () => dashboard.categories.find((category) => category.key === selectedKey.value) ?? null
+    () => dashboard.categories.find((category) => category.key === ui.dashboardCard) ?? null
 );
 
 // One clock for every "3h ago", ticking so the ages stay current while open.
@@ -51,11 +53,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearInterval(clock));
 
-// Another repository opened while the dashboard is showing: back to its overview.
+// Another repository opened while the dashboard is showing: reload it (the page
+// resets to the overview with the history, see MoirePage).
 watch(
     () => comparison.repoPath,
     () => {
-        selectedKey.value = null;
         void dashboard.load();
     }
 );
@@ -127,7 +129,7 @@ const updated = computed(() =>
                             variant="ghost"
                             size="sm"
                             class="h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                            @click="selectedKey = null"
+                            @click="ui.setDashboardCard(null)"
                         >
                             <ArrowLeft :size="16" />
                             Overview
@@ -344,7 +346,7 @@ const updated = computed(() =>
                             v-for="category in dashboard.categories"
                             :key="category.key"
                             :category="category"
-                            @open="selectedKey = category.key"
+                            @open="ui.setDashboardCard(category.key)"
                         />
                     </div>
                 </template>

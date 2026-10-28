@@ -189,6 +189,28 @@ describe('App', () => {
         expect(useUiStore().mainView).toBe('dashboard');
     });
 
+    it('steps back and forward with the mouse back and forward buttons', async () => {
+        stubApi();
+        vi.spyOn(useComparisonStore(), 'restoreLastRepo').mockResolvedValue(undefined);
+        const wrapper = mountApp();
+        await flushPromises();
+        const ui = useUiStore();
+        ui.setMainView('pr');
+
+        window.dispatchEvent(new MouseEvent('mouseup', { button: 3 }));
+        expect(ui.mainView).toBe('diff');
+        window.dispatchEvent(new MouseEvent('mouseup', { button: 4 }));
+        expect(ui.mainView).toBe('pr');
+
+        // A plain click is not a navigation.
+        window.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
+        expect(ui.mainView).toBe('pr');
+
+        wrapper.unmount();
+        window.dispatchEvent(new MouseEvent('mouseup', { button: 3 }));
+        expect(ui.mainView).toBe('pr');
+    });
+
     it('applies dashboard updates pushed by the main process', async () => {
         const { api } = stubApi();
         const comparison = useComparisonStore();

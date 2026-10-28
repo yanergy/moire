@@ -35,7 +35,23 @@ watchEffect(() => {
     document.title = windowTitle(comparison.repoName);
 });
 
+// The mouse back and forward buttons (buttons 4 and 5, reported as 3 and 4) step
+// through the page history, as in a browser. Captured on the window, so a pane
+// that stops the event (the Monaco editor) cannot swallow it.
+function onMouseUp(event: MouseEvent) {
+    if (event.button === 3) {
+        event.preventDefault();
+        ui.goBack();
+        return;
+    }
+    if (event.button === 4) {
+        event.preventDefault();
+        ui.goForward();
+    }
+}
+
 onMounted(async () => {
+    window.addEventListener('mouseup', onMouseUp, true);
     // Reopen the most recently opened repo on launch.
     comparison.restoreLastRepo();
     // Theme is owned by the main process (nativeTheme). Pull the current resolved
@@ -78,11 +94,12 @@ onMounted(async () => {
 
     // The GitHub notifier in main pushes the dashboard state after every poll.
     stopDashboard = api.onDashboardChanged((state) => dashboard.applyState(state));
-    stopShowDashboard = api.onShowDashboard(() => ui.setMainView('dashboard'));
+    stopShowDashboard = api.onShowDashboard(() => ui.openDashboard());
     stopOpenPr = api.onOpenPr((pr) => dashboard.openPr(pr));
 });
 
 onUnmounted(() => {
+    window.removeEventListener('mouseup', onMouseUp, true);
     stopThemeSync?.();
     stopMenuRefresh?.();
     stopMenuOpenRepo?.();

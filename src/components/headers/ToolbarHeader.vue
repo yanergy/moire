@@ -50,7 +50,12 @@ function setPrView(on: boolean) {
 
 // The dashboard toggle and the notifications menu show while a repository is open.
 function setDashboardView(on: boolean) {
-    ui.setMainView(on ? 'dashboard' : 'diff');
+    if (on) {
+        ui.openDashboard();
+        return;
+    }
+
+    ui.setMainView('diff');
 }
 
 // A status dot before the PR button label: vibrant green open, red closed,
