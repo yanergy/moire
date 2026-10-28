@@ -287,6 +287,11 @@ describe('getPullRequest checks', () => {
     });
 });
 
+// One submitted review by `login` in the given state.
+function review(login: string, state: string, at: string) {
+    return { author: { login }, body: '', state, submittedAt: at };
+}
+
 describe('getPullRequest review decision', () => {
     // Resolve the mapped reviewDecision for a PR carrying the given fields.
     async function decisionFor(overrides: Record<string, unknown>) {
@@ -364,13 +369,6 @@ describe('getPullRequest review decision', () => {
     });
 
     describe('after the review is re-requested', () => {
-        const review = (login: string, state: string, at: string) => ({
-            author: { login },
-            body: '',
-            state,
-            submittedAt: at,
-        });
-
         it("settles GitHub's CHANGES_REQUESTED to REVIEW_REQUIRED", async () => {
             expect(
                 await decisionFor({

@@ -76,6 +76,11 @@ function reviews(states: string[]) {
     };
 }
 
+// The reviewRequests connection for the given requested logins.
+function requests(logins: string[]) {
+    return { nodes: logins.map((login) => ({ requestedReviewer: { login } })) };
+}
+
 // The head commit connection with a check rollup.
 function rollup(state: string, contexts: object[] = []) {
     return {
@@ -280,9 +285,6 @@ describe('fetchSnapshot', () => {
     // GitHub keeps the changes-requested review until the reviewer reviews again;
     // a pending re-request from each of them moves the PR off Changes requested.
     it('settles changes requested once the review is re-requested from those reviewers', async () => {
-        const requests = (logins: string[]) => ({
-            nodes: logins.map((login) => ({ requestedReviewer: { login } })),
-        });
         const run = searchRunner({
             mineOpen: {
                 nodes: [
