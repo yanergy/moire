@@ -5,7 +5,7 @@ import { useDashboardStore } from '@/stores/dashboard';
 import { activityId } from '@/lib/dashboard';
 import type { ActivityEntry } from '@/shared/types';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationRow from '@/components/headers/NotificationRow.vue';
 
@@ -59,27 +59,34 @@ function openEntry(entry: ActivityEntry) {
 <template>
     <TooltipProvider :delay-duration="300" ignore-non-keyboard-focus>
         <Popover v-model:open="open">
-            <Tooltip>
-                <TooltipTrigger as-child>
-                    <PopoverTrigger as-child>
-                        <Button
-                            variant="outline"
-                            size="icon-sm"
-                            class="relative size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                            aria-label="Notifications"
-                        >
-                            <Bell :size="16" />
-                            <span
-                                v-if="dashboard.unreadCount"
-                                class="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-moire-pr-open px-1 text-center text-[10px] leading-4 font-semibold text-moire-check-fg"
-                            >
-                                {{ dashboard.unreadCount }}
-                            </span>
-                        </Button>
-                    </PopoverTrigger>
-                </TooltipTrigger>
-                <TooltipContent>{{ bellLabel }}</TooltipContent>
-            </Tooltip>
+            <!-- The popover's own anchor, outside the tooltip: nested in the tooltip,
+                 PopoverTrigger would register the button as the tooltip's anchor and
+                 leave the popover unpositioned (both build on Reka's Popper). -->
+            <PopoverAnchor as-child>
+                <span class="inline-flex">
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <PopoverTrigger as-child>
+                                <Button
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="relative size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                    aria-label="Notifications"
+                                >
+                                    <Bell :size="16" />
+                                    <span
+                                        v-if="dashboard.unreadCount"
+                                        class="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-moire-pr-open px-1 text-center text-[10px] leading-4 font-semibold text-moire-check-fg"
+                                    >
+                                        {{ dashboard.unreadCount }}
+                                    </span>
+                                </Button>
+                            </PopoverTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>{{ bellLabel }}</TooltipContent>
+                    </Tooltip>
+                </span>
+            </PopoverAnchor>
 
             <PopoverContent
                 align="end"

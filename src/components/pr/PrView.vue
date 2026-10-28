@@ -27,7 +27,7 @@ import { useComparisonStore } from '@/stores/comparison';
 import { renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import {
     Dialog,
@@ -998,26 +998,33 @@ function renderComment(comment: PrComment): string {
                                  refresh runs, the trigger shows the spinner in place of
                                  the "..." glyph. -->
                             <Popover :open="topMenuOpen" @update:open="topMenuOpen = $event">
-                                <Tooltip>
-                                    <TooltipTrigger as-child>
-                                        <PopoverTrigger as-child>
-                                            <Button
-                                                variant="outline"
-                                                size="icon-sm"
-                                                class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                                aria-label="More actions"
-                                            >
-                                                <RefreshCw
-                                                    v-if="refreshing"
-                                                    :size="16"
-                                                    class="animate-spin"
-                                                />
-                                                <MoreHorizontal v-else :size="16" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                    </TooltipTrigger>
-                                    <TooltipContent>More actions</TooltipContent>
-                                </Tooltip>
+                                <!-- The popover's own anchor, outside the tooltip: nested in the tooltip,
+                                     PopoverTrigger would register the button as the tooltip's anchor and
+                                     leave the popover unpositioned (both build on Reka's Popper). -->
+                                <PopoverAnchor as-child>
+                                    <span class="inline-flex">
+                                        <Tooltip>
+                                            <TooltipTrigger as-child>
+                                                <PopoverTrigger as-child>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="icon-sm"
+                                                        class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                        aria-label="More actions"
+                                                    >
+                                                        <RefreshCw
+                                                            v-if="refreshing"
+                                                            :size="16"
+                                                            class="animate-spin"
+                                                        />
+                                                        <MoreHorizontal v-else :size="16" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                            </TooltipTrigger>
+                                            <TooltipContent>More actions</TooltipContent>
+                                        </Tooltip>
+                                    </span>
+                                </PopoverAnchor>
                                 <PopoverContent
                                     align="end"
                                     :side-offset="6"
@@ -1470,20 +1477,31 @@ function renderComment(comment: PrComment): string {
                                                     openMenuId = $event ? comment.id : null
                                                 "
                                             >
-                                                <Tooltip>
-                                                    <TooltipTrigger as-child>
-                                                        <PopoverTrigger as-child>
-                                                            <button
-                                                                type="button"
-                                                                class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                                                aria-label="Comment actions"
+                                                <!-- The popover's own anchor, outside the tooltip: nested in the tooltip,
+                                                     PopoverTrigger would register the button as the tooltip's anchor and
+                                                     leave the popover unpositioned (both build on Reka's Popper). -->
+                                                <PopoverAnchor as-child>
+                                                    <span class="inline-flex">
+                                                        <Tooltip>
+                                                            <TooltipTrigger as-child>
+                                                                <PopoverTrigger as-child>
+                                                                    <button
+                                                                        type="button"
+                                                                        class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                                        aria-label="Comment actions"
+                                                                    >
+                                                                        <MoreHorizontal
+                                                                            :size="14"
+                                                                        />
+                                                                    </button>
+                                                                </PopoverTrigger>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent
+                                                                >Comment actions</TooltipContent
                                                             >
-                                                                <MoreHorizontal :size="14" />
-                                                            </button>
-                                                        </PopoverTrigger>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>Comment actions</TooltipContent>
-                                                </Tooltip>
+                                                        </Tooltip>
+                                                    </span>
+                                                </PopoverAnchor>
                                                 <PopoverContent
                                                     align="end"
                                                     :side-offset="6"

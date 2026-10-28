@@ -120,6 +120,21 @@ describe('NotificationsMenu', () => {
         wrapper.unmount();
     });
 
+    // Popover and Tooltip both build on Reka's Popper. Nested in the tooltip, the
+    // popover trigger anchored the tooltip instead, and the menu stayed parked at
+    // its unpositioned placeholder offscreen.
+    it('positions the menu against the bell', async () => {
+        const wrapper = mountMenu(ACTIVITY);
+        await openMenu(wrapper);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        await flushPromises();
+
+        const content = document.querySelector('[data-slot="popover-content"]');
+        expect(content).not.toBeNull();
+        expect((content!.parentElement as HTMLElement).style.transform).not.toContain('-200%');
+        wrapper.unmount();
+    });
+
     it('says when no notifications were sent yet', async () => {
         const wrapper = mountMenu([]);
         await openMenu(wrapper);

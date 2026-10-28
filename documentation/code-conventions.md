@@ -131,6 +131,10 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
   an icon, need no tooltip. `MoirePage` wraps the app in a `TooltipProvider`, so a new tooltip
   needs no provider of its own. In a spec that mounts a component on its own, call
   `stubTooltips()` from the test fixtures.
+- A tooltip on a popover's trigger needs a `PopoverAnchor` outside the `Tooltip`
+  (`Popover` > `PopoverAnchor as-child` > wrapper element > `Tooltip` > `TooltipTrigger as-child` >
+  `PopoverTrigger as-child` > `Button`). Both build on Reka's Popper, so a `PopoverTrigger` nested
+  in a `Tooltip` anchors the tooltip instead, and the popover opens unpositioned and invisible.
 
 ## Testing
 
