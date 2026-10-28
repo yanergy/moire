@@ -115,6 +115,70 @@ export function activityDotClass(entry: ActivityEntry): string {
     return ACTIVITY_DOTS[entry.kind];
 }
 
+// The notifications (newest first) grouped by the local day they were sent:
+// Today, Yesterday, the weekday within the last week, then the date (with the
+// year once it is not this year's). `now` is epoch ms.
+export function groupActivityByDay(
+    activity: ActivityEntry[],
+    now: number
+): { label: string; entries: ActivityEntry[] }[] {
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+
+    const groups: { label: string; entries: ActivityEntry[] }[] = [];
+    let lastDay: number | null = null;
+    for (const entry of activity) {
+        const day = new Date(entry.at);
+        day.setHours(0, 0, 0, 0);
+        if (day.getTime() !== lastDay) {
+            lastDay = day.getTime();
+            groups.push({ label: dayLabel(day, today), entries: [] });
+        }
+        groups[groups.length - 1]!.entries.push(entry);
+    }
+    return groups;
+}
+
+function dayLabel(day: Date, today: Date): string {
+    // Rounded, as a day across a daylight saving change is 23 or 25 hours.
+    const daysAgo = Math.round((today.getTime() - day.getTime()) / 86_400_000);
+    if (daysAgo <= 0) {
+        return 'Today';
+    }
+    if (daysAgo === 1) {
+        return 'Yesterday';
+    }
+    if (daysAgo < 7) {
+        return day.toLocaleDateString(undefined, { weekday: 'long' });
+    }
+    return day.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        ...(day.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+    });
+}
+
+// The notification types, in the order the notification settings list them, with
+// the dot of their notification rows. Restates NOTIFICATION_EVENT_OPTIONS in
+// electron/menu.ts (the Git > Notifications menu); keep the two in step.
+const NOTIFICATION_TYPE_LABELS: [DashboardEventKind, string][] = [
+    ['review-requested', 'Review requested'],
+    ['changes-requested', 'Changes requested'],
+    ['closed-unmerged', 'Closed without merge'],
+    ['checks-failed', 'Checks failed'],
+    ['approved', 'Approved'],
+    ['merge-conflict', 'Merge conflict'],
+    ['ready-to-merge', 'Ready to merge'],
+    ['merged-by-other', 'Merged by someone else'],
+];
+
+export const NOTIFICATION_TYPES = NOTIFICATION_TYPE_LABELS.map(([kind, label]) => ({
+    kind,
+    label,
+    dotClass: ACTIVITY_DOTS[kind],
+}));
+
 // Why the dashboard has no (fresh) data, as a title and a hint. Null when the
 // last load succeeded.
 export function dashboardNotice(

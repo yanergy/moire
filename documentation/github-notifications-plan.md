@@ -14,7 +14,7 @@ Branch: `feat/github-notifications`.
 
 ### Master switch
 
-A "GitHub Notifications" toggle in the Git → Notifications menu, **on by default**. Turning it off
+An "Enable Notifications" toggle in the Git → Notifications menu, **on by default**. Turning it off
 stops polling, notifications and the dock badge. The dashboard keeps working when it is off
 (it fetches on open and on refresh instead of in the background).
 
@@ -52,8 +52,10 @@ single notification that lists their names.
 
 #### Drafts
 
-Draft PRs are included by default, in the dashboard and in notifications. A "Show drafts" toggle
-in the dashboard header turns them off in both places. The toggle is persisted.
+Draft PRs are included by default, in the dashboard and in notifications. Each has its own
+toggle, both persisted: "Show drafts" in the dashboard's **Dashboard settings** menu, and "Notify
+about draft PRs" in the **Notification settings** menu on the notifications page. Settings saved before
+the split carry the old shared value over to both.
 
 #### Later
 
@@ -84,19 +86,19 @@ dot, a label, the PR count and a caption saying what is counted:
 | Drafts (gray) | Open draft PRs | Not ready for review |
 
 Every card but the first counts the open PRs of the authors picked in the **Users** submenu of
-the header's **Display** menu. It defaults to the signed in account (stored as "me", so it
+the header's **Dashboard settings** menu. It defaults to the signed in account (stored as "me", so it
 follows an account switch), and can pick any mix of the authors with an open PR in the
 repository, or **All**. The captions follow the pick ("Any author", "By ann", "3 authors"), and
 "Your open PRs" reads "Open PRs" for anyone but yourself.
 
 A card with unread notifications about its PRs shows a green "N new" pill in its top right
-corner, the bell's unread tone (a pill, not a dot, so it does not read as a second status dot): a review request on Needs your review, changes requested on Changes
+corner, the Notifications toggle's unread tone (a pill, not a dot, so it does not read as a second status dot): a review request on Needs your review, changes requested on Changes
 requested, an approval or ready to merge on Ready to merge, failed checks on Failing checks, and
 merged by someone else on Merged. A notification only counts while its PR is still in the card,
 and the pill goes away once the notifications are read or deleted.
 
 The Merged card counts merged rather than open PRs, by the same Users pick. Its period is set in
-the **Merged** submenu of the Display menu: **This week** (since Monday, the default) or **This
+the **Merged** submenu of the Dashboard settings menu: **This week** (since Monday, the default) or **This
 month** (since the 1st), both in local time and measured against the last refresh. The choice is
 not saved, so it is back to this week after a restart. The data comes from its own search in each
 poll: every PR in the repository merged in the last 31 days (capped at 100).
@@ -104,7 +106,7 @@ poll: every PR in the repository merged in the last 31 days (capped at 100).
 Clicking a card lists its PRs (title, author, branches, age, size and CI state), with a way back
 to the overview. Clicking a PR opens it in the PR view; an "Open in browser" button at the end of each row
 opens it on GitHub instead. The header shows how many PRs the cards cover, when the data was last refreshed,
-the **Display** menu (with "Show drafts", **Users**, **Cards** and **Merged**; **Cards** turns
+the **Dashboard settings** menu (with "Show drafts", **Users**, **Cards** and **Merged**; **Cards** turns
 each overview card on or off, saved with the other preferences) and a refresh button. With drafts hidden,
 the Drafts card goes away and drafts are left out of every other card.
 
@@ -114,21 +116,24 @@ button and the menu item are not available. When the repository has no GitHub re
 missing or not signed in, the dashboard shows the reason using the existing `PrStatus` style
 messages.
 
-### Notifications menu
+### Notifications page
 
-A bell button at the right end of the toolbar, shown while a repository is open, opens a menu
-listing every notification sent for the repository (the recent activity list, newest first, up
-to 50), each with what happened, the PR, and how long ago.
-Clicking one opens its PR and marks it read. Each row ends in an Open in browser button (which
-also marks it read), and shows Mark as read and Delete buttons over its age on hover, unread notifications stand out and are counted on the bell, and a "Mark all
-as read" button clears them at once. Opening a notification closes the menu. It used to sit below
-the dashboard's cards; it moved to the toolbar so it is reachable from every view. Read state and deletions are saved with the rest of the
-notifier state.
+A **Notifications** toggle beside the toolbar's **Dashboard** toggle, shown while a repository is
+open, opens a full width page listing every notification sent for the repository (the recent
+activity list, newest first, grouped by day, up to 500 and rendered a page at a time as it
+scrolls), each with what happened, the PR, and how long ago. Clicking one opens its PR and marks
+it read. Each row ends in an Open in browser button (which also marks it read), and shows Mark as
+read (Mark as unread once read, to undo an accidental read) and Delete buttons over its age on
+hover. Unread notifications stand out and are counted on
+the toggle, and a "Mark all as read" button clears them at once. The page header also holds the
+**Notification settings** menu. The list first sat below the dashboard's cards, then in a menu
+under a bell at the right end of the toolbar, before it became a page of its own. Read state and
+deletions are saved with the rest of the notifier state.
 
 ### Dock badge
 
 The dock icon shows the number of unread notifications for the open repository, the same count
-as the toolbar's bell. Marking notifications read (or deleting them) lowers it, and it
+as the toolbar's Notifications toggle. Marking notifications read (or deleting them) lowers it, and it
 is cleared when there are none or no repository is open. macOS only (`app.dock.setBadge`). It has its
 own toggle in the Git → Notifications menu and follows the master switch.
 
@@ -194,7 +199,8 @@ A pure function compares the previous snapshot with the new one and returns even
 - A PR of yours that changes to merged, with a merger other than the signed in account, produces
   "Merged by someone else".
 
-Events whose type is toggled off, and events for drafts while "Show drafts" is off, are dropped.
+Events whose type is toggled off, and events for drafts while "Notify about draft PRs" is off,
+are dropped.
 The rest become native notifications and are appended to the recent activity list (capped at 50
 per repository).
 
@@ -248,7 +254,7 @@ Following `documentation/code-conventions.md`:
 |---|---|
 | `electron/github/notifications.ts` (new) | Repository and login lookup, GraphQL query, parsing into a snapshot, the pure diff function |
 | `electron/notifier.ts` (new) | Poll loop tied to the open repository, wake handling, native notifications, summary notification, click handling, dock badge, recent activity |
-| `electron/settings.ts` | Master switch, per event toggles, dock badge toggle, "Show drafts", saved snapshot and recent activity per login and repository |
+| `electron/settings.ts` | Master switch, per event toggles, dock badge toggle, the two drafts toggles (dashboard and notifications), saved snapshot and recent activity per login and repository |
 | `electron/menu.ts` | Git → "Notifications" submenu with the master switch, a checkbox per event type and one for the dock badge; "Dashboard" item under View, enabled only while a repository is open |
 | `electron/main.ts` | Start, restart and stop the notifier as repositories open and close |
 | `electron/ipc/handlers.ts`, `electron/preload.ts`, `src/shared/types.ts` | Dashboard IPC channels and types |
@@ -292,8 +298,7 @@ remote prefix for remote tracking branches.
 - **Master switch**: on by default, users can opt out.
 - **Team review requests** are left out. Only requests addressed to you personally count
   (`user-review-requested:@me`). Team requests are listed as a possible expansion in the README.
-- **Drafts**: shown by default, with a "Show drafts" toggle in the dashboard that also applies to
-  notifications.
+- **Drafts**: shown by default, with separate toggles for the dashboard and for notifications.
 - **Dashboard placement**: a third main view inside the main window, next to the diff and PR
   views. Not a separate window. It is a quick overview, so it stays compact.
 - **Dock badge**: yes, counting the unread notifications for the open repository, with its own toggle.

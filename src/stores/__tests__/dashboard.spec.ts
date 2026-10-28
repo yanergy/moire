@@ -9,12 +9,14 @@ import {
 } from '@/stores/dashboard';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
+import { notificationSettings } from '@/components/__tests__/fixtures';
 import type {
     ActivityEntry,
     AuthorFilter,
     DashboardPr,
     DashboardSnapshot,
     DashboardState,
+    NotificationSettingsChange,
 } from '@/shared/types';
 
 function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
@@ -64,6 +66,7 @@ function state(overrides: Partial<DashboardState> = {}): DashboardState {
         showDrafts: true,
         authors: 'me',
         hiddenCards: [],
+        notifications: notificationSettings(),
         ...overrides,
     };
 }
@@ -126,6 +129,9 @@ function stubApi(result: DashboardState = state()) {
         setDashboardAuthors: vi
             .fn<(authors: AuthorFilter) => Promise<DashboardState>>()
             .mockImplementation(async (authors) => ({ ...result, authors })),
+        setNotificationSettings: vi
+            .fn<(change: NotificationSettingsChange) => Promise<DashboardState>>()
+            .mockResolvedValue(result),
     };
     window.api = api as unknown as Window['api'];
     return api;
@@ -406,6 +412,23 @@ describe('dashboard store', () => {
             expect(api.setDashboardShowDrafts).toHaveBeenCalledWith(false);
         });
 
+        it('applies a notification settings toggle right away and persists it', async () => {
+            const api = stubApi();
+            const store = useDashboardStore();
+            await store.load();
+
+            const pending = store.setNotificationSettings({ events: { approved: false } });
+            expect(store.notificationSettings?.events.approved).toBe(false);
+            expect(store.notificationSettings?.events['review-requested']).toBe(true);
+            // Showing drafts on the dashboard is its own setting.
+            expect(store.showDrafts).toBe(true);
+            await pending;
+
+            expect(api.setNotificationSettings).toHaveBeenCalledWith({
+                events: { approved: false },
+            });
+        });
+
         it('persists author picks, and All toggles back to the viewer', async () => {
             const api = stubApi(state({ snapshot: snapshot({ open: [pr({ author: 'bob' })] }) }));
             const store = useDashboardStore();
@@ -536,6 +559,31 @@ describe('dashboard store', () => {
             expect(openExternal).toHaveBeenCalledWith(entry.url);
             expect(markRead).toHaveBeenCalledWith('T1|approved|5');
             expect(store.unreadCount).toBe(0);
+        });
+
+        it('marks a read notification unread, counting it again', () => {
+            openApi();
+            const markUnread = vi.fn<(id: string) => Promise<DashboardState>>(
+                () => new Promise(() => {})
+            );
+            (window.api as unknown as Record<string, unknown>).markDashboardNotificationUnread =
+                markUnread;
+            const store = useDashboardStore();
+            const entry = {
+                kind: 'approved' as const,
+                at: 'T1',
+                number: 5,
+                title: 'Add notifications',
+                url: 'https://github.com/o/r/pull/5',
+                read: true,
+            };
+            store.applyState(state({ activity: [entry] }));
+            expect(store.unreadCount).toBe(0);
+
+            void store.markUnread(entry);
+
+            expect(markUnread).toHaveBeenCalledWith('T1|approved|5');
+            expect(store.unreadCount).toBe(1);
         });
 
         it('opens a fork PR, or one with unavailable branches, on GitHub', () => {

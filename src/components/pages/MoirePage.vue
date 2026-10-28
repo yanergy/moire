@@ -9,6 +9,7 @@ import DiffPane from '@/components/diff/DiffPane.vue';
 import StackedDiffPane from '@/components/diff/StackedDiffPane.vue';
 import PrView from '@/components/pr/PrView.vue';
 import DashboardView from '@/components/dashboard/DashboardView.vue';
+import NotificationsView from '@/components/notifications/NotificationsView.vue';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
@@ -18,8 +19,10 @@ const ui = useUiStore();
 // time the diff fills the pane.
 const showPrView = computed(() => ui.mainView === 'pr' && comparison.hasPullRequest);
 
-// The dashboard is always about the open repository, so it needs one.
+// The dashboard and the notifications are always about the open repository, so
+// they need one.
 const showDashboard = computed(() => ui.mainView === 'dashboard' && !!comparison.repoPath);
+const showNotifications = computed(() => ui.mainView === 'notifications' && !!comparison.repoPath);
 
 // Another repository opened: the back/forward history and the open dashboard
 // card belonged to the old one.
@@ -50,9 +53,11 @@ watch(
         <TooltipProvider :delay-duration="300" ignore-non-keyboard-focus>
             <toolbar-header />
             <missing-branch-notice />
-            <!-- The dashboard is a repository-wide overview, so it takes the full
-                 width; the file tree only belongs to the diff and PR views. -->
+            <!-- The dashboard and the notifications are repository wide, so they
+                 take the full width; the file tree only belongs to the diff and PR
+                 views. -->
             <dashboard-view v-if="showDashboard" />
+            <notifications-view v-else-if="showNotifications" />
             <div v-else class="flex min-h-0 flex-1">
                 <file-tree-sidebar />
                 <pr-view v-if="showPrView" />

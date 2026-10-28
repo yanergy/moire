@@ -31,7 +31,9 @@ const state = vi.hoisted(() => ({
         setShowDrafts: vi.fn<(show: boolean) => Promise<unknown>>(),
         setAuthors: vi.fn<(authors: unknown) => Promise<unknown>>(),
         setHiddenCards: vi.fn<(keys: string[]) => Promise<unknown>>(),
+        setNotificationSettings: vi.fn<(change: unknown) => Promise<unknown>>(),
         markRead: vi.fn<(id: string) => Promise<unknown>>(),
+        markUnread: vi.fn<(id: string) => Promise<unknown>>(),
         markAllRead: vi.fn<() => Promise<unknown>>(),
         deleteNotification: vi.fn<(id: string) => Promise<unknown>>(),
     },
@@ -162,7 +164,9 @@ describe('registerIpcHandlers', () => {
             'dashboard:set-show-drafts',
             'dashboard:set-authors',
             'dashboard:set-hidden-cards',
+            'dashboard:set-notification-settings',
             'dashboard:mark-read',
+            'dashboard:mark-unread',
             'dashboard:mark-all-read',
             'dashboard:delete-notification',
         ]) {
@@ -273,13 +277,33 @@ describe('registerIpcHandlers', () => {
         await invoke('dashboard:set-hidden-cards', 'stale');
         expect(state.dashboard.setHiddenCards).toHaveBeenLastCalledWith([]);
 
+        // Only known boolean fields and known event kinds reach the settings.
+        state.dashboard.setNotificationSettings.mockResolvedValue(dashboardState);
+        expect(
+            await invoke('dashboard:set-notification-settings', {
+                enabled: false,
+                notifyDrafts: 'no',
+                events: { approved: true, bogus: true, 'checks-failed': 1 },
+                extra: true,
+            })
+        ).toBe(dashboardState);
+        expect(state.dashboard.setNotificationSettings).toHaveBeenCalledWith({
+            enabled: false,
+            events: { approved: true },
+        });
+        await invoke('dashboard:set-notification-settings', null);
+        expect(state.dashboard.setNotificationSettings).toHaveBeenLastCalledWith({});
+
         state.dashboard.markRead.mockResolvedValue(dashboardState);
+        state.dashboard.markUnread.mockResolvedValue(dashboardState);
         state.dashboard.markAllRead.mockResolvedValue(dashboardState);
         state.dashboard.deleteNotification.mockResolvedValue(dashboardState);
         await invoke('dashboard:mark-read', 'id-1');
+        await invoke('dashboard:mark-unread', 'id-3');
         await invoke('dashboard:mark-all-read');
         await invoke('dashboard:delete-notification', 'id-2');
         expect(state.dashboard.markRead).toHaveBeenCalledWith('id-1');
+        expect(state.dashboard.markUnread).toHaveBeenCalledWith('id-3');
         expect(state.dashboard.markAllRead).toHaveBeenCalledTimes(1);
         expect(state.dashboard.deleteNotification).toHaveBeenCalledWith('id-2');
     });

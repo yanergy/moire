@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { h } from 'vue';
-import NotificationRow from '@/components/headers/NotificationRow.vue';
+import NotificationRow from '@/components/notifications/NotificationRow.vue';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ActivityEntry } from '@/shared/types';
 
@@ -54,10 +54,13 @@ describe('NotificationRow', () => {
         expect(wrapper.emitted('open')).toBeUndefined();
     });
 
-    it('fades a read notification and drops Mark as read', () => {
-        const wrapper = mountRow({ entry: { ...entry, read: true }, now: NOW });
+    it('fades a read notification and offers Mark as unread in place of Mark as read', async () => {
+        const read = { ...entry, read: true };
+        const wrapper = mountRow({ entry: read, now: NOW });
 
         expect(wrapper.find('[aria-label="Mark as read"]').exists()).toBe(false);
+        await wrapper.get('[aria-label="Mark as unread"]').trigger('click');
+        expect(wrapper.emitted('markUnread')).toEqual([[read]]);
         expect(wrapper.find('.opacity-40').exists()).toBe(true);
         expect(wrapper.text()).toContain('ann requested changes');
         expect(wrapper.find('span.text-moire-muted').text()).toBe('ann requested changes');

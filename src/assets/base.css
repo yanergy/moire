@@ -176,11 +176,13 @@
     }
 }
 
+/* No margin reset here: an unlayered rule beats every layered Tailwind utility,
+   so `margin: 0` would zero all margin classes. Tailwind's preflight already
+   resets margins, in its base layer. */
 *,
 *::before,
 *::after {
     box-sizing: border-box;
-    margin: 0;
 }
 
 body {

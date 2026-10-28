@@ -44,7 +44,7 @@ describe('DashboardView', () => {
 
     async function mountView(state: DashboardState) {
         const api = stubApi(state);
-        // Attached so the Display menu, which teleports to the body, can open.
+        // Attached so the Dashboard settings menu, which teleports to the body, can open.
         const wrapper = mount(DashboardView, {
             global: { plugins: [pinia] },
             attachTo: document.body,
@@ -146,10 +146,10 @@ describe('DashboardView', () => {
         expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
     });
 
-    it('offers Show drafts, a Users submenu and a Merged period submenu in the Display menu', async () => {
+    it('offers Show drafts, a Users submenu and a Merged period submenu in the Dashboard settings menu', async () => {
         const { api, wrapper } = await mountView(dashboardState());
 
-        await wrapper.get('[aria-label="Display options"]').trigger('click');
+        await wrapper.get('[aria-label="Dashboard settings"]').trigger('click');
         await flushPromises();
         await nextTick();
 

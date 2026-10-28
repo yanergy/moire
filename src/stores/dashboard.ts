@@ -9,6 +9,8 @@ import type {
     DashboardPr,
     DashboardSnapshot,
     DashboardState,
+    NotificationSettings,
+    NotificationSettingsChange,
     PrStatus,
 } from '@/shared/types';
 
@@ -134,8 +136,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const activity = ref<ActivityEntry[]>([]);
     const showDrafts = ref(true);
     const authors = ref<AuthorFilter>('me');
-    // The overview cards turned off in the Display menu, by key.
+    // The overview cards turned off in the Dashboard settings menu, by key.
     const hiddenCards = ref<string[]>([]);
+    // The notification settings shown on the notifications page (owned by main).
+    const notificationSettings = ref<NotificationSettings | null>(null);
     // Kept in the renderer only, so it resets to this week on restart.
     const mergedPeriod = ref<MergedPeriod>('week');
     const loading = ref(false);
@@ -148,6 +152,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         showDrafts.value = state.showDrafts;
         authors.value = state.authors ?? 'me';
         hiddenCards.value = state.hiddenCards ?? [];
+        notificationSettings.value = state.notifications ?? null;
     }
 
     // Run one dashboard call with the loading flag set. A rejection (no repository
@@ -178,6 +183,20 @@ export const useDashboardStore = defineStore('dashboard', () => {
         showDrafts.value = show;
         const api = window.api;
         return api ? run(() => api.setDashboardShowDrafts(show)) : Promise.resolve();
+    }
+
+    // Apply one notification settings toggle right away, then persist it.
+    function setNotificationSettings(change: NotificationSettingsChange) {
+        const current = notificationSettings.value;
+        if (current) {
+            notificationSettings.value = {
+                ...current,
+                ...change,
+                events: { ...current.events, ...change.events },
+            };
+        }
+        const api = window.api;
+        return api ? run(() => api.setNotificationSettings(change)) : Promise.resolve();
     }
 
     // Show or hide one overview card, right away, then persist the hidden list.
@@ -276,6 +295,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
         );
     }
 
+    // Undoes a read, so a notification opened by mistake counts as new again.
+    function markUnread(entry: ActivityEntry) {
+        const id = activityId(entry);
+        return editActivity(
+            (list) => list.map((e) => (activityId(e) === id ? { ...e, read: false } : e)),
+            (api) => api.markDashboardNotificationUnread(id)
+        );
+    }
+
     function markAllRead() {
         return editActivity(
             (list) => list.map((e) => (e.read ? e : { ...e, read: true })),
@@ -360,7 +388,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return Number.isNaN(fetched) ? 0 : fetched - STALE_DAYS * 24 * 60 * 60 * 1000;
     });
 
-    // Every card the Display menu can turn on or off, shown or not.
+    // Every card the Dashboard settings menu can turn on or off, shown or not.
     const cardOptions = computed(() =>
         baseCategories.value.map(({ key, label }) => ({
             key,
@@ -470,6 +498,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
         authors,
         mergedPeriod,
         hiddenCards,
+        notificationSettings,
+        setNotificationSettings,
         cardOptions,
         toggleCard,
         knownAuthors,
@@ -492,6 +522,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         openActivityInBrowser,
         unreadCount,
         markRead,
+        markUnread,
         markAllRead,
         deleteNotification,
     };

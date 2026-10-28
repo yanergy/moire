@@ -1192,9 +1192,7 @@ function renderComment(comment: PrComment): string {
 
                         <!-- A task-list checkbox write that failed (e.g. no permission).
                              It lives here because the checkbox is inside read-only
-                             rendered HTML with nowhere of its own to report. Padding,
-                             not margin, for the gap below (the unlayered reset zeroes
-                             margin utilities). -->
+                             rendered HTML with nowhere of its own to report. -->
                         <div v-if="taskError" class="pb-4">
                             <div
                                 class="flex items-center justify-between gap-2 rounded-md border border-moire-danger-edge bg-moire-danger px-3 py-2 text-[12px] text-moire-status-d"
@@ -1379,9 +1377,7 @@ function renderComment(comment: PrComment): string {
                         </div>
 
                         <!-- Separate the description from the conversation below it with a
-                             labelled rule spanning the full conversation width. Padding, not
-                             margin, for the gap below: the project's unlayered
-                             `* { margin: 0 }` reset zeroes margin utilities. The flanking
+                             labelled rule spanning the full conversation width. The flanking
                              spans are the rule, split around the centred label. -->
                         <div
                             v-if="comments.length"
@@ -1697,9 +1693,7 @@ function renderComment(comment: PrComment): string {
                                     {{ check.name }}
                                 </span>
                                 <!-- Detail and the Details button share a wider gap
-                                     so the duration reads apart from the button.
-                                     (gap, not a margin: the unlayered reset kills
-                                     margin utilities.) -->
+                                     so the duration reads apart from the button. -->
                                 <div
                                     v-if="check.detail || check.url"
                                     class="flex shrink-0 items-center gap-4"
@@ -1801,11 +1795,10 @@ function renderComment(comment: PrComment): string {
 <!-- Unscoped: reka's scroll viewport wraps the slot in a width-less block (only
      min-width: fit-content), so it shrink-wraps to the content and leaves no room
      to center within. Force that wrapper full width and center its child with
-     flexbox. (Tailwind's mx-auto can't do it here: the project's unlayered
-     `* { margin: 0 }` reset overrides the layered margin utility.) Content wider
-     than the pane still overflows and scrolls. Keyed to this view's scroll area
-     (.pr-scroll-area) so other ScrollAreas are untouched; unscoped because the
-     wrapper is reka-internal and carries no scope attribute for :deep to reach. -->
+     flexbox. Content wider than the pane still overflows and scrolls. Keyed to
+     this view's scroll area (.pr-scroll-area) so other ScrollAreas are untouched;
+     unscoped because the wrapper is reka-internal and carries no scope attribute
+     for :deep to reach. -->
 <style>
 .pr-scroll-area [data-reka-scroll-area-viewport] > div {
     display: flex;

@@ -166,7 +166,7 @@ export function buildMenuTemplate({
                   label: 'Notifications',
                   submenu: [
                       {
-                          label: 'GitHub Notifications',
+                          label: 'Enable Notifications',
                           type: 'checkbox',
                           checked: notificationPrefs.enabled,
                           click: (item) => onToggleNotifications?.(item.checked),
