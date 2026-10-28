@@ -52,9 +52,10 @@ export interface DashboardBridge {
     setHiddenCards: (keys: string[]) => Promise<DashboardState>;
     // The notification settings changed in the app's notifications menu.
     setNotificationSettings: (change: NotificationSettingsChange) => Promise<DashboardState>;
-    // The dashboard's notification list: mark one read (by its activity id), all
-    // read, or delete one.
+    // The dashboard's notification list: mark one read or unread (by its
+    // activity id), all read, or delete one.
     markRead: (id: string) => Promise<DashboardState>;
+    markUnread: (id: string) => Promise<DashboardState>;
     markAllRead: () => Promise<DashboardState>;
     deleteNotification: (id: string) => Promise<DashboardState>;
 }
@@ -254,6 +255,7 @@ function registerIpcHandlers({
         requireDashboard().setNotificationSettings(notificationSettingsChange(change))
     );
     handle('dashboard:mark-read', (id: string) => requireDashboard().markRead(id));
+    handle('dashboard:mark-unread', (id: string) => requireDashboard().markUnread(id));
     handle('dashboard:mark-all-read', () => requireDashboard().markAllRead());
     handle('dashboard:delete-notification', (id: string) =>
         requireDashboard().deleteNotification(id)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, ExternalLink, Trash2 } from '@lucide/vue';
+import { Check, CircleDot, ExternalLink, Trash2 } from '@lucide/vue';
 import type { ActivityEntry } from '@/shared/types';
 import {
     activityDotClass,
@@ -16,8 +16,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 // One sent notification on the notifications page: a dot colored by kind,
 // what happened, the PR it was about, and how long ago. Clicking it opens
 // the PR in Moiré; the always visible Open in browser button at its end opens it
-// on GitHub. On hover (or keyboard focus) Mark as read (while unread) and Delete
-// appear over the age. A read notification fades its dot and text. `now` (epoch
+// on GitHub. On hover (or keyboard focus) Mark as read (or, once read, Mark as
+// unread) and Delete appear over the age. A read notification fades its dot and text. `now` (epoch
 // ms) is the page's shared ticking clock. The icon buttons carry tooltips, so
 // the row must render inside a TooltipProvider (MoirePage provides one).
 defineProps<{ entry: ActivityEntry; now: number }>();
@@ -25,6 +25,7 @@ defineEmits<{
     open: [entry: ActivityEntry];
     openInBrowser: [entry: ActivityEntry];
     markRead: [entry: ActivityEntry];
+    markUnread: [entry: ActivityEntry];
     delete: [entry: ActivityEntry];
 }>();
 </script>
@@ -52,7 +53,7 @@ defineEmits<{
                 · #{{ entry.number }} {{ entry.title }}
             </span>
         </button>
-        <!-- The age, with Mark as read and Delete laid over it on hover. -->
+        <!-- The age, with Mark as read (or unread) and Delete laid over it on hover. -->
         <span class="relative flex shrink-0 items-center self-stretch">
             <span class="text-[12px] text-moire-faint" :class="ROW_MARKER_CLASS">
                 {{ timeSince(Date.parse(entry.at), now) }}
@@ -71,6 +72,20 @@ defineEmits<{
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent>Mark as read</TooltipContent>
+                </Tooltip>
+                <Tooltip v-else>
+                    <TooltipTrigger as-child>
+                        <Button
+                            variant="outline"
+                            size="icon-sm"
+                            :class="ROW_ACTION_CLASS"
+                            aria-label="Mark as unread"
+                            @click="$emit('markUnread', entry)"
+                        >
+                            <CircleDot :size="16" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Mark as unread</TooltipContent>
                 </Tooltip>
                 <!-- Red, in the failure tone the Checks tab uses, as it is destructive. -->
                 <Tooltip>

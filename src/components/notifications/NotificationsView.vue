@@ -122,6 +122,7 @@ onBeforeUnmount(() => {
                                     @open="dashboard.openActivity"
                                     @open-in-browser="dashboard.openActivityInBrowser"
                                     @mark-read="dashboard.markRead"
+                                    @mark-unread="dashboard.markUnread"
                                     @delete="dashboard.deleteNotification"
                                 />
                             </div>

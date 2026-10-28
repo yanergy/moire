@@ -471,8 +471,9 @@ export interface MoireApi {
     setDashboardHiddenCards(keys: string[]): Promise<DashboardState>;
     setNotificationSettings(change: NotificationSettingsChange): Promise<DashboardState>;
     // The dashboard's notification list, by activity id (see activityId in
-    // src/lib/dashboard.ts): mark one read, mark all read, or delete one.
+    // src/lib/dashboard.ts): mark one read or unread, mark all read, or delete one.
     markDashboardNotificationRead(id: string): Promise<DashboardState>;
+    markDashboardNotificationUnread(id: string): Promise<DashboardState>;
     markAllDashboardNotificationsRead(): Promise<DashboardState>;
     deleteDashboardNotification(id: string): Promise<DashboardState>;
     onDashboardChanged(cb: (state: DashboardState) => void): () => void;

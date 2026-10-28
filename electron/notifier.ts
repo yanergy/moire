@@ -230,11 +230,11 @@ export class Notifier {
         return this.inFlight;
     }
 
-    // Mark one notification read, every notification read, or delete one. Each
-    // edits the saved state of the repository the dashboard shows.
-    markActivityRead(id: string): Promise<void> {
+    // Mark one notification read or unread, every notification read, or delete
+    // one. Each edits the saved state of the repository the dashboard shows.
+    markActivityRead(id: string, read = true): Promise<void> {
         return this.updateActivity((activity) =>
-            activity.map((entry) => (activityId(entry) === id ? { ...entry, read: true } : entry))
+            activity.map((entry) => (activityId(entry) === id ? { ...entry, read } : entry))
         );
     }
 

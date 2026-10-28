@@ -123,7 +123,8 @@ open, opens a full width page listing every notification sent for the repository
 activity list, newest first, grouped by day, up to 500 and rendered a page at a time as it
 scrolls), each with what happened, the PR, and how long ago. Clicking one opens its PR and marks
 it read. Each row ends in an Open in browser button (which also marks it read), and shows Mark as
-read and Delete buttons over its age on hover. Unread notifications stand out and are counted on
+read (Mark as unread once read, to undo an accidental read) and Delete buttons over its age on
+hover. Unread notifications stand out and are counted on
 the toggle, and a "Mark all as read" button clears them at once. The page header also holds the
 **Notification settings** menu. The list first sat below the dashboard's cards, then in a menu
 under a bell at the right end of the toolbar, before it became a page of its own. Read state and

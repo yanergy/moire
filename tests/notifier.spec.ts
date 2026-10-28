@@ -414,6 +414,19 @@ describe('Notifier', () => {
             t.notifier.stop();
         });
 
+        it('marks a read notification unread again, counting it on the badge', async () => {
+            const { t, ids } = await withActivity();
+            await t.notifier.markAllActivityRead();
+
+            await t.notifier.markActivityRead(ids[1]!, false);
+
+            expect(t.notifier.getView().activity.map((e) => !!e.read)).toEqual([true, false]);
+            const saved = t.store.get('me|o/r') as { activity: { read?: boolean }[] };
+            expect(saved.activity.map((e) => !!e.read)).toEqual([true, false]);
+            expect(t.deps.setBadge).toHaveBeenLastCalledWith(1);
+            t.notifier.stop();
+        });
+
         it('marks every notification read, clearing the badge', async () => {
             const { t } = await withActivity();
             expect(t.deps.setBadge).toHaveBeenLastCalledWith(2);

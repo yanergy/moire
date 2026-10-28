@@ -561,6 +561,31 @@ describe('dashboard store', () => {
             expect(store.unreadCount).toBe(0);
         });
 
+        it('marks a read notification unread, counting it again', () => {
+            openApi();
+            const markUnread = vi.fn<(id: string) => Promise<DashboardState>>(
+                () => new Promise(() => {})
+            );
+            (window.api as unknown as Record<string, unknown>).markDashboardNotificationUnread =
+                markUnread;
+            const store = useDashboardStore();
+            const entry = {
+                kind: 'approved' as const,
+                at: 'T1',
+                number: 5,
+                title: 'Add notifications',
+                url: 'https://github.com/o/r/pull/5',
+                read: true,
+            };
+            store.applyState(state({ activity: [entry] }));
+            expect(store.unreadCount).toBe(0);
+
+            void store.markUnread(entry);
+
+            expect(markUnread).toHaveBeenCalledWith('T1|approved|5');
+            expect(store.unreadCount).toBe(1);
+        });
+
         it('opens a fork PR, or one with unavailable branches, on GitHub', () => {
             const openExternal = openApi();
             const comparison = useComparisonStore();

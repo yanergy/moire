@@ -118,8 +118,11 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.invoke('dashboard:set-hidden-cards', keys),
     setNotificationSettings: (change: unknown) =>
         ipcRenderer.invoke('dashboard:set-notification-settings', change),
-    // The dashboard's notification list: mark one read or all read, or delete one.
+    // The dashboard's notification list: mark one read or unread, or all read, or
+    // delete one.
     markDashboardNotificationRead: (id: string) => ipcRenderer.invoke('dashboard:mark-read', id),
+    markDashboardNotificationUnread: (id: string) =>
+        ipcRenderer.invoke('dashboard:mark-unread', id),
     markAllDashboardNotificationsRead: () => ipcRenderer.invoke('dashboard:mark-all-read'),
     deleteDashboardNotification: (id: string) =>
         ipcRenderer.invoke('dashboard:delete-notification', id),

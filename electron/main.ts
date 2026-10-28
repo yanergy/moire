@@ -346,6 +346,10 @@ app.whenReady().then(async () => {
                 await notifier.markActivityRead(id);
                 return dashboardState();
             },
+            markUnread: async (id) => {
+                await notifier.markActivityRead(id, false);
+                return dashboardState();
+            },
             markAllRead: async () => {
                 await notifier.markAllActivityRead();
                 return dashboardState();

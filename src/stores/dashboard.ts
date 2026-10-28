@@ -295,6 +295,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
         );
     }
 
+    // Undoes a read, so a notification opened by mistake counts as new again.
+    function markUnread(entry: ActivityEntry) {
+        const id = activityId(entry);
+        return editActivity(
+            (list) => list.map((e) => (activityId(e) === id ? { ...e, read: false } : e)),
+            (api) => api.markDashboardNotificationUnread(id)
+        );
+    }
+
     function markAllRead() {
         return editActivity(
             (list) => list.map((e) => (e.read ? e : { ...e, read: true })),
@@ -513,6 +522,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         openActivityInBrowser,
         unreadCount,
         markRead,
+        markUnread,
         markAllRead,
         deleteNotification,
     };

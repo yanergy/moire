@@ -175,7 +175,7 @@ last branch range are remembered per repository.
 - A notifications page (opened with the **Notifications** button next to **Dashboard**) listing the
   notifications sent for the open repository (the last 500, grouped by day and loaded as you
   scroll), with unread ones highlighted and counted on the
-  button, and buttons to mark them read or delete them. A **Notification settings** menu sits in
+  button, and buttons to mark them read (or unread again) or delete them. A **Notification settings** menu sits in
   the page header, as **Dashboard settings** does on the dashboard.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
   the tree by filetype, mutation type, or marker (files carrying an error, warning, or review
