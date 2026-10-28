@@ -54,7 +54,7 @@ single notification that lists their names.
 
 Draft PRs are included by default, in the dashboard and in notifications. Each has its own
 toggle, both persisted: "Show drafts" in the dashboard's **Dashboard settings** menu, and "Notify
-about draft PRs" in the notification settings (on the notifications page). Settings saved before
+about draft PRs" in the **Notification settings** menu on the notifications page. Settings saved before
 the split carry the old shared value over to both.
 
 #### Later

@@ -3,7 +3,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import NotificationsView from '@/components/notifications/NotificationsView.vue';
 import NotificationRow from '@/components/notifications/NotificationRow.vue';
-import NotificationSettings from '@/components/notifications/NotificationSettings.vue';
+import NotificationSettingsMenu from '@/components/notifications/NotificationSettingsMenu.vue';
 import { useDashboardStore } from '@/stores/dashboard';
 import type { ActivityEntry } from '@/shared/types';
 import { dashboardState, stubTooltips } from './fixtures';
@@ -42,13 +42,13 @@ describe('NotificationsView', () => {
         return mount(NotificationsView, { global: { plugins: [pinia] } });
     }
 
-    it('lists the notifications newest first, with the settings beside them', () => {
+    it('lists the notifications newest first, with the settings menu in the header', () => {
         const wrapper = mountView(ACTIVITY);
 
         const rows = wrapper.findAllComponents(NotificationRow);
         expect(rows.map((row) => row.props('entry').number)).toEqual([2, 1]);
         expect(wrapper.text()).toContain('1 unread of 2');
-        expect(wrapper.findComponent(NotificationSettings).exists()).toBe(true);
+        expect(wrapper.findComponent(NotificationSettingsMenu).exists()).toBe(true);
     });
 
     it('marks all read, offered only while something is unread', async () => {

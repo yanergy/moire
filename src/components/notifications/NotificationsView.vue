@@ -6,11 +6,11 @@ import { activityId, groupActivityByDay } from '@/lib/dashboard';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import NotificationRow from '@/components/notifications/NotificationRow.vue';
-import NotificationSettings from '@/components/notifications/NotificationSettings.vue';
+import NotificationSettingsMenu from '@/components/notifications/NotificationSettingsMenu.vue';
 
 // The notifications page, opened by the toolbar's bell: every notification sent
 // for the open repository (newest first, grouped by day), with mark read, delete and mark all
-// read, and the notification settings beside them. The data is the dashboard
+// read, and the notification settings menu. The data is the dashboard
 // store's, which mirrors the notifier in the main process.
 const dashboard = useDashboardStore();
 
@@ -100,50 +100,37 @@ onBeforeUnmount(() => {
                         <CheckCheck :size="16" />
                         Mark all as read
                     </Button>
+                    <notification-settings-menu />
                 </div>
 
-                <!-- The list, with the settings in a column at its side. -->
-                <div class="flex items-start gap-6 pt-6">
-                    <div class="min-w-0 flex-1">
-                        <div v-if="days.length" class="flex flex-col gap-5">
-                            <section v-for="day in days" :key="day.label">
-                                <h3
-                                    class="pb-2 text-[11px] font-medium tracking-wider text-moire-faint uppercase"
-                                >
-                                    {{ day.label }}
-                                </h3>
-                                <div
-                                    class="divide-y divide-moire-border overflow-hidden rounded-lg border border-moire-border"
-                                >
-                                    <notification-row
-                                        v-for="entry in day.entries"
-                                        :key="activityId(entry)"
-                                        :entry="entry"
-                                        :now="now"
-                                        @open="dashboard.openActivity"
-                                        @open-in-browser="dashboard.openActivityInBrowser"
-                                        @mark-read="dashboard.markRead"
-                                        @delete="dashboard.deleteNotification"
-                                    />
-                                </div>
-                            </section>
-                            <div v-if="hasMore" ref="sentinel" class="h-px" />
-                        </div>
-                        <p v-else class="py-10 text-[13px] text-moire-muted">
-                            No notifications for this repository yet.
-                        </p>
+                <div class="pt-6">
+                    <div v-if="days.length" class="flex flex-col gap-5">
+                        <section v-for="day in days" :key="day.label">
+                            <h3
+                                class="pb-2 text-[11px] font-medium tracking-wider text-moire-faint uppercase"
+                            >
+                                {{ day.label }}
+                            </h3>
+                            <div
+                                class="divide-y divide-moire-border overflow-hidden rounded-lg border border-moire-border"
+                            >
+                                <notification-row
+                                    v-for="entry in day.entries"
+                                    :key="activityId(entry)"
+                                    :entry="entry"
+                                    :now="now"
+                                    @open="dashboard.openActivity"
+                                    @open-in-browser="dashboard.openActivityInBrowser"
+                                    @mark-read="dashboard.markRead"
+                                    @delete="dashboard.deleteNotification"
+                                />
+                            </div>
+                        </section>
+                        <div v-if="hasMore" ref="sentinel" class="h-px" />
                     </div>
-
-                    <section
-                        class="w-[280px] shrink-0 overflow-hidden rounded-lg border border-moire-border bg-moire-chrome"
-                    >
-                        <h2
-                            class="border-b border-moire-border px-3 py-2.5 text-[13px] font-semibold text-moire-fg"
-                        >
-                            Settings
-                        </h2>
-                        <notification-settings />
-                    </section>
+                    <p v-else class="py-10 text-[13px] text-moire-muted">
+                        No notifications for this repository yet.
+                    </p>
                 </div>
             </div>
         </ScrollArea>

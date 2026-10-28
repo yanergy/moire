@@ -117,8 +117,8 @@ the popup never appears.
    the notifications you were sent. The count on the bell and on the dock icon is the
    number of unread notifications. Moiré checks
    GitHub every two minutes and sends a notification when something changes. Click a PR to open
-   it in the PR view. Choose which events notify you, and whether draft PRs do, in the settings
-   beside the list (or under **Git > Notifications**).
+   it in the PR view. Choose which events notify you, and whether draft PRs do, under
+   **Notification settings** on that page (or under **Git > Notifications**).
 
 The diff refreshes on its own when the repository changes on disk. Use **View > Refresh**
 (`Cmd/Ctrl+R`) to re-scan manually. Set the appearance under **View > Theme** (System, Light, or
@@ -162,8 +162,8 @@ last branch range are remembered per repository.
 - GitHub notifications for the open repository and the active `gh` account: a review requested
   from you, changes requested on your PR, your PR closed without merge, failed checks (once per PR
   until they pass again), an approval, a merge conflict, and optionally ready to merge and merged
-  by someone else. Each event has its own toggle in the notification settings (on the
-  notifications page), next to a master switch (on by default) and a toggle for whether draft PRs notify.
+  by someone else. Each event has its own toggle in the **Notification settings** menu (on
+  the notifications page), next to a master switch (on by default) and a toggle for whether draft PRs notify.
   **Git > Notifications** holds the same toggles plus a dock badge toggle, and the two stay in
   step. More than three updates at once arrive as one summary notification.
 - A dashboard for the open repository: an overview of cards counting the PRs that need your
@@ -175,8 +175,8 @@ last branch range are remembered per repository.
 - A notifications page (opened with the bell at the right of the toolbar) listing the
   notifications sent for the open repository (the last 500, grouped by day and loaded as you
   scroll), with unread ones highlighted and counted on the
-  bell, and buttons to mark them read or delete them. The notification settings sit beside the
-  list.
+  bell, and buttons to mark them read or delete them. A **Notification settings** menu sits in
+  the page header, as **Dashboard settings** does on the dashboard.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
   the tree by filetype, mutation type, or marker (files carrying an error, warning, or review
   comment). Filters are multi-select and combine, and a reset clears them at once.
