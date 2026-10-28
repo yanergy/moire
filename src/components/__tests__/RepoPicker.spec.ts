@@ -4,6 +4,9 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import type { BranchInfo } from '@/shared/types';
+import { stubTooltips } from './fixtures';
+
+stubTooltips();
 
 const RECENTS = ['/repos/moire', '/work/api-service'];
 

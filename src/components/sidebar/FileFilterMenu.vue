@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { ListFilter, X } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -63,19 +64,22 @@ const row = 'text-xs text-moire-file-fg focus:bg-moire-hover focus:text-moire-fg
                 <span>Filter</span>
                 <!-- With filters active, a reset cross clears them without opening the
                      menu. It stops the trigger's own open on pointerdown/click. -->
-                <span
-                    v-if="comparison.hasActiveFilters"
-                    role="button"
-                    tabindex="0"
-                    aria-label="Clear filters"
-                    title="Clear filters"
-                    class="-mr-0.5 flex size-3.5 items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/15"
-                    @pointerdown.stop
-                    @click.stop="comparison.clearFilters()"
-                    @keydown.enter.stop.prevent="comparison.clearFilters()"
-                >
-                    <X />
-                </span>
+                <Tooltip v-if="comparison.hasActiveFilters">
+                    <TooltipTrigger as-child>
+                        <span
+                            role="button"
+                            tabindex="0"
+                            aria-label="Clear filters"
+                            class="-mr-0.5 flex size-3.5 items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/15"
+                            @pointerdown.stop
+                            @click.stop="comparison.clearFilters()"
+                            @keydown.enter.stop.prevent="comparison.clearFilters()"
+                        >
+                            <X />
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Clear filters</TooltipContent>
+                </Tooltip>
             </Button>
         </DropdownMenuTrigger>
 

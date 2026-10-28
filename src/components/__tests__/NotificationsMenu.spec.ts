@@ -58,7 +58,15 @@ describe('NotificationsMenu', () => {
         const wrapper = mountMenu(ACTIVITY);
         const bell = wrapper.get('[aria-label="Notifications"]');
         expect(bell.text()).toBe('1');
-        expect(bell.attributes('title')).toBe('1 unread notification');
+        expect(bell.attributes('title')).toBeUndefined();
+
+        // Hovered, as the menu's tooltips ignore focus that is not from the keyboard.
+        await bell.trigger('pointermove', { pointerType: 'mouse' });
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        await flushPromises();
+        expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+            '1 unread notification'
+        );
         wrapper.unmount();
     });
 

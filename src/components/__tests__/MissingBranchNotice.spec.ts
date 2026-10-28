@@ -4,6 +4,9 @@ import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import MissingBranchNotice from '@/components/headers/MissingBranchNotice.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { stubTooltips } from './fixtures';
+
+stubTooltips();
 
 describe('MissingBranchNotice', () => {
     beforeEach(() => {

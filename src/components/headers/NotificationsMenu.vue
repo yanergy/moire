@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Bell, CheckCheck } from '@lucide/vue';
 import { useDashboardStore } from '@/stores/dashboard';
 import { activityId } from '@/lib/dashboard';
 import type { ActivityEntry } from '@/shared/types';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationRow from '@/components/headers/NotificationRow.vue';
 
 // The bell at the right of the toolbar: its count is the number of unread
@@ -16,6 +16,12 @@ import NotificationRow from '@/components/headers/NotificationRow.vue';
 const dashboard = useDashboardStore();
 
 const open = ref(false);
+
+const bellLabel = computed(() =>
+    dashboard.unreadCount
+        ? `${dashboard.unreadCount} unread ${dashboard.unreadCount === 1 ? 'notification' : 'notifications'}`
+        : 'Notifications'
+);
 
 // One clock for every "3h ago", ticking only while the menu is open.
 const now = ref(Date.now());
@@ -51,52 +57,55 @@ function openEntry(entry: ActivityEntry) {
 </script>
 
 <template>
-    <Popover v-model:open="open">
-        <PopoverTrigger as-child>
-            <Button
-                variant="outline"
-                size="icon-sm"
-                class="relative size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                aria-label="Notifications"
-                :title="
-                    dashboard.unreadCount
-                        ? `${dashboard.unreadCount} unread ${dashboard.unreadCount === 1 ? 'notification' : 'notifications'}`
-                        : 'Notifications'
-                "
-            >
-                <Bell :size="16" />
-                <span
-                    v-if="dashboard.unreadCount"
-                    class="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-moire-pr-open px-1 text-center text-[10px] leading-4 font-semibold text-moire-check-fg"
-                >
-                    {{ dashboard.unreadCount }}
-                </span>
-            </Button>
-        </PopoverTrigger>
+    <TooltipProvider :delay-duration="300" ignore-non-keyboard-focus>
+        <Popover v-model:open="open">
+            <Tooltip>
+                <TooltipTrigger as-child>
+                    <PopoverTrigger as-child>
+                        <Button
+                            variant="outline"
+                            size="icon-sm"
+                            class="relative size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                            aria-label="Notifications"
+                        >
+                            <Bell :size="16" />
+                            <span
+                                v-if="dashboard.unreadCount"
+                                class="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-moire-pr-open px-1 text-center text-[10px] leading-4 font-semibold text-moire-check-fg"
+                            >
+                                {{ dashboard.unreadCount }}
+                            </span>
+                        </Button>
+                    </PopoverTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{{ bellLabel }}</TooltipContent>
+            </Tooltip>
 
-        <PopoverContent
-            align="end"
-            :side-offset="6"
-            class="w-[560px] overflow-hidden border-moire-border bg-moire-pop p-0"
-            :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
-            @open-auto-focus="focusMenu"
-        >
-            <div class="flex items-center gap-2 border-b border-moire-border py-2 pr-2 pl-3">
-                <h2 class="text-[13px] font-semibold text-moire-fg">Notifications</h2>
-                <div class="flex-1" />
-                <Button
-                    v-if="dashboard.unreadCount"
-                    variant="ghost"
-                    size="sm"
-                    class="h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                    @click="dashboard.markAllRead()"
+            <PopoverContent
+                align="end"
+                :side-offset="6"
+                class="w-[560px] overflow-hidden border-moire-border bg-moire-pop p-0"
+                :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
+                @open-auto-focus="focusMenu"
+            >
+                <div class="flex items-center gap-2 border-b border-moire-border py-2 pr-2 pl-3">
+                    <h2 class="text-[13px] font-semibold text-moire-fg">Notifications</h2>
+                    <div class="flex-1" />
+                    <Button
+                        v-if="dashboard.unreadCount"
+                        variant="ghost"
+                        size="sm"
+                        class="h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                        @click="dashboard.markAllRead()"
+                    >
+                        <CheckCheck :size="16" />
+                        Mark all as read
+                    </Button>
+                </div>
+                <div
+                    v-if="dashboard.activity.length"
+                    class="max-h-[560px] divide-y divide-moire-border overflow-y-auto"
                 >
-                    <CheckCheck :size="16" />
-                    Mark all as read
-                </Button>
-            </div>
-            <TooltipProvider v-if="dashboard.activity.length" :delay-duration="300">
-                <div class="max-h-[560px] divide-y divide-moire-border overflow-y-auto">
                     <notification-row
                         v-for="entry in dashboard.activity"
                         :key="activityId(entry)"
@@ -108,10 +117,10 @@ function openEntry(entry: ActivityEntry) {
                         @delete="dashboard.deleteNotification"
                     />
                 </div>
-            </TooltipProvider>
-            <p v-else class="px-3 py-4 text-[13px] text-moire-muted">
-                No notifications for this repository yet.
-            </p>
-        </PopoverContent>
-    </Popover>
+                <p v-else class="px-3 py-4 text-[13px] text-moire-muted">
+                    No notifications for this repository yet.
+                </p>
+            </PopoverContent>
+        </Popover>
+    </TooltipProvider>
 </template>

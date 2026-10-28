@@ -4,6 +4,9 @@ import { mount, type VueWrapper } from '@vue/test-utils';
 import StackedDiffPane from '@/components/diff/StackedDiffPane.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { CHANGED_FILES } from '@/components/__tests__/fixtures';
+import { stubTooltips } from './fixtures';
+
+stubTooltips();
 
 // jsdom does no layout and the IntersectionObserver is a no-op stub, so no card
 // ever becomes "active" and no editor mounts. That is fine: the pane's job under

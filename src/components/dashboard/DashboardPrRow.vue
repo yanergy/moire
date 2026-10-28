@@ -5,6 +5,7 @@ import type { DashboardPr } from '@/shared/types';
 import { ciVisual, prDotClass, ROW_ACTION_CLASS } from '@/lib/dashboard';
 import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 
 // One PR on the dashboard: status dot, author avatar, title, a meta line (author,
@@ -66,15 +67,19 @@ const age = computed(() => {
                 />
             </span>
         </button>
-        <Button
-            variant="outline"
-            size="icon-sm"
-            :class="ROW_ACTION_CLASS"
-            aria-label="Open in browser"
-            title="Open in browser"
-            @click="$emit('openInBrowser', pr)"
-        >
-            <ExternalLink :size="16" />
-        </Button>
+        <Tooltip>
+            <TooltipTrigger as-child>
+                <Button
+                    variant="outline"
+                    size="icon-sm"
+                    :class="ROW_ACTION_CLASS"
+                    aria-label="Open in browser"
+                    @click="$emit('openInBrowser', pr)"
+                >
+                    <ExternalLink :size="16" />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent>Open in browser</TooltipContent>
+        </Tooltip>
     </div>
 </template>

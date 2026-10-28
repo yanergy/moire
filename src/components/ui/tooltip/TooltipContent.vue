@@ -2,7 +2,7 @@
 import type { TooltipContentEmits, TooltipContentProps } from 'reka-ui';
 import type { HTMLAttributes } from 'vue';
 import { reactiveOmit } from '@vueuse/core';
-import { TooltipArrow, TooltipContent, TooltipPortal, useForwardPropsEmits } from 'reka-ui';
+import { TooltipContent, TooltipPortal, useForwardPropsEmits } from 'reka-ui';
 import { cn } from '@/lib/utils';
 
 defineOptions({
@@ -35,11 +35,10 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
                 )
             "
         >
+            <!-- No arrow, deviating from stock shadcn: its rotated square has no
+                 border, so it cut a notch out of this bordered surface. The app's
+                 popovers and menus carry no arrow either. -->
             <slot />
-
-            <TooltipArrow
-                class="bg-moire-pop fill-moire-pop z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-xs"
-            />
         </TooltipContent>
     </TooltipPortal>
 </template>

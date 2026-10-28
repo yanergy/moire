@@ -4,6 +4,9 @@ import { mount, flushPromises } from '@vue/test-utils';
 import PrView from '@/components/pr/PrView.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import type { PrComment, PrStatus, PullRequest } from '@/shared/types';
+import { stubTooltips } from './fixtures';
+
+stubTooltips();
 
 const PR: PullRequest = {
     number: 42,

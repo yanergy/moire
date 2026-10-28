@@ -128,8 +128,9 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - Every icon only button (an icon with no visible text) gets a shadcn-vue `Tooltip` that names
   what the button does, in addition to its `aria-label`. A native `title` attribute is not a
   substitute, so do not add one alongside the tooltip. Buttons that show text, alone or next to
-  an icon, need no tooltip. The tooltip needs a `TooltipProvider` above it; reuse the one the
-  surrounding view already has, or add one where the component is rendered outside any.
+  an icon, need no tooltip. `MoirePage` wraps the app in a `TooltipProvider`, so a new tooltip
+  needs no provider of its own. In a spec that mounts a component on its own, call
+  `stubTooltips()` from the test fixtures.
 
 ## Testing
 

@@ -8,6 +8,7 @@ import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -274,17 +275,24 @@ const updated = computed(() =>
                             </DropdownMenuSub>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button
-                        variant="outline"
-                        size="icon-sm"
-                        class="size-7 shrink-0 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                        aria-label="Refresh"
-                        title="Refresh"
-                        :disabled="dashboard.loading"
-                        @click="dashboard.refresh()"
-                    >
-                        <RefreshCw :size="16" :class="{ 'animate-spin': dashboard.loading }" />
-                    </Button>
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <Button
+                                variant="outline"
+                                size="icon-sm"
+                                class="size-7 shrink-0 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                aria-label="Refresh"
+                                :disabled="dashboard.loading"
+                                @click="dashboard.refresh()"
+                            >
+                                <RefreshCw
+                                    :size="16"
+                                    :class="{ 'animate-spin': dashboard.loading }"
+                                />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Refresh</TooltipContent>
+                    </Tooltip>
                 </div>
 
                 <div v-if="notice" class="pt-5">
