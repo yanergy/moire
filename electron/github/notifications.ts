@@ -11,6 +11,7 @@
 import {
     classifyFailure,
     defaultRunner,
+    settleReRequestedChanges,
     toCheck,
     type GhCheckNode,
     type GhRunner,
@@ -136,6 +137,7 @@ fragment Pr on PullRequest {
   isCrossRepository additions deletions mergeable reviewDecision
   author { login } mergedBy { login } baseRefName headRefName
   latestReviews(first: 50) { nodes { id state author { login } } }
+  reviewRequests(first: 50) { nodes { requestedReviewer { ... on User { login } } } }
   commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { nodes {
     __typename
     ... on CheckRun { name status conclusion }
@@ -188,6 +190,9 @@ interface GqlPr {
     latestReviews?: {
         nodes?: ({ id?: string; state?: string; author?: { login?: string } | null } | null)[];
     } | null;
+    reviewRequests?: {
+        nodes?: ({ requestedReviewer?: { login?: string } | null } | null)[];
+    } | null;
     commits?: {
         nodes?: ({
             commit?: {
@@ -210,15 +215,19 @@ interface GqlSearch {
 // The effective review decision. Like the PR view (see reviewDecisionOf in gh.ts),
 // GitHub fills reviewDecision only when branch protection requires reviews, so an
 // empty one is derived from each reviewer's latest review: changes requested
-// outranks an approval.
-function decisionOf(decision: string, reviews: DashboardReview[]): string {
+// outranks an approval. Either way, changes requested is settled once the review
+// is re-requested from everyone who asked for them (see settleReRequestedChanges).
+function decisionOf(decision: string, reviews: DashboardReview[], requested: string[]): string {
+    const changesRequestedBy = reviews
+        .filter((r) => r.state === 'CHANGES_REQUESTED')
+        .map((r) => r.author);
     if (decision) {
-        return decision;
+        return settleReRequestedChanges(decision, changesRequestedBy, requested, true);
     }
 
     const states = new Set(reviews.map((r) => r.state));
     if (states.has('CHANGES_REQUESTED')) {
-        return 'CHANGES_REQUESTED';
+        return settleReRequestedChanges('CHANGES_REQUESTED', changesRequestedBy, requested, false);
     }
     if (states.has('APPROVED')) {
         return 'APPROVED';
@@ -247,6 +256,9 @@ function toDashboardPr(node: GqlPr): DashboardPr {
         .filter((r) => r !== null)
         .map((r) => ({ id: r.id ?? '', author: r.author?.login ?? '', state: r.state ?? '' }))
         .filter((r) => r.id && r.author);
+    const requested = (node.reviewRequests?.nodes ?? [])
+        .map((r) => r?.requestedReviewer?.login ?? '')
+        .filter(Boolean);
 
     const rollup = node.commits?.nodes?.[0]?.commit?.statusCheckRollup ?? null;
     const failedChecks = (rollup?.contexts?.nodes ?? [])
@@ -280,7 +292,7 @@ function toDashboardPr(node: GqlPr): DashboardPr {
         additions: node.additions ?? 0,
         deletions: node.deletions ?? 0,
         mergeable: node.mergeable ?? 'UNKNOWN',
-        reviewDecision: decisionOf(node.reviewDecision ?? '', reviews),
+        reviewDecision: decisionOf(node.reviewDecision ?? '', reviews, requested),
         ci: ciOf(rollup?.state),
         failedChecks,
         reviews,
