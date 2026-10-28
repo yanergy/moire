@@ -13,13 +13,13 @@ import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-// One sent notification in the header's notifications menu: a dot colored by
-// kind, what happened, the PR it was about, and how long ago. Clicking it opens
+// One sent notification on the notifications page: a dot colored by kind,
+// what happened, the PR it was about, and how long ago. Clicking it opens
 // the PR in Moiré; the always visible Open in browser button at its end opens it
 // on GitHub. On hover (or keyboard focus) Mark as read (while unread) and Delete
 // appear over the age. A read notification fades its dot and text. `now` (epoch
-// ms) is the menu's shared ticking clock. The icon buttons carry tooltips, so
-// the row must render inside a TooltipProvider (the menu provides one).
+// ms) is the page's shared ticking clock. The icon buttons carry tooltips, so
+// the row must render inside a TooltipProvider (MoirePage provides one).
 defineProps<{ entry: ActivityEntry; now: number }>();
 defineEmits<{
     open: [entry: ActivityEntry];

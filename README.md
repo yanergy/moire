@@ -113,12 +113,12 @@ the popup never appears.
    (this week or this month, under **Dashboard settings > Merged**), and drafts. Click a card to list its PRs, then a PR to open it (or its **Open in browser** button
    to open it on GitHub). The cards count your own PRs; under **Dashboard settings > Users**
    you can pick other authors, or **All**, and **Dashboard settings > Cards** hides the cards you do not
-   need. The notifications you were sent are listed under the
-   bell button at the right of the toolbar. The count on the bell and on the dock icon is the
+   need. The bell button at the right of the toolbar opens the notifications page, which lists
+   the notifications you were sent. The count on the bell and on the dock icon is the
    number of unread notifications. Moiré checks
    GitHub every two minutes and sends a notification when something changes. Click a PR to open
-   it in the PR view. Choose which events notify you, and whether draft PRs do, with the gear in
-   the bell's menu (or under **Git > Notifications**).
+   it in the PR view. Choose which events notify you, and whether draft PRs do, in the settings
+   beside the list (or under **Git > Notifications**).
 
 The diff refreshes on its own when the repository changes on disk. Use **View > Refresh**
 (`Cmd/Ctrl+R`) to re-scan manually. Set the appearance under **View > Theme** (System, Light, or
@@ -162,8 +162,8 @@ last branch range are remembered per repository.
 - GitHub notifications for the open repository and the active `gh` account: a review requested
   from you, changes requested on your PR, your PR closed without merge, failed checks (once per PR
   until they pass again), an approval, a merge conflict, and optionally ready to merge and merged
-  by someone else. Each event has its own toggle in the notification settings (the gear in the
-  bell's menu), next to a master switch (on by default) and a toggle for whether draft PRs notify.
+  by someone else. Each event has its own toggle in the notification settings (on the
+  notifications page), next to a master switch (on by default) and a toggle for whether draft PRs notify.
   **Git > Notifications** holds the same toggles plus a dock badge toggle, and the two stay in
   step. More than three updates at once arrive as one summary notification.
 - A dashboard for the open repository: an overview of cards counting the PRs that need your
@@ -172,9 +172,10 @@ last branch range are remembered per repository.
   **Dashboard settings** menu holds a "Show drafts" toggle (for the dashboard only; notifications
   have their own) and a **Users** submenu that picks whose PRs the cards count: you by default, any
   mix of authors, or all of them.
-- A notifications menu (the bell at the right of the toolbar) listing the notifications sent for
-  the open repository, with unread ones highlighted and counted on the bell, and buttons to mark
-  them read or delete them. Its gear opens the notification settings.
+- A notifications page (opened with the bell at the right of the toolbar) listing the
+  notifications sent for the open repository, with unread ones highlighted and counted on the
+  bell, and buttons to mark them read or delete them. The notification settings sit beside the
+  list.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
   the tree by filetype, mutation type, or marker (files carrying an error, warning, or review
   comment). Filters are multi-select and combine, and a reset clears them at once.
@@ -242,7 +243,7 @@ Track bugs and limitations here.
   active `gh` account.
 - **The Git > Notifications menu needs a connected `gh`.** It lives in the Git menu, which only
   appears when `gh` is signed in, so it shares that menu's refresh limitation above. The same
-  settings, apart from the dock badge, are always in the bell's menu.
+  settings, apart from the dock badge, are always on the notifications page.
 - **Clicking a notification while the window is closed may open the PR on GitHub.** The window
   reopens, but the repository's branches may not be loaded yet when the PR arrives, so it falls
   back to the browser.

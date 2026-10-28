@@ -183,13 +183,13 @@ describe('ToolbarHeader', () => {
     });
 
     describe('dashboard toggle', () => {
-        it('is hidden, with the notifications menu, without an open repo', () => {
+        it('is hidden, with the notifications bell, without an open repo', () => {
             const wrapper = mountToolbar();
             expect(wrapper.text()).not.toContain('Dashboard');
             expect(wrapper.find('[aria-label="Notifications"]').exists()).toBe(false);
         });
 
-        it('switches the main view, next to a notifications menu', async () => {
+        it('switches the main view, next to a notifications bell', async () => {
             useComparisonStore().repoPath = '/repos/moire';
             const ui = useUiStore();
 

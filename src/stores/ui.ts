@@ -31,10 +31,11 @@ export const useUiStore = defineStore('ui', () => {
     const codeStyle = ref<CodeStyle>('github');
     const diffLayout = ref<DiffLayout>('single');
     const viewMode = ref<ViewMode>('split');
-    // Which pane the main area shows: the diff (default), the pull-request view, or
-    // the GitHub dashboard. Local renderer state, like viewMode; the PR view is only
-    // reachable when a PR is detected for the selected branches (see the comparison
-    // store), and the dashboard only while a repository is open.
+    // Which pane the main area shows: the diff (default), the pull-request view, the
+    // GitHub dashboard, or the notifications. Local renderer state, like viewMode;
+    // the PR view is only reachable when a PR is detected for the selected branches
+    // (see the comparison store), and the dashboard and the notifications only while
+    // a repository is open.
     const mainView = ref<MainView>('diff');
     // The dashboard card whose PR list is open, or null for the overview grid.
     // Here rather than in the dashboard view so the history can restore it.

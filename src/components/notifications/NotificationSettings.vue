@@ -5,11 +5,11 @@ import { NOTIFICATION_TYPES } from '@/lib/dashboard';
 import type { DashboardEventKind } from '@/shared/types';
 import { Checkbox } from '@/components/ui/checkbox';
 
-// The notification settings, shown in the header's notifications menu in place of
-// the list: the master switch, whether draft PRs notify (apart from the
-// dashboard's own drafts toggle), and one toggle per notification type. The
-// state is the main process's (see setNotificationSettings in the dashboard
-// store), so the Git > Notifications menu stays in step with it.
+// The notification settings, shown beside the list on the notifications page:
+// the master switch, whether draft PRs notify (apart from the dashboard's own
+// drafts toggle), and one toggle per notification type. The state is the main
+// process's (see setNotificationSettings in the dashboard store), so the
+// Git > Notifications menu stays in step with it.
 const dashboard = useDashboardStore();
 
 const settings = computed(() => dashboard.notificationSettings);

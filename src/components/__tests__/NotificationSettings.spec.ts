@@ -1,7 +1,7 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import NotificationSettings from '@/components/headers/NotificationSettings.vue';
+import NotificationSettings from '@/components/notifications/NotificationSettings.vue';
 import { useDashboardStore } from '@/stores/dashboard';
 import { dashboardState, notificationSettings } from './fixtures';
 import type { NotificationSettings as Settings } from '@/shared/types';

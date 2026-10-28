@@ -11,7 +11,7 @@ export type CompareMode = 'merge-base' | 'direct';
 export type ViewMode = 'split' | 'unified';
 // Which pane fills the main area: the diff, or the pull-request view (reachable
 // only when a PR is detected for the compared branches). Renderer-only state.
-export type MainView = 'diff' | 'pr' | 'dashboard';
+export type MainView = 'diff' | 'pr' | 'dashboard' | 'notifications';
 // The concrete theme the UI resolves to. `ThemePreference` is what the user
 // picks; `system` follows the OS and resolves to one of these.
 export type ThemeName = 'dark' | 'light';
@@ -330,7 +330,7 @@ export interface ActivityEntry {
 // names specific logins. Mirrors AuthorFilter in electron/settings.ts.
 export type AuthorFilter = 'me' | 'all' | string[];
 
-// The notification settings the notifications menu shows and changes: the master
+// The notification settings the notifications page shows and changes: the master
 // switch, whether draft PRs notify, and one toggle per event kind. Mirrors
 // NotificationSettings in electron/notifier.ts.
 export interface NotificationSettings {

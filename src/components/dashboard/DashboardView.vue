@@ -154,7 +154,7 @@ const updated = computed(() =>
 
                     <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
                     <!-- Dashboard settings: drafts, whose PRs the cards count, which cards show,
-                         and the merged period. Notifications have their own, in the bell menu. -->
+                         and the merged period. Notifications have their own, on the notifications page. -->
                     <DropdownMenu>
                         <DropdownMenuTrigger as-child>
                             <Button

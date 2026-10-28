@@ -14,7 +14,7 @@ import type { CompareMode, ViewMode } from '@/shared/types';
 import RefSelector from '@/components/controls/RefSelector.vue';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
 import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
-import NotificationsMenu from '@/components/headers/NotificationsMenu.vue';
+import NotificationsButton from '@/components/headers/NotificationsButton.vue';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -48,7 +48,7 @@ function setPrView(on: boolean) {
     ui.setMainView(on ? 'pr' : 'diff');
 }
 
-// The dashboard toggle and the notifications menu show while a repository is open.
+// The dashboard toggle and the notifications bell show while a repository is open.
 function setDashboardView(on: boolean) {
     if (on) {
         ui.openDashboard();
@@ -224,7 +224,7 @@ const statusDotClass = computed(() => {
                     @update:model-value="ui.setViewMode"
                 />
 
-                <notifications-menu v-if="comparison.repoPath" />
+                <notifications-button v-if="comparison.repoPath" />
             </div>
         </div>
     </TooltipProvider>

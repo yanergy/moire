@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { h } from 'vue';
-import NotificationRow from '@/components/headers/NotificationRow.vue';
+import NotificationRow from '@/components/notifications/NotificationRow.vue';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ActivityEntry } from '@/shared/types';
 

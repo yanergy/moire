@@ -138,7 +138,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const authors = ref<AuthorFilter>('me');
     // The overview cards turned off in the Dashboard settings menu, by key.
     const hiddenCards = ref<string[]>([]);
-    // The notification settings shown in the notifications menu (owned by main).
+    // The notification settings shown on the notifications page (owned by main).
     const notificationSettings = ref<NotificationSettings | null>(null);
     // Kept in the renderer only, so it resets to this week on restart.
     const mergedPeriod = ref<MergedPeriod>('week');
