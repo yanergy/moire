@@ -21,6 +21,7 @@ export type DashboardCategoryKey =
     | 'changes'
     | 'ready'
     | 'failing'
+    | 'conflicts'
     | 'open'
     | 'stale'
     | 'drafts'
@@ -36,14 +37,15 @@ export interface DashboardCategory {
     unread: number;
 }
 
-// The card each notification kind points at. Kinds without a card (a merge
-// conflict, a PR closed without merge) mark none.
+// The card each notification kind points at. Kinds without a card (a PR closed
+// without merge, a comment) mark none.
 const CARD_FOR_KIND: Partial<Record<ActivityEntry['kind'], DashboardCategoryKey>> = {
     'review-requested': 'review',
     'changes-requested': 'changes',
     approved: 'ready',
     'ready-to-merge': 'ready',
     'checks-failed': 'failing',
+    'merge-conflict': 'conflicts',
     'merged-by-other': 'merged',
 };
 
@@ -446,6 +448,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
                 caption: author,
                 dotClass: 'bg-moire-pr-closed',
                 prs: scoped.value.filter((pr) => pr.ci === 'failing'),
+            },
+            {
+                key: 'conflicts',
+                label: 'Merge conflicts',
+                caption: author,
+                dotClass: 'bg-moire-pr-closed',
+                prs: scoped.value.filter((pr) => pr.mergeable === 'CONFLICTING'),
             },
             {
                 key: 'open',

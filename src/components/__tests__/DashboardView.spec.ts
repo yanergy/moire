@@ -66,7 +66,7 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('Overview');
         expect(wrapper.text()).toContain('2 open by you in o/r');
         expect(wrapper.text()).toContain('Updated 5m ago');
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 
     it('leaves the notifications to the header menu', async () => {
@@ -97,7 +97,7 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('2 · Requested from you');
 
         await wrapper.get('button').trigger('click'); // Overview
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 
     it('says so when a card has no PRs', async () => {
@@ -117,7 +117,7 @@ describe('DashboardView', () => {
 
         expect(wrapper.text()).toContain('gh is not signed in to GitHub');
         expect(wrapper.text()).toContain('Showing data from 5m ago');
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 
     it('says so when every card is hidden', async () => {
@@ -128,6 +128,7 @@ describe('DashboardView', () => {
                     'changes',
                     'ready',
                     'failing',
+                    'conflicts',
                     'open',
                     'stale',
                     'merged',
@@ -215,6 +216,6 @@ describe('DashboardView', () => {
 
         useUiStore().goBack();
         await flushPromises();
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 });
