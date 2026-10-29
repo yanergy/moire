@@ -174,12 +174,17 @@ describe('dashboard store', () => {
         expect(store.showDrafts).toBe(false);
     });
 
-    // My PRs: 1 changes requested, 2 ready, 3 draft, 4 closed, 5 failing and stale.
+    // My PRs: 1 changes requested and conflicting, 2 ready, 3 draft, 4 closed, 5 failing and stale.
     // Bob's: 7 failing and stale, 8 waiting.
     function scopedSnapshot() {
         const staleDate = '2026-10-10T00:00:00Z';
         const mineOpen = [
-            pr({ id: 'A', number: 1, reviewDecision: 'CHANGES_REQUESTED' }),
+            pr({
+                id: 'A',
+                number: 1,
+                reviewDecision: 'CHANGES_REQUESTED',
+                mergeable: 'CONFLICTING',
+            }),
             pr({ id: 'B', number: 2, reviewDecision: 'APPROVED', ci: 'passing' }),
             pr({ id: 'C', number: 3, isDraft: true }),
             pr({ id: 'E', number: 5, ci: 'failing', updatedAt: staleDate }),
@@ -205,6 +210,7 @@ describe('dashboard store', () => {
             'changes',
             'ready',
             'failing',
+            'conflicts',
             'open',
             'stale',
             'merged',
@@ -215,6 +221,7 @@ describe('dashboard store', () => {
             changes: [1],
             ready: [2],
             failing: [5],
+            conflicts: [1],
             open: [1, 2, 3, 5],
             stale: [5],
             merged: [],
@@ -233,6 +240,7 @@ describe('dashboard store', () => {
         expect(counts(store)).toMatchObject({
             review: [9],
             failing: [5, 7],
+            conflicts: [1],
             open: [1, 2, 3, 5, 7, 8, 9],
             stale: [5, 7],
         });
@@ -247,7 +255,12 @@ describe('dashboard store', () => {
         const store = useDashboardStore();
         store.applyState(state({ authors: ['bob'], snapshot: scopedSnapshot() }));
 
-        expect(counts(store)).toMatchObject({ failing: [7], open: [7, 8], stale: [7] });
+        expect(counts(store)).toMatchObject({
+            failing: [7],
+            conflicts: [],
+            open: [7, 8],
+            stale: [7],
+        });
         expect(store.categories.find((c) => c.key === 'failing')?.caption).toBe('By bob');
         expect(store.openLabel).toBe('open by bob');
         expect(store.authorsLabel).toBe('bob');
@@ -283,6 +296,7 @@ describe('dashboard store', () => {
             changes: 0,
             ready: 1,
             failing: 1,
+            conflicts: 1,
             open: 0,
             stale: 0,
             merged: 0,

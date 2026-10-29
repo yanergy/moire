@@ -109,7 +109,7 @@ the popup never appears.
    task-list boxes.
 7. **Keep track of pull requests.** The dashboard button in the toolbar (or **View > Dashboard**,
    `Cmd/Ctrl+Shift+D`) shows an overview of the open repository's pull requests as cards: needs
-   your review, changes requested, ready to merge, failing checks, your open PRs, stale, merged
+   your review, changes requested, ready to merge, failing checks, merge conflicts, your open PRs, stale, merged
    (this week or this month, under **Dashboard settings > Merged**), and drafts. Click a card to list its PRs, then a PR to open it (or its **Open in browser** button
    to open it on GitHub). The cards count your own PRs; under **Dashboard settings > Users**
    you can pick other authors, or **All**, and **Dashboard settings > Cards** hides the cards you do not
@@ -168,7 +168,7 @@ last branch range are remembered per repository.
   **Git > Notifications** holds the same toggles plus a dock badge toggle, and the two stay in
   step. More than three updates at once arrive as one summary notification.
 - A dashboard for the open repository: an overview of cards counting the PRs that need your
-  review, have changes requested, are ready to merge, have failing checks, are open, are stale
+  review, have changes requested, are ready to merge, have failing checks, have merge conflicts, are open, are stale
   (no activity in 7 or more days), were merged this week or this month, or are drafts. Each card opens a list of its PRs. The
   **Dashboard settings** menu holds a "Show drafts" toggle (for the dashboard only; notifications
   have their own) and a **Users** submenu that picks whose PRs the cards count: you by default, any

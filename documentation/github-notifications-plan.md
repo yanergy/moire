@@ -94,6 +94,7 @@ dot, a label, the PR count and a caption saying what is counted:
 | Changes requested (orange) | Open PRs with changes requested | On your PRs |
 | Ready to merge (green) | Open PRs that are approved, with passing checks and no conflicts | Approved, checks green |
 | Failing checks (red) | Open PRs with failing checks | On your PRs |
+| Merge conflicts (red) | Open PRs that conflict with their base branch | On your PRs |
 | Your open PRs (purple) | Open PRs | Authored by you |
 | Stale (gray) | Open PRs with no activity in 7 or more days | No activity in 7+ days |
 | Merged (purple) | PRs merged since Monday, or since the 1st of the month | This week |
@@ -107,7 +108,7 @@ repository, or **All**. The captions follow the pick ("Any author", "By ann", "3
 
 A card with unread notifications about its PRs shows a green "N new" pill in its top right
 corner, the Notifications toggle's unread tone (a pill, not a dot, so it does not read as a second status dot): a review request on Needs your review, changes requested on Changes
-requested, an approval or ready to merge on Ready to merge, failed checks on Failing checks, and
+requested, an approval or ready to merge on Ready to merge, failed checks on Failing checks, a merge conflict on Merge conflicts, and
 merged by someone else on Merged. A notification only counts while its PR is still in the card,
 and the pill goes away once the notifications are read or deleted.
 
