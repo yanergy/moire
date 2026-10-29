@@ -127,22 +127,10 @@ last branch range are remembered per repository.
 
 ## Features
 
+### Comparing branches
+
 - Two-branch diff for any local Git repository, with `merge-base` (pull-request style) and `direct`
   comparison modes.
-- Split and unified layouts, powered by the Monaco editor.
-- A choice of diff layout under **View > Diff Layout**: the single-file view, or a GitHub-style
-  "all files" list that stacks every changed file's diff in one scroll. The stacked view windows
-  its editors so large pull requests stay responsive, marking a file viewed collapses it, and
-  clicking a file in the tree jumps to it.
-- A virtualized file tree that stays smooth on large change sets, with per-file and per-folder
-  "mark viewed" progress.
-- Next and previous change navigation that steps through the open file, then crosses into the
-  adjacent file (in sidebar order) once a boundary is reached, wrapping around the whole change set.
-- Open a changed file from the diff header. The filename is a link (with an external-link icon)
-  that opens the working-tree copy, and **View > Open Files In** chooses the OS default app or a
-  detected editor (auto-detected per machine and persisted across launches).
-- Rename detection, binary-file notices, and inline image previews.
-- A large-file gate so oversized files never freeze the UI.
 - Searchable branch pickers that group branches by prefix and recommend a likely base and head.
 - Favorite branches. Star a branch in either picker to pin it in a "Favorites" group below the
   recommendations, in both the base and the head picker. A starred branch that is already
@@ -150,37 +138,77 @@ last branch range are remembered per repository.
   repository.
 - Recent-repository list and a native folder picker.
 - Auto-refresh when the working tree changes, plus a manual refresh.
-- System, light, and dark themes, with theme and branch selections persisted per repository.
-- A selectable diff color style (GitHub or VS Code) under **View > Code Style**, persisted across launches.
-- A status bar reporting line-ending style and how long ago the diff was synced.
-- A pull-request viewer for the compared branches: title, status, merge state, labels, description
-  and conversation as Markdown, and a Checks tab with the head commit's CI. An edit mode (off by
-  default) adds posting, editing, and deleting your own comments, editing the description, and
-  ticking task-list checkboxes. Inline review threads and CI check annotations show on their lines
-  in the diff, and you can reply to and resolve threads in place. The file tree flags each file that
-  carries review threads or annotations.
-- GitHub notifications for the open repository and the active `gh` account: a review requested
-  from you, changes requested on your PR, your PR closed without merge, failed checks (once per PR
-  until they pass again), an approval, a merge conflict, new comments by someone else on your
-  open PRs (several at once collapse into one notification), and optionally ready to merge and
-  merged by someone else. Each event has its own toggle in the **Notification settings** menu (on
-  the notifications page), next to an **Enable notifications** switch (on by default) and a toggle for whether draft PRs notify.
-  **Git > Notifications** holds the same toggles plus a dock badge toggle, and the two stay in
-  step. More than three updates at once arrive as one summary notification.
-- A dashboard for the open repository: an overview of cards counting the PRs that need your
-  review, have changes requested, are ready to merge, have failing checks, have merge conflicts, are open, are stale
-  (no activity in 7 or more days), were merged this week or this month, or are drafts. Each card opens a list of its PRs. The
-  **Dashboard settings** menu holds a "Show drafts" toggle (for the dashboard only; notifications
-  have their own) and a **Users** submenu that picks whose PRs the cards count: you by default, any
-  mix of authors, or all of them.
-- A notifications page (opened with the **Notifications** button next to **Dashboard**) listing the
-  notifications sent for the open repository (the last 500, grouped by day and loaded as you
-  scroll), with unread ones highlighted and counted on the
-  button, and buttons to mark them read (or unread again) or delete them. A **Notification settings** menu sits in
-  the page header, as **Dashboard settings** does on the dashboard.
+
+### Reading the diff
+
+- Split and unified layouts, powered by the Monaco editor.
+- A choice of diff layout under **View > Diff Layout**: the single-file view, or a GitHub-style
+  "all files" list that stacks every changed file's diff in one scroll. The stacked view windows
+  its editors so large pull requests stay responsive, marking a file viewed collapses it, and
+  clicking a file in the tree jumps to it.
+- A virtualized file tree that stays smooth on large change sets, with per-file and per-folder
+  "mark viewed" progress.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
   the tree by filetype, mutation type, or marker (files carrying an error, warning, or review
   comment). Filters are multi-select and combine, and a reset clears them at once.
+- Next and previous change navigation that steps through the open file, then crosses into the
+  adjacent file (in sidebar order) once a boundary is reached, wrapping around the whole change set.
+- Open a changed file from the diff header. The filename is a link (with an external-link icon)
+  that opens the working-tree copy, and **View > Open Files In** chooses the OS default app or a
+  detected editor (auto-detected per machine and persisted across launches).
+- Rename detection, binary-file notices, and inline image previews.
+- A large-file gate so oversized files never freeze the UI.
+- A status bar reporting line-ending style and how long ago the diff was synced.
+
+### Pull requests
+
+- A pull-request viewer for the compared branches: title, status, merge state, labels, description
+  and conversation as Markdown, and a Checks tab with the head commit's CI.
+- Inline review threads and CI check annotations show on their lines in the diff. The file tree
+  flags each file that carries review threads or annotations.
+- An edit mode (off by default) adds posting, editing, and deleting your own comments, editing the
+  description, ticking task-list checkboxes, and replying to and resolving threads in place.
+
+### Dashboard
+
+- A dashboard for the open repository: an overview of cards counting the PRs that need your
+  review, have changes requested, are ready to merge, have failing checks, have merge conflicts,
+  are open, are stale (no activity in 7 or more days), were merged this week or this month, or are
+  drafts.
+- Each card opens a list of its PRs. Clicking a PR opens it in the PR view on its remote branches,
+  or on GitHub when it comes from a fork or its branches are not available locally. Every row also
+  has an **Open in browser** button.
+- A card with unread notifications about its PRs shows an "N new" pill.
+- The **Dashboard settings** menu holds a "Show drafts" toggle (for the dashboard only;
+  notifications have their own), a **Users** submenu that picks whose PRs the cards count (you by
+  default, any mix of authors, or all of them), a **Cards** submenu that hides the cards you do not
+  need, and the period of the Merged card.
+
+### Notifications
+
+- GitHub notifications for the open repository and the active `gh` account, checked every two
+  minutes: a review requested from you, changes requested on your PR, your PR closed without
+  merge, failed checks (once per PR until they pass again), an approval, a merge conflict, new
+  comments by someone else on your open PRs (several at once collapse into one notification), and
+  optionally ready to merge and merged by someone else. More than three updates at once arrive as
+  one summary notification.
+- A notifications page (opened with the **Notifications** button next to **Dashboard**) listing the
+  notifications sent for the open repository (the last 500, grouped by day and loaded as you
+  scroll). Unread ones are highlighted and counted on the button and the dock icon, and each can be
+  marked read (or unread again) or deleted.
+- Each event has its own toggle in the **Notification settings** menu in the page header, next to
+  an **Enable notifications** switch (on by default) and a toggle for whether draft PRs notify.
+  **Git > Notifications** holds the same toggles plus a dock badge toggle, and the two stay in
+  step.
+
+### App
+
+- System, light, and dark themes, with theme and branch selections persisted per repository.
+- A selectable diff color style (GitHub or VS Code) under **View > Code Style**, persisted across
+  launches.
+- Back and forward history between the diff, the PR view, the dashboard and its cards, and the
+  notifications page, stepped through with the mouse's back and forward buttons.
+- An update check on launch that tells you when a newer release is out on GitHub.
 
 ## Development
 
