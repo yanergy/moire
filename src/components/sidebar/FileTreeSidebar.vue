@@ -58,10 +58,12 @@ watch(allViewed, (done, wasDone) => {
 // The sidebar is resizable by dragging its right border. Width is clamped so the
 // panel can't collapse away or crowd out the diff, and is remembered per viewer
 // in localStorage (a convenience, so a missing/blocked store just uses the default).
-// Floor keeps the header (title, count, controls, "viewed" tally) on one line.
-const MIN_WIDTH = 260;
+// Floor keeps the header (title, count, controls, "viewed" tally) on one line,
+// measured for four-digit counts with a filter active (its clear cross showing).
+// The default is that floor too; a saved width below it falls back to it.
+const MIN_WIDTH = 360;
 const MAX_WIDTH = 640;
-const DEFAULT_WIDTH = 312;
+const DEFAULT_WIDTH = 360;
 const WIDTH_KEY = 'moire:sidebar-width';
 
 function loadWidth(): number {

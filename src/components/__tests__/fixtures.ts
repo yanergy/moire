@@ -4,13 +4,29 @@
 // viewed state seed them from here instead. Not a *.spec file, so vitest does
 // not run it as a suite.
 
+import { config } from '@vue/test-utils';
 import type {
     BranchInfo,
     ChangedFile,
     DashboardPr,
     DashboardSnapshot,
     DashboardState,
+    NotificationSettings,
 } from '@/shared/types';
+
+// Tooltip primitives that render their trigger and drop the content. Components
+// that rely on a parent's TooltipProvider (the page's, the toolbar's) are mounted
+// alone in tests, where the real Tooltip would find no provider. Call at the top
+// of a spec file; vitest isolates each file, so it does not leak into others.
+export function stubTooltips() {
+    config.global.stubs = {
+        ...config.global.stubs,
+        TooltipProvider: { template: '<slot />' },
+        Tooltip: { template: '<slot />' },
+        TooltipTrigger: { template: '<slot />' },
+        TooltipContent: { render: () => null },
+    };
+}
 
 export const BRANCHES: BranchInfo[] = [
     { name: 'main', kind: 'local', isCurrent: true },
@@ -100,6 +116,28 @@ export function dashboardSnapshot(overrides: Partial<DashboardSnapshot> = {}): D
     };
 }
 
+// The notification settings at their defaults, with optional changes.
+export function notificationSettings(
+    overrides: Partial<NotificationSettings> = {}
+): NotificationSettings {
+    return {
+        enabled: true,
+        notifyDrafts: true,
+        events: {
+            'review-requested': true,
+            'changes-requested': true,
+            'closed-unmerged': true,
+            'checks-failed': true,
+            approved: true,
+            'merge-conflict': true,
+            'ready-to-merge': false,
+            'merged-by-other': false,
+            commented: true,
+        },
+        ...overrides,
+    };
+}
+
 export function dashboardState(overrides: Partial<DashboardState> = {}): DashboardState {
     return {
         status: 'ok',
@@ -108,6 +146,7 @@ export function dashboardState(overrides: Partial<DashboardState> = {}): Dashboa
         showDrafts: true,
         authors: 'me',
         hiddenCards: [],
+        notifications: notificationSettings(),
         ...overrides,
     };
 }

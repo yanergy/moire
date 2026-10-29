@@ -11,6 +11,7 @@
 import {
     classifyFailure,
     defaultRunner,
+    settleReRequestedChanges,
     toCheck,
     type GhCheckNode,
     type GhRunner,
@@ -63,6 +64,17 @@ export interface DashboardPr {
     ci: CiState;
     failedChecks: string[];
     reviews: DashboardReview[];
+    // The recent comments by anyone, for the commented event. Only the viewer's
+    // open PRs fetch them, so on other PRs, and in snapshots saved before they
+    // existed, it is left out.
+    comments?: DashboardComment[];
+}
+
+// One comment on a PR: in its conversation, the summary of a review left as a
+// comment, or an inline comment (a reply in a review thread included).
+export interface DashboardComment {
+    id: string;
+    author: string;
 }
 
 export interface DashboardSnapshot {
@@ -93,7 +105,21 @@ export type DashboardEventKind =
     | 'approved'
     | 'merge-conflict'
     | 'ready-to-merge'
-    | 'merged-by-other';
+    | 'merged-by-other'
+    | 'commented';
+
+// Every event kind, in the order the notification settings list them.
+export const NOTIFICATION_EVENT_KINDS: DashboardEventKind[] = [
+    'review-requested',
+    'changes-requested',
+    'closed-unmerged',
+    'checks-failed',
+    'approved',
+    'merge-conflict',
+    'ready-to-merge',
+    'merged-by-other',
+    'commented',
+];
 
 export interface DashboardEvent {
     kind: DashboardEventKind;
@@ -102,6 +128,8 @@ export interface DashboardEvent {
     actor?: string;
     // The failed check names for 'checks-failed'.
     checks?: string[];
+    // How many new comments a 'commented' event stands for.
+    count?: number;
 }
 
 export interface RepoIdentityResult {
@@ -130,17 +158,35 @@ export interface SnapshotDiff {
 
 // --- Fetching ---
 
-const PR_FRAGMENT = `
-fragment Pr on PullRequest {
+const PR_FIELDS = `
   id number title url isDraft state merged closedAt createdAt updatedAt
   isCrossRepository additions deletions mergeable reviewDecision
   author { login } mergedBy { login } baseRefName headRefName
   latestReviews(first: 50) { nodes { id state author { login } } }
+  reviewRequests(first: 50) { nodes { requestedReviewer { ... on User { login } } } }
   commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { nodes {
     __typename
     ... on CheckRun { name status conclusion }
     ... on StatusContext { context state }
-  } } } } } }
+  } } } } } }`;
+
+const PR_FRAGMENT = `
+fragment Pr on PullRequest {${PR_FIELDS}
+}`;
+
+// The viewer's open PRs also fetch their latest comments, for the commented
+// event. Only the newest few, as the poll runs every two minutes and few comments
+// land between two polls. A reply in a review thread is a review of its own, so
+// the reviews' inline comments cover the replies too.
+const COMMENT_WINDOW = 10;
+
+const MY_PR_FRAGMENT = `
+fragment Pr on PullRequest {${PR_FIELDS}
+  comments(last: ${COMMENT_WINDOW}) { nodes { id author { login } } }
+  reviews(last: ${COMMENT_WINDOW}) { nodes {
+    id state body author { login }
+    comments(first: ${COMMENT_WINDOW}) { nodes { id author { login } } }
+  } }
 }`;
 
 // The Merged card only lists merged PRs, so it skips the reviews and checks,
@@ -188,6 +234,19 @@ interface GqlPr {
     latestReviews?: {
         nodes?: ({ id?: string; state?: string; author?: { login?: string } | null } | null)[];
     } | null;
+    reviewRequests?: {
+        nodes?: ({ requestedReviewer?: { login?: string } | null } | null)[];
+    } | null;
+    comments?: { nodes?: (GqlComment | null)[] | null } | null;
+    reviews?: {
+        nodes?: ({
+            id?: string;
+            state?: string;
+            body?: string;
+            author?: { login?: string } | null;
+            comments?: { nodes?: (GqlComment | null)[] | null } | null;
+        } | null)[];
+    } | null;
     commits?: {
         nodes?: ({
             commit?: {
@@ -200,6 +259,11 @@ interface GqlPr {
     } | null;
 }
 
+interface GqlComment {
+    id?: string;
+    author?: { login?: string } | null;
+}
+
 interface GqlSearch {
     data?: {
         viewer?: { login?: string } | null;
@@ -210,15 +274,19 @@ interface GqlSearch {
 // The effective review decision. Like the PR view (see reviewDecisionOf in gh.ts),
 // GitHub fills reviewDecision only when branch protection requires reviews, so an
 // empty one is derived from each reviewer's latest review: changes requested
-// outranks an approval.
-function decisionOf(decision: string, reviews: DashboardReview[]): string {
+// outranks an approval. Either way, changes requested is settled once the review
+// is re-requested from everyone who asked for them (see settleReRequestedChanges).
+function decisionOf(decision: string, reviews: DashboardReview[], requested: string[]): string {
+    const changesRequestedBy = reviews
+        .filter((r) => r.state === 'CHANGES_REQUESTED')
+        .map((r) => r.author);
     if (decision) {
-        return decision;
+        return settleReRequestedChanges(decision, changesRequestedBy, requested, true);
     }
 
     const states = new Set(reviews.map((r) => r.state));
     if (states.has('CHANGES_REQUESTED')) {
-        return 'CHANGES_REQUESTED';
+        return settleReRequestedChanges('CHANGES_REQUESTED', changesRequestedBy, requested, false);
     }
     if (states.has('APPROVED')) {
         return 'APPROVED';
@@ -242,11 +310,43 @@ function ciOf(rollupState: string | undefined): CiState {
     }
 }
 
+function toComment(node: GqlComment | null): DashboardComment {
+    return { id: node?.id ?? '', author: node?.author?.login ?? '' };
+}
+
+// The PR's comments, when they were fetched. Only reviews left as a comment
+// count: an approval or a changes request with a summary already notifies on its
+// own (and a dismissed one was a changes request), so neither its summary nor
+// its inline comments notify again. A review without a summary (a lone thread
+// reply, say) counts by its inline comments only.
+function commentsOf(node: GqlPr): DashboardComment[] | undefined {
+    if (!node.comments && !node.reviews) {
+        return undefined;
+    }
+
+    const comments = (node.comments?.nodes ?? []).map(toComment);
+    for (const review of node.reviews?.nodes ?? []) {
+        if (review?.state !== 'COMMENTED') {
+            continue;
+        }
+        if (review.body?.trim()) {
+            comments.push(toComment(review));
+        }
+        comments.push(...(review.comments?.nodes ?? []).map(toComment));
+    }
+    return comments.filter((c) => c.id && c.author);
+}
+
 function toDashboardPr(node: GqlPr): DashboardPr {
     const reviews = (node.latestReviews?.nodes ?? [])
         .filter((r) => r !== null)
         .map((r) => ({ id: r.id ?? '', author: r.author?.login ?? '', state: r.state ?? '' }))
         .filter((r) => r.id && r.author);
+    const requested = (node.reviewRequests?.nodes ?? [])
+        .map((r) => r?.requestedReviewer?.login ?? '')
+        .filter(Boolean);
+
+    const comments = commentsOf(node);
 
     const rollup = node.commits?.nodes?.[0]?.commit?.statusCheckRollup ?? null;
     const failedChecks = (rollup?.contexts?.nodes ?? [])
@@ -280,10 +380,11 @@ function toDashboardPr(node: GqlPr): DashboardPr {
         additions: node.additions ?? 0,
         deletions: node.deletions ?? 0,
         mergeable: node.mergeable ?? 'UNKNOWN',
-        reviewDecision: decisionOf(node.reviewDecision ?? '', reviews),
+        reviewDecision: decisionOf(node.reviewDecision ?? '', reviews, requested),
         ci: ciOf(rollup?.state),
         failedChecks,
         reviews,
+        ...(comments ? { comments } : {}),
     };
 }
 
@@ -397,7 +498,12 @@ export async function fetchSnapshot(
             name: 'review requests',
             query: `${scope} is:open archived:false user-review-requested:@me`,
         },
-        { ...full, name: 'your open PRs', query: `${scope} is:open author:@me` },
+        {
+            ...full,
+            name: 'your open PRs',
+            query: `${scope} is:open author:@me`,
+            fragment: MY_PR_FRAGMENT,
+        },
         {
             ...full,
             name: 'your closed PRs',
@@ -564,6 +670,25 @@ export function diffSnapshots(prev: DashboardSnapshot, next: DashboardSnapshot):
             }
         }
 
+        // Comments by anyone but the viewer, one event per PR however many came
+        // in. A PR whose earlier copy has no comments (a snapshot saved before
+        // they were fetched) is a baseline, so an upgrade does not replay them.
+        if (pr.comments && !(before && !before.comments)) {
+            const seenComments = new Set(before?.comments?.map((c) => c.id) ?? []);
+            const fresh = pr.comments.filter(
+                (c) => c.author !== next.login && !seenComments.has(c.id)
+            );
+            if (fresh.length) {
+                const authors = new Set(fresh.map((c) => c.author));
+                events.push({
+                    kind: 'commented',
+                    pr,
+                    ...(authors.size === 1 ? { actor: fresh[0]!.author } : {}),
+                    count: fresh.length,
+                });
+            }
+        }
+
         if (pr.reviewDecision === 'APPROVED' && before?.reviewDecision !== 'APPROVED') {
             events.push({ kind: 'approved', pr });
         }
@@ -605,6 +730,7 @@ export interface ActivityEntry {
     url: string;
     actor?: string;
     checks?: string[];
+    count?: number;
     read?: boolean;
 }
 

@@ -3,7 +3,9 @@ import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import RefSelector from '@/components/controls/RefSelector.vue';
 import { useComparisonStore } from '@/stores/comparison';
-import { BRANCHES } from '@/components/__tests__/fixtures';
+import { BRANCHES, stubTooltips } from '@/components/__tests__/fixtures';
+
+stubTooltips();
 
 // The ref picker is a shadcn-vue Popover + Command. Its list is teleported to
 // document.body, so assertions query the document rather than the wrapper.

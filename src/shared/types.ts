@@ -11,7 +11,7 @@ export type CompareMode = 'merge-base' | 'direct';
 export type ViewMode = 'split' | 'unified';
 // Which pane fills the main area: the diff, or the pull-request view (reachable
 // only when a PR is detected for the compared branches). Renderer-only state.
-export type MainView = 'diff' | 'pr' | 'dashboard';
+export type MainView = 'diff' | 'pr' | 'dashboard' | 'notifications';
 // The concrete theme the UI resolves to. `ThemePreference` is what the user
 // picks; `system` follows the OS and resolves to one of these.
 export type ThemeName = 'dark' | 'light';
@@ -262,7 +262,8 @@ export type DashboardEventKind =
     | 'approved'
     | 'merge-conflict'
     | 'ready-to-merge'
-    | 'merged-by-other';
+    | 'merged-by-other'
+    | 'commented';
 
 // One reviewer's current stance on a PR (their latest review).
 export interface DashboardReview {
@@ -294,6 +295,8 @@ export interface DashboardPr {
     ci: CiState;
     failedChecks: string[];
     reviews: DashboardReview[];
+    // The recent comments, fetched on the viewer's open PRs only.
+    comments?: { id: string; author: string }[];
 }
 
 export interface DashboardSnapshot {
@@ -322,6 +325,8 @@ export interface ActivityEntry {
     url: string;
     actor?: string;
     checks?: string[];
+    // How many new comments a 'commented' notification stands for.
+    count?: number;
     read?: boolean;
 }
 
@@ -330,11 +335,27 @@ export interface ActivityEntry {
 // names specific logins. Mirrors AuthorFilter in electron/settings.ts.
 export type AuthorFilter = 'me' | 'all' | string[];
 
+// The notification settings the notifications page shows and changes: the master
+// switch, whether draft PRs notify, and one toggle per event kind. Mirrors
+// NotificationSettings in electron/notifier.ts.
+export interface NotificationSettings {
+    enabled: boolean;
+    notifyDrafts: boolean;
+    events: Record<DashboardEventKind, boolean>;
+}
+
+// A partial change to them, as one toggle sends it.
+export interface NotificationSettingsChange {
+    enabled?: boolean;
+    notifyDrafts?: boolean;
+    events?: Partial<Record<DashboardEventKind, boolean>>;
+}
+
 // The dashboard for the open repository. `status` explains a missing or stale
 // snapshot (no gh, not signed in, no GitHub remote, ...); `snapshot` stays the
-// last good fetch when a later one fails. `showDrafts` is the dashboard's
-// "Show drafts" toggle, which also applies to notifications. `authors` is its
-// author filter: whose open PRs the cards count.
+// last good fetch when a later one fails. `showDrafts` is the dashboard's own
+// "Show drafts" toggle (notifications have theirs in `notifications`). `authors`
+// is its author filter: whose open PRs the cards count.
 export interface DashboardState {
     status: PrStatus;
     message?: string;
@@ -342,8 +363,9 @@ export interface DashboardState {
     activity: ActivityEntry[];
     showDrafts: boolean;
     authors: AuthorFilter;
-    // The overview cards turned off in the Display menu, by key.
+    // The overview cards turned off in the Dashboard settings menu, by key.
     hiddenCards: string[];
+    notifications: NotificationSettings;
 }
 
 // Preload API surface, exposed on window.api once the git backend lands.
@@ -442,8 +464,9 @@ export interface MoireApi {
     // The GitHub dashboard for the open repository. `getDashboard` returns the
     // current state (fetching first if nothing was fetched yet); `refreshDashboard`
     // polls GitHub now; `setDashboardShowDrafts`, `setDashboardAuthors` and
-    // `setDashboardHiddenCards` persist the "Show drafts" toggle, the author filter
-    // and the cards turned off in the Display menu.
+    // `setDashboardHiddenCards` persist the dashboard's "Show drafts" toggle, the
+    // author filter and the cards turned off in its settings menu;
+    // `setNotificationSettings` persists a change to the notification settings.
     // All three reject when no repository is open. `onDashboardChanged` fires after
     // every background poll, and returns an unsubscribe function.
     getDashboard(): Promise<DashboardState>;
@@ -451,9 +474,11 @@ export interface MoireApi {
     setDashboardShowDrafts(show: boolean): Promise<DashboardState>;
     setDashboardAuthors(authors: AuthorFilter): Promise<DashboardState>;
     setDashboardHiddenCards(keys: string[]): Promise<DashboardState>;
+    setNotificationSettings(change: NotificationSettingsChange): Promise<DashboardState>;
     // The dashboard's notification list, by activity id (see activityId in
-    // src/lib/dashboard.ts): mark one read, mark all read, or delete one.
+    // src/lib/dashboard.ts): mark one read or unread, mark all read, or delete one.
     markDashboardNotificationRead(id: string): Promise<DashboardState>;
+    markDashboardNotificationUnread(id: string): Promise<DashboardState>;
     markAllDashboardNotificationsRead(): Promise<DashboardState>;
     deleteDashboardNotification(id: string): Promise<DashboardState>;
     onDashboardChanged(cb: (state: DashboardState) => void): () => void;

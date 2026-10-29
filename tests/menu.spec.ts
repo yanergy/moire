@@ -280,7 +280,7 @@ describe('application menu', () => {
             const checkboxes = items.filter((item) => item.type === 'checkbox');
 
             expect(checkboxes.map((item) => item.label)).toEqual([
-                'GitHub Notifications',
+                'Enable Notifications',
                 ...NOTIFICATION_EVENT_OPTIONS.map((option) => option.label),
                 'Dock Badge',
             ]);
@@ -294,6 +294,7 @@ describe('application menu', () => {
                 true,
                 false,
                 false,
+                true,
                 true,
             ]);
         });
@@ -323,7 +324,7 @@ describe('application menu', () => {
                     checked,
                 });
 
-            click('GitHub Notifications', false);
+            click('Enable Notifications', false);
             click('Checks Failed', false);
             click('Dock Badge', false);
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import {
     describeEvent,
+    MAX_ACTIVITY,
     Notifier,
     POLL_INTERVAL_MS,
     type NotificationContent,
@@ -39,6 +40,11 @@ function pr(overrides: Partial<DashboardPr> = {}): DashboardPr {
         reviews: [],
         ...overrides,
     };
+}
+
+// A comment by ann.
+function comment(id: string) {
+    return { id, author: 'ann' };
 }
 
 // A PR by someone else that requests the viewer's review.
@@ -170,6 +176,23 @@ describe('Notifier', () => {
         t.notifier.stop();
     });
 
+    it('records how many comments a commented notification stands for', async () => {
+        const t = setup();
+        t.respond(
+            snapshot({ mine: [pr({ comments: [] })] }),
+            snapshot({ mine: [pr({ comments: [comment('C1'), comment('C2')] })] })
+        );
+
+        await t.notifier.setRepo('/repo');
+        await t.notifier.poll();
+
+        expect(t.deps.notify.mock.calls[0]![0].title).toBe('ann left 2 comments');
+        expect(t.notifier.getView().activity).toMatchObject([
+            { kind: 'commented', actor: 'ann', count: 2 },
+        ]);
+        t.notifier.stop();
+    });
+
     it('drops events whose kind is toggled off, but still records them as seen', async () => {
         const t = setup({
             events: { ...DEFAULT_NOTIFICATION_PREFS.events, 'review-requested': false },
@@ -187,8 +210,19 @@ describe('Notifier', () => {
         t.notifier.stop();
     });
 
-    it('drops draft events, and so leaves them out of the badge, when drafts are hidden', async () => {
-        const t = setup({ showDrafts: false });
+    it('still notifies about drafts when only the dashboard hides them', async () => {
+        const t = setup({ dashboardShowDrafts: false });
+        t.respond(snapshot(), snapshot({ toReview: [request(5, { isDraft: true })] }));
+
+        await t.notifier.setRepo('/repo');
+        await t.notifier.poll();
+
+        expect(t.deps.notify).toHaveBeenCalledTimes(1);
+        t.notifier.stop();
+    });
+
+    it('drops draft events, and so leaves them out of the badge, when drafts do not notify', async () => {
+        const t = setup({ notifyDrafts: false });
         t.respond(snapshot(), snapshot({ toReview: [request(5, { isDraft: true }), request(6)] }));
 
         await t.notifier.setRepo('/repo');
@@ -222,9 +256,9 @@ describe('Notifier', () => {
         t.notifier.stop();
     });
 
-    it('keeps the newest activity first, capped at 50', async () => {
+    it('keeps the newest activity first, capped', async () => {
         const t = setup({ events: { ...DEFAULT_NOTIFICATION_PREFS.events } });
-        const polls = Array.from({ length: 55 }, (_, i) =>
+        const polls = Array.from({ length: MAX_ACTIVITY + 5 }, (_, i) =>
             snapshot({ toReview: i === 0 ? [] : [request(i)] })
         );
         t.respond(...polls);
@@ -237,8 +271,8 @@ describe('Notifier', () => {
         }
 
         const { activity } = t.notifier.getView();
-        expect(activity).toHaveLength(50);
-        expect(activity[0]!.number).toBe(54);
+        expect(activity).toHaveLength(MAX_ACTIVITY);
+        expect(activity[0]!.number).toBe(MAX_ACTIVITY + 4);
         t.notifier.stop();
     });
 
@@ -402,6 +436,19 @@ describe('Notifier', () => {
             t.notifier.stop();
         });
 
+        it('marks a read notification unread again, counting it on the badge', async () => {
+            const { t, ids } = await withActivity();
+            await t.notifier.markAllActivityRead();
+
+            await t.notifier.markActivityRead(ids[1]!, false);
+
+            expect(t.notifier.getView().activity.map((e) => !!e.read)).toEqual([true, false]);
+            const saved = t.store.get('me|o/r') as { activity: { read?: boolean }[] };
+            expect(saved.activity.map((e) => !!e.read)).toEqual([true, false]);
+            expect(t.deps.setBadge).toHaveBeenLastCalledWith(1);
+            t.notifier.stop();
+        });
+
         it('marks every notification read, clearing the badge', async () => {
             const { t } = await withActivity();
             expect(t.deps.setBadge).toHaveBeenLastCalledWith(2);
@@ -470,6 +517,19 @@ describe('describeEvent', () => {
         ).toBe('Merged by bob');
     });
 
+    it('counts the new comments, naming the commenter when there is one', () => {
+        const title = (count: number, actor?: string) =>
+            describeEvent(
+                { kind: 'commented', pr: pr(), count, ...(actor ? { actor } : {}) },
+                'o/r'
+            ).title;
+
+        expect(title(1, 'ann')).toBe('ann commented');
+        expect(title(3, 'ann')).toBe('ann left 3 comments');
+        expect(title(3)).toBe('3 new comments');
+        expect(title(1)).toBe('New comment');
+    });
+
     it('has a title for every event kind', () => {
         const kinds = [
             'review-requested',
@@ -480,6 +540,7 @@ describe('describeEvent', () => {
             'merge-conflict',
             'ready-to-merge',
             'merged-by-other',
+            'commented',
         ] as const;
 
         for (const kind of kinds) {

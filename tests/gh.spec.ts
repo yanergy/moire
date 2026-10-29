@@ -287,6 +287,11 @@ describe('getPullRequest checks', () => {
     });
 });
 
+// One submitted review by `login` in the given state.
+function review(login: string, state: string, at: string) {
+    return { author: { login }, body: '', state, submittedAt: at };
+}
+
 describe('getPullRequest review decision', () => {
     // Resolve the mapped reviewDecision for a PR carrying the given fields.
     async function decisionFor(overrides: Record<string, unknown>) {
@@ -361,6 +366,44 @@ describe('getPullRequest review decision', () => {
                 ],
             })
         ).toBe('CHANGES_REQUESTED');
+    });
+
+    describe('after the review is re-requested', () => {
+        it("settles GitHub's CHANGES_REQUESTED to REVIEW_REQUIRED", async () => {
+            expect(
+                await decisionFor({
+                    reviewDecision: 'CHANGES_REQUESTED',
+                    reviews: [review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z')],
+                    reviewRequests: [{ __typename: 'User', login: 'bob' }],
+                })
+            ).toBe('REVIEW_REQUIRED');
+        });
+
+        it('settles a derived CHANGES_REQUESTED to no decision, even with another approval', async () => {
+            expect(
+                await decisionFor({
+                    reviewDecision: '',
+                    reviews: [
+                        review('ann', 'APPROVED', '2026-09-04T00:00:00Z'),
+                        review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z'),
+                    ],
+                    reviewRequests: [{ __typename: 'User', login: 'bob' }],
+                })
+            ).toBe('');
+        });
+
+        it('keeps CHANGES_REQUESTED while another reviewer who asked for changes is not re-requested', async () => {
+            expect(
+                await decisionFor({
+                    reviewDecision: 'CHANGES_REQUESTED',
+                    reviews: [
+                        review('ann', 'CHANGES_REQUESTED', '2026-09-04T00:00:00Z'),
+                        review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z'),
+                    ],
+                    reviewRequests: [{ __typename: 'User', login: 'bob' }],
+                })
+            ).toBe('CHANGES_REQUESTED');
+        });
     });
 
     it('leaves the decision empty when there are only plain comments', async () => {

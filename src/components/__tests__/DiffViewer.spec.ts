@@ -4,6 +4,9 @@ import DiffViewer from '@/components/diff/DiffViewer.vue';
 import { editor } from './monaco-stub';
 import type { StubDiffEditor } from './monaco-stub';
 import type { CheckAnnotation, CodeStyle, PrReviewThread, ViewMode } from '@/shared/types';
+import { stubTooltips } from './fixtures';
+
+stubTooltips();
 
 const baseProps = {
     original: 'const a = 1;',

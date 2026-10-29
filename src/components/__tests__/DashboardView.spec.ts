@@ -6,9 +6,12 @@ import DashboardView from '@/components/dashboard/DashboardView.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
 import DashboardCard from '@/components/dashboard/DashboardCard.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
 import type { DashboardState } from '@/shared/types';
-import { dashboardPr, dashboardSnapshot, dashboardState } from './fixtures';
+import { dashboardPr, dashboardSnapshot, dashboardState, stubTooltips } from './fixtures';
+
+stubTooltips();
 
 function stubApi(state: DashboardState) {
     const api = {
@@ -41,7 +44,7 @@ describe('DashboardView', () => {
 
     async function mountView(state: DashboardState) {
         const api = stubApi(state);
-        // Attached so the Display menu, which teleports to the body, can open.
+        // Attached so the Dashboard settings menu, which teleports to the body, can open.
         const wrapper = mount(DashboardView, {
             global: { plugins: [pinia] },
             attachTo: document.body,
@@ -63,7 +66,7 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('Overview');
         expect(wrapper.text()).toContain('2 open by you in o/r');
         expect(wrapper.text()).toContain('Updated 5m ago');
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 
     it('leaves the notifications to the header menu', async () => {
@@ -94,7 +97,7 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('2 · Requested from you');
 
         await wrapper.get('button').trigger('click'); // Overview
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 
     it('says so when a card has no PRs', async () => {
@@ -114,7 +117,7 @@ describe('DashboardView', () => {
 
         expect(wrapper.text()).toContain('gh is not signed in to GitHub');
         expect(wrapper.text()).toContain('Showing data from 5m ago');
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 
     it('says so when every card is hidden', async () => {
@@ -125,6 +128,7 @@ describe('DashboardView', () => {
                     'changes',
                     'ready',
                     'failing',
+                    'conflicts',
                     'open',
                     'stale',
                     'merged',
@@ -143,10 +147,10 @@ describe('DashboardView', () => {
         expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
     });
 
-    it('offers Show drafts, a Users submenu and a Merged period submenu in the Display menu', async () => {
+    it('offers Show drafts, a Users submenu and a Merged period submenu in the Dashboard settings menu', async () => {
         const { api, wrapper } = await mountView(dashboardState());
 
-        await wrapper.get('[aria-label="Display options"]').trigger('click');
+        await wrapper.get('[aria-label="Dashboard settings"]').trigger('click');
         await flushPromises();
         await nextTick();
 
@@ -195,14 +199,23 @@ describe('DashboardView', () => {
         expect(api.openExternal).toHaveBeenCalledWith(pr.url);
     });
 
-    it('reloads, back on the overview, when another repository opens', async () => {
-        const { api, wrapper } = await mountView(dashboardState());
-        await wrapper.getComponent(DashboardCard).trigger('click');
+    // Back to the overview is the page's job (MoirePage resets the navigation).
+    it('reloads when another repository opens', async () => {
+        const { api } = await mountView(dashboardState());
 
         useComparisonStore().repoPath = '/repos/other';
         await flushPromises();
 
         expect(api.getDashboard).toHaveBeenCalledTimes(2);
-        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(8);
+    });
+
+    it('steps back from a card to the overview through the history', async () => {
+        const { wrapper } = await mountView(dashboardState());
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(0);
+
+        useUiStore().goBack();
+        await flushPromises();
+        expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 });

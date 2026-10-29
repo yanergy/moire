@@ -27,7 +27,7 @@ import { useComparisonStore } from '@/stores/comparison';
 import { renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import {
     Dialog,
@@ -39,6 +39,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Toggle } from '@/components/ui/toggle';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import type { CommentMutationResult, PrCheckState, PrComment } from '@/shared/types';
@@ -997,22 +998,33 @@ function renderComment(comment: PrComment): string {
                                  refresh runs, the trigger shows the spinner in place of
                                  the "..." glyph. -->
                             <Popover :open="topMenuOpen" @update:open="topMenuOpen = $event">
-                                <PopoverTrigger as-child>
-                                    <Button
-                                        variant="outline"
-                                        size="icon-sm"
-                                        class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                        aria-label="More actions"
-                                        title="More actions"
-                                    >
-                                        <RefreshCw
-                                            v-if="refreshing"
-                                            :size="16"
-                                            class="animate-spin"
-                                        />
-                                        <MoreHorizontal v-else :size="16" />
-                                    </Button>
-                                </PopoverTrigger>
+                                <!-- The popover's own anchor, outside the tooltip: nested in the tooltip,
+                                     PopoverTrigger would register the button as the tooltip's anchor and
+                                     leave the popover unpositioned (both build on Reka's Popper). -->
+                                <PopoverAnchor as-child>
+                                    <span class="inline-flex">
+                                        <Tooltip>
+                                            <TooltipTrigger as-child>
+                                                <PopoverTrigger as-child>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="icon-sm"
+                                                        class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                        aria-label="More actions"
+                                                    >
+                                                        <RefreshCw
+                                                            v-if="refreshing"
+                                                            :size="16"
+                                                            class="animate-spin"
+                                                        />
+                                                        <MoreHorizontal v-else :size="16" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                            </TooltipTrigger>
+                                            <TooltipContent>More actions</TooltipContent>
+                                        </Tooltip>
+                                    </span>
+                                </PopoverAnchor>
                                 <PopoverContent
                                     align="end"
                                     :side-offset="6"
@@ -1152,18 +1164,23 @@ function renderComment(comment: PrComment): string {
                          on the right, in the empty space past the tabs, so it can appear
                          and disappear (it shows only on the conversation tab) without
                          shifting the tabs. Only when something can fold. -->
-                    <Button
-                        v-if="activeTab === 'conversation' && hasCollapsible"
-                        variant="ghost"
-                        size="icon-xs"
-                        class="text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                        :aria-label="allCollapsed ? 'Expand all' : 'Collapse all'"
-                        :title="allCollapsed ? 'Expand all' : 'Collapse all'"
-                        @click="toggleAll"
-                    >
-                        <ChevronsUpDown v-if="allCollapsed" :size="16" />
-                        <ChevronsDownUp v-else :size="16" />
-                    </Button>
+                    <Tooltip v-if="activeTab === 'conversation' && hasCollapsible">
+                        <TooltipTrigger as-child>
+                            <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                class="text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                :aria-label="allCollapsed ? 'Expand all' : 'Collapse all'"
+                                @click="toggleAll"
+                            >
+                                <ChevronsUpDown v-if="allCollapsed" :size="16" />
+                                <ChevronsDownUp v-else :size="16" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{{
+                            allCollapsed ? 'Expand all' : 'Collapse all'
+                        }}</TooltipContent>
+                    </Tooltip>
                 </div>
 
                 <div class="p-4">
@@ -1175,22 +1192,25 @@ function renderComment(comment: PrComment): string {
 
                         <!-- A task-list checkbox write that failed (e.g. no permission).
                              It lives here because the checkbox is inside read-only
-                             rendered HTML with nowhere of its own to report. Padding,
-                             not margin, for the gap below (the unlayered reset zeroes
-                             margin utilities). -->
+                             rendered HTML with nowhere of its own to report. -->
                         <div v-if="taskError" class="pb-4">
                             <div
                                 class="flex items-center justify-between gap-2 rounded-md border border-moire-danger-edge bg-moire-danger px-3 py-2 text-[12px] text-moire-status-d"
                             >
                                 <span>{{ taskError }}</span>
-                                <button
-                                    type="button"
-                                    class="shrink-0 cursor-pointer rounded p-0.5 text-moire-status-d hover:bg-moire-danger-edge"
-                                    aria-label="Dismiss"
-                                    @click="taskError = ''"
-                                >
-                                    <CircleX :size="14" />
-                                </button>
+                                <Tooltip>
+                                    <TooltipTrigger as-child>
+                                        <button
+                                            type="button"
+                                            class="shrink-0 cursor-pointer rounded p-0.5 text-moire-status-d hover:bg-moire-danger-edge"
+                                            aria-label="Dismiss"
+                                            @click="taskError = ''"
+                                        >
+                                            <CircleX :size="14" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Dismiss</TooltipContent>
+                                </Tooltip>
                             </div>
                         </div>
 
@@ -1251,41 +1271,53 @@ function renderComment(comment: PrComment): string {
                                             <!-- Edit the description, in edit mode. Shown even
                                                  with no body yet, so one can be added. Swaps
                                                  the body for an editor. -->
-                                            <button
-                                                v-if="editing && !editingDescription"
-                                                type="button"
-                                                class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                aria-label="Edit description"
-                                                title="Edit the description"
-                                                @click="startEditDescription"
-                                            >
-                                                <Pencil :size="13" />
-                                            </button>
+                                            <Tooltip v-if="editing && !editingDescription">
+                                                <TooltipTrigger as-child>
+                                                    <button
+                                                        type="button"
+                                                        class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                        aria-label="Edit description"
+                                                        @click="startEditDescription"
+                                                    >
+                                                        <Pencil :size="13" />
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Edit description</TooltipContent>
+                                            </Tooltip>
                                             <!-- Fold the description down to its header. Points
                                                  down to expand, up to collapse. Only when there
                                                  is a description. -->
-                                            <button
-                                                v-if="hasBody"
-                                                type="button"
-                                                class="-mr-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                :aria-expanded="!descriptionCollapsed"
-                                                :aria-label="
+                                            <Tooltip v-if="hasBody">
+                                                <TooltipTrigger as-child>
+                                                    <button
+                                                        type="button"
+                                                        class="-mr-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                        :aria-expanded="!descriptionCollapsed"
+                                                        :aria-label="
+                                                            descriptionCollapsed
+                                                                ? 'Expand description'
+                                                                : 'Collapse description'
+                                                        "
+                                                        @click="
+                                                            descriptionCollapsed =
+                                                                !descriptionCollapsed
+                                                        "
+                                                    >
+                                                        <!-- Same disclosure as the file tree: down when
+                                                             open, right when collapsed. -->
+                                                        <ChevronDown
+                                                            v-if="!descriptionCollapsed"
+                                                            :size="14"
+                                                        />
+                                                        <ChevronRight v-else :size="14" />
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{{
                                                     descriptionCollapsed
                                                         ? 'Expand description'
                                                         : 'Collapse description'
-                                                "
-                                                @click="
-                                                    descriptionCollapsed = !descriptionCollapsed
-                                                "
-                                            >
-                                                <!-- Same disclosure as the file tree: down when
-                                                     open, right when collapsed. -->
-                                                <ChevronDown
-                                                    v-if="!descriptionCollapsed"
-                                                    :size="14"
-                                                />
-                                                <ChevronRight v-else :size="14" />
-                                            </button>
+                                                }}</TooltipContent>
+                                            </Tooltip>
                                         </div>
                                     </div>
                                     <div v-if="!descriptionCollapsed" class="px-3.5 py-3">
@@ -1345,9 +1377,7 @@ function renderComment(comment: PrComment): string {
                         </div>
 
                         <!-- Separate the description from the conversation below it with a
-                             labelled rule spanning the full conversation width. Padding, not
-                             margin, for the gap below: the project's unlayered
-                             `* { margin: 0 }` reset zeroes margin utilities. The flanking
+                             labelled rule spanning the full conversation width. The flanking
                              spans are the rule, split around the centred label. -->
                         <div
                             v-if="comments.length"
@@ -1443,16 +1473,31 @@ function renderComment(comment: PrComment): string {
                                                     openMenuId = $event ? comment.id : null
                                                 "
                                             >
-                                                <PopoverTrigger as-child>
-                                                    <button
-                                                        type="button"
-                                                        class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                                        aria-label="Comment actions"
-                                                        title="Comment actions"
-                                                    >
-                                                        <MoreHorizontal :size="14" />
-                                                    </button>
-                                                </PopoverTrigger>
+                                                <!-- The popover's own anchor, outside the tooltip: nested in the tooltip,
+                                                     PopoverTrigger would register the button as the tooltip's anchor and
+                                                     leave the popover unpositioned (both build on Reka's Popper). -->
+                                                <PopoverAnchor as-child>
+                                                    <span class="inline-flex">
+                                                        <Tooltip>
+                                                            <TooltipTrigger as-child>
+                                                                <PopoverTrigger as-child>
+                                                                    <button
+                                                                        type="button"
+                                                                        class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                                        aria-label="Comment actions"
+                                                                    >
+                                                                        <MoreHorizontal
+                                                                            :size="14"
+                                                                        />
+                                                                    </button>
+                                                                </PopoverTrigger>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent
+                                                                >Comment actions</TooltipContent
+                                                            >
+                                                        </Tooltip>
+                                                    </span>
+                                                </PopoverAnchor>
                                                 <PopoverContent
                                                     align="end"
                                                     :side-offset="6"
@@ -1498,20 +1543,32 @@ function renderComment(comment: PrComment): string {
                                             <!-- Fold this comment down to its header; points
                                                  down to expand, up to collapse (as the file
                                                  tree does). -->
-                                            <button
-                                                type="button"
-                                                class="-mr-1 inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                :aria-expanded="!isCollapsed(i)"
-                                                :aria-label="
+                                            <Tooltip>
+                                                <TooltipTrigger as-child>
+                                                    <button
+                                                        type="button"
+                                                        class="-mr-1 inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                        :aria-expanded="!isCollapsed(i)"
+                                                        :aria-label="
+                                                            isCollapsed(i)
+                                                                ? 'Expand comment'
+                                                                : 'Collapse comment'
+                                                        "
+                                                        @click="toggleCollapsed(i)"
+                                                    >
+                                                        <ChevronDown
+                                                            v-if="!isCollapsed(i)"
+                                                            :size="14"
+                                                        />
+                                                        <ChevronRight v-else :size="14" />
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{{
                                                     isCollapsed(i)
                                                         ? 'Expand comment'
                                                         : 'Collapse comment'
-                                                "
-                                                @click="toggleCollapsed(i)"
-                                            >
-                                                <ChevronDown v-if="!isCollapsed(i)" :size="14" />
-                                                <ChevronRight v-else :size="14" />
-                                            </button>
+                                                }}</TooltipContent>
+                                            </Tooltip>
                                         </div>
                                     </div>
                                     <div v-if="!isCollapsed(i)" class="px-3.5 py-3">
@@ -1636,9 +1693,7 @@ function renderComment(comment: PrComment): string {
                                     {{ check.name }}
                                 </span>
                                 <!-- Detail and the Details button share a wider gap
-                                     so the duration reads apart from the button.
-                                     (gap, not a margin: the unlayered reset kills
-                                     margin utilities.) -->
+                                     so the duration reads apart from the button. -->
                                 <div
                                     v-if="check.detail || check.url"
                                     class="flex shrink-0 items-center gap-4"
@@ -1740,11 +1795,10 @@ function renderComment(comment: PrComment): string {
 <!-- Unscoped: reka's scroll viewport wraps the slot in a width-less block (only
      min-width: fit-content), so it shrink-wraps to the content and leaves no room
      to center within. Force that wrapper full width and center its child with
-     flexbox. (Tailwind's mx-auto can't do it here: the project's unlayered
-     `* { margin: 0 }` reset overrides the layered margin utility.) Content wider
-     than the pane still overflows and scrolls. Keyed to this view's scroll area
-     (.pr-scroll-area) so other ScrollAreas are untouched; unscoped because the
-     wrapper is reka-internal and carries no scope attribute for :deep to reach. -->
+     flexbox. Content wider than the pane still overflows and scrolls. Keyed to
+     this view's scroll area (.pr-scroll-area) so other ScrollAreas are untouched;
+     unscoped because the wrapper is reka-internal and carries no scope attribute
+     for :deep to reach. -->
 <style>
 .pr-scroll-area [data-reka-scroll-area-viewport] > div {
     display: flex;

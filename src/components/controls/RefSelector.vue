@@ -13,6 +13,7 @@ import { WORKING_TREE, type BranchInfo } from '@/shared/types';
 import { recommendedBase, recommendedHead } from '@/lib/branch-recommendations';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     Command,
     CommandEmpty,
@@ -261,17 +262,25 @@ function pick(name: string) {
                     <span class="text-[10px] font-medium tracking-wider text-moire-faint uppercase">
                         Branches
                     </span>
-                    <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        :aria-label="allCollapsed ? 'Expand all groups' : 'Collapse all groups'"
-                        :title="allCollapsed ? 'Expand all' : 'Collapse all'"
-                        class="text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
-                        @click="toggleAll()"
-                    >
-                        <ChevronsUpDown v-if="allCollapsed" :size="14" />
-                        <ChevronsDownUp v-else :size="14" />
-                    </Button>
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                :aria-label="
+                                    allCollapsed ? 'Expand all groups' : 'Collapse all groups'
+                                "
+                                class="text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
+                                @click="toggleAll()"
+                            >
+                                <ChevronsUpDown v-if="allCollapsed" :size="14" />
+                                <ChevronsDownUp v-else :size="14" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{{
+                            allCollapsed ? 'Expand all groups' : 'Collapse all groups'
+                        }}</TooltipContent>
+                    </Tooltip>
                 </div>
                 <CommandList class="max-h-[322px]">
                     <CommandEmpty class="text-moire-faint">No refs found.</CommandEmpty>
@@ -333,31 +342,40 @@ function pick(name: string) {
                                  starred. Stops the click so starring does not also pick
                                  the row. Unstarred, it only shows on the hovered or
                                  highlighted row to keep the list quiet. -->
-                            <Button
-                                v-if="item.name !== WORKING_TREE"
-                                variant="ghost"
-                                size="icon-xs"
-                                data-slot="ref-favorite"
-                                :aria-pressed="comparison.isFavorite(item.name)"
-                                :aria-label="
-                                    comparison.isFavorite(item.name)
-                                        ? `Unstar ${item.name}`
-                                        : `Star ${item.name}`
-                                "
-                                :title="comparison.isFavorite(item.name) ? 'Unstar' : 'Star'"
-                                class="absolute top-1/2 right-1 size-5 -translate-y-1/2 hover:bg-transparent dark:hover:bg-transparent"
-                                :class="
-                                    comparison.isFavorite(item.name)
-                                        ? 'text-moire-warn'
-                                        : 'text-moire-faint opacity-0 group-hover/ref:opacity-100 group-data-[highlighted]/ref:opacity-100 hover:text-moire-fg'
-                                "
-                                @click.stop="comparison.toggleFavorite(item.name)"
-                            >
-                                <Star
-                                    class="size-3 text-current"
-                                    :class="comparison.isFavorite(item.name) ? 'fill-current' : ''"
-                                />
-                            </Button>
+                            <Tooltip v-if="item.name !== WORKING_TREE">
+                                <TooltipTrigger as-child>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon-xs"
+                                        data-slot="ref-favorite"
+                                        :aria-pressed="comparison.isFavorite(item.name)"
+                                        :aria-label="
+                                            comparison.isFavorite(item.name)
+                                                ? `Unstar ${item.name}`
+                                                : `Star ${item.name}`
+                                        "
+                                        class="absolute top-1/2 right-1 size-5 -translate-y-1/2 hover:bg-transparent dark:hover:bg-transparent"
+                                        :class="
+                                            comparison.isFavorite(item.name)
+                                                ? 'text-moire-warn'
+                                                : 'text-moire-faint opacity-0 group-hover/ref:opacity-100 group-data-[highlighted]/ref:opacity-100 hover:text-moire-fg'
+                                        "
+                                        @click.stop="comparison.toggleFavorite(item.name)"
+                                    >
+                                        <Star
+                                            class="size-3 text-current"
+                                            :class="
+                                                comparison.isFavorite(item.name)
+                                                    ? 'fill-current'
+                                                    : ''
+                                            "
+                                        />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{{
+                                    comparison.isFavorite(item.name) ? 'Unstar' : 'Star'
+                                }}</TooltipContent>
+                            </Tooltip>
                         </CommandItem>
                     </CommandGroup>
                 </CommandList>

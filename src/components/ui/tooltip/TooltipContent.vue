@@ -12,7 +12,7 @@ defineOptions({
 const props = withDefaults(
     defineProps<TooltipContentProps & { class?: HTMLAttributes['class'] }>(),
     {
-        sideOffset: 4,
+        sideOffset: 0,
     }
 );
 
@@ -37,8 +37,12 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
         >
             <slot />
 
+            <!-- Bordered on its two outer edges, deviating from stock shadcn, so the
+                 tooltip's border runs around the point instead of being cut by it.
+                 Reka draws the arrow pointing down and rotates it for the other
+                 sides, so the right and bottom edges are always the outer ones. -->
             <TooltipArrow
-                class="bg-moire-pop fill-moire-pop z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-xs"
+                class="bg-moire-pop fill-moire-pop z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-xs border-r border-b border-moire-border"
             />
         </TooltipContent>
     </TooltipPortal>

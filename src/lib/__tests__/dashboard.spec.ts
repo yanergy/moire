@@ -5,6 +5,7 @@ import {
     activityLabel,
     ciVisual,
     dashboardNotice,
+    groupActivityByDay,
     prDotClass,
 } from '@/lib/dashboard';
 import type { ActivityEntry, DashboardPr } from '@/shared/types';
@@ -84,6 +85,16 @@ describe('activityLabel', () => {
         );
         expect(activityLabel(entry({ kind: 'closed-unmerged' }))).toBe('Closed without merge');
     });
+
+    it('counts the comments, naming the commenter when there is one', () => {
+        expect(activityLabel(entry({ kind: 'commented', actor: 'ann', count: 1 }))).toBe(
+            'ann commented'
+        );
+        expect(activityLabel(entry({ kind: 'commented', actor: 'ann', count: 4 }))).toBe(
+            'ann left 4 comments'
+        );
+        expect(activityLabel(entry({ kind: 'commented', count: 4 }))).toBe('4 new comments');
+    });
 });
 
 describe('activityDotClass', () => {
@@ -102,5 +113,56 @@ describe('dashboardNotice', () => {
         expect(dashboardNotice('not-a-github-repo')?.title).toContain('no GitHub remote');
         expect(dashboardNotice('error', 'rate limited')?.detail).toBe('rate limited');
         expect(dashboardNotice('error')?.detail).toContain('Try refreshing');
+    });
+});
+
+// A notification sent at a local time.
+function sentAt(...date: [number, number, number, number]): ActivityEntry {
+    return {
+        kind: 'approved',
+        at: new Date(...date).toISOString(),
+        number: 1,
+        title: 'Add notifications',
+        url: 'https://github.com/o/r/pull/1',
+    };
+}
+
+describe('groupActivityByDay', () => {
+    // Local times, so the days hold in any time zone. Now is Wednesday afternoon.
+    const NOW = new Date(2026, 9, 28, 15, 0).getTime();
+
+    it('groups by local day, newest first, as Today, Yesterday, the weekday and the date', () => {
+        const activity = [
+            sentAt(2026, 9, 28, 9),
+            sentAt(2026, 9, 28, 0),
+            sentAt(2026, 9, 27, 23),
+            sentAt(2026, 9, 23, 12),
+            sentAt(2026, 9, 12, 12),
+            sentAt(2025, 11, 31, 12),
+        ];
+
+        const groups = groupActivityByDay(activity, NOW);
+
+        expect(groups.map((group) => group.entries.length)).toEqual([2, 1, 1, 1, 1]);
+        expect(groups.map((group) => group.label)).toEqual([
+            'Today',
+            'Yesterday',
+            new Date(2026, 9, 23).toLocaleDateString(undefined, { weekday: 'long' }),
+            new Date(2026, 9, 12).toLocaleDateString(undefined, {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+            }),
+            new Date(2025, 11, 31).toLocaleDateString(undefined, {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+            }),
+        ]);
+    });
+
+    it('returns no groups without notifications', () => {
+        expect(groupActivityByDay([], NOW)).toEqual([]);
     });
 });

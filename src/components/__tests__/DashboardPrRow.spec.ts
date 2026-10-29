@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
-import { dashboardPr } from './fixtures';
+import { dashboardPr, stubTooltips } from './fixtures';
+
+stubTooltips();
 
 const NOW = Date.parse('2026-10-26T12:00:00Z');
 

@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
-import NotificationRow from '@/components/headers/NotificationRow.vue';
+import { afterEach, describe, it, expect } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { h } from 'vue';
+import NotificationRow from '@/components/notifications/NotificationRow.vue';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ActivityEntry } from '@/shared/types';
 
 const NOW = Date.parse('2026-10-26T12:00:00Z');
@@ -14,9 +16,19 @@ const entry: ActivityEntry = {
     url: 'https://github.com/o/r/pull/12',
 };
 
+enableAutoUnmount(afterEach);
+
+// The row's tooltips need a provider, which the menu supplies in the app.
+function mountRow(props: { entry: ActivityEntry; now: number }, attachTo?: HTMLElement) {
+    return mount(TooltipProvider, {
+        slots: { default: () => h(NotificationRow, props) },
+        attachTo,
+    }).findComponent(NotificationRow);
+}
+
 describe('NotificationRow', () => {
     it('shows what happened, the PR and how long ago', () => {
-        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mountRow({ entry, now: NOW });
 
         expect(wrapper.text()).toContain('ann requested changes');
         expect(wrapper.text()).toContain('#12 Fix login');
@@ -25,14 +37,14 @@ describe('NotificationRow', () => {
     });
 
     it('emits open with the entry when clicked', async () => {
-        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mountRow({ entry, now: NOW });
 
         await wrapper.findAll('button')[0]!.trigger('click');
         expect(wrapper.emitted('open')).toEqual([[entry]]);
     });
 
     it('offers Mark as read and Delete, emitting the entry', async () => {
-        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mountRow({ entry, now: NOW });
 
         await wrapper.get('[aria-label="Mark as read"]').trigger('click');
         await wrapper.get('[aria-label="Delete notification"]').trigger('click');
@@ -42,19 +54,29 @@ describe('NotificationRow', () => {
         expect(wrapper.emitted('open')).toBeUndefined();
     });
 
-    it('fades a read notification and drops Mark as read', () => {
-        const wrapper = mount(NotificationRow, {
-            props: { entry: { ...entry, read: true }, now: NOW },
-        });
+    it('fades a read notification and offers Mark as unread in place of Mark as read', async () => {
+        const read = { ...entry, read: true };
+        const wrapper = mountRow({ entry: read, now: NOW });
 
         expect(wrapper.find('[aria-label="Mark as read"]').exists()).toBe(false);
+        await wrapper.get('[aria-label="Mark as unread"]').trigger('click');
+        expect(wrapper.emitted('markUnread')).toEqual([[read]]);
         expect(wrapper.find('.opacity-40').exists()).toBe(true);
         expect(wrapper.text()).toContain('ann requested changes');
         expect(wrapper.find('span.text-moire-muted').text()).toBe('ann requested changes');
     });
 
+    // The ellipsis of a cut off title takes the truncating span's color.
+    it('colors the truncating span like the title', () => {
+        const unread = mountRow({ entry, now: NOW });
+        expect(unread.get('.truncate').classes()).toContain('text-moire-muted');
+
+        const read = mountRow({ entry: { ...entry, read: true }, now: NOW });
+        expect(read.get('.truncate').classes()).toContain('text-moire-faint');
+    });
+
     it('always shows Open in browser at the end of the row', async () => {
-        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mountRow({ entry, now: NOW });
         const button = wrapper.get('[aria-label="Open in browser"]');
 
         expect(button.element.parentElement).toBe(wrapper.element);
@@ -65,8 +87,25 @@ describe('NotificationRow', () => {
         expect(wrapper.emitted('open')).toBeUndefined();
     });
 
+    it('shows a tooltip, not a native title, on the icon buttons', async () => {
+        const wrapper = mountRow({ entry, now: NOW }, document.body);
+
+        for (const label of ['Mark as read', 'Delete notification', 'Open in browser']) {
+            const button = wrapper.get(`[aria-label="${label}"]`);
+            expect(button.attributes('title')).toBeUndefined();
+
+            await button.trigger('focus');
+            await flushPromises();
+            expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+                label
+            );
+            await button.trigger('blur');
+            await flushPromises();
+        }
+    });
+
     it('colors the Delete icon red', () => {
-        const wrapper = mount(NotificationRow, { props: { entry, now: NOW } });
+        const wrapper = mountRow({ entry, now: NOW });
         const classes = wrapper.get('[aria-label="Delete notification"]').classes();
 
         expect(classes).toContain('text-moire-status-d');

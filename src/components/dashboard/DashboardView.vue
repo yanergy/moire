@@ -2,12 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowLeft, LoaderCircle, RefreshCw, SlidersHorizontal, TriangleAlert } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
-import { useDashboardStore, type DashboardCategoryKey } from '@/stores/dashboard';
+import { useUiStore } from '@/stores/ui';
+import { useDashboardStore } from '@/stores/dashboard';
 import { dashboardNotice } from '@/lib/dashboard';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -30,11 +32,12 @@ import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
 // the main process (see stores/dashboard.ts).
 const comparison = useComparisonStore();
 const dashboard = useDashboardStore();
+const ui = useUiStore();
 
-// The card whose PR list is showing, or null for the overview grid.
-const selectedKey = ref<DashboardCategoryKey | null>(null);
+// The card whose PR list is showing (null for the overview grid). Kept in the ui
+// store, so the back/forward history can step between the overview and a card.
 const selected = computed(
-    () => dashboard.categories.find((category) => category.key === selectedKey.value) ?? null
+    () => dashboard.categories.find((category) => category.key === ui.dashboardCard) ?? null
 );
 
 // One clock for every "3h ago", ticking so the ages stay current while open.
@@ -50,11 +53,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearInterval(clock));
 
-// Another repository opened while the dashboard is showing: back to its overview.
+// Another repository opened while the dashboard is showing: reload it (the page
+// resets to the overview with the history, see MoirePage).
 watch(
     () => comparison.repoPath,
     () => {
-        selectedKey.value = null;
         void dashboard.load();
     }
 );
@@ -126,7 +129,7 @@ const updated = computed(() =>
                             variant="ghost"
                             size="sm"
                             class="h-7 gap-1.5 px-2 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                            @click="selectedKey = null"
+                            @click="ui.setDashboardCard(null)"
                         >
                             <ArrowLeft :size="16" />
                             Overview
@@ -150,17 +153,18 @@ const updated = computed(() =>
                     <div class="flex-1" />
 
                     <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
-                    <!-- Display options: drafts, and whose PRs the cards count. -->
+                    <!-- Dashboard settings: drafts, whose PRs the cards count, which cards show,
+                         and the merged period. Notifications have their own, on the notifications page. -->
                     <DropdownMenu>
                         <DropdownMenuTrigger as-child>
                             <Button
                                 variant="outline"
                                 size="sm"
                                 class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                aria-label="Display options"
+                                aria-label="Dashboard settings"
                             >
                                 <SlidersHorizontal :size="16" />
-                                Display
+                                Dashboard settings
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -172,7 +176,7 @@ const updated = computed(() =>
                             <DropdownMenuCheckboxItem
                                 :model-value="dashboard.showDrafts"
                                 :class="menuRow"
-                                title="Include draft PRs in the dashboard and in notifications"
+                                title="Include draft PRs in the dashboard"
                                 @select="keepOpen"
                                 @update:model-value="dashboard.setShowDrafts($event)"
                             >
@@ -183,7 +187,7 @@ const updated = computed(() =>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger :class="menuRow">
                                     Users
-                                    <span class="ml-auto pl-3 text-moire-faint">
+                                    <span class="flex-1 pl-3 text-right text-moire-faint">
                                         {{ dashboard.authorsLabel }}
                                     </span>
                                 </DropdownMenuSubTrigger>
@@ -222,7 +226,7 @@ const updated = computed(() =>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger :class="menuRow">
                                     Cards
-                                    <span class="ml-auto pl-3 text-moire-faint">
+                                    <span class="flex-1 pl-3 text-right text-moire-faint">
                                         {{ cardsLabel }}
                                     </span>
                                 </DropdownMenuSubTrigger>
@@ -246,7 +250,7 @@ const updated = computed(() =>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger :class="menuRow">
                                     Merged
-                                    <span class="ml-auto pl-3 text-moire-faint">
+                                    <span class="flex-1 pl-3 text-right text-moire-faint">
                                         {{ dashboard.mergedPeriod === 'week' ? 'Week' : 'Month' }}
                                     </span>
                                 </DropdownMenuSubTrigger>
@@ -274,17 +278,24 @@ const updated = computed(() =>
                             </DropdownMenuSub>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button
-                        variant="outline"
-                        size="icon-sm"
-                        class="size-7 shrink-0 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                        aria-label="Refresh"
-                        title="Refresh"
-                        :disabled="dashboard.loading"
-                        @click="dashboard.refresh()"
-                    >
-                        <RefreshCw :size="16" :class="{ 'animate-spin': dashboard.loading }" />
-                    </Button>
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <Button
+                                variant="outline"
+                                size="icon-sm"
+                                class="size-7 shrink-0 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                aria-label="Refresh"
+                                :disabled="dashboard.loading"
+                                @click="dashboard.refresh()"
+                            >
+                                <RefreshCw
+                                    :size="16"
+                                    :class="{ 'animate-spin': dashboard.loading }"
+                                />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Refresh</TooltipContent>
+                    </Tooltip>
                 </div>
 
                 <div v-if="notice" class="pt-5">
@@ -326,7 +337,7 @@ const updated = computed(() =>
                         v-if="!dashboard.categories.length"
                         class="py-10 text-[13px] text-moire-muted"
                     >
-                        Every card is hidden. Turn them back on under Display, Cards.
+                        Every card is hidden. Turn them back on under Dashboard settings, Cards.
                     </p>
                     <div
                         v-else
@@ -336,7 +347,7 @@ const updated = computed(() =>
                             v-for="category in dashboard.categories"
                             :key="category.key"
                             :category="category"
-                            @open="selectedKey = category.key"
+                            @open="ui.setDashboardCard(category.key)"
                         />
                     </div>
                 </template>
@@ -349,6 +360,13 @@ const updated = computed(() =>
      viewport wraps the slot in a width-less block, so force it full width and
      center the content column. Keyed to this view's scroll area. -->
 <style>
+/* An opaque viewport, so Chromium paints the scroll layer in one color. Left
+   transparent, the area below short content showed the parent through it and,
+   on macOS, rendered a shade apart from the content, a seam across the view. */
+.dashboard-scroll-area [data-reka-scroll-area-viewport] {
+    background-color: var(--moire-app);
+}
+
 .dashboard-scroll-area [data-reka-scroll-area-viewport] > div {
     display: flex;
     width: 100%;

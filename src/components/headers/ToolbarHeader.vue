@@ -14,7 +14,7 @@ import type { CompareMode, ViewMode } from '@/shared/types';
 import RefSelector from '@/components/controls/RefSelector.vue';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
 import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
-import NotificationsMenu from '@/components/headers/NotificationsMenu.vue';
+import NotificationsButton from '@/components/headers/NotificationsButton.vue';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -48,9 +48,14 @@ function setPrView(on: boolean) {
     ui.setMainView(on ? 'pr' : 'diff');
 }
 
-// The dashboard toggle and the notifications menu show while a repository is open.
+// The dashboard toggle and the notifications bell show while a repository is open.
 function setDashboardView(on: boolean) {
-    ui.setMainView(on ? 'dashboard' : 'diff');
+    if (on) {
+        ui.openDashboard();
+        return;
+    }
+
+    ui.setMainView('diff');
 }
 
 // A status dot before the PR button label: vibrant green open, red closed,
@@ -82,7 +87,8 @@ const statusDotClass = computed(() => {
 <template>
     <TooltipProvider :delay-duration="300">
         <!-- Three columns: the repository and range on the left, the dashboard
-             button in the middle and the diff options on the right. The equal
+             and notifications buttons in the middle and the diff options on the
+             right. The equal
              side columns keep the middle centered on the header; a side that
              does not fit pushes it over rather than overlapping it. -->
         <div
@@ -126,41 +132,24 @@ const statusDotClass = computed(() => {
                     <TooltipContent>Checking for a pull request…</TooltipContent>
                 </Tooltip>
 
-                <Tooltip v-else-if="comparison.hasPullRequest">
-                    <TooltipTrigger as-child>
-                        <!-- The tooltip trigger wraps a span, not the Toggle: the trigger
-                         stamps its own data-state, which would otherwise clobber the
-                         toggle's data-state=on and drop the pressed styling. -->
-                        <span class="inline-flex">
-                            <Toggle
-                                variant="outline"
-                                size="sm"
-                                :model-value="ui.mainView === 'pr'"
-                                :class="[
-                                    'h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg',
-                                    // A draft PR reads as provisional: a dashed border, as
-                                    // GitHub renders draft state.
-                                    { 'border-dashed': comparison.pullRequest?.isDraft },
-                                ]"
-                                @update:model-value="setPrView"
-                            >
-                                <span
-                                    class="size-2.5 shrink-0 rounded-full"
-                                    :class="statusDotClass"
-                                />
-                                <GitPullRequestDraft
-                                    v-if="comparison.pullRequest?.isDraft"
-                                    :size="16"
-                                />
-                                <GitPullRequest v-else :size="16" />
-                                PR #{{ comparison.pullRequest?.number }}
-                            </Toggle>
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        {{ ui.mainView === 'pr' ? 'Back to the diff' : 'View the pull request' }}
-                    </TooltipContent>
-                </Tooltip>
+                <Toggle
+                    v-else-if="comparison.hasPullRequest"
+                    variant="outline"
+                    size="sm"
+                    :model-value="ui.mainView === 'pr'"
+                    :class="[
+                        'h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg',
+                        // A draft PR reads as provisional: a dashed border, as
+                        // GitHub renders draft state.
+                        { 'border-dashed': comparison.pullRequest?.isDraft },
+                    ]"
+                    @update:model-value="setPrView"
+                >
+                    <span class="size-2.5 shrink-0 rounded-full" :class="statusDotClass" />
+                    <GitPullRequestDraft v-if="comparison.pullRequest?.isDraft" :size="16" />
+                    <GitPullRequest v-else :size="16" />
+                    PR #{{ comparison.pullRequest?.number }}
+                </Toggle>
 
                 <!-- Shown in the PR button's place when the gh lookup failed (gh
                  missing, signed out, or an access error), so a missing PR panel is
@@ -180,30 +169,20 @@ const statusDotClass = computed(() => {
                 </Tooltip>
             </div>
 
-            <div class="flex justify-center">
-                <Tooltip v-if="comparison.repoPath">
-                    <TooltipTrigger as-child>
-                        <!-- Wrapped in a span for the same data-state reason as the PR
-                         toggle above. -->
-                        <span class="inline-flex">
-                            <Toggle
-                                variant="outline"
-                                size="sm"
-                                :model-value="ui.mainView === 'dashboard'"
-                                class="h-8 gap-2 px-3.5 text-[13px] font-medium text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                                @update:model-value="setDashboardView"
-                            >
-                                <LayoutDashboard :size="18" />
-                                Dashboard
-                            </Toggle>
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        {{
-                            ui.mainView === 'dashboard' ? 'Back to the diff' : 'Open the dashboard'
-                        }}
-                    </TooltipContent>
-                </Tooltip>
+            <!-- The two repository wide pages, side by side. -->
+            <div class="flex justify-center gap-2">
+                <Toggle
+                    v-if="comparison.repoPath"
+                    variant="outline"
+                    size="sm"
+                    :model-value="ui.mainView === 'dashboard'"
+                    class="h-8 gap-2 px-3.5 text-[13px] font-medium text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                    @update:model-value="setDashboardView"
+                >
+                    <LayoutDashboard :size="18" />
+                    Dashboard
+                </Toggle>
+                <notifications-button v-if="comparison.repoPath" />
             </div>
 
             <div class="flex items-center justify-end gap-2">
@@ -218,8 +197,6 @@ const statusDotClass = computed(() => {
                     :model-value="ui.viewMode"
                     @update:model-value="ui.setViewMode"
                 />
-
-                <notifications-menu v-if="comparison.repoPath" />
             </div>
         </div>
     </TooltipProvider>

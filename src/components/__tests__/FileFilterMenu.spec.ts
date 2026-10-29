@@ -5,6 +5,9 @@ import { nextTick } from 'vue';
 import FileFilterMenu from '@/components/sidebar/FileFilterMenu.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { CHANGED_FILES } from '@/components/__tests__/fixtures';
+import { stubTooltips } from './fixtures';
+
+stubTooltips();
 
 // The menu content teleports to the body; the top level holds a sub-trigger per
 // filter category (its options live in a hover submenu, not tested through jsdom).

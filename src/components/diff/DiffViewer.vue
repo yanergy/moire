@@ -12,6 +12,7 @@ import type {
     PrReviewThread,
     ViewMode,
 } from '@/shared/types';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const props = defineProps<{
     original: string | null;
@@ -868,14 +869,19 @@ defineExpose({
                 class="flex items-center justify-between border-b border-moire-border px-3 py-2 text-[12px] font-medium text-moire-muted"
             >
                 <span>{{ popoverTitle }}</span>
-                <button
-                    type="button"
-                    class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                    aria-label="Close"
-                    @click="closeThreadPopover"
-                >
-                    <X :size="14" />
-                </button>
+                <Tooltip>
+                    <TooltipTrigger as-child>
+                        <button
+                            type="button"
+                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                            aria-label="Close"
+                            @click="closeThreadPopover"
+                        >
+                            <X :size="14" />
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Close</TooltipContent>
+                </Tooltip>
             </div>
             <div class="min-h-0 flex-1 overflow-y-auto">
                 <!-- Check annotations first (they are warnings), then comments. -->

@@ -4,11 +4,14 @@ import { describe, it, expect, vi } from 'vitest';
 // an in-memory store so the pure logic (dedup, cap, cascade, round-trips) is
 // testable without touching disk. Each test re-imports settings after resetting
 // modules, since the module caches its store promise, so every case starts clean.
+// Values a test stores before settings loads, as an older version left them.
+const seeded = vi.hoisted(() => ({ data: {} as Record<string, unknown> }));
+
 vi.mock('electron-store', () => {
     class Store {
         private data: Record<string, unknown>;
         constructor(opts: { defaults?: Record<string, unknown> } = {}) {
-            this.data = { ...opts.defaults };
+            this.data = { ...opts.defaults, ...seeded.data };
         }
         get(key: string, def: unknown) {
             return key in this.data ? this.data[key] : def;
@@ -20,7 +23,8 @@ vi.mock('electron-store', () => {
     return { default: Store };
 });
 
-async function loadSettings() {
+async function loadSettings(stored: Record<string, unknown> = {}) {
+    seeded.data = stored;
     vi.resetModules();
     return import('../electron/settings');
 }
@@ -153,12 +157,14 @@ describe('settings: notifications', () => {
 
         expect(prefs.enabled).toBe(true);
         expect(prefs.dockBadge).toBe(true);
-        expect(prefs.showDrafts).toBe(true);
+        expect(prefs.notifyDrafts).toBe(true);
+        expect(prefs.dashboardShowDrafts).toBe(true);
         expect(prefs.dashboardAuthors).toBe('me');
         expect(prefs.dashboardHiddenCards).toEqual([]);
         expect(prefs.events['checks-failed']).toBe(true);
         expect(prefs.events['ready-to-merge']).toBe(false);
         expect(prefs.events['merged-by-other']).toBe(false);
+        expect(prefs.events.commented).toBe(true);
     });
 
     it('merges a single toggle into the stored preferences', async () => {
@@ -170,6 +176,21 @@ describe('settings: notifications', () => {
         expect(prefs.enabled).toBe(false);
         expect(prefs.events.approved).toBe(false);
         expect(prefs.events['review-requested']).toBe(true);
+    });
+
+    it('carries an old shared drafts toggle over to both new ones', async () => {
+        const { getNotificationPrefs, setNotificationPrefs } = await loadSettings({
+            notifications: { showDrafts: false },
+        });
+        const prefs = await getNotificationPrefs();
+        expect(prefs.notifyDrafts).toBe(false);
+        expect(prefs.dashboardShowDrafts).toBe(false);
+
+        // Changing one no longer moves the other.
+        await setNotificationPrefs({ dashboardShowDrafts: true });
+        const next = await getNotificationPrefs();
+        expect(next.dashboardShowDrafts).toBe(true);
+        expect(next.notifyDrafts).toBe(false);
     });
 
     it('keeps notifier state per key, null until stored', async () => {

@@ -183,20 +183,22 @@ describe('ToolbarHeader', () => {
     });
 
     describe('dashboard toggle', () => {
-        it('is hidden, with the notifications menu, without an open repo', () => {
+        it('is hidden, with the notifications toggle, without an open repo', () => {
             const wrapper = mountToolbar();
             expect(wrapper.text()).not.toContain('Dashboard');
-            expect(wrapper.find('[aria-label="Notifications"]').exists()).toBe(false);
+            expect(wrapper.text()).not.toContain('Notifications');
         });
 
-        it('switches the main view, next to a notifications menu', async () => {
+        it('switches the main view, next to the notifications toggle', async () => {
             useComparisonStore().repoPath = '/repos/moire';
             const ui = useUiStore();
 
             const wrapper = mountToolbar();
             const toggle = dashboardToggle(wrapper);
             expect(toggle.text()).toBe('Dashboard');
-            expect(wrapper.find('[aria-label="Notifications"]').exists()).toBe(true);
+            expect(toggle.element.parentElement!.parentElement!.textContent).toContain(
+                'Notifications'
+            );
 
             await toggle.trigger('click');
             expect(ui.mainView).toBe('dashboard');

@@ -10,6 +10,7 @@ import {
     activityId,
     diffSnapshots,
     type ActivityEntry,
+    type DashboardEventKind,
     type DashboardEvent,
     type DashboardPr,
     type DashboardSnapshot,
@@ -25,7 +26,9 @@ export const POLL_INTERVAL_MS = 2 * 60 * 1000;
 // so reopening a repository after a busy week does not flood the screen.
 const SUMMARY_THRESHOLD = 3;
 
-const MAX_ACTIVITY = 50;
+// How many sent notifications a repository keeps. The notifications page renders
+// them a page at a time as it scrolls.
+export const MAX_ACTIVITY = 500;
 
 export interface NotificationContent {
     title: string;
@@ -41,13 +44,30 @@ export interface NotifierView {
     activity: ActivityEntry[];
 }
 
-// What the renderer's dashboard receives: the view plus the "Show drafts" toggle,
-// the author filter and the hidden cards, which the dashboard applies to its cards. Mirrored as
-// DashboardState in src/shared/types.ts; keep the two in sync.
+// The notification settings the app's notifications menu shows and changes: the
+// master switch, whether draft PRs notify, and one toggle per event kind.
+export interface NotificationSettings {
+    enabled: boolean;
+    notifyDrafts: boolean;
+    events: Record<DashboardEventKind, boolean>;
+}
+
+// A partial change to them, as one toggle sends it.
+export interface NotificationSettingsChange {
+    enabled?: boolean;
+    notifyDrafts?: boolean;
+    events?: Partial<Record<DashboardEventKind, boolean>>;
+}
+
+// What the renderer's dashboard receives: the view plus its own "Show drafts"
+// toggle, the author filter and the hidden cards, which the dashboard applies to
+// its cards, and the notification settings. Mirrored as DashboardState in
+// src/shared/types.ts; keep the two in sync.
 export interface DashboardState extends NotifierView {
     showDrafts: boolean;
     authors: AuthorFilter;
     hiddenCards: string[];
+    notifications: NotificationSettings;
 }
 
 export interface NotifierDeps {
@@ -70,6 +90,15 @@ export interface NotifierDeps {
 
 function prLine(pr: DashboardPr): string {
     return `#${pr.number} ${pr.title}`;
+}
+
+// "ann commented", "ann left 3 comments" or, from several people, "3 new
+// comments". Restated in src/lib/dashboard.ts; keep the two in step.
+export function commentTitle(count: number, actor?: string): string {
+    if (!actor) {
+        return count === 1 ? 'New comment' : `${count} new comments`;
+    }
+    return count === 1 ? `${actor} commented` : `${actor} left ${count} comments`;
 }
 
 // The notification text for one event. The repository goes in the subtitle so
@@ -108,6 +137,9 @@ export function describeEvent(event: DashboardEvent, repo: string): Notification
         case 'merged-by-other':
             title = event.actor ? `Merged by ${event.actor}` : 'Merged';
             break;
+        case 'commented':
+            title = commentTitle(event.count ?? 1, event.actor);
+            break;
     }
 
     return { title, subtitle: repo, body };
@@ -122,6 +154,7 @@ function toActivity(event: DashboardEvent, at: string): ActivityEntry {
         url: event.pr.url,
         ...(event.actor ? { actor: event.actor } : {}),
         ...(event.checks ? { checks: event.checks } : {}),
+        ...(event.count ? { count: event.count } : {}),
     };
 }
 
@@ -210,11 +243,11 @@ export class Notifier {
         return this.inFlight;
     }
 
-    // Mark one notification read, every notification read, or delete one. Each
-    // edits the saved state of the repository the dashboard shows.
-    markActivityRead(id: string): Promise<void> {
+    // Mark one notification read or unread, every notification read, or delete
+    // one. Each edits the saved state of the repository the dashboard shows.
+    markActivityRead(id: string, read = true): Promise<void> {
         return this.updateActivity((activity) =>
-            activity.map((entry) => (activityId(entry) === id ? { ...entry, read: true } : entry))
+            activity.map((entry) => (activityId(entry) === id ? { ...entry, read } : entry))
         );
     }
 
@@ -334,7 +367,8 @@ export class Notifier {
             // Events are diffed (and so recorded as seen) even when they are
             // not shown, so turning a toggle on later does not replay them.
             const delivered = diff.events.filter(
-                (e) => prefs.enabled && prefs.events[e.kind] && (prefs.showDrafts || !e.pr.isDraft)
+                (e) =>
+                    prefs.enabled && prefs.events[e.kind] && (prefs.notifyDrafts || !e.pr.isDraft)
             );
             const at = now.toISOString();
             state = {

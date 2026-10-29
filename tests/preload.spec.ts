@@ -73,7 +73,9 @@ describe('preload bridge', () => {
             'setDashboardShowDrafts',
             'setDashboardAuthors',
             'setDashboardHiddenCards',
+            'setNotificationSettings',
             'markDashboardNotificationRead',
+            'markDashboardNotificationUnread',
             'markAllDashboardNotificationsRead',
             'deleteDashboardNotification',
             'onDashboardChanged',
@@ -133,8 +135,15 @@ describe('preload bridge', () => {
         await api().setDashboardHiddenCards!(['stale']);
         expect(bridge.invoke).toHaveBeenCalledWith('dashboard:set-hidden-cards', ['stale']);
 
+        await api().setNotificationSettings!({ enabled: false });
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:set-notification-settings', {
+            enabled: false,
+        });
+
         await api().markDashboardNotificationRead!('id-1');
         expect(bridge.invoke).toHaveBeenCalledWith('dashboard:mark-read', 'id-1');
+        await api().markDashboardNotificationUnread!('id-1');
+        expect(bridge.invoke).toHaveBeenCalledWith('dashboard:mark-unread', 'id-1');
         await api().markAllDashboardNotificationsRead!();
         expect(bridge.invoke).toHaveBeenCalledWith('dashboard:mark-all-read');
         await api().deleteDashboardNotification!('id-2');

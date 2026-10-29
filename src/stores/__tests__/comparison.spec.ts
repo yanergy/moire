@@ -1111,11 +1111,39 @@ describe('comparison store', () => {
         });
 
         describe('selectPullRequestRange', () => {
-            it('prefers the local branch, then the origin tracking branch', () => {
+            it('prefers the origin tracking branches over the local ones', () => {
                 const store = branchStore();
+                store.branches = [
+                    { name: 'development', kind: 'local' },
+                    { name: 'fix/branch', kind: 'local' },
+                    { name: 'origin/development', kind: 'remote' },
+                    { name: 'origin/fix/branch', kind: 'remote' },
+                ];
+
+                expect(store.selectPullRequestRange('development', 'fix/branch')).toBe(true);
+                expect([store.base, store.head]).toEqual([
+                    'origin/development',
+                    'origin/fix/branch',
+                ]);
+            });
+
+            it('falls back to another remote, then to the local branch', () => {
+                const store = branchStore();
+                store.branches = [
+                    { name: 'main', kind: 'local' },
+                    { name: 'feat/local', kind: 'local' },
+                    { name: 'upstream/feat/remote', kind: 'remote' },
+                ];
+
+                expect(store.selectPullRequestRange('main', 'feat/remote')).toBe(true);
+                expect([store.base, store.head]).toEqual(['main', 'upstream/feat/remote']);
 
                 expect(store.selectPullRequestRange('main', 'feat/local')).toBe(true);
-                expect([store.base, store.head]).toEqual(['main', 'feat/local']);
+                expect(store.head).toBe('feat/local');
+            });
+
+            it('picks origin when several remotes track the branch', () => {
+                const store = branchStore();
 
                 expect(store.selectPullRequestRange('main', 'feat/remote')).toBe(true);
                 expect(store.head).toBe('origin/feat/remote');

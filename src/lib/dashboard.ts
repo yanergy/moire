@@ -71,6 +71,14 @@ export function activityId(entry: ActivityEntry): string {
     return `${entry.at}|${entry.kind}|${entry.number}`;
 }
 
+// Restates commentTitle in electron/notifier.ts; keep the two in step.
+function commentLabel(count: number, actor?: string): string {
+    if (!actor) {
+        return count === 1 ? 'New comment' : `${count} new comments`;
+    }
+    return count === 1 ? `${actor} commented` : `${actor} left ${count} comments`;
+}
+
 // What a notification said, for its row in the dashboard's notification list.
 // Restates the notification titles in electron/notifier.ts (describeEvent); keep
 // the wording in step.
@@ -94,12 +102,14 @@ export function activityLabel(entry: ActivityEntry): string {
             return 'Ready to merge';
         case 'merged-by-other':
             return entry.actor ? `Merged by ${entry.actor}` : 'Merged';
+        case 'commented':
+            return commentLabel(entry.count ?? 1, entry.actor);
     }
 }
 
 // The dot before a notification row, in the colors the overview cards use for the
 // same kind of thing: blue review, orange changes, green good news, red trouble,
-// purple merged.
+// purple merged, grey for a plain comment.
 const ACTIVITY_DOTS: Record<DashboardEventKind, string> = {
     'review-requested': 'bg-moire-accent',
     'changes-requested': 'bg-moire-changes-fg',
@@ -109,11 +119,77 @@ const ACTIVITY_DOTS: Record<DashboardEventKind, string> = {
     'merge-conflict': 'bg-moire-pr-closed',
     'ready-to-merge': 'bg-moire-pr-open',
     'merged-by-other': 'bg-moire-pr-merged',
+    commented: 'bg-moire-muted',
 };
 
 export function activityDotClass(entry: ActivityEntry): string {
     return ACTIVITY_DOTS[entry.kind];
 }
+
+// The notifications (newest first) grouped by the local day they were sent:
+// Today, Yesterday, the weekday within the last week, then the date (with the
+// year once it is not this year's). `now` is epoch ms.
+export function groupActivityByDay(
+    activity: ActivityEntry[],
+    now: number
+): { label: string; entries: ActivityEntry[] }[] {
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+
+    const groups: { label: string; entries: ActivityEntry[] }[] = [];
+    let lastDay: number | null = null;
+    for (const entry of activity) {
+        const day = new Date(entry.at);
+        day.setHours(0, 0, 0, 0);
+        if (day.getTime() !== lastDay) {
+            lastDay = day.getTime();
+            groups.push({ label: dayLabel(day, today), entries: [] });
+        }
+        groups[groups.length - 1]!.entries.push(entry);
+    }
+    return groups;
+}
+
+function dayLabel(day: Date, today: Date): string {
+    // Rounded, as a day across a daylight saving change is 23 or 25 hours.
+    const daysAgo = Math.round((today.getTime() - day.getTime()) / 86_400_000);
+    if (daysAgo <= 0) {
+        return 'Today';
+    }
+    if (daysAgo === 1) {
+        return 'Yesterday';
+    }
+    if (daysAgo < 7) {
+        return day.toLocaleDateString(undefined, { weekday: 'long' });
+    }
+    return day.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        ...(day.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+    });
+}
+
+// The notification types, in the order the notification settings list them, with
+// the dot of their notification rows. Restates NOTIFICATION_EVENT_OPTIONS in
+// electron/menu.ts (the Git > Notifications menu); keep the two in step.
+const NOTIFICATION_TYPE_LABELS: [DashboardEventKind, string][] = [
+    ['review-requested', 'Review requested'],
+    ['changes-requested', 'Changes requested'],
+    ['closed-unmerged', 'Closed without merge'],
+    ['checks-failed', 'Checks failed'],
+    ['approved', 'Approved'],
+    ['merge-conflict', 'Merge conflict'],
+    ['ready-to-merge', 'Ready to merge'],
+    ['merged-by-other', 'Merged by someone else'],
+    ['commented', 'New comments'],
+];
+
+export const NOTIFICATION_TYPES = NOTIFICATION_TYPE_LABELS.map(([kind, label]) => ({
+    kind,
+    label,
+    dotClass: ACTIVITY_DOTS[kind],
+}));
 
 // Why the dashboard has no (fresh) data, as a title and a hint. Null when the
 // last load succeeded.
