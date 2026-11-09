@@ -21,7 +21,15 @@ vi.mock('electron', () => ({
 
 vi.mock('../electron/logger', () => ({ logError: state.logError }));
 
-import { isNewerVersion, checkForUpdate, promptUpdateIfAvailable } from '../electron/updates';
+import {
+    isNewerVersion,
+    checkForUpdate,
+    showUpdatePrompt,
+    UpdateWatcher,
+    CHECK_INTERVAL_MS,
+    FOCUS_CHECK_MIN_GAP_MS,
+} from '../electron/updates';
+import type { UpdateCheckResult } from '../src/shared/types';
 
 // A Response-like stub for net.fetch, only the fields checkForUpdate reads.
 function jsonResponse(body: unknown, { ok = true, status = 200 } = {}) {
@@ -104,49 +112,157 @@ describe('checkForUpdate', () => {
     });
 });
 
-describe('promptUpdateIfAvailable', () => {
+describe('showUpdatePrompt', () => {
+    const available: UpdateCheckResult = {
+        status: 'available',
+        currentVersion: '1.0.0',
+        latestVersion: '1.1.0',
+        url: 'https://example.test/releases/v1.1.0',
+    };
+
     beforeEach(() => {
         vi.clearAllMocks();
-        state.getVersion.mockReturnValue('1.0.0');
     });
 
-    it('shows a popup and opens the release page when Download is chosen', async () => {
-        state.fetch.mockResolvedValue(
-            jsonResponse({ tag_name: 'v1.1.0', html_url: 'https://example.test/releases/v1.1.0' })
-        );
+    it('opens the release page when Download is chosen', async () => {
         state.showMessageBox.mockResolvedValue({ response: 0 }); // Download
 
-        await promptUpdateIfAvailable();
+        await showUpdatePrompt(available);
 
         expect(state.showMessageBox).toHaveBeenCalledTimes(1);
         expect(state.openExternal).toHaveBeenCalledWith('https://example.test/releases/v1.1.0');
     });
 
-    it('shows the popup but does not open the page when Later is chosen', async () => {
-        state.fetch.mockResolvedValue(
-            jsonResponse({ tag_name: 'v1.1.0', html_url: 'https://example.test/releases/v1.1.0' })
-        );
+    it('does not open the page when Later is chosen', async () => {
         state.showMessageBox.mockResolvedValue({ response: 1 }); // Later
 
-        await promptUpdateIfAvailable();
+        await showUpdatePrompt(available);
 
         expect(state.showMessageBox).toHaveBeenCalledTimes(1);
         expect(state.openExternal).not.toHaveBeenCalled();
     });
+});
 
-    it('shows no popup when the build is current', async () => {
-        state.fetch.mockResolvedValue(jsonResponse({ tag_name: 'v1.0.0' }));
+function availableResult(version: string): UpdateCheckResult {
+    return { status: 'available', currentVersion: '1.0.0', latestVersion: version, url: 'u' };
+}
 
-        await promptUpdateIfAvailable();
+describe('UpdateWatcher', () => {
+    function setup({ focused = true } = {}) {
+        let now = 0;
+        const env = {
+            focused,
+            result: availableResult('1.1.0'),
+            check: vi.fn<() => Promise<UpdateCheckResult>>(() => Promise.resolve(env.result)),
+            prompt: vi.fn<(result: UpdateCheckResult) => Promise<void>>(() => Promise.resolve()),
+            advance: (ms: number) => {
+                now += ms;
+            },
+        };
+        const watcher = new UpdateWatcher({
+            check: env.check,
+            prompt: env.prompt,
+            isAppFocused: () => env.focused,
+            now: () => now,
+        });
+        return { env, watcher };
+    }
 
-        expect(state.showMessageBox).not.toHaveBeenCalled();
+    it('prompts right away when an update is found while the app is focused', async () => {
+        const { env, watcher } = setup();
+
+        await watcher.check();
+
+        expect(env.prompt).toHaveBeenCalledWith(availableResult('1.1.0'));
     });
 
-    it('shows no popup when the check fails', async () => {
-        state.fetch.mockRejectedValue(new Error('offline'));
+    it('stays silent when the build is current or the check fails', async () => {
+        const { env, watcher } = setup();
+        env.result = { status: 'current', currentVersion: '1.0.0', latestVersion: '1.0.0' };
+        await watcher.check();
+        env.result = { status: 'error', currentVersion: '1.0.0' };
+        await watcher.check();
 
-        await promptUpdateIfAvailable();
+        expect(env.prompt).not.toHaveBeenCalled();
+    });
 
-        expect(state.showMessageBox).not.toHaveBeenCalled();
+    it('holds the popup while the app is in the background and shows it on focus', async () => {
+        const { env, watcher } = setup({ focused: false });
+
+        await watcher.check();
+        expect(env.prompt).not.toHaveBeenCalled();
+
+        env.focused = true;
+        await watcher.onFocus();
+
+        expect(env.prompt).toHaveBeenCalledTimes(1);
+        // Showing the held popup does not cost another request.
+        expect(env.check).toHaveBeenCalledTimes(1);
+    });
+
+    it('announces a version only once per session', async () => {
+        const { env, watcher } = setup();
+
+        await watcher.check();
+        env.advance(FOCUS_CHECK_MIN_GAP_MS);
+        await watcher.onFocus();
+        await watcher.check();
+
+        expect(env.check).toHaveBeenCalledTimes(3);
+        expect(env.prompt).toHaveBeenCalledTimes(1);
+    });
+
+    it('prompts again for a release newer than the one announced', async () => {
+        const { env, watcher } = setup();
+
+        await watcher.check();
+        env.result = availableResult('1.2.0');
+        await watcher.check();
+
+        expect(env.prompt).toHaveBeenCalledTimes(2);
+        expect(env.prompt).toHaveBeenLastCalledWith(availableResult('1.2.0'));
+    });
+
+    it('re-checks on focus only once the last check is old enough', async () => {
+        const { env, watcher } = setup();
+        env.result = { status: 'current', currentVersion: '1.0.0' };
+
+        await watcher.check();
+        env.advance(FOCUS_CHECK_MIN_GAP_MS - 1);
+        await watcher.onFocus();
+        expect(env.check).toHaveBeenCalledTimes(1);
+
+        env.advance(1);
+        await watcher.onFocus();
+        expect(env.check).toHaveBeenCalledTimes(2);
+    });
+
+    it('joins an overlapping check instead of sending a second request', async () => {
+        const { env, watcher } = setup();
+
+        await Promise.all([watcher.check(), watcher.check()]);
+
+        expect(env.check).toHaveBeenCalledTimes(1);
+        expect(env.prompt).toHaveBeenCalledTimes(1);
+    });
+
+    it('checks at start and then on the hourly timer until stopped', async () => {
+        vi.useFakeTimers();
+        try {
+            const { env, watcher } = setup();
+            env.result = { status: 'current', currentVersion: '1.0.0' };
+
+            watcher.start();
+            expect(env.check).toHaveBeenCalledTimes(1);
+
+            await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS);
+            expect(env.check).toHaveBeenCalledTimes(2);
+
+            watcher.stop();
+            await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS);
+            expect(env.check).toHaveBeenCalledTimes(2);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

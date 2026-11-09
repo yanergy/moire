@@ -50,11 +50,16 @@ confirm. After that it opens normally. (Windows and Linux targets are configured
 
 ### Releasing a new version
 
-Moiré checks for updates on launch. It asks the GitHub Releases API for the latest release of
-`yanergy/moire`, compares that release tag to the running version (`app.getVersion()`, which reads
-the `version` field from `package.json`), and pops a native dialog when the release is newer,
-offering to open the release page. The app is not code-signed, so it cannot install updates itself.
-The popup only notifies, and the user downloads and installs the new build by hand.
+Moiré checks for updates while it runs: at launch, once an hour, and when the app is focused again
+after at least 15 minutes since the last check (well within GitHub's unauthenticated rate limit).
+It asks the GitHub Releases API for the latest release of `yanergy/moire`, compares that release
+tag to the running version (`app.getVersion()`, which reads the `version` field from
+`package.json`), and pops a native dialog when the release is newer, offering to open the release
+page. A release found while the app is in the background waits until a window is focused, then
+the popup shows right away. Each version is announced once per session, so choosing **Later**
+keeps it quiet until a newer release appears or the app is relaunched. The app is not code-signed,
+so it cannot install updates itself. The popup only notifies, and the user downloads and installs
+the new build by hand.
 
 For that check to work, a release has to be published and its tag has to match the version in
 `package.json`. To cut a release:
@@ -208,7 +213,7 @@ last branch range are remembered per repository.
   launches.
 - Back and forward history between the diff, the PR view, the dashboard and its cards, and the
   notifications page, stepped through with the mouse's back and forward buttons.
-- An update check on launch that tells you when a newer release is out on GitHub.
+- Update checks while the app runs that tell you when a newer release is out on GitHub.
 
 ## Development
 

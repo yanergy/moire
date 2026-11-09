@@ -90,18 +90,11 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
     }
 }
 
-// Run the launch-time check and, when a newer release exists, show a native
-// popup (the same dialog surface the git/gh errors use) offering to open the
-// release page. The app is unsigned and cannot self-install, so "Download" just
-// opens the page in the browser and the user replaces their copy by hand. Does
-// nothing when the build is current or the check fails, so it is safe to fire and
-// forget at launch.
-export async function promptUpdateIfAvailable(): Promise<void> {
-    const result = await checkForUpdate();
-    if (result.status !== 'available') {
-        return;
-    }
-
+// Show the native update popup (the same dialog surface the git/gh errors use)
+// for an available release, offering to open its release page. The app is
+// unsigned and cannot self-install, so "Download" just opens the page in the
+// browser and the user replaces their copy by hand.
+export async function showUpdatePrompt(result: UpdateCheckResult): Promise<void> {
     const { response } = await dialog.showMessageBox({
         type: 'info',
         title: 'Update available',
@@ -113,5 +106,111 @@ export async function promptUpdateIfAvailable(): Promise<void> {
     });
     if (response === 0 && result.url) {
         await shell.openExternal(result.url);
+    }
+}
+
+// How often to ask GitHub while the app runs. Unauthenticated requests are
+// limited to 60 an hour per IP, so stay far below that: one an hour on the timer,
+// plus at most one per FOCUS_CHECK_MIN_GAP_MS when the app comes to the front.
+export const CHECK_INTERVAL_MS = 60 * 60 * 1000;
+export const FOCUS_CHECK_MIN_GAP_MS = 15 * 60 * 1000;
+
+export interface UpdateWatcherDeps {
+    check: () => Promise<UpdateCheckResult>;
+    prompt: (result: UpdateCheckResult) => Promise<void>;
+    // Whether one of the app's windows is focused, i.e. the user can see a popup.
+    isAppFocused: () => boolean;
+    now?: () => number;
+}
+
+// Keeps checking for a newer release while the app runs (at launch, on an hourly
+// timer, and when the app is focused again after a while) and pops the update
+// dialog as soon as the user can see it. A release found while the app is in the
+// background is held until a window is focused. Each version is announced at most
+// once per session, so "Later" does not bring the same popup back on every focus
+// or check; a release newer than the one announced prompts again.
+export class UpdateWatcher {
+    private announcedVersion: string | null = null;
+    private pending: UpdateCheckResult | null = null;
+    private lastCheckAt = Number.NEGATIVE_INFINITY;
+    private inFlight: Promise<void> | null = null;
+    private prompting = false;
+    private timer: ReturnType<typeof setInterval> | null = null;
+    private readonly now: () => number;
+
+    constructor(private readonly deps: UpdateWatcherDeps) {
+        this.now = deps.now ?? Date.now;
+    }
+
+    start(): void {
+        this.stop();
+        void this.check();
+        this.timer = setInterval(() => void this.check(), CHECK_INTERVAL_MS);
+    }
+
+    stop(): void {
+        if (this.timer) {
+            clearInterval(this.timer);
+            this.timer = null;
+        }
+    }
+
+    // A window was focused: show a held popup right away, otherwise re-check when
+    // the last check is old enough (the app may have sat in the background).
+    async onFocus(): Promise<void> {
+        if (this.pending) {
+            await this.showPending();
+            return;
+        }
+
+        if (this.now() - this.lastCheckAt >= FOCUS_CHECK_MIN_GAP_MS) {
+            await this.check();
+        }
+    }
+
+    // One check at a time: an overlapping call joins the running one.
+    check(): Promise<void> {
+        this.inFlight ??= this.runCheck().finally(() => {
+            this.inFlight = null;
+        });
+        return this.inFlight;
+    }
+
+    private async runCheck(): Promise<void> {
+        this.lastCheckAt = this.now();
+        const result = await this.deps.check();
+        if (result.status !== 'available' || !result.latestVersion) {
+            return;
+        }
+
+        if (!this.isUnannounced(result.latestVersion)) {
+            return;
+        }
+
+        this.pending = result;
+        if (this.deps.isAppFocused()) {
+            await this.showPending();
+        }
+    }
+
+    private isUnannounced(version: string): boolean {
+        return this.announcedVersion === null || isNewerVersion(version, this.announcedVersion);
+    }
+
+    private async showPending(): Promise<void> {
+        // A popup already open covers it; a newer find stays pending for the next focus.
+        if (!this.pending || this.prompting) {
+            return;
+        }
+
+        const result = this.pending;
+        this.pending = null;
+        this.announcedVersion = result.latestVersion ?? null;
+        this.prompting = true;
+        try {
+            await this.deps.prompt(result);
+        } finally {
+            this.prompting = false;
+        }
     }
 }
