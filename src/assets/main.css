@@ -1,4 +1,5 @@
 @import './base.css';
+@import './markdown.css';
 
 /* Moiré is a full-window desktop app: no page centering or max-width.
    The root layout (App.vue) owns its own background via the --moire-* tokens. */
