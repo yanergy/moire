@@ -198,13 +198,17 @@ const groupLabel =
 <template>
     <div ref="scroller" class="flex min-h-0 min-w-0 flex-1 flex-col items-center bg-moire-app">
         <div class="flex min-h-0 w-full max-w-[1200px] flex-1 flex-col px-6 pt-8">
-            <div class="flex min-h-8 shrink-0 items-center gap-3">
-                <span class="text-[18px] font-bold text-moire-fg">Settings</span>
-                <span v-if="comparison.repoPath" class="truncate text-[13px] text-moire-muted">
-                    These settings apply to
-                    <span class="font-medium text-moire-fg">{{ comparison.repoName }}</span>
-                    only
-                </span>
+            <!-- The title with the repository it applies to underneath, and the
+                 save status on the right. -->
+            <div class="flex shrink-0 items-center gap-3">
+                <div class="flex min-w-0 flex-col gap-0.5">
+                    <span class="text-[18px] font-bold text-moire-fg">Settings</span>
+                    <span v-if="comparison.repoPath" class="truncate text-[12px] text-moire-muted">
+                        These settings apply to
+                        <span class="font-medium text-moire-fg">{{ comparison.repoName }}</span>
+                        only
+                    </span>
+                </div>
                 <div class="flex-1" />
                 <span
                     class="flex shrink-0 items-center gap-1.5 text-[12px]"
@@ -230,7 +234,7 @@ const groupLabel =
                 Settings are kept per repository. Open a repository to change its settings.
             </p>
 
-            <div v-else class="flex min-h-0 flex-1 gap-7 pt-3">
+            <div v-else class="flex min-h-0 flex-1 gap-7 pt-5">
                 <nav
                     aria-label="Settings sections"
                     class="flex w-[180px] flex-none flex-col gap-0.5 pt-3"
