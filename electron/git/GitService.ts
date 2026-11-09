@@ -380,6 +380,22 @@ class GitService {
         }
     }
 
+    // The commit a ref points at, or null when it does not resolve to one.
+    async resolveCommit(ref: string): Promise<string | null> {
+        try {
+            const out = await this.git.raw([
+                'rev-parse',
+                '--verify',
+                '--quiet',
+                '--end-of-options',
+                `${ref}^{commit}`,
+            ]);
+            return out.trim() || null;
+        } catch {
+            return null;
+        }
+    }
+
     // File content at a committed ref, or null when the path does not exist there
     // (an added file has no base side; a deleted file has no head side).
     async contentAt(ref: string, filePath: string): Promise<string | null> {

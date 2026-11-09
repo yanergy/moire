@@ -121,10 +121,16 @@ export interface PrComment {
 
 // One comment inside an inline review thread: an author login, its Markdown body,
 // and when it was posted.
+// `isPending` marks a comment still in the viewer's unsubmitted review;
+// `viewerDidAuthor` whether the viewer wrote it (a pending one can then be edited
+// or deleted). `id` is its node id.
 export interface PrReviewComment {
+    id: string;
     author: string;
     body: string;
     createdAt: string;
+    isPending: boolean;
+    viewerDidAuthor: boolean;
 }
 
 // An inline (line-anchored) code review thread on the PR, shown as a marker in the
@@ -141,8 +147,32 @@ export interface PrReviewThread {
     side: 'LEFT' | 'RIGHT';
     isResolved: boolean;
     isOutdated: boolean;
+    // Started in the viewer's pending review, so not yet on GitHub for others.
+    isPending: boolean;
     comments: PrReviewComment[];
 }
+
+// The viewer's side of a PR's review (keep in sync with electron/github/gh.ts): the
+// id of their pending review, null when there is none, and whether they opened the
+// PR (an author can only comment, not approve or request changes).
+export interface ReviewState {
+    pendingReviewId: string | null;
+    viewerIsAuthor: boolean;
+}
+
+// A new line or range comment for the pending review: the file, the line it ends on
+// and that line's side (RIGHT for the head, LEFT for the base), and the first line
+// when it spans several.
+export interface ReviewCommentInput {
+    path: string;
+    line: number;
+    side: 'LEFT' | 'RIGHT';
+    startLine?: number;
+    body: string;
+}
+
+// How a review is submitted.
+export type ReviewEvent = 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES';
 
 // A CI check annotation (a line-anchored note a GitHub Actions workflow or app posts
 // on the head commit, e.g. a linter flagging a line), shown as a marker on its line in
@@ -236,6 +266,11 @@ export interface PullRequestResult {
 export interface CommentMutationResult {
     ok: boolean;
     message?: string;
+}
+
+// Starting a review also hands back the new pending review's id.
+export interface StartReviewResult extends CommentMutationResult {
+    reviewId?: string;
 }
 
 // The result of the launch-time update check against the GitHub Releases feed.
@@ -440,6 +475,24 @@ export interface MoireApi {
     // result rather than rejecting, so the popover can show an inline error.
     replyToReviewThread(threadId: string, body: string): Promise<CommentMutationResult>;
     setReviewThreadResolved(threadId: string, resolved: boolean): Promise<CommentMutationResult>;
+    // Reviews, by the PR's or the pending review's node id. `getReviewState` reads
+    // the viewer's pending review and whether they opened the PR (a failure reads as
+    // no pending review). The writes start a pending review, add, edit or delete its
+    // line comments, and submit or discard it; all resolve an ok/message result.
+    getReviewState(prId: string): Promise<ReviewState>;
+    startReview(prId: string): Promise<StartReviewResult>;
+    addReviewComment(reviewId: string, comment: ReviewCommentInput): Promise<CommentMutationResult>;
+    editReviewComment(commentId: string, body: string): Promise<CommentMutationResult>;
+    deleteReviewComment(commentId: string): Promise<CommentMutationResult>;
+    submitReview(
+        reviewId: string,
+        event: ReviewEvent,
+        body: string
+    ): Promise<CommentMutationResult>;
+    discardReview(reviewId: string): Promise<CommentMutationResult>;
+    // The commit a ref points at, or null when it does not resolve. Used to check
+    // the compared head is at the PR's head commit before offering line comments.
+    resolveCommit(ref: string): Promise<string | null>;
     // Open a URL (a PR link) in the user's default browser, via the main process.
     // Restricted to http(s) URLs on the main side.
     openExternal(url: string): Promise<void>;

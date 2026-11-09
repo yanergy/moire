@@ -92,6 +92,15 @@ describe('PrView', () => {
         expect(text).toContain('Does things.');
     });
 
+    it('offers to start a review at the top right, or to finish the pending one', async () => {
+        const wrapper = mountWith(PR);
+        expect(wrapper.find('[data-slot="start-review"]').text()).toBe('Review');
+
+        useComparisonStore().reviewState = { pendingReviewId: 'PRR_1', viewerIsAuthor: false };
+        await flushPromises();
+        expect(wrapper.find('[data-slot="finish-review"]').text()).toContain('Finish review');
+    });
+
     it('shows up to two author initials in the avatar', () => {
         expect(mountWith(PR).text()).toContain('ST'); // s.trivedi -> ST
     });

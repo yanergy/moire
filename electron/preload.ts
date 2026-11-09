@@ -49,6 +49,20 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.invoke('gh:reply-review-thread', threadId, body),
     setReviewThreadResolved: (threadId: string, resolved: boolean) =>
         ipcRenderer.invoke('gh:set-review-thread-resolved', threadId, resolved),
+    // Reviews: the viewer's pending review, and the writes that build and submit it.
+    getReviewState: (prId: string) => ipcRenderer.invoke('gh:review-state', prId),
+    startReview: (prId: string) => ipcRenderer.invoke('gh:start-review', prId),
+    addReviewComment: (reviewId: string, comment: unknown) =>
+        ipcRenderer.invoke('gh:add-review-comment', reviewId, comment),
+    editReviewComment: (commentId: string, body: string) =>
+        ipcRenderer.invoke('gh:edit-review-comment', commentId, body),
+    deleteReviewComment: (commentId: string) =>
+        ipcRenderer.invoke('gh:delete-review-comment', commentId),
+    submitReview: (reviewId: string, event: string, body: string) =>
+        ipcRenderer.invoke('gh:submit-review', reviewId, event, body),
+    discardReview: (reviewId: string) => ipcRenderer.invoke('gh:discard-review', reviewId),
+    // The commit a ref points at (null when it does not resolve).
+    resolveCommit: (ref: string) => ipcRenderer.invoke('git:resolve-commit', ref),
     // Open a PR link in the default browser (main restricts it to http(s)).
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
     openFile: (filePath: string) => ipcRenderer.invoke('shell:open-path', filePath),

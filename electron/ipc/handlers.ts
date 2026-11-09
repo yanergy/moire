@@ -16,6 +16,15 @@ import {
     editDescription,
     replyToReviewThread,
     setReviewThreadResolved,
+    getReviewState,
+    startReview,
+    addReviewComment,
+    editReviewComment,
+    deleteReviewComment,
+    submitReview,
+    discardReview,
+    type ReviewCommentInput,
+    type ReviewEvent,
 } from '../github/gh';
 import { watchRepo } from '../watcher/RepoWatcher';
 import {
@@ -193,6 +202,45 @@ function repoBranchSettings(value: unknown): RepoBranchSettings {
     return settings;
 }
 
+function isLine(n: unknown): n is number {
+    return Number.isInteger(n) && (n as number) >= 1;
+}
+
+// A line comment from the renderer, or null when it is malformed: a file path, a
+// positive whole line, a known side, an optional earlier start line and a body.
+function reviewCommentInput(value: unknown): ReviewCommentInput | null {
+    if (typeof value !== 'object' || value === null) {
+        return null;
+    }
+
+    const input = value as Record<string, unknown>;
+    if (
+        typeof input.path !== 'string' ||
+        !isLine(input.line) ||
+        (input.side !== 'LEFT' && input.side !== 'RIGHT') ||
+        typeof input.body !== 'string'
+    ) {
+        return null;
+    }
+
+    const comment: ReviewCommentInput = {
+        path: input.path,
+        line: input.line,
+        side: input.side,
+        body: input.body,
+    };
+    if (isLine(input.startLine) && input.startLine < input.line) {
+        comment.startLine = input.startLine;
+    }
+
+    return comment;
+}
+
+// A review verdict from the renderer; anything unknown submits as a plain comment.
+function reviewEvent(value: unknown): ReviewEvent {
+    return value === 'APPROVE' || value === 'REQUEST_CHANGES' ? value : 'COMMENT';
+}
+
 function registerIpcHandlers({
     onRecentsChanged,
     onRepoOpened,
@@ -340,6 +388,9 @@ function registerIpcHandlers({
         requireRepo().changedFiles(base, head, mode)
     );
 
+    // The commit a ref points at, for checking the head is at the PR's head commit.
+    handle('git:resolve-commit', (ref: string) => requireRepo().resolveCommit(ref));
+
     handle(
         'git:file-pair',
         (base: string, head: string, filePath: string, mode: CompareMode, full: boolean) =>
@@ -392,6 +443,35 @@ function registerIpcHandlers({
 
     handle('gh:set-review-thread-resolved', (threadId: string, resolved: boolean) =>
         setReviewThreadResolved(requireRepo().repoPath, threadId, resolved)
+    );
+
+    // Reviews: the viewer's pending review, then starting one, adding, editing and
+    // deleting its line comments, and submitting or discarding it. The renderer's
+    // values are checked here, since they become GraphQL variables.
+    handle('gh:review-state', (prId: string) => getReviewState(requireRepo().repoPath, prId));
+    handle('gh:start-review', (prId: string) => startReview(requireRepo().repoPath, prId));
+    handle('gh:add-review-comment', (reviewId: string, comment: unknown) => {
+        const input = reviewCommentInput(comment);
+        return input
+            ? addReviewComment(requireRepo().repoPath, reviewId, input)
+            : { ok: false, message: 'Nothing to add.' };
+    });
+    handle('gh:edit-review-comment', (commentId: string, body: string) =>
+        editReviewComment(requireRepo().repoPath, commentId, body)
+    );
+    handle('gh:delete-review-comment', (commentId: string) =>
+        deleteReviewComment(requireRepo().repoPath, commentId)
+    );
+    handle('gh:submit-review', (reviewId: string, event: unknown, body: unknown) =>
+        submitReview(
+            requireRepo().repoPath,
+            reviewId,
+            reviewEvent(event),
+            typeof body === 'string' ? body : ''
+        )
+    );
+    handle('gh:discard-review', (reviewId: string) =>
+        discardReview(requireRepo().repoPath, reviewId)
     );
 
     // Open an external URL (a PR link) in the default browser. Restricted to

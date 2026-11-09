@@ -207,6 +207,12 @@ function openInEditor() {
                     :check-annotations="comparison.annotationsForFile(file.path)"
                     :reply-to-thread="comparison.replyToReviewThread"
                     :set-thread-resolved="comparison.setReviewThreadResolved"
+                    :can-comment="comparison.canCommentOnLines"
+                    :add-comment="
+                        (comment) => comparison.addReviewComment({ ...comment, path: file.path })
+                    "
+                    :edit-pending-comment="comparison.editReviewComment"
+                    :delete-pending-comment="comparison.deleteReviewComment"
                     @update:content-height="bodyHeight = $event"
                 />
             </template>

@@ -40,6 +40,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import type { CommentMutationResult, PrCheckState, PrComment } from '@/shared/types';
@@ -963,6 +964,8 @@ function renderComment(comment: PrComment): string {
                             <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
                         </div>
                         <div class="flex shrink-0 items-center gap-1.5">
+                            <!-- Starts a review of this PR, or finishes the pending one. -->
+                            <review-button />
                             <!-- The conversation is read-only until this is on; then the
                                  composer and per-comment Edit actions appear. -->
                             <Toggle

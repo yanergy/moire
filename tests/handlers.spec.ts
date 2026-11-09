@@ -50,6 +50,12 @@ const state = vi.hoisted(() => ({
         deleteNotification: vi.fn<(id: string) => Promise<unknown>>(),
     },
     getPullRequest: vi.fn<(repoPath: string, base: string, head: string) => Promise<unknown>>(),
+    addReviewComment:
+        vi.fn<(repoPath: string, reviewId: string, comment: unknown) => Promise<unknown>>(),
+    submitReview:
+        vi.fn<
+            (repoPath: string, reviewId: string, event: string, body: string) => Promise<unknown>
+        >(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
     openPath: vi.fn<(p: string) => Promise<string>>(),
     getEditorPreference: vi.fn<() => Promise<string>>(),
@@ -89,7 +95,11 @@ vi.mock('../electron/git/GitService', () => ({
     },
 }));
 
-vi.mock('../electron/github/gh', () => ({ getPullRequest: state.getPullRequest }));
+vi.mock('../electron/github/gh', () => ({
+    getPullRequest: state.getPullRequest,
+    addReviewComment: state.addReviewComment,
+    submitReview: state.submitReview,
+}));
 vi.mock('../electron/watcher/RepoWatcher', () => ({ watchRepo: state.watchRepo }));
 vi.mock('../electron/settings', () => ({
     getRecentRepos: state.getRecentRepos,
@@ -175,6 +185,9 @@ describe('registerIpcHandlers', () => {
             'git:changed-files',
             'git:file-pair',
             'gh:pull-request',
+            'gh:add-review-comment',
+            'gh:submit-review',
+            'git:resolve-commit',
             'shell:open-external',
             'shell:open-path',
             'dashboard:get',
@@ -279,6 +292,64 @@ describe('registerIpcHandlers', () => {
 
         expect(state.getPullRequest).toHaveBeenCalledWith('/repos/moire', 'main', 'feature');
         expect(result).toBe(prResult);
+    });
+
+    describe('review writes', () => {
+        beforeEach(async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.addReviewComment.mockResolvedValue({ ok: true });
+            state.submitReview.mockResolvedValue({ ok: true });
+        });
+
+        it('passes a well formed line comment on, dropping a start line past its end', async () => {
+            await invoke('gh:add-review-comment', 'PRR_1', {
+                path: 'src/a.ts',
+                line: 4,
+                startLine: 9,
+                side: 'LEFT',
+                body: 'hm',
+                extra: true,
+            });
+
+            expect(state.addReviewComment).toHaveBeenCalledWith('/repos/moire', 'PRR_1', {
+                path: 'src/a.ts',
+                line: 4,
+                side: 'LEFT',
+                body: 'hm',
+            });
+        });
+
+        it('refuses a malformed line comment without calling gh', async () => {
+            const result = await invoke('gh:add-review-comment', 'PRR_1', {
+                path: 'src/a.ts',
+                line: 0,
+                side: 'UP',
+                body: 'hm',
+            });
+
+            expect(result).toEqual({ ok: false, message: 'Nothing to add.' });
+            expect(state.addReviewComment).not.toHaveBeenCalled();
+        });
+
+        it('submits an unknown verdict as a comment', async () => {
+            await invoke('gh:submit-review', 'PRR_1', 'MERGE', 'done');
+            await invoke('gh:submit-review', 'PRR_1', 'REQUEST_CHANGES', 7);
+
+            expect(state.submitReview).toHaveBeenNthCalledWith(
+                1,
+                '/repos/moire',
+                'PRR_1',
+                'COMMENT',
+                'done'
+            );
+            expect(state.submitReview).toHaveBeenNthCalledWith(
+                2,
+                '/repos/moire',
+                'PRR_1',
+                'REQUEST_CHANGES',
+                ''
+            );
+        });
     });
 
     it('rejects the dashboard channels before any repo is opened', async () => {

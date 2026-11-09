@@ -11,6 +11,13 @@ import {
     editDescription,
     replyToReviewThread,
     setReviewThreadResolved,
+    getReviewState,
+    startReview,
+    addReviewComment,
+    editReviewComment,
+    deleteReviewComment,
+    submitReview,
+    discardReview,
     type GhRunner,
 } from '../electron/github/gh';
 
@@ -306,6 +313,25 @@ describe('getPullRequest review decision', () => {
             'CHANGES_REQUESTED'
         );
         expect(await decisionFor({ reviewDecision: 'APPROVED' })).toBe('APPROVED');
+    });
+
+    it("ignores the viewer's pending review, which has no submitted time yet", async () => {
+        const reviews = [
+            {
+                author: { login: 'me' },
+                body: 'ship it',
+                state: 'APPROVED',
+                submittedAt: '2026-09-04T00:00:00Z',
+            },
+            { author: { login: 'me' }, body: '', state: 'PENDING', submittedAt: null },
+        ];
+        const { run } = okRunner(JSON.stringify([{ ...ghPr, reviewDecision: '', reviews }]));
+
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+
+        expect(result.status).toBe('ok');
+        expect(result.pr!.reviewDecision).toBe('APPROVED');
+        expect(result.pr!.comments.filter((c) => c.kind === 'review')).toHaveLength(1);
     });
 
     it('derives CHANGES_REQUESTED from the reviews when gh leaves the field empty', async () => {
@@ -632,11 +658,21 @@ describe('getReviewThreads', () => {
                     comments: {
                         nodes: [
                             {
+                                id: 'RC_1',
                                 author: { login: 'bob' },
                                 body: 'this can race',
                                 createdAt: '2026-09-02T00:00:00Z',
+                                state: 'SUBMITTED',
+                                viewerDidAuthor: false,
                             },
-                            { author: { login: 'me' }, body: 'fixed', createdAt: '2026-09-03Z' },
+                            {
+                                id: 'RC_2',
+                                author: { login: 'me' },
+                                body: 'fixed',
+                                createdAt: '2026-09-03Z',
+                                state: 'SUBMITTED',
+                                viewerDidAuthor: true,
+                            },
                         ],
                     },
                 },
@@ -669,15 +705,59 @@ describe('getReviewThreads', () => {
             side: 'RIGHT',
             isResolved: false,
             isOutdated: false,
+            isPending: false,
             comments: [
-                { author: 'bob', body: 'this can race', createdAt: '2026-09-02T00:00:00Z' },
-                { author: 'me', body: 'fixed', createdAt: '2026-09-03Z' },
+                {
+                    id: 'RC_1',
+                    author: 'bob',
+                    body: 'this can race',
+                    createdAt: '2026-09-02T00:00:00Z',
+                    isPending: false,
+                    viewerDidAuthor: false,
+                },
+                {
+                    id: 'RC_2',
+                    author: 'me',
+                    body: 'fixed',
+                    createdAt: '2026-09-03Z',
+                    isPending: false,
+                    viewerDidAuthor: true,
+                },
             ],
         });
         expect(threads[1]!.side).toBe('LEFT');
         expect(threads[1]!.originalLine).toBe(4);
         expect(threads[1]!.isResolved).toBe(true);
         expect(threads[1]!.isOutdated).toBe(true);
+    });
+
+    it("marks a thread from the viewer's pending review", async () => {
+        const { run } = okRunner(
+            threadsJson([
+                {
+                    id: 'RT_p',
+                    path: 'src/a.ts',
+                    line: 3,
+                    diffSide: 'RIGHT',
+                    comments: {
+                        nodes: [
+                            {
+                                id: 'RC_p',
+                                author: { login: 'me' },
+                                body: 'rename this',
+                                createdAt: '',
+                                state: 'PENDING',
+                                viewerDidAuthor: true,
+                            },
+                        ],
+                    },
+                },
+            ])
+        );
+
+        const [thread] = await getReviewThreads('/repo', 'PR_1', run);
+        expect(thread!.isPending).toBe(true);
+        expect(thread!.comments[0]).toMatchObject({ isPending: true, viewerDidAuthor: true });
     });
 
     it('drops threads with no file or no comments', async () => {
@@ -942,5 +1022,168 @@ describe('getCheckAnnotations', () => {
     it('returns an empty list when the check-runs output is not valid JSON', async () => {
         const { run } = okRunner('not json');
         expect(await getCheckAnnotations('/repo', 'sha', run)).toEqual([]);
+    });
+});
+
+describe('getReviewState', () => {
+    it("reads the viewer's pending review and whether they opened the PR", async () => {
+        const { run, calls } = okRunner(
+            JSON.stringify({
+                data: {
+                    node: {
+                        viewerDidAuthor: true,
+                        reviews: {
+                            nodes: [
+                                { id: 'PRR_other', viewerDidAuthor: false },
+                                { id: 'PRR_mine', viewerDidAuthor: true },
+                            ],
+                        },
+                    },
+                },
+            })
+        );
+
+        expect(await getReviewState('/repo', 'PR_1', run)).toEqual({
+            pendingReviewId: 'PRR_mine',
+            viewerIsAuthor: true,
+        });
+        expect(calls[0]!.args).toContain('id=PR_1');
+        expect(calls[0]!.args.some((a) => a.includes('states:PENDING'))).toBe(true);
+    });
+
+    it('reads no pending review when there is none, or gh fails', async () => {
+        const { run } = okRunner(
+            JSON.stringify({ data: { node: { viewerDidAuthor: false, reviews: { nodes: [] } } } })
+        );
+        const none = { pendingReviewId: null, viewerIsAuthor: false };
+
+        expect(await getReviewState('/repo', 'PR_1', run)).toEqual(none);
+        expect(await getReviewState('/repo', 'PR_1', failRunner({ code: 'ENOENT' }))).toEqual(none);
+        expect(await getReviewState('/repo', '', vi.fn<GhRunner>())).toEqual(none);
+    });
+});
+
+describe('startReview', () => {
+    it('starts a pending review and returns its id', async () => {
+        const { run, calls } = okRunner(
+            JSON.stringify({
+                data: { addPullRequestReview: { pullRequestReview: { id: 'PRR_new' } } },
+            })
+        );
+
+        expect(await startReview('/repo', 'PR_1', run)).toEqual({
+            ok: true,
+            reviewId: 'PRR_new',
+        });
+        expect(calls[0]!.args.some((a) => a.includes('addPullRequestReview'))).toBe(true);
+        expect(calls[0]!.args).toContain('id=PR_1');
+    });
+
+    it('surfaces a gh failure', async () => {
+        const run = failRunner({ stderr: 'Resource not accessible by integration' });
+        expect(await startReview('/repo', 'PR_1', run)).toEqual({
+            ok: false,
+            message: 'Resource not accessible by integration',
+        });
+    });
+});
+
+describe('addReviewComment', () => {
+    it('adds a line comment to the review, the line as an integer', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        const result = await addReviewComment(
+            '/repo',
+            'PRR_1',
+            { path: 'src/a.ts', line: 12, side: 'RIGHT', body: 'nit' },
+            run
+        );
+
+        expect(result).toEqual({ ok: true });
+        const args = calls[0]!.args;
+        expect(args.some((a) => a.includes('addPullRequestReviewThread'))).toBe(true);
+        expect(args).toContain('reviewId=PRR_1');
+        expect(args).toContain('path=src/a.ts');
+        expect(args[args.indexOf('line=12') - 1]).toBe('-F');
+        expect(args).toContain('side=RIGHT');
+        expect(args).toContain('body=nit');
+        expect(args.some((a) => a.startsWith('startLine='))).toBe(false);
+    });
+
+    it('adds a range comment with its start line on the same side', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        await addReviewComment(
+            '/repo',
+            'PRR_1',
+            { path: 'src/a.ts', line: 14, startLine: 10, side: 'LEFT', body: 'all of this' },
+            run
+        );
+
+        const args = calls[0]!.args;
+        expect(args[args.indexOf('startLine=10') - 1]).toBe('-F');
+        expect(args).toContain('startSide=LEFT');
+    });
+
+    it('rejects a blank body without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+        expect(
+            await addReviewComment(
+                '/repo',
+                'PRR_1',
+                { path: 'a', line: 1, side: 'RIGHT', body: ' ' },
+                run
+            )
+        ).toEqual({ ok: false, message: 'Nothing to add.' });
+        expect(run).not.toHaveBeenCalled();
+    });
+});
+
+describe('editReviewComment and deleteReviewComment', () => {
+    it('edits a review comment by its id', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        expect(await editReviewComment('/repo', 'RC_1', 'better', run)).toEqual({ ok: true });
+        expect(calls[0]!.args.some((a) => a.includes('updatePullRequestReviewComment'))).toBe(true);
+        expect(calls[0]!.args).toContain('id=RC_1');
+        expect(calls[0]!.args).toContain('body=better');
+    });
+
+    it('deletes a review comment by its id', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        expect(await deleteReviewComment('/repo', 'RC_1', run)).toEqual({ ok: true });
+        expect(calls[0]!.args.some((a) => a.includes('deletePullRequestReviewComment'))).toBe(true);
+        expect(calls[0]!.args).toContain('id=RC_1');
+    });
+});
+
+describe('submitReview and discardReview', () => {
+    it('submits the review with its verdict and summary', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        expect(await submitReview('/repo', 'PRR_1', 'APPROVE', 'Looks good', run)).toEqual({
+            ok: true,
+        });
+        expect(calls[0]!.args.some((a) => a.includes('submitPullRequestReview'))).toBe(true);
+        expect(calls[0]!.args).toContain('id=PRR_1');
+        expect(calls[0]!.args).toContain('event=APPROVE');
+        expect(calls[0]!.args).toContain('body=Looks good');
+    });
+
+    it('discards the review', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        expect(await discardReview('/repo', 'PRR_1', run)).toEqual({ ok: true });
+        expect(calls[0]!.args.some((a) => a.includes('deletePullRequestReview('))).toBe(true);
+        expect(calls[0]!.args).toContain('id=PRR_1');
+    });
+
+    it('surfaces a refused verdict', async () => {
+        const run = failRunner({ stderr: 'Can not approve your own pull request' });
+        expect(await submitReview('/repo', 'PRR_1', 'APPROVE', '', run)).toEqual({
+            ok: false,
+            message: 'Can not approve your own pull request',
+        });
     });
 });
