@@ -91,6 +91,20 @@ describe('ReviewButton', () => {
         expect(ui.mainView).toBe('diff');
     });
 
+    it('shows only Finish review in the toolbar, once a review is pending', async () => {
+        const store = await prStore(null);
+        const wrapper = mount(ReviewButton, {
+            props: { finishOnly: true },
+            global: { plugins: [pinia] },
+        });
+        expect(wrapper.find('[data-slot="start-review"]').exists()).toBe(false);
+        expect(wrapper.find('[data-slot="finish-review"]').exists()).toBe(false);
+
+        store.reviewState = { pendingReviewId: 'PRR_1', viewerIsAuthor: false };
+        await flushPromises();
+        expect(wrapper.find('[data-slot="finish-review"]').exists()).toBe(true);
+    });
+
     it('stays on the page when the review could not start', async () => {
         const store = await prStore(null);
         vi.spyOn(store, 'startReview').mockResolvedValue({ ok: false, message: 'Forbidden' });

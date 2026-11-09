@@ -213,6 +213,7 @@ function openInEditor() {
                     "
                     :edit-pending-comment="comparison.editReviewComment"
                     :delete-pending-comment="comparison.deleteReviewComment"
+                    :show-in-pr="ui.showThreadInPr"
                     @update:content-height="bodyHeight = $event"
                 />
             </template>

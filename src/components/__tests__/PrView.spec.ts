@@ -3,7 +3,8 @@ import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import PrView from '@/components/pr/PrView.vue';
 import { useComparisonStore } from '@/stores/comparison';
-import type { PrComment, PrStatus, PullRequest } from '@/shared/types';
+import { useUiStore } from '@/stores/ui';
+import type { PrComment, PrReviewThread, PrStatus, PullRequest } from '@/shared/types';
 import { stubTooltips } from './fixtures';
 
 stubTooltips();
@@ -71,6 +72,31 @@ const comment = (over: Partial<PrComment> = {}): PrComment => ({
     ...over,
 });
 
+// A submitted review's thread on README.md, in review PRR_1.
+const thread = (over: Partial<PrReviewThread> = {}): PrReviewThread => ({
+    id: 'RT_1',
+    path: 'README.md',
+    line: 128,
+    originalLine: null,
+    side: 'RIGHT',
+    isResolved: false,
+    isOutdated: false,
+    isPending: false,
+    reviewId: 'PRR_1',
+    diffHunk: '@@ -125,2 +125,4 @@\n context\n+one\n+two\n+three',
+    comments: [
+        {
+            id: 'RC_1',
+            author: 'yanergy',
+            body: 'Test 2',
+            createdAt: '',
+            isPending: false,
+            viewerDidAuthor: true,
+        },
+    ],
+    ...over,
+});
+
 describe('PrView', () => {
     beforeEach(() => setActivePinia(createPinia()));
     afterEach(() => {
@@ -99,6 +125,169 @@ describe('PrView', () => {
         useComparisonStore().reviewState = { pendingReviewId: 'PRR_1', viewerIsAuthor: false };
         await flushPromises();
         expect(wrapper.find('[data-slot="finish-review"]').text()).toContain('Finish review');
+    });
+
+    describe("a review's line comments", () => {
+        it('shows them under their review: the file, the code and the comments', () => {
+            useComparisonStore().reviewThreads = [thread()];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [
+                    comment({
+                        kind: 'review',
+                        state: 'COMMENTED',
+                        body: 'Test 5',
+                        reviewId: 'PRR_1',
+                    }),
+                ],
+            });
+
+            const shown = wrapper.get('[data-slot="review-thread"]');
+            expect(shown.text()).toContain('README.md');
+            expect(shown.text()).toContain('Test 2');
+            // The commented line, highlighted, with the line above it. (The line below
+            // comes from the PR's file, which this store has not loaded.)
+            const lines = shown.findAll('[data-slot="hunk-line"]');
+            expect(lines).toHaveLength(2);
+            expect(lines[1]!.text()).toContain('128');
+            expect(lines[1]!.text()).toContain('three');
+            expect(lines.map((l) => l.attributes('data-commented'))).toEqual([undefined, 'true']);
+        });
+
+        it("adds the line below from the PR's file while the diff is the PR's", async () => {
+            const store = useComparisonStore();
+            store.base = 'main';
+            store.head = 'feature';
+            await flushPromises();
+            store.reviewThreads = [thread()];
+            const lines = Array.from({ length: 130 }, (_, n) => `file line ${n + 1}`);
+            vi.spyOn(store, 'pairFor').mockResolvedValue({
+                path: 'README.md',
+                oldContent: '',
+                newContent: `${lines.join('\n')}\n`,
+                language: 'markdown',
+                binary: false,
+                tooLarge: false,
+                sizeBytes: 0,
+            });
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+            await flushPromises();
+
+            const shown = wrapper.findAll('[data-slot="hunk-line"]');
+            expect(shown).toHaveLength(3);
+            expect(shown[2]!.text()).toContain('129');
+            expect(shown[2]!.text()).toContain('file line 129');
+            expect(shown[2]!.attributes('data-commented')).toBeUndefined();
+        });
+
+        it('folds a line comment down to its file name', async () => {
+            useComparisonStore().reviewThreads = [thread()];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            await wrapper.get('[data-slot="thread-toggle"]').trigger('click');
+            const shown = wrapper.get('[data-slot="review-thread"]');
+            expect(shown.text()).toContain('README.md');
+            expect(shown.find('[data-slot="hunk-line"]').exists()).toBe(false);
+            expect(shown.text()).not.toContain('Test 2');
+
+            await wrapper.get('[data-slot="thread-toggle"]').trigger('click');
+            expect(wrapper.get('[data-slot="review-thread"]').text()).toContain('Test 2');
+        });
+
+        it("links a thread's comment avatars with a line, up to the last", () => {
+            const base = thread();
+            const reply = { ...base.comments[0]!, id: 'RC_2', author: 'ann', body: 'Agreed' };
+            useComparisonStore().reviewThreads = [thread({ comments: [base.comments[0]!, reply] })];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            const rows = wrapper.findAll('[data-slot="thread-comment"]');
+            expect(rows).toHaveLength(2);
+            expect(rows[0]!.find('[data-slot="thread-connector"]').exists()).toBe(true);
+            expect(rows[1]!.find('[data-slot="thread-connector"]').exists()).toBe(false);
+        });
+
+        it('shows every line of a range comment', () => {
+            useComparisonStore().reviewThreads = [thread({ startLine: 127 })];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            // Both commented lines are highlighted, under the context left above them.
+            const lines = wrapper.findAll('[data-slot="hunk-line"]');
+            expect(lines.map((l) => l.attributes('data-commented'))).toEqual([
+                undefined,
+                'true',
+                'true',
+            ]);
+            expect(lines[1]!.text()).toContain('two');
+        });
+
+        it('scrolls to and outlines a thread asked for from the diff, unfolding its review', async () => {
+            const scrollIntoView = vi.fn<() => void>();
+            Element.prototype.scrollIntoView = scrollIntoView;
+            useComparisonStore().reviewThreads = [thread()];
+            const ui = useUiStore();
+            ui.showThreadInPr('RT_1');
+            expect(ui.mainView).toBe('pr');
+
+            const wrapper = mountWith(
+                {
+                    ...PR,
+                    comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+                },
+                'ok',
+                true
+            );
+            await flushPromises();
+
+            expect(scrollIntoView).toHaveBeenCalled();
+            expect(wrapper.get('[data-thread-id="RT_1"]').classes()).toContain('ring-2');
+            expect(ui.prFocusThread).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("opens the thread's file in the diff from its name", async () => {
+            const store = useComparisonStore();
+            store.reviewThreads = [thread()];
+            const ui = useUiStore();
+            ui.setMainView('pr');
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            await wrapper.get('[data-slot="thread-file"]').trigger('click');
+            expect(store.selectedPath).toBe('README.md');
+            expect(store.scrollToFile.path).toBe('README.md');
+            expect(ui.mainView).toBe('diff');
+        });
+
+        it('shows a review without a summary when it holds line comments, else hides it', () => {
+            const empty = comment({
+                kind: 'review',
+                state: 'COMMENTED',
+                body: '',
+                reviewId: 'PRR_1',
+            });
+            const store = useComparisonStore();
+            store.reviewThreads = [thread()];
+            const wrapper = mountWith({ ...PR, comments: [empty] });
+            expect(wrapper.findAll('[data-slot="review-thread"]')).toHaveLength(1);
+
+            store.reviewThreads = [];
+            const bare = mountWith({ ...PR, comments: [empty] });
+            expect(bare.text()).not.toContain('reviewed');
+        });
     });
 
     it('shows up to two author initials in the avatar', () => {

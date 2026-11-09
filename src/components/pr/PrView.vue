@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import {
     ArrowRight,
     Check,
@@ -24,8 +24,10 @@ import {
     Trash2,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
 import { renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
+import { parseHunkTail, type HunkLine } from '@/lib/diff-hunk';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
@@ -43,7 +45,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
-import type { CommentMutationResult, PrCheckState, PrComment } from '@/shared/types';
+import type {
+    CommentMutationResult,
+    PrCheckState,
+    PrComment,
+    PrReviewThread,
+} from '@/shared/types';
 
 // The shape both status boxes share: the Conversation tab's merge state and the
 // Checks tab's CI summary. `icon` is a lucide component, `cls` tints the box.
@@ -56,6 +63,7 @@ interface StatusBox {
 }
 
 const comparison = useComparisonStore();
+const ui = useUiStore();
 
 const pr = computed(() => comparison.pullRequest);
 
@@ -187,7 +195,200 @@ const hasBody = computed(() => !!pr.value?.body.trim());
 // together with the comments.
 const descriptionCollapsed = ref(false);
 
-const comments = computed(() => pr.value?.comments ?? []);
+// A submitted review's line comments, as threads keyed by the review they were
+// started in, shown under that review as GitHub does.
+const threadsByReview = computed(() => {
+    const byReview = new Map<string, PrReviewThread[]>();
+    for (const thread of comparison.reviewThreads) {
+        if (!thread.reviewId || thread.isPending) {
+            continue;
+        }
+
+        const list = byReview.get(thread.reviewId);
+        if (list) {
+            list.push(thread);
+        } else {
+            byReview.set(thread.reviewId, [thread]);
+        }
+    }
+
+    return byReview;
+});
+
+function threadsFor(comment: PrComment): PrReviewThread[] {
+    return comment.kind === 'review' && comment.reviewId
+        ? (threadsByReview.value.get(comment.reviewId) ?? [])
+        : [];
+}
+
+// The conversation. A plain COMMENTED review with no summary is only a container
+// for line comments, so it shows only while it holds some.
+const comments = computed(() =>
+    (pr.value?.comments ?? []).filter(
+        (c) =>
+            c.kind !== 'review' ||
+            c.body.trim() ||
+            (c.state !== 'COMMENTED' && c.state) ||
+            threadsFor(c).length > 0
+    )
+);
+
+// Whether an entry renders as a card (a body or line comments to show); a bare
+// verdict stays a one-line row.
+function hasCard(comment: PrComment): boolean {
+    return Boolean(comment.body.trim()) || threadsFor(comment).length > 0;
+}
+
+// Line comments folded down to their file name, by thread id.
+const collapsedThreads = ref<Set<string>>(new Set());
+function isThreadCollapsed(threadId: string): boolean {
+    return collapsedThreads.value.has(threadId);
+}
+function toggleThreadCollapsed(threadId: string) {
+    const next = new Set(collapsedThreads.value);
+    if (!next.delete(threadId)) {
+        next.add(threadId);
+    }
+    collapsedThreads.value = next;
+}
+
+// The code a thread's comment is on: the commented line (or the lines of a range
+// comment) with a line of context above and below. The diff hunk ends on the
+// (last) commented line, so it gives the line above but not the one below; that
+// one is read from the file in the diff, which is only the PR's file while the
+// diff on screen is the PR's (and the comment is not outdated). Otherwise the
+// block ends on the commented line.
+interface ThreadLine extends HunkLine {
+    commented: boolean;
+}
+
+const lineBelow = ref<Record<string, HunkLine>>({});
+let lineBelowRequest = 0;
+
+async function loadLinesBelow() {
+    const token = ++lineBelowRequest;
+    const next: Record<string, HunkLine> = {};
+    const threads = [...threadsByReview.value.values()].flat().filter((t) => !t.isOutdated);
+    if (!comparison.lineCommentBlocker) {
+        await Promise.all(
+            threads.map(async (thread) => {
+                const right = thread.side === 'RIGHT';
+                const end = right ? thread.line : (thread.originalLine ?? thread.line);
+                const pair = await comparison.pairFor(thread.path);
+                const content = right ? pair.newContent : pair.oldContent;
+                if (!end || content === null) {
+                    return;
+                }
+
+                const lines = content.split('\n');
+                const last = content.endsWith('\n') ? lines.length - 2 : lines.length - 1;
+                // Line `end` is at index end - 1, so the one below it at index end.
+                if (end > last) {
+                    return;
+                }
+
+                next[thread.id] = {
+                    kind: 'context',
+                    oldLine: right ? null : end + 1,
+                    newLine: right ? end + 1 : null,
+                    text: lines[end] ?? '',
+                };
+            })
+        );
+    }
+
+    if (token === lineBelowRequest) {
+        lineBelow.value = next;
+    }
+}
+
+watch([threadsByReview, () => comparison.lineCommentBlocker], () => void loadLinesBelow(), {
+    immediate: true,
+});
+
+function threadLines(thread: PrReviewThread): ThreadLine[] {
+    const end = thread.line ?? thread.originalLine;
+    const start = thread.startLine ?? thread.originalStartLine;
+    const commented = start && end && end >= start ? end - start + 1 : 1;
+    const lines: ThreadLine[] = parseHunkTail(thread.diffHunk ?? '', commented + 1).map(
+        (line, i, all) => Object.assign(line, { commented: i >= all.length - commented })
+    );
+    const below = lineBelow.value[thread.id];
+    if (below) {
+        lines.push({ ...below, commented: false });
+    }
+
+    return lines;
+}
+
+// "Show in PR" from the diff popover: scroll to the thread under its review
+// (unfolding the review first) and outline it for a moment, then clear the request.
+const FOCUS_MS = 1600;
+const focusedThread = ref<string | null>(null);
+let focusTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function focusRequestedThread() {
+    const threadId = ui.prFocusThread;
+    if (!threadId) {
+        return;
+    }
+
+    const index = comments.value.findIndex((c) => threadsFor(c).some((t) => t.id === threadId));
+    if (index === -1) {
+        // Not in the conversation (yet): leave the request for when it loads.
+        return;
+    }
+
+    ui.prFocusThread = null;
+    if (isCollapsed(index)) {
+        toggleCollapsed(index);
+    }
+    if (isThreadCollapsed(threadId)) {
+        toggleThreadCollapsed(threadId);
+    }
+
+    await nextTick();
+    document
+        .querySelector(`[data-thread-id="${CSS.escape(threadId)}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    focusedThread.value = threadId;
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => (focusedThread.value = null), FOCUS_MS);
+}
+
+// On mount (the request usually opens this view) and whenever a request or the
+// conversation arrives later.
+onMounted(() => void focusRequestedThread());
+watch([() => ui.prFocusThread, comments], () => void focusRequestedThread());
+onBeforeUnmount(() => clearTimeout(focusTimer));
+
+// The file name above a thread's code opens that file in the diff, as picking it
+// in the file tree does (the stacked layout scrolls to it).
+function openThreadFile(path: string) {
+    comparison.selectFile(path);
+    comparison.requestScrollToFile(path);
+    ui.setMainView('diff');
+}
+
+// The commented lines are highlighted (an accent bar and tint), the context lines
+// keep their diff colors.
+function hunkLineClass(line: ThreadLine): string {
+    if (line.commented) {
+        return 'bg-moire-accent/15 shadow-[inset_3px_0_0_var(--moire-accent)]';
+    }
+    if (line.kind === 'add') {
+        return 'bg-moire-add-fg/15';
+    }
+    if (line.kind === 'del') {
+        return 'bg-moire-del-fg/15';
+    }
+
+    return '';
+}
+
+function hunkMark(line: HunkLine): string {
+    return line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' ';
+}
 
 // Comments the user has folded down to just their header, keyed by index. The
 // conversation is stable within a view and new comments append, so indices stay
@@ -1403,7 +1604,7 @@ function renderComment(comment: PrComment): string {
                                      line. -->
                                 <div
                                     class="flex shrink-0 items-center"
-                                    :class="comment.body.trim() ? 'h-10' : 'h-6'"
+                                    :class="hasCard(comment) ? 'h-10' : 'h-6'"
                                 >
                                     <user-avatar :login="comment.author" :size="24" />
                                 </div>
@@ -1414,7 +1615,7 @@ function renderComment(comment: PrComment): string {
                             </div>
                             <div class="min-w-0 flex-1 pb-5">
                                 <div
-                                    v-if="comment.body.trim()"
+                                    v-if="hasCard(comment)"
                                     class="rounded-lg border border-moire-border bg-moire-app"
                                 >
                                     <div
@@ -1574,7 +1775,10 @@ function renderComment(comment: PrComment): string {
                                             </Tooltip>
                                         </div>
                                     </div>
-                                    <div v-if="!isCollapsed(i)" class="px-3.5 py-3">
+                                    <div
+                                        v-if="!isCollapsed(i) && comment.body.trim()"
+                                        class="px-3.5 py-3"
+                                    >
                                         <!-- Editing this comment: an inline editor in place of
                                              the rendered body. -->
                                         <div
@@ -1623,6 +1827,171 @@ function renderComment(comment: PrComment): string {
                                             @click="onCommentBodyClick($event, comment)"
                                             v-html="renderComment(comment)"
                                         />
+                                    </div>
+                                    <!-- The review's line comments, as GitHub shows them
+                                         under it: the file, the last lines of code the
+                                         comment is on, then the thread's comments. -->
+                                    <div
+                                        v-if="!isCollapsed(i) && threadsFor(comment).length"
+                                        class="flex flex-col gap-4 px-3.5 pb-3.5"
+                                        :class="comment.body.trim() ? '' : 'pt-3.5'"
+                                    >
+                                        <div
+                                            v-for="thread in threadsFor(comment)"
+                                            :key="thread.id"
+                                            data-slot="review-thread"
+                                            :data-thread-id="thread.id"
+                                            class="overflow-hidden rounded-md border border-moire-border ring-offset-2 ring-offset-moire-app transition-shadow duration-500"
+                                            :class="
+                                                focusedThread === thread.id
+                                                    ? 'ring-2 ring-moire-accent'
+                                                    : ''
+                                            "
+                                        >
+                                            <div
+                                                class="flex items-center gap-2 bg-moire-chrome px-4 py-2.5 text-[12px]"
+                                                :class="{
+                                                    'border-b border-moire-border':
+                                                        !isThreadCollapsed(thread.id),
+                                                }"
+                                            >
+                                                <!-- Fold this line comment down to its file
+                                                     name, as GitHub does. -->
+                                                <button
+                                                    type="button"
+                                                    data-slot="thread-toggle"
+                                                    class="-ml-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                    :aria-expanded="!isThreadCollapsed(thread.id)"
+                                                    :aria-label="
+                                                        isThreadCollapsed(thread.id)
+                                                            ? 'Expand line comment'
+                                                            : 'Collapse line comment'
+                                                    "
+                                                    @click="toggleThreadCollapsed(thread.id)"
+                                                >
+                                                    <ChevronRight
+                                                        v-if="isThreadCollapsed(thread.id)"
+                                                        :size="14"
+                                                    />
+                                                    <ChevronDown v-else :size="14" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    data-slot="thread-file"
+                                                    class="min-w-0 cursor-pointer truncate font-mono text-moire-accent hover:underline"
+                                                    :title="`Open ${thread.path} in the diff`"
+                                                    @click="openThreadFile(thread.path)"
+                                                >
+                                                    {{ thread.path }}
+                                                </button>
+                                                <span
+                                                    v-if="thread.isOutdated"
+                                                    class="text-[10px] font-medium tracking-wide text-moire-faint uppercase"
+                                                >
+                                                    Outdated
+                                                </span>
+                                                <span
+                                                    v-if="thread.isResolved"
+                                                    class="text-[10px] font-medium tracking-wide text-moire-status-a uppercase"
+                                                >
+                                                    Resolved
+                                                </span>
+                                            </div>
+                                            <div
+                                                v-if="
+                                                    !isThreadCollapsed(thread.id) &&
+                                                    threadLines(thread).length
+                                                "
+                                                class="border-b border-moire-border py-1 font-mono text-[12px] leading-6"
+                                            >
+                                                <div
+                                                    v-for="(line, li) in threadLines(thread)"
+                                                    :key="li"
+                                                    data-slot="hunk-line"
+                                                    :data-commented="line.commented || undefined"
+                                                    class="flex"
+                                                    :class="hunkLineClass(line)"
+                                                >
+                                                    <span
+                                                        class="w-10 shrink-0 pr-2 text-right text-moire-faint select-none"
+                                                    >
+                                                        {{ line.oldLine ?? '' }}
+                                                    </span>
+                                                    <span
+                                                        class="w-10 shrink-0 pr-2 text-right text-moire-faint select-none"
+                                                    >
+                                                        {{ line.newLine ?? '' }}
+                                                    </span>
+                                                    <span
+                                                        class="w-4 shrink-0 text-center text-moire-faint select-none"
+                                                    >
+                                                        {{ hunkMark(line) }}
+                                                    </span>
+                                                    <span
+                                                        class="min-w-0 flex-1 pr-3 break-all whitespace-pre-wrap text-moire-file-fg"
+                                                        >{{ line.text }}</span
+                                                    >
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-if="!isThreadCollapsed(thread.id)"
+                                                class="flex flex-col px-4 py-4"
+                                            >
+                                                <!-- A line down from each avatar to the next
+                                                     ties the thread's comments together, as in
+                                                     the conversation; the gap between comments
+                                                     is the text column's padding, so the line
+                                                     runs through it. -->
+                                                <div
+                                                    v-for="(threadComment, tci) in thread.comments"
+                                                    :key="threadComment.id"
+                                                    data-slot="thread-comment"
+                                                    class="flex gap-3"
+                                                >
+                                                    <div
+                                                        class="flex w-5 shrink-0 flex-col items-center"
+                                                    >
+                                                        <user-avatar
+                                                            :login="threadComment.author"
+                                                            :size="20"
+                                                        />
+                                                        <span
+                                                            v-if="tci < thread.comments.length - 1"
+                                                            data-slot="thread-connector"
+                                                            class="my-2 w-px flex-1 bg-moire-border"
+                                                        />
+                                                    </div>
+                                                    <div
+                                                        class="flex min-w-0 flex-1 flex-col gap-1"
+                                                        :class="{
+                                                            'pb-5':
+                                                                tci < thread.comments.length - 1,
+                                                        }"
+                                                    >
+                                                        <div
+                                                            class="flex items-center gap-1.5 text-[12px] text-moire-faint"
+                                                        >
+                                                            <span
+                                                                class="text-[13px] font-medium text-moire-fg"
+                                                            >
+                                                                {{ threadComment.author }}
+                                                            </span>
+                                                            <span>{{
+                                                                relative(threadComment.createdAt)
+                                                            }}</span>
+                                                        </div>
+                                                        <!-- v-html is safe: renderMarkdown
+                                                             sanitizes via DOMPurify. -->
+                                                        <div
+                                                            class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
+                                                            v-html="
+                                                                renderMarkdown(threadComment.body)
+                                                            "
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 

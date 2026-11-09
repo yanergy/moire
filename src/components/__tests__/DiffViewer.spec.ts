@@ -694,6 +694,34 @@ describe('DiffViewer', () => {
             wrapper.unmount();
         });
 
+        it('shows a submitted thread in the PR, but not a pending one', async () => {
+            const showInPr = vi.fn<(threadId: string) => void>();
+            const wrapper = mount(DiffViewer, {
+                props: writeProps({
+                    reviewThreads: [thread(), thread({ id: 'RT_p', line: 14, isPending: true })],
+                    showInPr,
+                }),
+                attachTo: document.body,
+            });
+            const diff = lastEditor();
+            diff.fireDiffUpdate();
+
+            diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+            await flushPromises();
+            // The link sits in the popover's header, and each comment has its avatar.
+            expect(
+                wrapper.find('[role="dialog"] > div:first-child [data-slot="show-in-pr"]').exists()
+            ).toBe(true);
+            expect(wrapper.find('[data-slot="popover-comment"] img').exists()).toBe(true);
+            await dialogButton(wrapper, 'Show in PR')!.trigger('click');
+            expect(showInPr).toHaveBeenCalledWith('RT_1');
+
+            diff.getModifiedEditor().fireMouseDown(glyphClick(14));
+            await flushPromises();
+            expect(dialogButton(wrapper, 'Show in PR')).toBeUndefined();
+            wrapper.unmount();
+        });
+
         it('marks pending comments and lets their author edit and delete them', async () => {
             const editPendingComment = vi
                 .fn<(id: string, body: string) => Promise<{ ok: boolean }>>()

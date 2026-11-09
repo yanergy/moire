@@ -117,6 +117,8 @@ export interface PrComment {
     // the signed-in gh account authored it, so the PR view can offer an Edit action.
     id: string;
     canEdit: boolean;
+    // A review's own node id, which its line comments' threads point back to.
+    reviewId?: string;
 }
 
 // One comment inside an inline review thread: an author login, its Markdown body,
@@ -149,6 +151,14 @@ export interface PrReviewThread {
     isOutdated: boolean;
     // Started in the viewer's pending review, so not yet on GitHub for others.
     isPending: boolean;
+    // The review the thread was started in, and the diff around the commented
+    // line(s), for showing it under that review in the PR view.
+    reviewId?: string;
+    diffHunk?: string;
+    // The first line of a range comment on the head and base side (null for a
+    // single-line comment).
+    startLine?: number | null;
+    originalStartLine?: number | null;
     comments: PrReviewComment[];
 }
 

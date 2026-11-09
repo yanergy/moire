@@ -19,6 +19,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 // the diff offers a comment button on each line. With one pending it shows how many
 // comments the review holds and opens the dialog that submits or discards it.
 // The pending review lives on GitHub, so one started on github.com shows here too.
+// `finishOnly` is the toolbar's copy: it shows only while a review is pending, so
+// the review is easy to complete from the diff, and never offers to start one.
+defineProps<{
+    finishOnly?: boolean;
+}>();
+
 const comparison = useComparisonStore();
 const ui = useUiStore();
 
@@ -132,7 +138,7 @@ watch(
 
 <template>
     <template v-if="comparison.hasPullRequest">
-        <Tooltip v-if="!comparison.hasPendingReview">
+        <Tooltip v-if="!comparison.hasPendingReview && !finishOnly">
             <TooltipTrigger as-child>
                 <Button
                     variant="outline"
@@ -157,7 +163,7 @@ watch(
         </Tooltip>
 
         <Button
-            v-else
+            v-else-if="comparison.hasPendingReview"
             variant="outline"
             size="sm"
             data-slot="finish-review"

@@ -50,6 +50,9 @@ export interface PrComment {
     // wrote it, so it may edit it.
     id: string;
     canEdit: boolean;
+    // A review's own node id, which its line comments' threads point back to, so
+    // the PR view can show them under the review.
+    reviewId?: string;
 }
 
 // A PR label; `color` is a 6-digit hex without the leading '#', as GitHub returns.
@@ -131,6 +134,7 @@ interface GhComment {
 // `submittedAt` is null for the viewer's own pending review, which gh lists among
 // the reviews although it is not on the PR until it is submitted.
 interface GhReview {
+    id?: string;
     author: GhAuthor | null;
     body: string;
     state: string;
@@ -179,6 +183,14 @@ export interface PrReviewThread {
     // The thread was started in the viewer's pending review (its first comment is
     // pending), so it is not on GitHub for anyone else yet.
     isPending: boolean;
+    // The review the thread was started in (its first comment's), and the diff
+    // around the commented line(s), as GitHub shows them in the conversation.
+    reviewId?: string;
+    diffHunk?: string;
+    // The first line of a range comment on the head and base side (null for a
+    // single-line comment), so the PR view shows just the commented lines.
+    startLine?: number | null;
+    originalStartLine?: number | null;
     comments: PrReviewComment[];
 }
 
@@ -264,10 +276,10 @@ export const defaultRunner: GhRunner = async (args, cwd) => {
 };
 
 // Merge the separate comment and review arrays into one chronological timeline.
-// A review with no body and a COMMENTED (or missing) state is just a container
-// for inline code comments, which are not fetched here, so it is dropped; an
-// approval or change request is kept even with an empty body so its state shows.
-// The viewer's pending review is left out: it joins the conversation once submitted.
+// Every submitted review is kept with its node id, an empty COMMENTED one too: it
+// is the container for line comments (fetched separately, with the threads), and
+// the PR view drops it only when it holds none. The viewer's pending review is
+// left out: it joins the conversation once submitted.
 function buildComments(pr: GhPr): PrComment[] {
     const out: PrComment[] = [];
     for (const c of pr.comments ?? []) {
@@ -286,9 +298,6 @@ function buildComments(pr: GhPr): PrComment[] {
         if (r.state === 'PENDING' || !r.submittedAt) {
             continue;
         }
-        if (!body && (r.state === 'COMMENTED' || !r.state)) {
-            continue;
-        }
 
         out.push({
             author: r.author?.login ?? '',
@@ -300,6 +309,7 @@ function buildComments(pr: GhPr): PrComment[] {
             // they carry no id and are never marked editable.
             id: '',
             canEdit: false,
+            reviewId: r.id ?? '',
         });
     }
 
@@ -579,6 +589,8 @@ interface GhReviewThread {
     path: string | null;
     line: number | null;
     originalLine: number | null;
+    startLine?: number | null;
+    originalStartLine?: number | null;
     diffSide: string | null;
     isResolved: boolean | null;
     isOutdated: boolean | null;
@@ -586,6 +598,8 @@ interface GhReviewThread {
 }
 interface GhReviewComment {
     id?: string | null;
+    diffHunk?: string | null;
+    pullRequestReview?: { id?: string | null } | null;
     author: GhAuthor | null;
     body: string | null;
     createdAt: string | null;
@@ -595,10 +609,12 @@ interface GhReviewComment {
 
 const REVIEW_THREADS_QUERY =
     'query($id:ID!){node(id:$id){... on PullRequest{reviewThreads(first:100){nodes{' +
-    'id path line originalLine diffSide isResolved isOutdated ' +
-    'comments(first:100){nodes{id author{login} body createdAt state viewerDidAuthor}}}}}}}';
+    'id path line originalLine startLine originalStartLine diffSide isResolved isOutdated ' +
+    'comments(first:100){nodes{id author{login} body createdAt state viewerDidAuthor ' +
+    'diffHunk pullRequestReview{id}}}}}}}}';
 
 function toReviewThread(node: GhReviewThread): PrReviewThread {
+    const first = node.comments?.nodes?.[0];
     const comments = (node.comments?.nodes ?? []).map((c) => ({
         id: c.id ?? '',
         author: c.author?.login ?? '',
@@ -616,6 +632,10 @@ function toReviewThread(node: GhReviewThread): PrReviewThread {
         isResolved: node.isResolved ?? false,
         isOutdated: node.isOutdated ?? false,
         isPending: comments[0]?.isPending ?? false,
+        startLine: node.startLine ?? null,
+        originalStartLine: node.originalStartLine ?? null,
+        reviewId: first?.pullRequestReview?.id ?? '',
+        diffHunk: first?.diffHunk ?? '',
         comments,
     };
 }

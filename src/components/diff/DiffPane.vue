@@ -133,6 +133,7 @@ function openSelected() {
             "
             :edit-pending-comment="comparison.editReviewComment"
             :delete-pending-comment="comparison.deleteReviewComment"
+            :show-in-pr="ui.showThreadInPr"
             @update:change-count="changeCount = $event"
             @edge-consumed="comparison.clearChangeEdge()"
         />

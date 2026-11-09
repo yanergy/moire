@@ -124,10 +124,11 @@ the popup never appears.
    click it to comment on that line, or select several lines first to comment on all of them.
    **Suggest change** adds a suggestion block with the selected code to edit. Your comments collect
    in a pending review, marked **Pending** on their lines, where you can still edit or delete them.
-   Back in the PR view, **Finish review** (with the number of pending comments) opens a dialog to
-   add a summary and submit the review as **Comment**, **Approve** or **Request changes**, or to
-   discard it. The pending review lives on GitHub, so a review started on github.com continues
-   here, and the other way around.
+   While the review is pending, **Finish review** (with the number of pending comments) sits next
+   to the PR button in the toolbar and in the PR view. It opens a dialog to add a summary and submit
+   the review as **Comment**, **Approve** or **Request changes**, or to discard it. The pending
+   review lives on GitHub, so a review started on github.com continues here, and the other way
+   around.
 7. **Keep track of pull requests.** The dashboard button in the toolbar (or **View > Dashboard**,
    `Cmd/Ctrl+Shift+D`) shows an overview of the open repository's pull requests as cards: needs
    your review, changes requested, ready to merge, failing checks, merge conflicts, your open PRs,
@@ -197,6 +198,10 @@ last branch range are remembered per repository.
   and conversation as Markdown, and a Checks tab with the head commit's CI.
 - Inline review threads and CI check annotations show on their lines in the diff. The file tree
   flags each file that carries review threads or annotations.
+- In the PR view's conversation, each review lists its line comments under it: the file (a link
+  that opens it in the diff), the commented line or lines (highlighted, with a line of context above
+  and below), and the thread's comments. The other way, **Show in PR** on a review comment in the
+  diff jumps to it in the conversation.
 - An edit mode (off by default) adds posting, editing, and deleting your own comments, editing the
   description, ticking task-list checkboxes, and replying to and resolving threads in place.
 - Code reviews from within the app: start a review, comment on lines or ranges in the diff

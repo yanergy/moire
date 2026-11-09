@@ -15,6 +15,7 @@ import type {
     ViewMode,
 } from '@/shared/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import UserAvatar from '@/components/pr/UserAvatar.vue';
 
 const props = defineProps<{
     original: string | null;
@@ -48,6 +49,8 @@ const props = defineProps<{
     addComment?: (comment: Omit<ReviewCommentInput, 'path'>) => Promise<CommentMutationResult>;
     editPendingComment?: (commentId: string, body: string) => Promise<CommentMutationResult>;
     deletePendingComment?: (commentId: string) => Promise<CommentMutationResult>;
+    // Opens the PR view at a submitted thread, under its review in the conversation.
+    showInPr?: (threadId: string) => void;
     // The stacked "all files" view mounts one viewer per file inside a single
     // scroll container, so each editor must size itself to its content (rather than
     // fill its parent and scroll internally). When set, the container height tracks
@@ -170,6 +173,9 @@ interface ComposerTarget {
     startLine?: number;
 }
 const composer = ref<ComposerTarget | null>(null);
+
+// The popover is wider while it holds the composer, so its buttons fit on one line.
+const popoverWidth = computed(() => (composer.value ? 440 : 360));
 const composerDrafts = reactive<Record<string, string>>({});
 const composerBusy = ref(false);
 const composerError = ref('');
@@ -229,8 +235,9 @@ function openComposer(line: number, side: 'LEFT' | 'RIGHT', clientX: number, cli
         (side === 'RIGHT' ? modifiedThreadsByLine : originalThreadsByLine).get(target.line) ?? [];
     const annotations = side === 'RIGHT' ? (modifiedAnnotationsByLine.get(target.line) ?? []) : [];
     composerError.value = '';
-    openPopover(target.line, side, threads, annotations, clientX, clientY);
+    // Set first, so the popover is placed at the composer's (wider) width.
     composer.value = target;
+    openPopover(target.line, side, threads, annotations, clientX, clientY);
 }
 
 // Insert a suggested change: GitHub's suggestion block, prefilled with the
@@ -589,7 +596,7 @@ function openPopover(
         return;
     }
 
-    const width = 360;
+    const width = popoverWidth.value;
     const left = Math.max(8, Math.min(clientX - rect.left + 8, rect.width - width - 8));
     activeLine.value = line;
     activeSide.value = side;
@@ -630,6 +637,10 @@ function refreshOpenPopover() {
 
     activeThreads.value = threads;
 }
+
+// The thread "Show in PR" in the popover header goes to: the line's first submitted
+// one (a pending thread is not in the conversation yet).
+const submittedThread = computed(() => activeThreads.value.find((t) => !t.isPending) ?? null);
 
 // The popover header, naming whichever of annotations and comments it holds.
 const popoverTitle = computed(() => {
@@ -1162,8 +1173,9 @@ defineExpose({
         <div
             v-if="(activeThreads.length || activeAnnotations.length || composer) && popoverPos"
             ref="popover"
-            class="absolute z-20 flex max-h-[60%] w-[360px] max-w-[calc(100%-16px)] flex-col overflow-hidden rounded-lg border border-moire-border bg-moire-pop text-moire-fg"
+            class="absolute z-20 flex max-h-[60%] max-w-[calc(100%-16px)] flex-col overflow-hidden rounded-lg border border-moire-border bg-moire-pop text-moire-fg"
             :style="{
+                width: `${popoverWidth}px`,
                 top: `${popoverPos.top}px`,
                 left: `${popoverPos.left}px`,
                 boxShadow: 'var(--moire-pop-shadow)',
@@ -1175,11 +1187,23 @@ defineExpose({
                 class="flex items-center justify-between border-b border-moire-border px-3 py-2 text-[12px] font-medium text-moire-muted"
             >
                 <span>{{ popoverTitle }}</span>
+                <span class="flex-1" />
+                <!-- A submitted thread also shows under its review in the PR view's
+                     conversation; a pending one is not there yet. -->
+                <button
+                    v-if="showInPr && submittedThread"
+                    type="button"
+                    data-slot="show-in-pr"
+                    class="mr-1.5 shrink-0 cursor-pointer text-[12px] font-normal whitespace-nowrap text-moire-accent hover:underline"
+                    @click="showInPr(submittedThread.id)"
+                >
+                    Show in PR
+                </button>
                 <Tooltip>
                     <TooltipTrigger as-child>
                         <button
                             type="button"
-                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
                             aria-label="Close"
                             @click="closeThreadPopover"
                         >
@@ -1217,7 +1241,7 @@ defineExpose({
                     <button
                         v-if="annotation.url"
                         type="button"
-                        class="cursor-pointer self-start text-[12px] text-moire-accent hover:underline"
+                        class="cursor-pointer self-start text-[12px] text-moire-accent hover:underline shrink-0 whitespace-nowrap"
                         @click="openAnnotationUrl(annotation.url)"
                     >
                         View on GitHub
@@ -1236,119 +1260,129 @@ defineExpose({
                         <span v-if="thread.isResolved" class="text-moire-status-a">Resolved</span>
                         <span v-if="thread.isOutdated" class="text-moire-faint">Outdated</span>
                     </div>
-                    <div v-for="(c, ci) in thread.comments" :key="ci" class="flex flex-col gap-0.5">
-                        <div
-                            class="flex flex-wrap items-center gap-1.5 text-[12px] text-moire-faint"
-                        >
-                            <span class="font-medium text-moire-fg">{{ c.author }}</span>
-                            <span>{{ relative(c.createdAt) }}</span>
-                            <!-- Still in the viewer's unsubmitted review. -->
-                            <span
-                                v-if="c.isPending"
-                                data-slot="pending-badge"
-                                class="rounded-full border border-moire-changes-edge bg-moire-changes px-1.5 text-[10px] leading-4 font-medium text-moire-changes-fg"
+                    <div
+                        v-for="(c, ci) in thread.comments"
+                        :key="ci"
+                        data-slot="popover-comment"
+                        class="flex gap-2.5"
+                    >
+                        <user-avatar :login="c.author" :size="20" class="mt-px" />
+                        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <div
+                                class="flex flex-wrap items-center gap-1.5 text-[12px] text-moire-faint"
                             >
-                                Pending
-                            </span>
-                            <span class="flex-1" />
-                            <template
-                                v-if="
-                                    canChangeComment(c) &&
-                                    editingCommentId !== c.id &&
-                                    confirmingDeleteCommentId !== c.id
-                                "
-                            >
-                                <button
-                                    type="button"
-                                    class="cursor-pointer text-[12px] text-moire-muted hover:text-moire-fg"
-                                    @click="startEditComment(c)"
+                                <span class="font-medium text-moire-fg">{{ c.author }}</span>
+                                <span>{{ relative(c.createdAt) }}</span>
+                                <!-- Still in the viewer's unsubmitted review. -->
+                                <span
+                                    v-if="c.isPending"
+                                    data-slot="pending-badge"
+                                    class="rounded-full border border-moire-changes-edge bg-moire-changes px-1.5 text-[10px] leading-4 font-medium text-moire-changes-fg"
                                 >
-                                    Edit
-                                </button>
-                                <button
-                                    type="button"
-                                    class="cursor-pointer text-[12px] text-moire-muted hover:text-moire-status-d"
-                                    @click="confirmingDeleteCommentId = c.id"
+                                    Pending
+                                </span>
+                                <span class="flex-1" />
+                                <template
+                                    v-if="
+                                        canChangeComment(c) &&
+                                        editingCommentId !== c.id &&
+                                        confirmingDeleteCommentId !== c.id
+                                    "
                                 >
-                                    Delete
-                                </button>
-                            </template>
-                        </div>
+                                    <button
+                                        type="button"
+                                        class="cursor-pointer text-[12px] text-moire-muted hover:text-moire-fg shrink-0 whitespace-nowrap"
+                                        @click="startEditComment(c)"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="cursor-pointer text-[12px] text-moire-muted hover:text-moire-status-d shrink-0 whitespace-nowrap"
+                                        @click="confirmingDeleteCommentId = c.id"
+                                    >
+                                        Delete
+                                    </button>
+                                </template>
+                            </div>
 
-                        <!-- Editing a pending comment in place. -->
-                        <div v-if="editingCommentId === c.id" class="flex flex-col gap-1.5">
-                            <textarea
-                                v-model="editCommentDraft"
-                                rows="3"
-                                aria-label="Edit comment"
-                                class="w-full resize-y rounded-md border border-moire-border bg-transparent px-2 py-1.5 text-[13px] text-moire-fg focus-visible:border-moire-ring focus-visible:outline-none"
-                                :disabled="busyCommentId === c.id"
-                                @keydown.stop
+                            <!-- Editing a pending comment in place. -->
+                            <div v-if="editingCommentId === c.id" class="flex flex-col gap-1.5">
+                                <textarea
+                                    v-model="editCommentDraft"
+                                    rows="3"
+                                    aria-label="Edit comment"
+                                    class="w-full resize-y rounded-md border border-moire-border bg-transparent px-2 py-1.5 text-[13px] text-moire-fg focus-visible:border-moire-ring focus-visible:outline-none"
+                                    :disabled="busyCommentId === c.id"
+                                    @keydown.stop
+                                />
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <button
+                                        type="button"
+                                        class="cursor-pointer rounded-md px-2 py-1 text-[12px] text-moire-muted hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
+                                        :disabled="busyCommentId === c.id"
+                                        @click="editingCommentId = null"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md whitespace-nowrap bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                        :disabled="
+                                            !editCommentDraft.trim() || busyCommentId === c.id
+                                        "
+                                        @click="saveEditComment(c)"
+                                    >
+                                        <LoaderCircle
+                                            v-if="busyCommentId === c.id"
+                                            :size="12"
+                                            class="animate-spin"
+                                        />
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- v-html is safe: renderThreadComment sanitizes via DOMPurify. -->
+                            <div
+                                v-else
+                                class="pr-markdown text-[13px] leading-[1.55] text-moire-file-fg"
+                                v-html="renderThreadComment(c.body)"
                             />
-                            <div class="flex items-center justify-end gap-1.5">
+
+                            <!-- Deleting a pending comment asks first, in place. -->
+                            <div
+                                v-if="confirmingDeleteCommentId === c.id"
+                                class="flex items-center justify-end gap-1.5 pt-1"
+                            >
+                                <span class="mr-auto text-[12px] text-moire-muted">
+                                    Delete this comment?
+                                </span>
                                 <button
                                     type="button"
-                                    class="cursor-pointer rounded-md px-2 py-1 text-[12px] text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                    class="cursor-pointer rounded-md px-2 py-1 text-[12px] text-moire-muted hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
                                     :disabled="busyCommentId === c.id"
-                                    @click="editingCommentId = null"
+                                    @click="confirmingDeleteCommentId = null"
                                 >
-                                    Cancel
+                                    Keep
                                 </button>
                                 <button
                                     type="button"
-                                    class="inline-flex cursor-pointer items-center gap-1 rounded-md bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                                    :disabled="!editCommentDraft.trim() || busyCommentId === c.id"
-                                    @click="saveEditComment(c)"
+                                    class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md whitespace-nowrap bg-moire-status-d px-2.5 py-1 text-[12px] font-medium text-white hover:opacity-90"
+                                    :disabled="busyCommentId === c.id"
+                                    @click="deletePendingComment(c)"
                                 >
                                     <LoaderCircle
                                         v-if="busyCommentId === c.id"
                                         :size="12"
                                         class="animate-spin"
                                     />
-                                    Save
+                                    Delete
                                 </button>
                             </div>
+                            <p v-if="commentErrors[c.id]" class="text-[12px] text-moire-status-d">
+                                {{ commentErrors[c.id] }}
+                            </p>
                         </div>
-                        <!-- v-html is safe: renderThreadComment sanitizes via DOMPurify. -->
-                        <div
-                            v-else
-                            class="pr-markdown text-[13px] leading-[1.55] text-moire-file-fg"
-                            v-html="renderThreadComment(c.body)"
-                        />
-
-                        <!-- Deleting a pending comment asks first, in place. -->
-                        <div
-                            v-if="confirmingDeleteCommentId === c.id"
-                            class="flex items-center justify-end gap-1.5 pt-1"
-                        >
-                            <span class="mr-auto text-[12px] text-moire-muted">
-                                Delete this comment?
-                            </span>
-                            <button
-                                type="button"
-                                class="cursor-pointer rounded-md px-2 py-1 text-[12px] text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                                :disabled="busyCommentId === c.id"
-                                @click="confirmingDeleteCommentId = null"
-                            >
-                                Keep
-                            </button>
-                            <button
-                                type="button"
-                                class="inline-flex cursor-pointer items-center gap-1 rounded-md bg-moire-status-d px-2.5 py-1 text-[12px] font-medium text-white hover:opacity-90"
-                                :disabled="busyCommentId === c.id"
-                                @click="deletePendingComment(c)"
-                            >
-                                <LoaderCircle
-                                    v-if="busyCommentId === c.id"
-                                    :size="12"
-                                    class="animate-spin"
-                                />
-                                Delete
-                            </button>
-                        </div>
-                        <p v-if="commentErrors[c.id]" class="text-[12px] text-moire-status-d">
-                            {{ commentErrors[c.id] }}
-                        </p>
                     </div>
 
                     <!-- Reply box and resolve toggle (GitHub-style), shown only when the
@@ -1368,17 +1402,19 @@ defineExpose({
                             @keydown.stop
                         />
                         <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    class="cursor-pointer rounded-md border border-moire-border px-2 py-1 text-[12px] text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-fg disabled:cursor-not-allowed disabled:opacity-60 shrink-0 whitespace-nowrap"
+                                    :disabled="busyThreadId === thread.id"
+                                    @click="toggleResolved(thread)"
+                                >
+                                    {{ thread.isResolved ? 'Unresolve' : 'Resolve' }}
+                                </button>
+                            </div>
                             <button
                                 type="button"
-                                class="cursor-pointer rounded-md border border-moire-border px-2 py-1 text-[12px] text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-fg disabled:cursor-not-allowed disabled:opacity-60"
-                                :disabled="busyThreadId === thread.id"
-                                @click="toggleResolved(thread)"
-                            >
-                                {{ thread.isResolved ? 'Unresolve' : 'Resolve' }}
-                            </button>
-                            <button
-                                type="button"
-                                class="inline-flex cursor-pointer items-center gap-1 rounded-md bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md whitespace-nowrap bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                                 :disabled="
                                     !(replyDrafts[thread.id] || '').trim() ||
                                     busyThreadId === thread.id
@@ -1422,7 +1458,7 @@ defineExpose({
                         <button
                             v-if="composer.side === 'RIGHT'"
                             type="button"
-                            class="cursor-pointer rounded-md border border-moire-border px-2 py-1 text-[12px] text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                            class="cursor-pointer rounded-md border border-moire-border px-2 py-1 text-[12px] text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
                             :disabled="composerBusy"
                             @click="insertSuggestion"
                         >
@@ -1431,7 +1467,7 @@ defineExpose({
                         <span class="flex-1" />
                         <button
                             type="button"
-                            class="cursor-pointer rounded-md px-2 py-1 text-[12px] text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                            class="cursor-pointer rounded-md px-2 py-1 text-[12px] text-moire-muted hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
                             :disabled="composerBusy"
                             @click="cancelComposer"
                         >
@@ -1439,7 +1475,7 @@ defineExpose({
                         </button>
                         <button
                             type="button"
-                            class="inline-flex cursor-pointer items-center gap-1 rounded-md bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md whitespace-nowrap bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="!composerDraft.trim() || composerBusy"
                             @click="submitComposer"
                         >

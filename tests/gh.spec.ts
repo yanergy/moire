@@ -49,12 +49,14 @@ const ghPr = {
     ],
     reviews: [
         {
+            id: 'PRR_ann',
             author: { login: 'ann' },
             body: 'looks good',
             state: 'APPROVED',
             submittedAt: '2026-09-03T00:00:00Z',
         },
         {
+            id: 'PRR_x',
             author: { login: 'x' },
             body: '',
             state: 'COMMENTED',
@@ -113,13 +115,23 @@ describe('getPullRequest', () => {
         expect(calls[0]!.args).toContain('feature');
     });
 
-    it('merges comments and reviews into one chronological conversation, dropping empty reviews', async () => {
+    it('merges comments and reviews into one chronological conversation', async () => {
         const { run } = okRunner(JSON.stringify([ghPr]));
         const result = await getPullRequest('/repo', 'main', 'feature', run);
 
-        // The bare COMMENTED review (empty body) is dropped; the comment and the
-        // approval remain, ordered by time.
+        // Every submitted review is kept, the bare COMMENTED one too (it may hold
+        // line comments; the PR view drops it when it holds none), ordered by time.
         expect(result.pr!.comments).toEqual([
+            {
+                author: 'x',
+                body: '',
+                createdAt: '2026-09-01T00:00:00Z',
+                kind: 'review',
+                state: 'COMMENTED',
+                id: '',
+                canEdit: false,
+                reviewId: 'PRR_x',
+            },
             {
                 author: 'bob',
                 body: 'nice',
@@ -138,6 +150,7 @@ describe('getPullRequest', () => {
                 // Reviews are not editable through this path.
                 id: '',
                 canEdit: false,
+                reviewId: 'PRR_ann',
             },
         ]);
     });
@@ -664,6 +677,8 @@ describe('getReviewThreads', () => {
                                 createdAt: '2026-09-02T00:00:00Z',
                                 state: 'SUBMITTED',
                                 viewerDidAuthor: false,
+                                diffHunk: '@@ -10,2 +10,3 @@\n a\n+b',
+                                pullRequestReview: { id: 'PRR_bob' },
                             },
                             {
                                 id: 'RC_2',
@@ -706,6 +721,12 @@ describe('getReviewThreads', () => {
             isResolved: false,
             isOutdated: false,
             isPending: false,
+            // A single-line comment has no start line.
+            startLine: null,
+            originalStartLine: null,
+            // The thread belongs to the review its first comment was made in.
+            reviewId: 'PRR_bob',
+            diffHunk: '@@ -10,2 +10,3 @@\n a\n+b',
             comments: [
                 {
                     id: 'RC_1',
