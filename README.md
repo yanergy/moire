@@ -115,9 +115,10 @@ the popup never appears.
 6. **Review the pull request.** The **PR** tab next to **Diff** in the toolbar opens a PR view of
    the pull request for the selected branches, with its description, status, labels, conversation,
    and CI checks. The tab shows the PR number and a status dot; while there is no pull request it
-   stays in place but is disabled, and its tooltip says why (including how to fix a failed lookup). Inline review comments and check annotations show on their lines in the diff. An
-   optional edit mode lets you reply to and resolve threads, post and edit your own comments, edit
-   the description, and tick task-list boxes. The **Diff** tab takes you back to the diff.
+   stays in place but is disabled, and its tooltip says why (including how to fix a failed lookup). Inline
+   review comments and check annotations show on their lines in the diff. An optional edit mode
+   lets you reply to and resolve threads, post and edit your own comments, edit the description,
+   and tick task-list boxes. The **Diff** tab takes you back to the diff.
 
    To review the pull request yourself, click **Review** at the top right of the PR view. The diff
    opens, and hovering a line of the PR's diff shows a **+** between the line numbers and the code;
@@ -202,6 +203,8 @@ last branch range are remembered per repository.
   that opens it in the diff), the commented line or lines (highlighted, with a line of context above
   and below), and the thread's comments. The other way, **Show in PR** on a review comment in the
   diff jumps to it in the conversation.
+- **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the
+  PR view. Each is enabled while its end is more than a screen away.
 - An edit mode (off by default) adds posting, editing, and deleting your own comments, editing the
   description, ticking task-list checkboxes, and replying to and resolving threads in place.
 - Code reviews from within the app: start a review, comment on lines or ranges in the diff

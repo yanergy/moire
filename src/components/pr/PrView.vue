@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    useTemplateRef,
+    watch,
+    type Component,
+} from 'vue';
 import {
     ArrowRight,
     Check,
@@ -45,6 +54,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
+import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
 import type {
     CommentMutationResult,
     PrCheckState,
@@ -66,6 +76,13 @@ const comparison = useComparisonStore();
 const ui = useUiStore();
 
 const pr = computed(() => comparison.pullRequest);
+
+// The element that scrolls the conversation (the ScrollArea's viewport), for the
+// floating Back to top and Jump to bottom buttons.
+const scrollArea = useTemplateRef<{ $el: HTMLElement }>('scrollArea');
+const scrollViewport = computed(() =>
+    scrollArea.value?.$el.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+);
 
 // Whether the PR view is in edit mode (toggled from the header). Declared here
 // because the rendered Markdown and several actions below read it.
@@ -1152,8 +1169,8 @@ function renderComment(comment: PrComment): string {
 </script>
 
 <template>
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
-        <ScrollArea v-if="pr" class="pr-scroll-area min-h-0 flex-1">
+    <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
+        <ScrollArea v-if="pr" ref="scrollArea" class="pr-scroll-area min-h-0 flex-1">
             <div class="w-full max-w-[1040px]">
                 <!-- Header -->
                 <div class="border-b border-moire-border px-4 pt-4 pb-4">
@@ -2095,6 +2112,8 @@ function renderComment(comment: PrComment): string {
                 </div>
             </div>
         </ScrollArea>
+        <!-- Beside the 1040px content column above. -->
+        <scroll-jump-buttons v-if="pr" :target="scrollViewport" :column="1040" />
 
         <!-- Delete confirmation. A modal, deliberately outside the comment card, so
              the destructive action reads clearly and is not mistaken for part of the
