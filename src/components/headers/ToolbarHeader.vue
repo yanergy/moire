@@ -17,6 +17,7 @@ import RefSelector from '@/components/controls/RefSelector.vue';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
 import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 import NotificationsButton from '@/components/headers/NotificationsButton.vue';
+import ReviewButton from '@/components/headers/ReviewButton.vue';
 import ToolbarNavButton from '@/components/headers/ToolbarNavButton.vue';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -171,6 +172,9 @@ const statusDotClass = computed(() => {
                         <span v-for="(line, i) in comparison.prWarning" :key="i">{{ line }}</span>
                     </TooltipContent>
                 </Tooltip>
+
+                <!-- Once a review is pending, finishing it is a click away from the diff. -->
+                <review-button v-if="!comparison.prLoading" finish-only />
             </div>
 
             <!-- The page navigation, side by side: the diff, then the repository

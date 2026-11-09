@@ -9,10 +9,13 @@ import type {
     CheckAnnotation,
     CommentMutationResult,
     CodeStyle,
+    PrReviewComment,
     PrReviewThread,
+    ReviewCommentInput,
     ViewMode,
 } from '@/shared/types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import UserAvatar from '@/components/pr/UserAvatar.vue';
 
 const props = defineProps<{
     original: string | null;
@@ -37,6 +40,17 @@ const props = defineProps<{
     // control and stays read-only. Each resolves an ok/message result.
     replyToThread?: (threadId: string, body: string) => Promise<CommentMutationResult>;
     setThreadResolved?: (threadId: string, resolved: boolean) => Promise<CommentMutationResult>;
+    // The pending review's line comments, injected by the parent. While
+    // `canComment` is set (a review is pending and the diff is the PR's), the gutter
+    // offers a "+" on each line of the PR's diff that opens a composer, and
+    // `addComment` (bound to this file by the parent) adds the comment to the review.
+    // The pending comments the viewer wrote can be edited and deleted.
+    canComment?: boolean;
+    addComment?: (comment: Omit<ReviewCommentInput, 'path'>) => Promise<CommentMutationResult>;
+    editPendingComment?: (commentId: string, body: string) => Promise<CommentMutationResult>;
+    deletePendingComment?: (commentId: string) => Promise<CommentMutationResult>;
+    // Opens the PR view at a submitted thread, under its review in the conversation.
+    showInPr?: (threadId: string) => void;
     // The stacked "all files" view mounts one viewer per file inside a single
     // scroll container, so each editor must size itself to its content (rather than
     // fill its parent and scroll internally). When set, the container height tracks
@@ -85,6 +99,255 @@ const modifiedAnnotationsByLine = new Map<number, CheckAnnotation[]>();
 
 // Listeners for line clicks (open the popover) and scrolling (close it).
 let commentListeners: monaco.IDisposable[] = [];
+
+// --- New review comments ---
+//
+// While a review is pending, hovering a line of the PR's diff shows a "+" in the
+// line decorations gutter (between the line numbers and the code); clicking it
+// opens the composer for that line, or for the selected lines when the selection
+// covers it. GitHub only takes comments on lines in the diff's hunks (the changed
+// lines and three lines of context either side), so other lines get no "+".
+const HUNK_CONTEXT = 3;
+let originalAddDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
+let modifiedAddDecorations: monaco.editor.IEditorDecorationsCollection | null = null;
+const commentableLines = { LEFT: new Set<number>(), RIGHT: new Set<number>() };
+
+function addLines(set: Set<number>, from: number, to: number) {
+    for (let line = Math.max(1, from); line <= to; line++) {
+        set.add(line);
+    }
+}
+
+// The lines each side's hunks cover, from Monaco's line changes. A change with no
+// lines on a side (a pure insertion or deletion) still has context there, around
+// the line it sits after.
+function computeCommentableLines() {
+    commentableLines.LEFT.clear();
+    commentableLines.RIGHT.clear();
+
+    for (const change of changes) {
+        const sides = [
+            [commentableLines.RIGHT, change.modifiedStartLineNumber, change.modifiedEndLineNumber],
+            [commentableLines.LEFT, change.originalStartLineNumber, change.originalEndLineNumber],
+        ] as const;
+        for (const [set, start, end] of sides) {
+            if (end >= start && start >= 1) {
+                addLines(set, start - HUNK_CONTEXT, end + HUNK_CONTEXT);
+            } else {
+                addLines(set, start - HUNK_CONTEXT + 1, start + HUNK_CONTEXT);
+            }
+        }
+    }
+}
+
+const canAddComment = computed(() => Boolean(props.canComment && props.addComment));
+
+function isCommentable(line: number | undefined, side: 'LEFT' | 'RIGHT'): line is number {
+    return canAddComment.value && !!line && commentableLines[side].has(line);
+}
+
+function showAddButton(line: number | null, side: 'LEFT' | 'RIGHT') {
+    const collection = side === 'RIGHT' ? modifiedAddDecorations : originalAddDecorations;
+    collection?.set(
+        line
+            ? [
+                  {
+                      range: new monaco.Range(line, 1, line, 1),
+                      options: { linesDecorationsClassName: 'moire-add-comment' },
+                  },
+              ]
+            : []
+    );
+}
+
+function onEditorMouseMove(e: monaco.editor.IEditorMouseEvent, side: 'LEFT' | 'RIGHT') {
+    const line = e.target.position?.lineNumber;
+    showAddButton(isCommentable(line, side) ? line : null, side);
+}
+
+// The composer: which line (and first line of a range) on which side it comments
+// on. Drafts are kept per target, so a popover closed by a scroll keeps its text.
+interface ComposerTarget {
+    side: 'LEFT' | 'RIGHT';
+    line: number;
+    startLine?: number;
+}
+const composer = ref<ComposerTarget | null>(null);
+
+// The popover is wider while it holds the composer, so its buttons fit on one line.
+const popoverWidth = computed(() => (composer.value ? 440 : 360));
+const composerDrafts = reactive<Record<string, string>>({});
+const composerBusy = ref(false);
+const composerError = ref('');
+
+function composerKey(target: ComposerTarget): string {
+    return `${target.side}:${target.startLine ?? target.line}-${target.line}`;
+}
+
+const composerDraft = computed({
+    get: () => (composer.value ? (composerDrafts[composerKey(composer.value)] ?? '') : ''),
+    set: (value: string) => {
+        if (composer.value) {
+            composerDrafts[composerKey(composer.value)] = value;
+        }
+    },
+});
+
+const composerLabel = computed(() => {
+    const target = composer.value;
+    if (!target) {
+        return '';
+    }
+
+    const side = target.side === 'LEFT' ? ' (base)' : '';
+    return target.startLine
+        ? `Lines ${target.startLine} to ${target.line}${side}`
+        : `Line ${target.line}${side}`;
+});
+
+// The target for a "+" click: the selected lines when the selection on that side
+// spans several and covers the clicked one (and every line is in the diff), else
+// the clicked line alone.
+function composerTargetFor(line: number, side: 'LEFT' | 'RIGHT'): ComposerTarget {
+    const inner = side === 'RIGHT' ? editor?.getModifiedEditor() : editor?.getOriginalEditor();
+    const selection = inner?.getSelection();
+    if (selection && selection.endLineNumber > selection.startLineNumber) {
+        // A selection ending at column 1 stops before that line.
+        const end =
+            selection.endColumn === 1 ? selection.endLineNumber - 1 : selection.endLineNumber;
+        const start = selection.startLineNumber;
+        let inDiff = end > start;
+        for (let n = start; inDiff && n <= end; n++) {
+            inDiff = commentableLines[side].has(n);
+        }
+
+        if (inDiff && line >= start && line <= end) {
+            return { side, line: end, startLine: start };
+        }
+    }
+
+    return { side, line };
+}
+
+function openComposer(line: number, side: 'LEFT' | 'RIGHT', clientX: number, clientY: number) {
+    const target = composerTargetFor(line, side);
+    const threads =
+        (side === 'RIGHT' ? modifiedThreadsByLine : originalThreadsByLine).get(target.line) ?? [];
+    const annotations = side === 'RIGHT' ? (modifiedAnnotationsByLine.get(target.line) ?? []) : [];
+    composerError.value = '';
+    // Set first, so the popover is placed at the composer's (wider) width.
+    composer.value = target;
+    openPopover(target.line, side, threads, annotations, clientX, clientY);
+}
+
+// Insert a suggested change: GitHub's suggestion block, prefilled with the
+// commented lines so they can be edited into the replacement. Head side only, since
+// a suggestion replaces lines of the PR's head.
+function insertSuggestion() {
+    const target = composer.value;
+    const model = editor?.getModifiedEditor().getModel();
+    if (!target || target.side !== 'RIGHT' || !model) {
+        return;
+    }
+
+    const lines: string[] = [];
+    for (let n = target.startLine ?? target.line; n <= target.line; n++) {
+        lines.push(model.getLineContent(n));
+    }
+
+    const draft = composerDraft.value;
+    const gap = draft && !draft.endsWith('\n') ? '\n' : '';
+    composerDraft.value = `${draft}${gap}\`\`\`suggestion\n${lines.join('\n')}\n\`\`\`\n`;
+}
+
+async function submitComposer() {
+    const target = composer.value;
+    const body = composerDraft.value.trim();
+    if (!target || !body || !props.addComment || composerBusy.value) {
+        return;
+    }
+
+    composerBusy.value = true;
+    composerError.value = '';
+    const result = await props.addComment({
+        line: target.line,
+        side: target.side,
+        startLine: target.startLine,
+        body,
+    });
+    composerBusy.value = false;
+    if (result.ok) {
+        delete composerDrafts[composerKey(target)];
+        composer.value = null;
+        // The new pending thread arrives with the refreshed threads, and the open
+        // popover redraws in place to show it (see refreshOpenPopover).
+    } else {
+        composerError.value = result.message ?? 'Could not add the comment.';
+    }
+}
+
+function cancelComposer() {
+    if (composer.value) {
+        delete composerDrafts[composerKey(composer.value)];
+    }
+
+    composer.value = null;
+    if (activeThreads.value.length === 0 && activeAnnotations.value.length === 0) {
+        closeThreadPopover();
+    }
+}
+
+// --- Editing and deleting pending comments ---
+//
+// A comment still in the viewer's pending review can be rewritten or removed until
+// the review is submitted. One comment is edited at a time, and a delete asks first.
+const editingCommentId = ref<string | null>(null);
+const editCommentDraft = ref('');
+const confirmingDeleteCommentId = ref<string | null>(null);
+const busyCommentId = ref<string | null>(null);
+const commentErrors = reactive<Record<string, string>>({});
+
+function canChangeComment(c: PrReviewComment): boolean {
+    return c.isPending && c.viewerDidAuthor && Boolean(props.editPendingComment);
+}
+
+function startEditComment(c: PrReviewComment) {
+    editingCommentId.value = c.id;
+    editCommentDraft.value = c.body;
+    confirmingDeleteCommentId.value = null;
+    commentErrors[c.id] = '';
+}
+
+async function saveEditComment(c: PrReviewComment) {
+    const body = editCommentDraft.value.trim();
+    if (!props.editPendingComment || !body || busyCommentId.value) {
+        return;
+    }
+
+    busyCommentId.value = c.id;
+    const result = await props.editPendingComment(c.id, body);
+    busyCommentId.value = null;
+    if (result.ok) {
+        editingCommentId.value = null;
+    } else {
+        commentErrors[c.id] = result.message ?? 'Could not save the comment.';
+    }
+}
+
+async function deletePendingComment(c: PrReviewComment) {
+    if (!props.deletePendingComment || busyCommentId.value) {
+        return;
+    }
+
+    busyCommentId.value = c.id;
+    const result = await props.deletePendingComment(c.id);
+    busyCommentId.value = null;
+    if (result.ok) {
+        confirmingDeleteCommentId.value = null;
+    } else {
+        commentErrors[c.id] = result.message ?? 'Could not delete the comment.';
+    }
+}
 
 // What the open popover shows for a clicked line (the line's annotations and review
 // threads), and where it sits (relative to the editor container). All empty/null
@@ -161,6 +424,9 @@ function glyphClassFor(threads: PrReviewThread[]): string {
     }
     if (threads.every((t) => t.isOutdated)) {
         cls += ' moire-comment-glyph-outdated';
+    }
+    if (threads.every((t) => t.isPending)) {
+        cls += ' moire-comment-glyph-pending';
     }
 
     return cls;
@@ -330,7 +596,7 @@ function openPopover(
         return;
     }
 
-    const width = 360;
+    const width = popoverWidth.value;
     const left = Math.max(8, Math.min(clientX - rect.left + 8, rect.width - width - 8));
     activeLine.value = line;
     activeSide.value = side;
@@ -340,7 +606,12 @@ function openPopover(
 }
 
 function closeThreadPopover() {
-    if (activeThreads.value.length > 0 || activeAnnotations.value.length > 0) {
+    if (
+        activeThreads.value.length > 0 ||
+        activeAnnotations.value.length > 0 ||
+        composer.value !== null
+    ) {
+        composer.value = null;
         activeThreads.value = [];
         activeAnnotations.value = [];
         activeLine.value = null;
@@ -359,7 +630,7 @@ function refreshOpenPopover() {
 
     const map = activeSide.value === 'RIGHT' ? modifiedThreadsByLine : originalThreadsByLine;
     const threads = map.get(activeLine.value) ?? [];
-    if (threads.length === 0 && activeAnnotations.value.length === 0) {
+    if (threads.length === 0 && activeAnnotations.value.length === 0 && !composer.value) {
         closeThreadPopover();
         return;
     }
@@ -367,8 +638,16 @@ function refreshOpenPopover() {
     activeThreads.value = threads;
 }
 
+// The thread "Show in PR" in the popover header goes to: the line's first submitted
+// one (a pending thread is not in the conversation yet).
+const submittedThread = computed(() => activeThreads.value.find((t) => !t.isPending) ?? null);
+
 // The popover header, naming whichever of annotations and comments it holds.
 const popoverTitle = computed(() => {
+    if (composer.value && activeThreads.value.length === 0 && !activeAnnotations.value.length) {
+        return 'New review comment';
+    }
+
     const annotations = activeAnnotations.value.length;
     const threads = activeThreads.value.length;
     if (annotations && threads) {
@@ -392,6 +671,16 @@ function levelLabel(level: string): string {
 // it. Clicks outside the editor are handled by onDocMouseDown.
 function onEditorMouseDown(e: monaco.editor.IEditorMouseEvent, side: 'LEFT' | 'RIGHT') {
     const line = e.target.position?.lineNumber;
+    // The "+" in the line decorations gutter opens the composer for that line.
+    if (
+        e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_DECORATIONS &&
+        isCommentable(line, side)
+    ) {
+        const browser = e.event.browserEvent;
+        openComposer(line, side, browser.clientX, browser.clientY);
+        return;
+    }
+
     const threads = line
         ? (side === 'RIGHT' ? modifiedThreadsByLine : originalThreadsByLine).get(line)
         : undefined;
@@ -410,7 +699,11 @@ function onEditorMouseDown(e: monaco.editor.IEditorMouseEvent, side: 'LEFT' | 'R
 // clicks are left to onEditorMouseDown (which opens on a commented line, closes
 // elsewhere), so this only handles clicks in the rest of the app.
 function onDocMouseDown(e: MouseEvent) {
-    if (activeThreads.value.length === 0 && activeAnnotations.value.length === 0) {
+    if (
+        activeThreads.value.length === 0 &&
+        activeAnnotations.value.length === 0 &&
+        !composer.value
+    ) {
         return;
     }
 
@@ -657,6 +950,8 @@ onMounted(() => {
         renderSideBySide: props.viewMode === 'split',
         // Reserve the gutter for inline review-comment markers.
         glyphMargin: true,
+        // Room for the review composer's "+" between the line numbers and the code.
+        lineDecorationsWidth: 16,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         renderLineHighlight: 'none',
@@ -695,6 +990,9 @@ onMounted(() => {
     modifiedCommentDecorations = editor.getModifiedEditor().createDecorationsCollection();
     // Annotations mark the head side only.
     modifiedAnnotationDecorations = editor.getModifiedEditor().createDecorationsCollection();
+    // The review composer's "+" on the hovered line.
+    originalAddDecorations = editor.getOriginalEditor().createDecorationsCollection();
+    modifiedAddDecorations = editor.getModifiedEditor().createDecorationsCollection();
 
     // Clicking a commented line opens its popover; scrolling either side closes it,
     // since it is pinned to a pixel position that scrolling would strand.
@@ -705,6 +1003,10 @@ onMounted(() => {
         originalEditor.onMouseDown((e) => onEditorMouseDown(e, 'LEFT')),
         modifiedEditor.onDidScrollChange(() => closeThreadPopover()),
         originalEditor.onDidScrollChange(() => closeThreadPopover()),
+        modifiedEditor.onMouseMove((e) => onEditorMouseMove(e, 'RIGHT')),
+        originalEditor.onMouseMove((e) => onEditorMouseMove(e, 'LEFT')),
+        modifiedEditor.onMouseLeave(() => showAddButton(null, 'RIGHT')),
+        originalEditor.onMouseLeave(() => showAddButton(null, 'LEFT')),
     ];
     window.addEventListener('keydown', onKeydown);
     // Dismiss the popover on a click anywhere outside it and the editor.
@@ -724,6 +1026,7 @@ onMounted(() => {
         changes = editor?.getLineChanges() ?? [];
         emit('update:changeCount', changes.length);
         applyWordHighlights();
+        computeCommentableLines();
         // Re-place the review-comment and check-annotation markers against the
         // (re)computed model.
         applyCommentMarkers();
@@ -776,6 +1079,18 @@ watch(
         refreshOpenPopover();
     }
 );
+
+// The review stopped taking comments (submitted, discarded, or the range moved off
+// the PR): drop the "+" and an open composer.
+watch(canAddComment, (can) => {
+    if (!can) {
+        showAddButton(null, 'RIGHT');
+        showAddButton(null, 'LEFT');
+        if (composer.value) {
+            cancelComposer();
+        }
+    }
+});
 
 // The same, for check annotations arriving or refreshing.
 watch(
@@ -831,6 +1146,8 @@ onBeforeUnmount(() => {
     originalCommentDecorations = null;
     modifiedCommentDecorations = null;
     modifiedAnnotationDecorations = null;
+    originalAddDecorations = null;
+    modifiedAddDecorations = null;
 });
 
 defineExpose({
@@ -854,10 +1171,11 @@ defineExpose({
              Opened by clicking the line, pinned to the click; closes on a click
              outside, its X, Escape, scrolling, or a file/layout change. -->
         <div
-            v-if="(activeThreads.length || activeAnnotations.length) && popoverPos"
+            v-if="(activeThreads.length || activeAnnotations.length || composer) && popoverPos"
             ref="popover"
-            class="absolute z-20 flex max-h-[60%] w-[360px] max-w-[calc(100%-16px)] flex-col overflow-hidden rounded-lg border border-moire-border bg-moire-pop text-moire-fg"
+            class="absolute z-20 flex max-h-[60%] max-w-[calc(100%-16px)] flex-col overflow-hidden rounded-lg border border-moire-border bg-moire-pop text-moire-fg"
             :style="{
+                width: `${popoverWidth}px`,
                 top: `${popoverPos.top}px`,
                 left: `${popoverPos.left}px`,
                 boxShadow: 'var(--moire-pop-shadow)',
@@ -869,11 +1187,23 @@ defineExpose({
                 class="flex items-center justify-between border-b border-moire-border px-3 py-2 text-[12px] font-medium text-moire-muted"
             >
                 <span>{{ popoverTitle }}</span>
+                <span class="flex-1" />
+                <!-- A submitted thread also shows under its review in the PR view's
+                     conversation; a pending one is not there yet. -->
+                <button
+                    v-if="showInPr && submittedThread"
+                    type="button"
+                    data-slot="show-in-pr"
+                    class="mr-1.5 shrink-0 cursor-pointer text-[12px] font-normal whitespace-nowrap text-moire-accent hover:underline"
+                    @click="showInPr(submittedThread.id)"
+                >
+                    Show in PR
+                </button>
                 <Tooltip>
                     <TooltipTrigger as-child>
                         <button
                             type="button"
-                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
                             aria-label="Close"
                             @click="closeThreadPopover"
                         >
@@ -911,7 +1241,7 @@ defineExpose({
                     <button
                         v-if="annotation.url"
                         type="button"
-                        class="cursor-pointer self-start text-[12px] text-moire-accent hover:underline"
+                        class="cursor-pointer self-start text-[12px] text-moire-accent hover:underline shrink-0 whitespace-nowrap"
                         @click="openAnnotationUrl(annotation.url)"
                     >
                         View on GitHub
@@ -930,18 +1260,129 @@ defineExpose({
                         <span v-if="thread.isResolved" class="text-moire-status-a">Resolved</span>
                         <span v-if="thread.isOutdated" class="text-moire-faint">Outdated</span>
                     </div>
-                    <div v-for="(c, ci) in thread.comments" :key="ci" class="flex flex-col gap-0.5">
-                        <div
-                            class="flex flex-wrap items-center gap-1.5 text-[12px] text-moire-faint"
-                        >
-                            <span class="font-medium text-moire-fg">{{ c.author }}</span>
-                            <span>{{ relative(c.createdAt) }}</span>
+                    <div
+                        v-for="(c, ci) in thread.comments"
+                        :key="ci"
+                        data-slot="popover-comment"
+                        class="flex gap-2.5"
+                    >
+                        <user-avatar :login="c.author" :size="20" class="mt-px" />
+                        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <div
+                                class="flex flex-wrap items-center gap-1.5 text-[12px] text-moire-faint"
+                            >
+                                <span class="font-medium text-moire-fg">{{ c.author }}</span>
+                                <span>{{ relative(c.createdAt) }}</span>
+                                <!-- Still in the viewer's unsubmitted review. -->
+                                <span
+                                    v-if="c.isPending"
+                                    data-slot="pending-badge"
+                                    class="rounded-full border border-moire-changes-edge bg-moire-changes px-1.5 text-[10px] leading-4 font-medium text-moire-changes-fg"
+                                >
+                                    Pending
+                                </span>
+                                <span class="flex-1" />
+                                <template
+                                    v-if="
+                                        canChangeComment(c) &&
+                                        editingCommentId !== c.id &&
+                                        confirmingDeleteCommentId !== c.id
+                                    "
+                                >
+                                    <button
+                                        type="button"
+                                        class="cursor-pointer text-[12px] text-moire-muted hover:text-moire-fg shrink-0 whitespace-nowrap"
+                                        @click="startEditComment(c)"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="cursor-pointer text-[12px] text-moire-muted hover:text-moire-status-d shrink-0 whitespace-nowrap"
+                                        @click="confirmingDeleteCommentId = c.id"
+                                    >
+                                        Delete
+                                    </button>
+                                </template>
+                            </div>
+
+                            <!-- Editing a pending comment in place. -->
+                            <div v-if="editingCommentId === c.id" class="flex flex-col gap-1.5">
+                                <textarea
+                                    v-model="editCommentDraft"
+                                    rows="3"
+                                    aria-label="Edit comment"
+                                    class="w-full resize-y rounded-md border border-moire-border bg-transparent px-2 py-1.5 text-[13px] text-moire-fg focus-visible:border-moire-ring focus-visible:outline-none"
+                                    :disabled="busyCommentId === c.id"
+                                    @keydown.stop
+                                />
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <button
+                                        type="button"
+                                        class="cursor-pointer rounded-md px-2 py-1 text-[12px] text-moire-muted hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
+                                        :disabled="busyCommentId === c.id"
+                                        @click="editingCommentId = null"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md whitespace-nowrap bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                        :disabled="
+                                            !editCommentDraft.trim() || busyCommentId === c.id
+                                        "
+                                        @click="saveEditComment(c)"
+                                    >
+                                        <LoaderCircle
+                                            v-if="busyCommentId === c.id"
+                                            :size="12"
+                                            class="animate-spin"
+                                        />
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- v-html is safe: renderThreadComment sanitizes via DOMPurify. -->
+                            <div
+                                v-else
+                                class="pr-markdown text-[13px] leading-[1.55] text-moire-file-fg"
+                                v-html="renderThreadComment(c.body)"
+                            />
+
+                            <!-- Deleting a pending comment asks first, in place. -->
+                            <div
+                                v-if="confirmingDeleteCommentId === c.id"
+                                class="flex items-center justify-end gap-1.5 pt-1"
+                            >
+                                <span class="mr-auto text-[12px] text-moire-muted">
+                                    Delete this comment?
+                                </span>
+                                <button
+                                    type="button"
+                                    class="cursor-pointer rounded-md px-2 py-1 text-[12px] text-moire-muted hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
+                                    :disabled="busyCommentId === c.id"
+                                    @click="confirmingDeleteCommentId = null"
+                                >
+                                    Keep
+                                </button>
+                                <button
+                                    type="button"
+                                    class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md whitespace-nowrap bg-moire-status-d px-2.5 py-1 text-[12px] font-medium text-white hover:opacity-90"
+                                    :disabled="busyCommentId === c.id"
+                                    @click="deletePendingComment(c)"
+                                >
+                                    <LoaderCircle
+                                        v-if="busyCommentId === c.id"
+                                        :size="12"
+                                        class="animate-spin"
+                                    />
+                                    Delete
+                                </button>
+                            </div>
+                            <p v-if="commentErrors[c.id]" class="text-[12px] text-moire-status-d">
+                                {{ commentErrors[c.id] }}
+                            </p>
                         </div>
-                        <!-- v-html is safe: renderThreadComment sanitizes via DOMPurify. -->
-                        <div
-                            class="pr-markdown text-[13px] leading-[1.55] text-moire-file-fg"
-                            v-html="renderThreadComment(c.body)"
-                        />
                     </div>
 
                     <!-- Reply box and resolve toggle (GitHub-style), shown only when the
@@ -961,17 +1402,19 @@ defineExpose({
                             @keydown.stop
                         />
                         <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    class="cursor-pointer rounded-md border border-moire-border px-2 py-1 text-[12px] text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-fg disabled:cursor-not-allowed disabled:opacity-60 shrink-0 whitespace-nowrap"
+                                    :disabled="busyThreadId === thread.id"
+                                    @click="toggleResolved(thread)"
+                                >
+                                    {{ thread.isResolved ? 'Unresolve' : 'Resolve' }}
+                                </button>
+                            </div>
                             <button
                                 type="button"
-                                class="cursor-pointer rounded-md border border-moire-border px-2 py-1 text-[12px] text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-fg disabled:cursor-not-allowed disabled:opacity-60"
-                                :disabled="busyThreadId === thread.id"
-                                @click="toggleResolved(thread)"
-                            >
-                                {{ thread.isResolved ? 'Unresolve' : 'Resolve' }}
-                            </button>
-                            <button
-                                type="button"
-                                class="inline-flex cursor-pointer items-center gap-1 rounded-md bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md whitespace-nowrap bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                                 :disabled="
                                     !(replyDrafts[thread.id] || '').trim() ||
                                     busyThreadId === thread.id
@@ -986,6 +1429,59 @@ defineExpose({
                                 Reply
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- The composer for a new review comment on the clicked line(s). -->
+                <div
+                    v-if="composer"
+                    data-slot="review-composer"
+                    class="flex flex-col gap-1.5 border-t border-moire-border px-3 py-2.5 first:border-t-0"
+                >
+                    <span class="text-[12px] font-medium text-moire-muted">
+                        {{ composerLabel }}
+                    </span>
+                    <p v-if="composerError" class="text-[12px] text-moire-status-d">
+                        {{ composerError }}
+                    </p>
+                    <!-- @keydown.stop so typing does not reach the editor shortcuts. -->
+                    <textarea
+                        v-model="composerDraft"
+                        rows="4"
+                        placeholder="Leave a comment"
+                        aria-label="New review comment"
+                        class="w-full resize-y rounded-md border border-moire-border bg-transparent px-2 py-1.5 text-[13px] text-moire-fg placeholder:text-moire-faint focus-visible:border-moire-ring focus-visible:outline-none"
+                        :disabled="composerBusy"
+                        @keydown.stop
+                    />
+                    <div class="flex items-center gap-1.5">
+                        <button
+                            v-if="composer.side === 'RIGHT'"
+                            type="button"
+                            class="cursor-pointer rounded-md border border-moire-border px-2 py-1 text-[12px] text-moire-muted transition-colors hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
+                            :disabled="composerBusy"
+                            @click="insertSuggestion"
+                        >
+                            Suggest change
+                        </button>
+                        <span class="flex-1" />
+                        <button
+                            type="button"
+                            class="cursor-pointer rounded-md px-2 py-1 text-[12px] text-moire-muted hover:bg-moire-hover hover:text-moire-fg shrink-0 whitespace-nowrap"
+                            :disabled="composerBusy"
+                            @click="cancelComposer"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md whitespace-nowrap bg-moire-accent px-2.5 py-1 text-[12px] font-medium text-moire-check-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="!composerDraft.trim() || composerBusy"
+                            @click="submitComposer"
+                        >
+                            <LoaderCircle v-if="composerBusy" :size="12" class="animate-spin" />
+                            Add review comment
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1060,6 +1556,28 @@ defineExpose({
 
 :deep(.moire-comment-glyph-outdated) {
     opacity: 0.55;
+}
+
+/* A thread still in the viewer's pending review: amber, like its Pending label. */
+:deep(.moire-comment-glyph-pending) {
+    background-color: var(--moire-changes-fg);
+}
+
+/* The review composer's "+" on the hovered line of the PR's diff, in the line
+   decorations gutter between the line numbers and the code: an accent square with
+   a plus cut out, drawn with a mask so a theme token drives its color. */
+:deep(.moire-add-comment) {
+    cursor: pointer;
+    background-color: var(--moire-accent);
+    border-radius: 3px;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M3 0h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3zm4.25 4v3.25H4v1.5h3.25V12h1.5V8.75H12v-1.5H8.75V4z'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M3 0h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3zm4.25 4v3.25H4v1.5h3.25V12h1.5V8.75H12v-1.5H8.75V4z'/%3E%3C/svg%3E");
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+    mask-position: center;
+    -webkit-mask-position: center;
+    mask-size: 14px 14px;
+    -webkit-mask-size: 14px 14px;
 }
 
 /* Whole-line highlight for a commented line: a solid accent bar down its left edge

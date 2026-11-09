@@ -51,6 +51,26 @@ describe('GitService.branches', () => {
     });
 });
 
+describe('GitService.resolveCommit', () => {
+    it("resolves a ref to its commit, or null when it doesn't resolve", async () => {
+        const raw = vi
+            .fn<(args: string[]) => Promise<string>>()
+            .mockResolvedValueOnce('abc123\n')
+            .mockRejectedValueOnce(new Error('unknown revision'));
+        const service = new GitService('/repo', { raw });
+
+        expect(await service.resolveCommit('origin/feature')).toBe('abc123');
+        expect(raw).toHaveBeenCalledWith([
+            'rev-parse',
+            '--verify',
+            '--quiet',
+            '--end-of-options',
+            'origin/feature^{commit}',
+        ]);
+        expect(await service.resolveCommit('gone')).toBeNull();
+    });
+});
+
 describe('GitService.rangeArgs', () => {
     const service = new GitService('/repo', {});
 

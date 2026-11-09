@@ -118,6 +118,17 @@ the popup never appears.
    optional edit mode lets you reply to and resolve threads, post and edit your own comments, edit
    the description, and tick task-list boxes. The **Diff** button in the middle of the toolbar
    takes you back to the diff.
+
+   To review the pull request yourself, click **Review** at the top right of the PR view. The diff
+   opens, and hovering a line of the PR's diff shows a **+** between the line numbers and the code;
+   click it to comment on that line, or select several lines first to comment on all of them.
+   **Suggest change** adds a suggestion block with the selected code to edit. Your comments collect
+   in a pending review, marked **Pending** on their lines, where you can still edit or delete them.
+   While the review is pending, **Finish review** (with the number of pending comments) sits next
+   to the PR button in the toolbar and in the PR view. It opens a dialog to add a summary and submit
+   the review as **Comment**, **Approve** or **Request changes**, or to discard it. The pending
+   review lives on GitHub, so a review started on github.com continues here, and the other way
+   around.
 7. **Keep track of pull requests.** The dashboard button in the toolbar (or **View > Dashboard**,
    `Cmd/Ctrl+Shift+D`) shows an overview of the open repository's pull requests as cards: needs
    your review, changes requested, ready to merge, failing checks, merge conflicts, your open PRs,
@@ -187,8 +198,17 @@ last branch range are remembered per repository.
   and conversation as Markdown, and a Checks tab with the head commit's CI.
 - Inline review threads and CI check annotations show on their lines in the diff. The file tree
   flags each file that carries review threads or annotations.
+- In the PR view's conversation, each review lists its line comments under it: the file (a link
+  that opens it in the diff), the commented line or lines (highlighted, with a line of context above
+  and below), and the thread's comments. The other way, **Show in PR** on a review comment in the
+  diff jumps to it in the conversation.
 - An edit mode (off by default) adds posting, editing, and deleting your own comments, editing the
   description, ticking task-list checkboxes, and replying to and resolving threads in place.
+- Code reviews from within the app: start a review, comment on lines or ranges in the diff
+  (suggested changes included), keep track of the pending comments, and submit the review as
+  Comment, Approve or Request changes, or discard it. Line comments are offered only when the diff
+  on screen is the PR's (its base and head, in merge-base mode, with the head at the PR's latest
+  commit); otherwise a bar under the toolbar says why. On your own PR only Comment is offered.
 
 ### Dashboard
 
@@ -283,6 +303,11 @@ Track bugs and limitations here.
   annotations are read-only: unlike code scanning alerts, a check-run annotation cannot be dismissed
   through the API (it belongs to a check run and clears when the check re-runs), so there is nothing
   to act on.
+- **The review comment button follows Moiré's diff, not GitHub's.** The **+** is offered on the
+  changed lines and three lines of context around them, which is how GitHub cuts the diff into
+  hunks, but the two diff algorithms can disagree on an edge line. GitHub then refuses the comment
+  and its message shows in the composer, with the text kept. In the unified layout only the head
+  side's lines can be commented on, since the removed lines are not real editor lines there.
 - **A task-list tick can be lost if you quit within the debounce window.** Ticking a checkbox
   writes back after a short quiet period (about two seconds), batching a burst into one save.
   Pending ticks are flushed on the usual exits (leaving edit mode, refreshing, switching tab, the
@@ -320,12 +345,7 @@ Track bugs and limitations here.
 
 ## Planned features
 
-Everything on the original roadmap has shipped. These are the next features on the list:
-
-- **Full code reviews from within the app.** Mirror GitHub's review flow: place inline comments on a
-  line or a range of lines in the diff (including suggested changes), collect them as a pending
-  review, and submit the review as Comment, Approve, or Request changes with an overall summary.
-  Pending comments stay visible and editable until the review is submitted or discarded.
+Everything on the original roadmap and the follow-up list has shipped.
 
 Possible expansions of the GitHub notifications and dashboard, not planned yet:
 

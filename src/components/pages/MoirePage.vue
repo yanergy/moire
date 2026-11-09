@@ -4,6 +4,7 @@ import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import MissingBranchNotice from '@/components/headers/MissingBranchNotice.vue';
+import ReviewLinesNotice from '@/components/headers/ReviewLinesNotice.vue';
 import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
 import DiffPane from '@/components/diff/DiffPane.vue';
 import StackedDiffPane from '@/components/diff/StackedDiffPane.vue';
@@ -66,8 +67,11 @@ watch(
                 <pr-view v-if="showPrView" />
                 <!-- The diff area follows the View → Diff Layout setting: the single-file
                      pane, or the GitHub-style stacked all-files list. -->
-                <diff-pane v-else-if="ui.diffLayout === 'single'" />
-                <stacked-diff-pane v-else />
+                <div v-else class="flex min-h-0 min-w-0 flex-1 flex-col">
+                    <review-lines-notice />
+                    <diff-pane v-if="ui.diffLayout === 'single'" />
+                    <stacked-diff-pane v-else />
+                </div>
             </div>
         </TooltipProvider>
     </div>

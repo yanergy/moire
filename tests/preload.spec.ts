@@ -56,6 +56,14 @@ describe('preload bridge', () => {
             'getChangedFiles',
             'getFilePair',
             'getPullRequest',
+            'getReviewState',
+            'startReview',
+            'addReviewComment',
+            'editReviewComment',
+            'deleteReviewComment',
+            'submitReview',
+            'discardReview',
+            'resolveCommit',
             'openExternal',
             'openFile',
             'getTheme',
@@ -116,6 +124,21 @@ describe('preload bridge', () => {
 
         await api().getPullRequest!('main', 'feature');
         expect(bridge.invoke).toHaveBeenCalledWith('gh:pull-request', 'main', 'feature');
+
+        await api().addReviewComment!('PRR_1', { path: 'a', line: 2 });
+        expect(bridge.invoke).toHaveBeenCalledWith('gh:add-review-comment', 'PRR_1', {
+            path: 'a',
+            line: 2,
+        });
+
+        await api().submitReview!('PRR_1', 'APPROVE', 'ok');
+        expect(bridge.invoke).toHaveBeenCalledWith('gh:submit-review', 'PRR_1', 'APPROVE', 'ok');
+
+        await api().discardReview!('PRR_1');
+        expect(bridge.invoke).toHaveBeenCalledWith('gh:discard-review', 'PRR_1');
+
+        await api().resolveCommit!('origin/feature');
+        expect(bridge.invoke).toHaveBeenCalledWith('git:resolve-commit', 'origin/feature');
 
         await api().openExternal!('https://github.com/o/r/pull/1');
         expect(bridge.invoke).toHaveBeenCalledWith(

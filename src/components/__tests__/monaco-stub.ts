@@ -12,6 +12,16 @@ function makeInnerEditor() {
     // Review-comment glyph clicks and scroll-to-close go through onMouseDown /
     // onDidScrollChange; tests drive them via fireMouseDown / fireScroll below.
     let mouseDownCb: ((e: unknown) => void) | null = null;
+    // The review composer's "+" follows the mouse (onMouseMove / onMouseLeave) and
+    // reads the selection to comment on a range; tests drive them below.
+    let mouseMoveCb: ((e: unknown) => void) | null = null;
+    let mouseLeaveCb: (() => void) | null = null;
+    let selection: {
+        startLineNumber: number;
+        startColumn: number;
+        endLineNumber: number;
+        endColumn: number;
+    } | null = null;
     let scrollCb: (() => void) | null = null;
     // The stacked "all files" view sizes each editor to its content via
     // getContentHeight + onDidContentSizeChange; tests drive it with fireContentSize.
@@ -27,9 +37,21 @@ function makeInnerEditor() {
         })),
         // The diff viewer validates thread lines against the model's line count; a
         // large stand-in keeps every fixture line in range.
-        getModel: vi.fn<() => { getLineCount: () => number }>(() => ({
+        getModel: vi.fn<
+            () => { getLineCount: () => number; getLineContent: (line: number) => string }
+        >(() => ({
             getLineCount: () => Number.MAX_SAFE_INTEGER,
+            getLineContent: (line: number) => `line ${line}`,
         })),
+        getSelection: vi.fn<() => typeof selection>(() => selection),
+        onMouseMove: vi.fn<(cb: (e: unknown) => void) => { dispose: () => void }>((cb) => {
+            mouseMoveCb = cb;
+            return { dispose: vi.fn<() => void>() };
+        }),
+        onMouseLeave: vi.fn<(cb: () => void) => { dispose: () => void }>((cb) => {
+            mouseLeaveCb = cb;
+            return { dispose: vi.fn<() => void>() };
+        }),
         onMouseDown: vi.fn<(cb: (e: unknown) => void) => { dispose: () => void }>((cb) => {
             mouseDownCb = cb;
             return { dispose: vi.fn<() => void>() };
@@ -45,6 +67,11 @@ function makeInnerEditor() {
         }),
         // Test drivers (not part of Monaco).
         fireMouseDown: (e: unknown) => mouseDownCb?.(e),
+        fireMouseMove: (e: unknown) => mouseMoveCb?.(e),
+        fireMouseLeave: () => mouseLeaveCb?.(),
+        setSelection: (next: typeof selection) => {
+            selection = next;
+        },
         fireScroll: () => scrollCb?.(),
         fireContentSize: (h: number) => {
             contentHeight = h;
@@ -103,8 +130,8 @@ export const editor = {
     defineTheme: vi.fn<(name: string, theme: unknown) => void>(),
     setTheme: vi.fn<(name: string) => void>(),
     create: vi.fn<(container: unknown, options?: unknown) => void>(),
-    // Only the member the diff viewer compares a glyph click against.
-    MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 },
+    // The members the diff viewer compares a gutter click against.
+    MouseTargetType: { GUTTER_GLYPH_MARGIN: 2, GUTTER_LINE_DECORATIONS: 4 },
     // Lanes the comment-marker overview-ruler decoration references.
     OverviewRulerLane: { Left: 1, Center: 2, Right: 4, Full: 7 },
 };

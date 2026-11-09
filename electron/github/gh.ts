@@ -50,6 +50,9 @@ export interface PrComment {
     // wrote it, so it may edit it.
     id: string;
     canEdit: boolean;
+    // A review's own node id, which its line comments' threads point back to, so
+    // the PR view can show them under the review.
+    reviewId?: string;
 }
 
 // A PR label; `color` is a 6-digit hex without the leading '#', as GitHub returns.
@@ -128,11 +131,14 @@ interface GhComment {
     viewerDidAuthor?: boolean;
 }
 
+// `submittedAt` is null for the viewer's own pending review, which gh lists among
+// the reviews although it is not on the PR until it is submitted.
 interface GhReview {
+    id?: string;
     author: GhAuthor | null;
     body: string;
     state: string;
-    submittedAt: string;
+    submittedAt: string | null;
 }
 
 // A pending review request: a user (login) or a team (slug).
@@ -147,12 +153,17 @@ interface GhLabel {
     description: string;
 }
 
-// One comment inside an inline review thread: an author login, its Markdown body,
-// and when it was posted.
+// One comment inside an inline review thread: its node id, an author login, its
+// Markdown body, and when it was posted. `isPending` marks a comment still in the
+// viewer's unsubmitted review (only its author can see those); `viewerDidAuthor`
+// says whether the viewer wrote it, so a pending one can be edited or deleted.
 export interface PrReviewComment {
+    id: string;
     author: string;
     body: string;
     createdAt: string;
+    isPending: boolean;
+    viewerDidAuthor: boolean;
 }
 
 // An inline (line-anchored) code review thread on the PR, shown as a marker in the
@@ -169,6 +180,17 @@ export interface PrReviewThread {
     side: 'LEFT' | 'RIGHT';
     isResolved: boolean;
     isOutdated: boolean;
+    // The thread was started in the viewer's pending review (its first comment is
+    // pending), so it is not on GitHub for anyone else yet.
+    isPending: boolean;
+    // The review the thread was started in (its first comment's), and the diff
+    // around the commented line(s), as GitHub shows them in the conversation.
+    reviewId?: string;
+    diffHunk?: string;
+    // The first line of a range comment on the head and base side (null for a
+    // single-line comment), so the PR view shows just the commented lines.
+    startLine?: number | null;
+    originalStartLine?: number | null;
     comments: PrReviewComment[];
 }
 
@@ -254,9 +276,10 @@ export const defaultRunner: GhRunner = async (args, cwd) => {
 };
 
 // Merge the separate comment and review arrays into one chronological timeline.
-// A review with no body and a COMMENTED (or missing) state is just a container
-// for inline code comments, which are not fetched here, so it is dropped; an
-// approval or change request is kept even with an empty body so its state shows.
+// Every submitted review is kept with its node id, an empty COMMENTED one too: it
+// is the container for line comments (fetched separately, with the threads), and
+// the PR view drops it only when it holds none. The viewer's pending review is
+// left out: it joins the conversation once submitted.
 function buildComments(pr: GhPr): PrComment[] {
     const out: PrComment[] = [];
     for (const c of pr.comments ?? []) {
@@ -272,7 +295,7 @@ function buildComments(pr: GhPr): PrComment[] {
 
     for (const r of pr.reviews ?? []) {
         const body = r.body ?? '';
-        if (!body && (r.state === 'COMMENTED' || !r.state)) {
+        if (r.state === 'PENDING' || !r.submittedAt) {
             continue;
         }
 
@@ -286,11 +309,12 @@ function buildComments(pr: GhPr): PrComment[] {
             // they carry no id and are never marked editable.
             id: '',
             canEdit: false,
+            reviewId: r.id ?? '',
         });
     }
 
     // ISO 8601 timestamps sort chronologically as plain strings.
-    out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    out.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
     return out;
 }
 
@@ -330,7 +354,8 @@ function reviewDecisionOf(pr: GhPr): string {
     const latest = new Map<string, string>();
     for (const r of reviews) {
         const login = r.author?.login ?? '';
-        if (login && r.state) {
+        // A pending review is not submitted yet, so it does not change a stance.
+        if (login && r.state && r.state !== 'PENDING') {
             latest.set(login, r.state);
         }
     }
@@ -564,23 +589,40 @@ interface GhReviewThread {
     path: string | null;
     line: number | null;
     originalLine: number | null;
+    startLine?: number | null;
+    originalStartLine?: number | null;
     diffSide: string | null;
     isResolved: boolean | null;
     isOutdated: boolean | null;
     comments: { nodes: GhReviewComment[] | null } | null;
 }
 interface GhReviewComment {
+    id?: string | null;
+    diffHunk?: string | null;
+    pullRequestReview?: { id?: string | null } | null;
     author: GhAuthor | null;
     body: string | null;
     createdAt: string | null;
+    state?: string | null;
+    viewerDidAuthor?: boolean | null;
 }
 
 const REVIEW_THREADS_QUERY =
     'query($id:ID!){node(id:$id){... on PullRequest{reviewThreads(first:100){nodes{' +
-    'id path line originalLine diffSide isResolved isOutdated ' +
-    'comments(first:100){nodes{author{login} body createdAt}}}}}}}';
+    'id path line originalLine startLine originalStartLine diffSide isResolved isOutdated ' +
+    'comments(first:100){nodes{id author{login} body createdAt state viewerDidAuthor ' +
+    'diffHunk pullRequestReview{id}}}}}}}}';
 
 function toReviewThread(node: GhReviewThread): PrReviewThread {
+    const first = node.comments?.nodes?.[0];
+    const comments = (node.comments?.nodes ?? []).map((c) => ({
+        id: c.id ?? '',
+        author: c.author?.login ?? '',
+        body: c.body ?? '',
+        createdAt: c.createdAt ?? '',
+        isPending: c.state === 'PENDING',
+        viewerDidAuthor: c.viewerDidAuthor ?? false,
+    }));
     return {
         id: node.id ?? '',
         path: node.path ?? '',
@@ -589,11 +631,12 @@ function toReviewThread(node: GhReviewThread): PrReviewThread {
         side: node.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT',
         isResolved: node.isResolved ?? false,
         isOutdated: node.isOutdated ?? false,
-        comments: (node.comments?.nodes ?? []).map((c) => ({
-            author: c.author?.login ?? '',
-            body: c.body ?? '',
-            createdAt: c.createdAt ?? '',
-        })),
+        isPending: comments[0]?.isPending ?? false,
+        startLine: node.startLine ?? null,
+        originalStartLine: node.originalStartLine ?? null,
+        reviewId: first?.pullRequestReview?.id ?? '',
+        diffHunk: first?.diffHunk ?? '',
+        comments,
     };
 }
 
@@ -914,6 +957,269 @@ export async function setReviewThreadResolved(
             ['api', 'graphql', '-f', `query=${query}`, '-f', `threadId=${threadId}`],
             repoPath
         );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// --- Reviews (GraphQL) ---
+//
+// A review is GitHub's batch of line comments plus an overall verdict. It starts as
+// a pending review (visible only to its author), collects line and range comments,
+// and is then submitted as a comment, an approval, or a change request, or discarded.
+// The pending review lives on GitHub, so one started on github.com is picked up here
+// and the other way around. Like the other writes, each returns an ok/message result.
+
+// The viewer's side of a PR's review: the id of their pending review (null when
+// there is none) and whether they opened the PR, since GitHub lets an author only
+// comment, not approve or request changes.
+export interface ReviewState {
+    pendingReviewId: string | null;
+    viewerIsAuthor: boolean;
+}
+
+const REVIEW_STATE_QUERY =
+    'query($id:ID!){node(id:$id){... on PullRequest{viewerDidAuthor ' +
+    'reviews(states:PENDING,first:10){nodes{id viewerDidAuthor}}}}}';
+
+// Read the viewer's pending review and authorship of a PR, by its node id. A failure
+// reads as no pending review, so the toolbar offers to start one.
+export async function getReviewState(
+    repoPath: string,
+    prId: string,
+    run: GhRunner = defaultRunner
+): Promise<ReviewState> {
+    const none: ReviewState = { pendingReviewId: null, viewerIsAuthor: false };
+    if (!repoPath || !prId) {
+        return none;
+    }
+
+    try {
+        const { stdout } = await run(
+            ['api', 'graphql', '-f', `query=${REVIEW_STATE_QUERY}`, '-f', `id=${prId}`],
+            repoPath
+        );
+        const parsed = JSON.parse(stdout) as {
+            data?: {
+                node?: {
+                    viewerDidAuthor?: boolean | null;
+                    reviews?: {
+                        nodes?: { id?: string | null; viewerDidAuthor?: boolean | null }[] | null;
+                    } | null;
+                } | null;
+            };
+        };
+        const pr = parsed.data?.node;
+        const pending = (pr?.reviews?.nodes ?? []).find((r) => r.id && r.viewerDidAuthor);
+        return {
+            pendingReviewId: pending?.id ?? null,
+            viewerIsAuthor: pr?.viewerDidAuthor ?? false,
+        };
+    } catch {
+        return none;
+    }
+}
+
+export interface StartReviewResult extends CommentMutationResult {
+    reviewId?: string;
+}
+
+// Start a pending review on the PR via addPullRequestReview, returning its id.
+export async function startReview(
+    repoPath: string,
+    prId: string,
+    run: GhRunner = defaultRunner
+): Promise<StartReviewResult> {
+    if (!repoPath || !prId) {
+        return { ok: false, message: 'No pull request to review.' };
+    }
+
+    const query =
+        'mutation($id:ID!){addPullRequestReview(input:{pullRequestId:$id}){pullRequestReview{id}}}';
+    try {
+        const { stdout } = await run(
+            ['api', 'graphql', '-f', `query=${query}`, '-f', `id=${prId}`],
+            repoPath
+        );
+        const parsed = JSON.parse(stdout) as {
+            data?: { addPullRequestReview?: { pullRequestReview?: { id?: string } | null } | null };
+        };
+        const reviewId = parsed.data?.addPullRequestReview?.pullRequestReview?.id;
+        return reviewId
+            ? { ok: true, reviewId }
+            : { ok: false, message: 'GitHub did not return the new review.' };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// A new line comment for the pending review: the file, the line it ends on and that
+// line's side (RIGHT for the head, LEFT for the base), plus the first line of a
+// range when it spans several.
+export interface ReviewCommentInput {
+    path: string;
+    line: number;
+    side: 'LEFT' | 'RIGHT';
+    startLine?: number;
+    body: string;
+}
+
+// Add a line or range comment to a pending review via addPullRequestReviewThread.
+// GitHub refuses lines outside the PR's diff; its message comes back as is.
+export async function addReviewComment(
+    repoPath: string,
+    reviewId: string,
+    comment: ReviewCommentInput,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !reviewId || !comment.path || comment.line < 1 || !comment.body.trim()) {
+        return { ok: false, message: 'Nothing to add.' };
+    }
+
+    const range = comment.startLine !== undefined && comment.startLine < comment.line;
+    const query =
+        'mutation($reviewId:ID!,$path:String!,$line:Int!,$side:DiffSide!,' +
+        '$startLine:Int,$startSide:DiffSide,$body:String!){addPullRequestReviewThread(' +
+        'input:{pullRequestReviewId:$reviewId,path:$path,line:$line,side:$side,' +
+        'startLine:$startLine,startSide:$startSide,body:$body}){thread{id}}}';
+    const args = [
+        'api',
+        'graphql',
+        '-f',
+        `query=${query}`,
+        '-f',
+        `reviewId=${reviewId}`,
+        '-f',
+        `path=${comment.path}`,
+        '-F',
+        `line=${comment.line}`,
+        '-f',
+        `side=${comment.side}`,
+        '-f',
+        `body=${comment.body}`,
+    ];
+    if (range) {
+        args.push('-F', `startLine=${comment.startLine}`, '-f', `startSide=${comment.side}`);
+    }
+
+    try {
+        await run(args, repoPath);
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// Edit a review comment (a pending one, from the diff) via
+// updatePullRequestReviewComment, keyed on the comment's node id.
+export async function editReviewComment(
+    repoPath: string,
+    commentId: string,
+    body: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !commentId || !body.trim()) {
+        return { ok: false, message: 'Nothing to save.' };
+    }
+
+    const query =
+        'mutation($id:ID!,$body:String!){updatePullRequestReviewComment(' +
+        'input:{pullRequestReviewCommentId:$id,body:$body}){pullRequestReviewComment{id}}}';
+    try {
+        await run(
+            [
+                'api',
+                'graphql',
+                '-f',
+                `query=${query}`,
+                '-f',
+                `id=${commentId}`,
+                '-f',
+                `body=${body}`,
+            ],
+            repoPath
+        );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// Delete a review comment via deletePullRequestReviewComment, keyed on its node id.
+export async function deleteReviewComment(
+    repoPath: string,
+    commentId: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !commentId) {
+        return { ok: false, message: 'Nothing to delete.' };
+    }
+
+    const query =
+        'mutation($id:ID!){deletePullRequestReviewComment(input:{id:$id}){clientMutationId}}';
+    try {
+        await run(['api', 'graphql', '-f', `query=${query}`, '-f', `id=${commentId}`], repoPath);
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+export type ReviewEvent = 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES';
+
+// Submit the pending review via submitPullRequestReview, posting its comments at
+// once with the summary and the chosen verdict.
+export async function submitReview(
+    repoPath: string,
+    reviewId: string,
+    event: ReviewEvent,
+    body: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !reviewId) {
+        return { ok: false, message: 'No review to submit.' };
+    }
+
+    const query =
+        'mutation($id:ID!,$event:PullRequestReviewEvent!,$body:String){submitPullRequestReview(' +
+        'input:{pullRequestReviewId:$id,event:$event,body:$body}){pullRequestReview{id}}}';
+    try {
+        await run(
+            [
+                'api',
+                'graphql',
+                '-f',
+                `query=${query}`,
+                '-f',
+                `id=${reviewId}`,
+                '-f',
+                `event=${event}`,
+                '-f',
+                `body=${body}`,
+            ],
+            repoPath
+        );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// Discard the pending review via deletePullRequestReview, which deletes its comments.
+export async function discardReview(
+    repoPath: string,
+    reviewId: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !reviewId) {
+        return { ok: false, message: 'No review to discard.' };
+    }
+
+    const query =
+        'mutation($id:ID!){deletePullRequestReview(input:{pullRequestReviewId:$id}){clientMutationId}}';
+    try {
+        await run(['api', 'graphql', '-f', `query=${query}`, '-f', `id=${reviewId}`], repoPath);
         return { ok: true };
     } catch (error) {
         return { ok: false, message: mutationError(error) };

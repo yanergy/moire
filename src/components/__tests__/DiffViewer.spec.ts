@@ -70,7 +70,17 @@ const thread = (over: Partial<PrReviewThread> = {}): PrReviewThread => ({
     side: 'RIGHT',
     isResolved: false,
     isOutdated: false,
-    comments: [{ author: 'bob', body: 'this can race', createdAt: '' }],
+    isPending: false,
+    comments: [
+        {
+            id: 'C_bob',
+            author: 'bob',
+            body: 'this can race',
+            createdAt: '',
+            isPending: false,
+            viewerDidAuthor: false,
+        },
+    ],
     ...over,
 });
 
@@ -130,6 +140,17 @@ const writeProps = (over: Record<string, unknown> = {}) => ({
 });
 const dialogButton = (w: ReturnType<typeof mount>, label: string) =>
     w.findAll('[role="dialog"] button').find((b) => b.text() === label);
+
+// The "+" collection is the fifth created on the modified editor (after the
+// word, active-change, comment and annotation ones).
+function addButtonDecorations(diff: StubDiffEditor) {
+    const set = diff.getModifiedEditor().createDecorationsCollection.mock.results[4]!.value.set;
+    const calls = set.mock.calls;
+    return (calls[calls.length - 1]?.[0] ?? []) as {
+        range: { startLineNumber: number };
+        options: { linesDecorationsClassName?: string };
+    }[];
+}
 
 describe('DiffViewer', () => {
     it('mounts and creates a diff editor in its container', () => {
@@ -561,5 +582,195 @@ describe('DiffViewer', () => {
         expect(modified.revealLineInCenter).toHaveBeenLastCalledWith(20);
         wrapper.vm.goToEdge('first');
         expect(modified.revealLineInCenter).toHaveBeenLastCalledWith(5);
+    });
+
+    describe('review comments', () => {
+        // A mouse event on the line decorations gutter (type 4), where the "+" sits.
+        const plusClick = (lineNumber: number) => lineMouseDown(lineNumber, 4);
+
+        function mountReviewing(over: Record<string, unknown> = {}) {
+            const addComment = vi
+                .fn<(comment: unknown) => Promise<{ ok: boolean; message?: string }>>()
+                .mockResolvedValue({ ok: true });
+            const wrapper = mount(DiffViewer, {
+                props: { ...baseProps, canComment: true, addComment, ...over },
+                attachTo: document.body,
+            });
+            const diff = lastEditor();
+            diff.setLineChanges(TWO_CHANGES);
+            diff.fireDiffUpdate();
+            return { wrapper, diff, addComment };
+        }
+
+        it("shows the + on a hovered line of the PR's diff, not on lines outside it", () => {
+            const { diff, wrapper } = mountReviewing();
+            const modified = diff.getModifiedEditor();
+
+            modified.fireMouseMove({ target: { position: { lineNumber: 7 } } });
+            expect(addButtonDecorations(diff)[0]!.range.startLineNumber).toBe(7);
+            expect(addButtonDecorations(diff)[0]!.options.linesDecorationsClassName).toBe(
+                'moire-add-comment'
+            );
+
+            // Line 12 is outside both hunks (5 +/- 3, 20..21 +/- 3).
+            modified.fireMouseMove({ target: { position: { lineNumber: 12 } } });
+            expect(addButtonDecorations(diff)).toEqual([]);
+            wrapper.unmount();
+        });
+
+        it('offers no + without a pending review', () => {
+            const { diff, wrapper } = mountReviewing({ canComment: false });
+
+            diff.getModifiedEditor().fireMouseMove({ target: { position: { lineNumber: 5 } } });
+            expect(addButtonDecorations(diff)).toEqual([]);
+            wrapper.unmount();
+        });
+
+        it('adds a comment on the clicked line to the review', async () => {
+            const { diff, wrapper, addComment } = mountReviewing();
+
+            diff.getModifiedEditor().fireMouseDown(plusClick(20));
+            await flushPromises();
+            expect(wrapper.text()).toContain('Line 20');
+
+            await wrapper.get('[aria-label="New review comment"]').setValue('Off by one?');
+            await dialogButton(wrapper, 'Add review comment')!.trigger('click');
+            await flushPromises();
+
+            expect(addComment).toHaveBeenCalledWith({
+                line: 20,
+                side: 'RIGHT',
+                startLine: undefined,
+                body: 'Off by one?',
+            });
+            expect(wrapper.find('[data-slot="review-composer"]').exists()).toBe(false);
+            wrapper.unmount();
+        });
+
+        it('comments on the selected lines, with a suggested change', async () => {
+            const { diff, wrapper, addComment } = mountReviewing();
+            const modified = diff.getModifiedEditor();
+            modified.setSelection({
+                startLineNumber: 19,
+                startColumn: 1,
+                endLineNumber: 21,
+                endColumn: 4,
+            });
+
+            modified.fireMouseDown(plusClick(20));
+            await flushPromises();
+            expect(wrapper.text()).toContain('Lines 19 to 21');
+
+            await dialogButton(wrapper, 'Suggest change')!.trigger('click');
+            const textarea = wrapper.get<HTMLTextAreaElement>('[aria-label="New review comment"]');
+            expect(textarea.element.value).toBe('```suggestion\nline 19\nline 20\nline 21\n```\n');
+
+            await dialogButton(wrapper, 'Add review comment')!.trigger('click');
+            await flushPromises();
+            expect(addComment).toHaveBeenCalledWith(
+                expect.objectContaining({ line: 21, startLine: 19, side: 'RIGHT' })
+            );
+            wrapper.unmount();
+        });
+
+        it('keeps the draft and shows the error when GitHub refuses the comment', async () => {
+            const { diff, wrapper, addComment } = mountReviewing();
+            addComment.mockResolvedValue({ ok: false, message: 'Line could not be resolved' });
+
+            diff.getOriginalEditor().fireMouseDown(plusClick(5));
+            await flushPromises();
+            expect(wrapper.text()).toContain('Line 5 (base)');
+            // A suggestion replaces head lines, so the base side offers none.
+            expect(dialogButton(wrapper, 'Suggest change')).toBeUndefined();
+
+            await wrapper.get('[aria-label="New review comment"]').setValue('Why?');
+            await dialogButton(wrapper, 'Add review comment')!.trigger('click');
+            await flushPromises();
+
+            expect(wrapper.text()).toContain('Line could not be resolved');
+            expect(
+                wrapper.get<HTMLTextAreaElement>('[aria-label="New review comment"]').element.value
+            ).toBe('Why?');
+            wrapper.unmount();
+        });
+
+        it('shows a submitted thread in the PR, but not a pending one', async () => {
+            const showInPr = vi.fn<(threadId: string) => void>();
+            const wrapper = mount(DiffViewer, {
+                props: writeProps({
+                    reviewThreads: [thread(), thread({ id: 'RT_p', line: 14, isPending: true })],
+                    showInPr,
+                }),
+                attachTo: document.body,
+            });
+            const diff = lastEditor();
+            diff.fireDiffUpdate();
+
+            diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+            await flushPromises();
+            // The link sits in the popover's header, and each comment has its avatar.
+            expect(
+                wrapper.find('[role="dialog"] > div:first-child [data-slot="show-in-pr"]').exists()
+            ).toBe(true);
+            expect(wrapper.find('[data-slot="popover-comment"] img').exists()).toBe(true);
+            await dialogButton(wrapper, 'Show in PR')!.trigger('click');
+            expect(showInPr).toHaveBeenCalledWith('RT_1');
+
+            diff.getModifiedEditor().fireMouseDown(glyphClick(14));
+            await flushPromises();
+            expect(dialogButton(wrapper, 'Show in PR')).toBeUndefined();
+            wrapper.unmount();
+        });
+
+        it('marks pending comments and lets their author edit and delete them', async () => {
+            const editPendingComment = vi
+                .fn<(id: string, body: string) => Promise<{ ok: boolean }>>()
+                .mockResolvedValue({ ok: true });
+            const deletePendingComment = vi
+                .fn<(id: string) => Promise<{ ok: boolean }>>()
+                .mockResolvedValue({ ok: true });
+            const pending = thread({
+                isPending: true,
+                comments: [
+                    {
+                        id: 'RC_1',
+                        author: 'me',
+                        body: 'rename',
+                        createdAt: '',
+                        isPending: true,
+                        viewerDidAuthor: true,
+                    },
+                ],
+            });
+            const wrapper = mount(DiffViewer, {
+                props: {
+                    ...writeProps({ reviewThreads: [pending] }),
+                    editPendingComment,
+                    deletePendingComment,
+                },
+                attachTo: document.body,
+            });
+            const diff = lastEditor();
+            diff.fireDiffUpdate();
+            expect(commentDecorations(diff, 'modified')[0]!.options.glyphMarginClassName).toContain(
+                'moire-comment-glyph-pending'
+            );
+
+            diff.getModifiedEditor().fireMouseDown(glyphClick(12));
+            await flushPromises();
+            expect(wrapper.find('[data-slot="pending-badge"]').text()).toBe('Pending');
+
+            await dialogButton(wrapper, 'Edit')!.trigger('click');
+            await wrapper.get('[aria-label="Edit comment"]').setValue('rename it');
+            await dialogButton(wrapper, 'Save')!.trigger('click');
+            await flushPromises();
+            expect(editPendingComment).toHaveBeenCalledWith('RC_1', 'rename it');
+
+            await dialogButton(wrapper, 'Delete')!.trigger('click');
+            await dialogButton(wrapper, 'Delete')!.trigger('click');
+            await flushPromises();
+            expect(deletePendingComment).toHaveBeenCalledWith('RC_1');
+            wrapper.unmount();
+        });
     });
 });

@@ -316,7 +316,17 @@ describe('FileTreeSidebar', () => {
                 side: 'RIGHT',
                 isResolved: false,
                 isOutdated: false,
-                comments: [{ author: 'bob', body: 'hm', createdAt: '' }],
+                isPending: false,
+                comments: [
+                    {
+                        id: 'C_bob',
+                        author: 'bob',
+                        body: 'hm',
+                        createdAt: '',
+                        isPending: false,
+                        viewerDidAuthor: false,
+                    },
+                ],
             },
             {
                 id: 'RT_done',
@@ -326,7 +336,17 @@ describe('FileTreeSidebar', () => {
                 side: 'RIGHT',
                 isResolved: true,
                 isOutdated: false,
-                comments: [{ author: 'ann', body: 'ok', createdAt: '' }],
+                isPending: false,
+                comments: [
+                    {
+                        id: 'C_ann',
+                        author: 'ann',
+                        body: 'ok',
+                        createdAt: '',
+                        isPending: false,
+                        viewerDidAuthor: false,
+                    },
+                ],
             },
         ];
         wrapper = mount(FileTreeSidebar, { global: { plugins: [pinia] } });

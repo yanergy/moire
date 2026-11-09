@@ -1222,7 +1222,17 @@ describe('comparison store', () => {
                     side: 'RIGHT',
                     isResolved: false,
                     isOutdated: false,
-                    comments: [{ author: 'bob', body: 'x', createdAt: '' }],
+                    isPending: false,
+                    comments: [
+                        {
+                            id: 'C_bob',
+                            author: 'bob',
+                            body: 'x',
+                            createdAt: '',
+                            isPending: false,
+                            viewerDidAuthor: false,
+                        },
+                    ],
                 },
                 {
                     id: 'RT_b',
@@ -1232,7 +1242,17 @@ describe('comparison store', () => {
                     side: 'RIGHT',
                     isResolved: true,
                     isOutdated: false,
-                    comments: [{ author: 'ann', body: 'y', createdAt: '' }],
+                    isPending: false,
+                    comments: [
+                        {
+                            id: 'C_ann',
+                            author: 'ann',
+                            body: 'y',
+                            createdAt: '',
+                            isPending: false,
+                            viewerDidAuthor: false,
+                        },
+                    ],
                 },
             ];
             const getPullRequest = vi
@@ -1284,7 +1304,17 @@ describe('comparison store', () => {
                         side: 'RIGHT',
                         isResolved: false,
                         isOutdated: false,
-                        comments: [{ author: 'me', body: 'done', createdAt: '' }],
+                        isPending: false,
+                        comments: [
+                            {
+                                id: 'C_me',
+                                author: 'me',
+                                body: 'done',
+                                createdAt: '',
+                                isPending: false,
+                                viewerDidAuthor: false,
+                            },
+                        ],
                     },
                 ]);
             const replyToReviewThread = vi
@@ -1562,6 +1592,165 @@ describe('comparison store', () => {
             await done;
             expect(store.prLoading).toBe(false);
         });
+
+        describe('reviews', () => {
+            const pendingThread = {
+                id: 'RT_p',
+                path: 'src/a.ts',
+                line: 3,
+                originalLine: null,
+                side: 'RIGHT',
+                isResolved: false,
+                isOutdated: false,
+                isPending: true,
+                comments: [
+                    {
+                        id: 'RC_1',
+                        author: 'me',
+                        body: 'rename',
+                        createdAt: '',
+                        isPending: true,
+                        viewerDidAuthor: true,
+                    },
+                    {
+                        id: 'RC_2',
+                        author: 'me',
+                        body: 'and this',
+                        createdAt: '',
+                        isPending: true,
+                        viewerDidAuthor: true,
+                    },
+                ],
+            };
+
+            // A main...feature range on PR #7 (head commit abc), with the review
+            // channels stubbed. `pending` seeds the viewer's pending review.
+            function reviewStore(
+                options: { pending?: string | null; author?: boolean; headCommit?: string } = {}
+            ) {
+                const api = {
+                    getPullRequest: vi
+                        .fn<(base: string, head: string) => Promise<unknown>>()
+                        .mockResolvedValue({
+                            status: 'ok',
+                            pr: { ...PR, id: 'PR_7', headRefOid: 'abc' },
+                        }),
+                    getReviewThreads: vi
+                        .fn<(prId: string) => Promise<unknown>>()
+                        .mockResolvedValue(options.pending ? [pendingThread] : []),
+                    getReviewState: vi.fn<(prId: string) => Promise<unknown>>().mockResolvedValue({
+                        pendingReviewId: options.pending ?? null,
+                        viewerIsAuthor: options.author ?? false,
+                    }),
+                    resolveCommit: vi
+                        .fn<(ref: string) => Promise<string | null>>()
+                        .mockResolvedValue(options.headCommit ?? 'abc'),
+                    startReview: vi
+                        .fn<(prId: string) => Promise<unknown>>()
+                        .mockResolvedValue({ ok: true, reviewId: 'PRR_new' }),
+                    addReviewComment: vi
+                        .fn<(reviewId: string, comment: unknown) => Promise<unknown>>()
+                        .mockResolvedValue({ ok: true }),
+                    submitReview: vi
+                        .fn<(reviewId: string, event: string, body: string) => Promise<unknown>>()
+                        .mockResolvedValue({ ok: true }),
+                    discardReview: vi
+                        .fn<(reviewId: string) => Promise<unknown>>()
+                        .mockResolvedValue({ ok: true }),
+                };
+                window.api = api as unknown as Window['api'];
+                const store = useComparisonStore();
+                store.repoPath = '/repo';
+                store.base = 'main';
+                store.head = 'feature';
+                return { store, api };
+            }
+
+            it('reads the pending review and counts its comments', async () => {
+                const { store, api } = reviewStore({ pending: 'PRR_1' });
+                await store.loadPullRequest();
+                await flushPromises();
+
+                expect(api.getReviewState).toHaveBeenCalledWith('PR_7');
+                expect(api.resolveCommit).toHaveBeenCalledWith('feature');
+                expect(store.hasPendingReview).toBe(true);
+                expect(store.pendingCommentCount).toBe(2);
+                expect(store.lineCommentBlocker).toBeNull();
+                expect(store.canCommentOnLines).toBe(true);
+            });
+
+            it('offers no line comments until a review is started', async () => {
+                const { store, api } = reviewStore();
+                await store.loadPullRequest();
+                await flushPromises();
+                expect(store.canCommentOnLines).toBe(false);
+
+                expect(await store.startReview()).toEqual({ ok: true, reviewId: 'PRR_new' });
+                expect(api.startReview).toHaveBeenCalledWith('PR_7');
+                // The re-read state (still the stub's) wins; the new id was used meanwhile.
+                expect(api.getReviewState).toHaveBeenCalledTimes(2);
+            });
+
+            it('explains why lines cannot take comments', async () => {
+                const { store } = reviewStore({ pending: 'PRR_1', headCommit: 'old' });
+                await store.loadPullRequest();
+                await flushPromises();
+
+                expect(store.lineCommentBlocker).toContain('not at the pull request');
+                expect(store.canCommentOnLines).toBe(false);
+
+                store.compareMode = 'direct';
+                expect(store.lineCommentBlocker).toContain('merge-base');
+
+                store.base = 'develop';
+                expect(store.lineCommentBlocker).toContain("pull request's branches");
+            });
+
+            it('adds a line comment to the pending review, then re-reads the threads', async () => {
+                const { store, api } = reviewStore({ pending: 'PRR_1' });
+                await store.loadPullRequest();
+                await flushPromises();
+                api.getReviewThreads.mockClear();
+
+                const comment = { path: 'src/a.ts', line: 4, side: 'RIGHT' as const, body: 'hm' };
+                expect(await store.addReviewComment(comment)).toEqual({ ok: true });
+                expect(api.addReviewComment).toHaveBeenCalledWith('PRR_1', comment);
+                expect(api.getReviewThreads).toHaveBeenCalledTimes(1);
+            });
+
+            it('submits the review and re-reads the pull request', async () => {
+                const { store, api } = reviewStore({ pending: 'PRR_1' });
+                await store.loadPullRequest();
+                await flushPromises();
+                api.getPullRequest.mockClear();
+
+                expect(await store.submitReview('APPROVE', 'Looks good')).toEqual({ ok: true });
+                await flushPromises();
+                expect(api.submitReview).toHaveBeenCalledWith('PRR_1', 'APPROVE', 'Looks good');
+                expect(api.getPullRequest).toHaveBeenCalledTimes(1);
+            });
+
+            it('discards the review', async () => {
+                const { store, api } = reviewStore({ pending: 'PRR_1' });
+                await store.loadPullRequest();
+                await flushPromises();
+
+                expect(await store.discardReview()).toEqual({ ok: true });
+                expect(api.discardReview).toHaveBeenCalledWith('PRR_1');
+            });
+
+            it('reports a failed write without throwing', async () => {
+                const { store, api } = reviewStore({ pending: 'PRR_1' });
+                api.submitReview.mockRejectedValue(new Error('boom'));
+                await store.loadPullRequest();
+                await flushPromises();
+
+                expect(await store.submitReview('COMMENT', '')).toEqual({
+                    ok: false,
+                    message: 'gh could not complete the request.',
+                });
+            });
+        });
     });
 
     describe('file-tree filters', () => {
@@ -1669,7 +1858,17 @@ describe('comparison store', () => {
                     side: 'RIGHT',
                     isResolved: false,
                     isOutdated: false,
-                    comments: [{ author: 'bob', body: 'hm', createdAt: '' }],
+                    isPending: false,
+                    comments: [
+                        {
+                            id: 'C_bob',
+                            author: 'bob',
+                            body: 'hm',
+                            createdAt: '',
+                            isPending: false,
+                            viewerDidAuthor: false,
+                        },
+                    ],
                 },
             ];
 

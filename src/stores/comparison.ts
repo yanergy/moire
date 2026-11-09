@@ -4,11 +4,14 @@ import type {
     BranchInfo,
     ChangedFile,
     CommentMutationResult,
+    ReviewEvent,
+    ReviewState,
     CompareMode,
     CheckAnnotation,
     FilePair,
     FileStatus,
     PrReviewThread,
+    ReviewCommentInput,
     PrStatus,
     PullRequest,
     RepoBranchSettings,
@@ -260,6 +263,13 @@ export const useComparisonStore = defineStore('comparison', () => {
     // PR and shown as markers in the diff viewer, not the PR conversation. Empty when
     // there is no PR or the lookup failed. `threadsForFile` narrows them to one file.
     const reviewThreads = ref<PrReviewThread[]>([]);
+
+    // The viewer's side of the PR's review: their pending review (null when none)
+    // and whether they opened the PR. The head ref's commit is kept to check it is
+    // the PR's head commit, without which line numbers would not match the PR.
+    const NO_REVIEW: ReviewState = { pendingReviewId: null, viewerIsAuthor: false };
+    const reviewState = ref<ReviewState>({ ...NO_REVIEW });
+    const headCommit = ref<string | null>(null);
     function threadsForFile(path: string): PrReviewThread[] {
         return path ? reviewThreads.value.filter((t) => t.path === path) : [];
     }
@@ -574,6 +584,8 @@ export const useComparisonStore = defineStore('comparison', () => {
             prStatus.value = 'no-pr';
             prMessage.value = '';
             reviewThreads.value = [];
+            reviewState.value = { ...NO_REVIEW };
+            headCommit.value = null;
             checkAnnotations.value = [];
             prLoading.value = false;
             return;
@@ -594,6 +606,8 @@ export const useComparisonStore = defineStore('comparison', () => {
             prMessage.value = result.message ?? '';
             prLoading.value = false;
             void loadReviewThreads(result.pr?.id, token);
+            void loadReviewState(result.pr?.id, token);
+            void loadHeadCommit(head.value, token);
             void loadCheckAnnotations(result.pr?.headRefOid, token);
         } catch {
             if (token === prRequest) {
@@ -601,6 +615,8 @@ export const useComparisonStore = defineStore('comparison', () => {
                 prStatus.value = 'error';
                 prMessage.value = '';
                 reviewThreads.value = [];
+                reviewState.value = { ...NO_REVIEW };
+                headCommit.value = null;
                 checkAnnotations.value = [];
                 prLoading.value = false;
             }
@@ -661,7 +677,185 @@ export const useComparisonStore = defineStore('comparison', () => {
     // the diff popover reflects the change. Bumps the request token so it, not a stale
     // in-flight load, is the one that lands.
     async function reloadReviewThreads() {
-        await loadReviewThreads(pullRequest.value?.id, ++prRequest);
+        const token = ++prRequest;
+        await Promise.all([
+            loadReviewThreads(pullRequest.value?.id, token),
+            loadReviewState(pullRequest.value?.id, token),
+        ]);
+    }
+
+    // Read the viewer's pending review and authorship, guarded like the threads. A
+    // failure reads as no pending review.
+    async function loadReviewState(prId: string | undefined, token: number) {
+        const api = window.api;
+        let state: ReviewState = { ...NO_REVIEW };
+        if (api?.getReviewState && prId) {
+            try {
+                state = await api.getReviewState(prId);
+            } catch {
+                state = { ...NO_REVIEW };
+            }
+        }
+
+        if (token === prRequest) {
+            reviewState.value = state;
+        }
+    }
+
+    // Resolve the compared head ref to its commit, guarded like the threads.
+    async function loadHeadCommit(headRef: string, token: number) {
+        const api = window.api;
+        let commit: string | null = null;
+        if (api?.resolveCommit && headRef && headRef !== WORKING_TREE) {
+            try {
+                commit = await api.resolveCommit(headRef);
+            } catch {
+                commit = null;
+            }
+        }
+
+        if (token === prRequest) {
+            headCommit.value = commit;
+        }
+    }
+
+    // --- Reviews ---
+    //
+    // A review collects line comments on GitHub as a pending review, then submits
+    // them at once. Starting one is the user's explicit choice (the toolbar's Review
+    // button), like edit mode in the PR view. Each write re-reads the threads and the
+    // review state, so the diff and the toolbar follow.
+
+    const hasPendingReview = computed(() => !!reviewState.value.pendingReviewId);
+
+    // How many comments the pending review holds (its new threads and its replies).
+    const pendingCommentCount = computed(
+        () => reviewThreads.value.flatMap((t) => t.comments).filter((c) => c.isPending).length
+    );
+
+    // Why the diff on screen cannot take line comments, or null when it can: its
+    // lines have to be the PR's, so the range must be the PR's base and head, in
+    // merge-base mode, with the head at the PR's head commit.
+    const lineCommentBlocker = computed<string | null>(() => {
+        const pr = pullRequest.value;
+        if (!pr || !hasPullRequest.value) {
+            return 'There is no pull request for these branches.';
+        }
+        if (head.value === WORKING_TREE) {
+            return 'The working tree is not part of the pull request.';
+        }
+        if (
+            prBranchName(base.value) !== pr.baseRefName ||
+            prBranchName(head.value) !== pr.headRefName
+        ) {
+            return `Compare ${pr.baseRefName} with ${pr.headRefName}, the pull request's branches, to comment on lines.`;
+        }
+        if (compareMode.value !== 'merge-base') {
+            return 'Switch to merge-base to comment on lines: the direct comparison does not match the pull request.';
+        }
+        if (pr.headRefOid && headCommit.value && headCommit.value !== pr.headRefOid) {
+            return `Your copy of ${head.value} is not at the pull request's latest commit. Fetch or pull it to comment on lines.`;
+        }
+
+        return null;
+    });
+
+    // Line comments go in while a review is pending and the diff is the PR's.
+    const canCommentOnLines = computed(() => hasPendingReview.value && !lineCommentBlocker.value);
+
+    // Run a review write, then re-read the threads and review state.
+    async function reviewWrite(
+        write: () => Promise<CommentMutationResult>
+    ): Promise<CommentMutationResult> {
+        let result: CommentMutationResult;
+        try {
+            result = await write();
+        } catch {
+            result = { ok: false, message: 'gh could not complete the request.' };
+        }
+
+        await reloadReviewThreads();
+        return result;
+    }
+
+    // Start a pending review on the PR. Picks up the new review's id straight away,
+    // so the diff's comment buttons appear before the re-read lands.
+    async function startReview(): Promise<CommentMutationResult> {
+        const api = window.api;
+        const prId = pullRequest.value?.id;
+        if (!api?.startReview || !prId) {
+            return { ok: false, message: 'No pull request to review.' };
+        }
+
+        return reviewWrite(async () => {
+            const result = await api.startReview(prId);
+            if (result.ok && result.reviewId) {
+                reviewState.value = { ...reviewState.value, pendingReviewId: result.reviewId };
+            }
+
+            return result;
+        });
+    }
+
+    // Add a line or range comment to the pending review.
+    async function addReviewComment(comment: ReviewCommentInput): Promise<CommentMutationResult> {
+        const api = window.api;
+        const reviewId = reviewState.value.pendingReviewId;
+        if (!api?.addReviewComment || !reviewId || !comment.body.trim()) {
+            return { ok: false, message: 'Nothing to add.' };
+        }
+
+        return reviewWrite(() => api.addReviewComment(reviewId, comment));
+    }
+
+    // Edit or delete one of the pending review's comments.
+    async function editReviewComment(
+        commentId: string,
+        body: string
+    ): Promise<CommentMutationResult> {
+        const api = window.api;
+        if (!api?.editReviewComment || !commentId || !body.trim()) {
+            return { ok: false, message: 'Nothing to save.' };
+        }
+
+        return reviewWrite(() => api.editReviewComment(commentId, body));
+    }
+
+    async function deleteReviewComment(commentId: string): Promise<CommentMutationResult> {
+        const api = window.api;
+        if (!api?.deleteReviewComment || !commentId) {
+            return { ok: false, message: 'Nothing to delete.' };
+        }
+
+        return reviewWrite(() => api.deleteReviewComment(commentId));
+    }
+
+    // Submit the pending review with a verdict and a summary, posting its comments.
+    // A submitted review shows in the PR's conversation, so the PR is re-read too.
+    async function submitReview(event: ReviewEvent, body: string): Promise<CommentMutationResult> {
+        const api = window.api;
+        const reviewId = reviewState.value.pendingReviewId;
+        if (!api?.submitReview || !reviewId) {
+            return { ok: false, message: 'No review to submit.' };
+        }
+
+        const result = await reviewWrite(() => api.submitReview(reviewId, event, body));
+        if (result.ok) {
+            void loadPullRequest();
+        }
+
+        return result;
+    }
+
+    // Discard the pending review, deleting its comments.
+    async function discardReview(): Promise<CommentMutationResult> {
+        const api = window.api;
+        const reviewId = reviewState.value.pendingReviewId;
+        if (!api?.discardReview || !reviewId) {
+            return { ok: false, message: 'No review to discard.' };
+        }
+
+        return reviewWrite(() => api.discardReview(reviewId));
     }
 
     // Reply into an inline review thread by its node id, then re-fetch so the reply
@@ -1290,6 +1484,8 @@ export const useComparisonStore = defineStore('comparison', () => {
         prStatus.value = 'no-pr';
         prMessage.value = '';
         reviewThreads.value = [];
+        reviewState.value = { ...NO_REVIEW };
+        headCommit.value = null;
         checkAnnotations.value = [];
         prLoading.value = false;
     }
@@ -1558,6 +1754,18 @@ export const useComparisonStore = defineStore('comparison', () => {
         commentStateForFile,
         replyToReviewThread,
         setReviewThreadResolved,
+        reviewState,
+        headCommit,
+        hasPendingReview,
+        pendingCommentCount,
+        lineCommentBlocker,
+        canCommentOnLines,
+        startReview,
+        addReviewComment,
+        editReviewComment,
+        deleteReviewComment,
+        submitReview,
+        discardReview,
         checkAnnotations,
         annotationsForFile,
         annotationLevelForFile,

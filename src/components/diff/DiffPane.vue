@@ -123,6 +123,17 @@ function openSelected() {
             :check-annotations="comparison.annotationsForFile(comparison.selectedFile.path)"
             :reply-to-thread="comparison.replyToReviewThread"
             :set-thread-resolved="comparison.setReviewThreadResolved"
+            :can-comment="comparison.canCommentOnLines"
+            :add-comment="
+                (comment) =>
+                    comparison.addReviewComment({
+                        ...comment,
+                        path: comparison.selectedFile.path,
+                    })
+            "
+            :edit-pending-comment="comparison.editReviewComment"
+            :delete-pending-comment="comparison.deleteReviewComment"
+            :show-in-pr="ui.showThreadInPr"
             @update:change-count="changeCount = $event"
             @edge-consumed="comparison.clearChangeEdge()"
         />
