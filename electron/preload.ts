@@ -106,6 +106,14 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('menu:open-recent', listener);
         return () => ipcRenderer.removeListener('menu:open-recent', listener);
     },
+    // Fired when a native Git → Comparison Presets item is chosen, with the base and
+    // head it selects. Returns an unsubscribe function.
+    onMenuComparePreset: (callback: (base: string, head: string) => void) => {
+        const listener = (_event: IpcRendererEvent, base: string, head: string) =>
+            callback(base, head);
+        ipcRenderer.on('menu:compare-preset', listener);
+        return () => ipcRenderer.removeListener('menu:compare-preset', listener);
+    },
     // The GitHub dashboard for the open repository, backed by the notifier in the
     // main process. `onDashboardChanged` fires after every background poll and
     // returns an unsubscribe function.

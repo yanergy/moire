@@ -67,6 +67,7 @@ describe('preload bridge', () => {
             'onMenuRefresh',
             'onMenuOpenRepo',
             'onMenuOpenRecent',
+            'onMenuComparePreset',
             'onRepoChanged',
             'getDashboard',
             'refreshDashboard',
@@ -169,6 +170,16 @@ describe('preload bridge', () => {
         listener({}, '/repos/x'); // (event, path)
 
         expect(cb).toHaveBeenCalledWith('/repos/x');
+    });
+
+    it('delivers a comparison preset base and head to the callback', () => {
+        const cb = vi.fn<(base: string, head: string) => void>();
+        api().onMenuComparePreset!(cb);
+
+        const listener = bridge.on.mock.calls.find((c) => c[0] === 'menu:compare-preset')![1];
+        listener({}, 'origin/development', 'feat/x');
+
+        expect(cb).toHaveBeenCalledWith('origin/development', 'feat/x');
     });
 
     it('delivers dashboard updates to the callback', () => {

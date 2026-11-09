@@ -537,11 +537,16 @@ export const useComparisonStore = defineStore('comparison', () => {
             return false;
         }
 
+        selectRange(baseRef, headRef);
+        return true;
+    }
+
+    // Set the base and head in one step (a PR's range, a Git menu preset).
+    function selectRange(baseRef: string, headRef: string) {
         base.value = baseRef;
         head.value = headRef;
         disappearedBranches.value = [];
         void loadChangedFiles();
-        return true;
     }
 
     // Monotonic token so an out-of-order PR lookup (the range moved before gh
@@ -1574,6 +1579,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         toggleMarkerFilter,
         clearFilters,
         setBase,
+        selectRange,
         setHead,
         setCompareMode,
         dismissMissingBranches,

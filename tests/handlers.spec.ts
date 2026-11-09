@@ -10,7 +10,13 @@ const state = vi.hoisted(() => ({
     checkIsRepo: vi.fn<() => Promise<boolean>>(),
     showOpenDialog: vi.fn<() => Promise<{ canceled: boolean; filePaths: string[] }>>(),
     showErrorBox: vi.fn<(title: string, content: string) => void>(),
-    watchRepo: vi.fn<(repoPath: string) => void>(),
+    watchRepo:
+        vi.fn<
+            (
+                repoPath: string,
+                options: { onChange: (event: { reason: 'refs' | 'worktree'; at: number }) => void }
+            ) => void
+        >(),
     addRecentRepo: vi.fn<(repoPath: string) => Promise<string[]>>(),
     getRecentRepos: vi.fn<() => Promise<string[]>>(),
     removeRecentRepo: vi.fn<(repoPath: string) => Promise<string[]>>(),
@@ -25,6 +31,7 @@ const state = vi.hoisted(() => ({
     logError: vi.fn<(context: string, error: unknown) => void>(),
     onRecentsChanged: vi.fn<() => void>(),
     onRepoOpened: vi.fn<(repoPath: string) => void>(),
+    onRefsChanged: vi.fn<() => void>(),
     dashboard: {
         get: vi.fn<() => Promise<unknown>>(),
         refresh: vi.fn<() => Promise<unknown>>(),
@@ -135,6 +142,7 @@ describe('registerIpcHandlers', () => {
         mod.registerIpcHandlers({
             onRecentsChanged: state.onRecentsChanged,
             onRepoOpened: state.onRepoOpened,
+            onRefsChanged: state.onRefsChanged,
             dashboard: state.dashboard as never,
         });
     });
@@ -185,13 +193,25 @@ describe('registerIpcHandlers', () => {
 
         expect(result).toEqual({ path: '/repos/moire', name: 'moire' });
         expect(state.addRecentRepo).toHaveBeenCalledWith('/repos/moire');
-        expect(state.watchRepo).toHaveBeenCalledWith('/repos/moire');
+        expect(state.watchRepo).toHaveBeenCalledWith('/repos/moire', expect.any(Object));
         expect(state.onRecentsChanged).toHaveBeenCalledTimes(1);
         expect(state.onRepoOpened).toHaveBeenCalledWith('/repos/moire');
         expect(mod.getCurrentRepoPath()).toBe('/repos/moire');
 
         // A git channel now resolves instead of throwing the guard.
         await expect(invoke('git:branches')).resolves.toEqual([]);
+        await expect(mod.getCurrentBranches()).resolves.toEqual([]);
+    });
+
+    it('reports ref changes of the opened repo, but not working tree changes', async () => {
+        await invoke('repo:open', '/repos/moire');
+        const { onChange } = state.watchRepo.mock.calls.at(-1)![1];
+
+        onChange({ reason: 'worktree', at: 1 });
+        expect(state.onRefsChanged).not.toHaveBeenCalled();
+
+        onChange({ reason: 'refs', at: 2 });
+        expect(state.onRefsChanged).toHaveBeenCalledTimes(1);
     });
 
     it('rejects a non-repository path with an error box and leaves no current repo', async () => {

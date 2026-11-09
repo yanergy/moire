@@ -37,6 +37,7 @@ import { logError } from '../logger';
 import type { DashboardState, NotificationSettingsChange } from '../notifier';
 import { NOTIFICATION_EVENT_KINDS } from '../github/notifications';
 import type { AuthorFilter } from '../settings';
+import type { BranchInfo } from '../../src/shared/types';
 
 // The dashboard's data comes from the Notifier, which main.ts owns; main hands
 // these in so the handlers stay free of polling and Electron notification code.
@@ -92,6 +93,22 @@ function requireRepo(): GitService {
 // Open Recent list.
 function getCurrentRepoPath(): string | null {
     return currentRepo?.repoPath ?? null;
+}
+
+// The open repo's branches for the Git → Comparison Presets menu. Empty when no
+// repo is open or git fails, which disables the presets rather than breaking the
+// menu build.
+async function getCurrentBranches(): Promise<BranchInfo[]> {
+    if (!currentRepo) {
+        return [];
+    }
+
+    try {
+        return await currentRepo.branches();
+    } catch (error) {
+        logError('menu:branches', error);
+        return [];
+    }
 }
 
 async function isGitRepo(repoPath: string): Promise<boolean> {
@@ -152,10 +169,14 @@ function notificationSettingsChange(value: unknown): NotificationSettingsChange 
 function registerIpcHandlers({
     onRecentsChanged,
     onRepoOpened,
+    onRefsChanged,
     dashboard,
 }: {
     onRecentsChanged?: () => void;
     onRepoOpened?: (repoPath: string) => void;
+    // The open repo's refs changed on disk (checkout, commit, fetch), so main can
+    // rebuild the comparison presets for the new current branch and remotes.
+    onRefsChanged?: () => void;
     dashboard?: DashboardBridge;
 } = {}): void {
     handle('dialog:open-repo', async () => {
@@ -183,7 +204,13 @@ function registerIpcHandlers({
         currentRepo = new GitService(repoPath);
         // Watch the newly opened repo so the diff auto-refreshes; this replaces
         // any watcher from a previously opened repo.
-        watchRepo(repoPath);
+        watchRepo(repoPath, {
+            onChange: (event) => {
+                if (event.reason === 'refs') {
+                    onRefsChanged?.();
+                }
+            },
+        });
         // After currentRepo is set, so the rebuilt menu can mark it active.
         onRecentsChanged?.();
         onRepoOpened?.(repoPath);
@@ -359,4 +386,4 @@ function registerIpcHandlers({
     });
 }
 
-export { registerIpcHandlers, isGitAvailable, getCurrentRepoPath };
+export { registerIpcHandlers, isGitAvailable, getCurrentRepoPath, getCurrentBranches };

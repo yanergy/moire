@@ -92,6 +92,9 @@ the popup never appears.
    branch, and the checked-out branch. For the head it is the working tree and the checked-out
    branch. Click the star on any branch row to add it to a **Favorites** group listed below the
    recommendations in both pickers.
+   For two common comparisons, **Git > Comparison Presets** sets both sides at once:
+   `origin/development` against the checked-out branch, or the checked-out branch's `origin` copy against the working
+   tree (everything not pushed yet).
 3. **Choose how to compare.** Toggle between:
     - **merge-base**: compares head to the point where it branched off base, showing only the changes
       head introduces. This matches what a GitHub pull request shows.
@@ -141,6 +144,9 @@ last branch range are remembered per repository.
   recommendations, in both the base and the head picker. A starred branch that is already
   recommended keeps its place there, so no branch is listed twice. Favorites are remembered per
   repository.
+- Comparison presets under **Git > Comparison Presets**: `origin/development` to the checked-out
+  branch, and the working tree to the checked-out branch's `origin` copy. A preset whose ref does
+  not exist is disabled.
 - Recent-repository list and a native folder picker.
 - Auto-refresh when the working tree changes, plus a manual refresh.
 
@@ -264,8 +270,9 @@ Track bugs and limitations here.
   last couple of seconds before quitting can still be dropped. Handling that needs the main
   process to hold quitting until the pending write lands, which is not wired up yet.
 - **The Git menu's account list refreshes only when the menu is rebuilt** (on launch, when a repo
-  opens, and right after switching accounts). Signing in or out with `gh auth login` / `gh auth
-  logout` while the app is running is not picked up until one of those happens (or a relaunch).
+  opens, when the repo's refs change, and right after switching accounts). Signing in or out with
+  `gh auth login` / `gh auth logout` while the app is running is not picked up until one of those
+  happens (or a relaunch).
 - **`gh` has to be reachable from your login shell.** A packaged app started from Finder or the
   Dock inherits launchd's minimal PATH, so the app asks `$SHELL -ilc` for its PATH at startup and
   merges that in (plus the usual install directories: Homebrew, MacPorts, `~/.local/bin`,
@@ -276,8 +283,9 @@ Track bugs and limitations here.
 - **GitHub notifications only arrive while Moiré is running.** Closing the window keeps the app
   running on macOS, quitting does not. They cover only the repository that is open, and only the
   active `gh` account.
-- **The Git > Notifications menu needs a connected `gh`.** It lives in the Git menu, which only
-  appears when `gh` is signed in, so it shares that menu's refresh limitation above. The same
+- **The Git > Notifications menu needs a connected `gh`.** The Git menu always shows, but it lists
+  the notifications only when `gh` is signed in, so they share the account list's refresh
+  limitation above. The same
   settings, apart from the dock badge, are always on the notifications page.
 - **Clicking a notification while the window is closed may open the PR on GitHub.** The window
   reopens, but the repository's branches may not be loaded yet when the PR arrives, so it falls
