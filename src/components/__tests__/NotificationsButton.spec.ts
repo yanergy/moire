@@ -32,7 +32,7 @@ describe('NotificationsButton', () => {
         });
     }
 
-    it('shows the unread count on the toggle', () => {
+    it('shows the unread count after the label', () => {
         const wrapper = mountButton([UNREAD, { ...UNREAD, number: 1, read: true }]);
         expect(wrapper.get('[aria-label="1 unread notification"]').text()).toBe('1');
     });
