@@ -26,10 +26,13 @@ describe('NotificationsButton', () => {
 
     function mountButton(activity: ActivityEntry[]) {
         useDashboardStore().applyState(dashboardState({ activity }));
-        return mount(NotificationsButton, { global: { plugins: [pinia] } });
+        return mount(NotificationsButton, {
+            props: { selected: false },
+            global: { plugins: [pinia] },
+        });
     }
 
-    it('shows the unread count on the toggle', () => {
+    it('shows the unread count after the label', () => {
         const wrapper = mountButton([UNREAD, { ...UNREAD, number: 1, read: true }]);
         expect(wrapper.get('[aria-label="1 unread notification"]').text()).toBe('1');
     });
@@ -39,16 +42,20 @@ describe('NotificationsButton', () => {
         expect(wrapper.text()).toBe('Notifications');
     });
 
-    it('toggles the notifications page', async () => {
+    it('goes to the notifications page', async () => {
         const wrapper = mountButton([]);
         const ui = useUiStore();
-        const toggle = wrapper.get('button');
 
-        await toggle.trigger('click');
+        await wrapper.get('button').trigger('click');
         expect(ui.mainView).toBe('notifications');
-        expect(toggle.attributes('data-state')).toBe('on');
+    });
 
-        await toggle.trigger('click');
-        expect(ui.mainView).toBe('diff');
+    it('shows as the current page when selected, and then does nothing on click', async () => {
+        const wrapper = mountButton([]);
+        await wrapper.setProps({ selected: true });
+
+        expect(wrapper.get('button').attributes('aria-current')).toBe('page');
+        await wrapper.get('button').trigger('click');
+        expect(useUiStore().mainView).toBe('diff');
     });
 });

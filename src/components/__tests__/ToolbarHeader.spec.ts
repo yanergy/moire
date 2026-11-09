@@ -35,9 +35,22 @@ const PR: PullRequest = {
 // button. (The theme toggle moved to the native View menu; see tests/menu.spec.ts.)
 const stubs = { RepoPicker: true, RefSelector: true, SegmentedToggle: true };
 
-// The dashboard toggle, found by its label.
-function dashboardToggle(wrapper: VueWrapper) {
-    return wrapper.findAll('button').find((b) => b.text().startsWith('Dashboard'))!;
+// A page button, found by its label.
+function pageButton(wrapper: VueWrapper, label: string) {
+    return wrapper.findAll('button').find((b) => b.text().startsWith(label))!;
+}
+
+// The labels of the page buttons, in toolbar order.
+function pageLabels(wrapper: VueWrapper) {
+    return wrapper
+        .get('nav[aria-label="Pages"]')
+        .findAll('button')
+        .map((b) => b.text());
+}
+
+// The labels of the page buttons shown as selected.
+function selectedPages(wrapper: VueWrapper) {
+    return wrapper.findAll('[aria-current="page"]').map((b) => b.text());
 }
 
 describe('ToolbarHeader', () => {
@@ -68,7 +81,7 @@ describe('ToolbarHeader', () => {
         expect(wrapper.text()).not.toContain('PR #');
     });
 
-    it('shows the PR button once a PR is detected and toggles the main view', async () => {
+    it('shows the PR button once a PR is detected and goes to the PR page', async () => {
         const comparison = useComparisonStore();
         comparison.prStatus = 'ok';
         comparison.pullRequest = PR;
@@ -80,8 +93,11 @@ describe('ToolbarHeader', () => {
         const prButton = wrapper.findAll('button').find((b) => b.text().includes('PR #'))!;
         await prButton.trigger('click');
         expect(ui.mainView).toBe('pr');
+        expect(selectedPages(wrapper)).toEqual(['PR #7']);
+
+        // Clicking the current page's button stays on it.
         await prButton.trigger('click');
-        expect(ui.mainView).toBe('diff');
+        expect(ui.mainView).toBe('pr');
     });
 
     it('uses the draft icon and a dashed border for a draft PR', () => {
@@ -182,43 +198,59 @@ describe('ToolbarHeader', () => {
         expect(wrapper.find('.lucide-triangle-alert').exists()).toBe(false);
     });
 
-    describe('dashboard toggle', () => {
-        it('is hidden, with the notifications toggle, without an open repo', () => {
+    describe('page buttons', () => {
+        it('shows Diff and Settings without an open repo, Diff selected', () => {
             const wrapper = mountToolbar();
-            expect(wrapper.text()).not.toContain('Dashboard');
-            expect(wrapper.text()).not.toContain('Notifications');
+
+            expect(pageLabels(wrapper)).toEqual(['Diff', 'Settings']);
+            expect(selectedPages(wrapper)).toEqual(['Diff']);
         });
 
-        it('switches the main view, next to the notifications toggle', async () => {
+        it('adds Dashboard and Notifications while a repo is open', () => {
+            useComparisonStore().repoPath = '/repos/moire';
+            const wrapper = mountToolbar();
+
+            expect(pageLabels(wrapper)).toEqual(['Diff', 'Dashboard', 'Notifications', 'Settings']);
+        });
+
+        it('goes to each page, selecting exactly its button', async () => {
             useComparisonStore().repoPath = '/repos/moire';
             const ui = useUiStore();
-
             const wrapper = mountToolbar();
-            const toggle = dashboardToggle(wrapper);
-            expect(toggle.text()).toBe('Dashboard');
-            expect(toggle.element.parentElement!.parentElement!.textContent).toContain(
-                'Notifications'
-            );
 
-            await toggle.trigger('click');
-            expect(ui.mainView).toBe('dashboard');
+            const goTo = async (label: string, view: string) => {
+                await pageButton(wrapper, label).trigger('click');
+                expect(ui.mainView).toBe(view);
+                expect(selectedPages(wrapper)).toEqual([label]);
+            };
 
-            await toggle.trigger('click');
-            expect(ui.mainView).toBe('diff');
+            await goTo('Dashboard', 'dashboard');
+            await goTo('Notifications', 'notifications');
+            await goTo('Settings', 'settings');
+            await goTo('Diff', 'diff');
         });
-    });
 
-    describe('settings toggle', () => {
-        it('shows without an open repo and toggles the Settings page', async () => {
+        it("does nothing on the current page's button, adding no history", async () => {
+            useComparisonStore().repoPath = '/repos/moire';
             const ui = useUiStore();
             const wrapper = mountToolbar();
-            const toggle = wrapper.findAll('button').find((b) => b.text() === 'Settings')!;
 
-            await toggle.trigger('click');
-            expect(ui.mainView).toBe('settings');
+            await pageButton(wrapper, 'Dashboard').trigger('click');
+            await pageButton(wrapper, 'Dashboard').trigger('click');
+            expect(ui.mainView).toBe('dashboard');
 
-            await toggle.trigger('click');
+            // One step back reaches the diff, and there is nothing before it.
+            ui.goBack();
             expect(ui.mainView).toBe('diff');
+            ui.goBack();
+            expect(ui.mainView).toBe('diff');
+        });
+
+        it('selects Diff while the PR page is set but no PR is detected', () => {
+            useUiStore().mainView = 'pr';
+            const wrapper = mountToolbar();
+
+            expect(selectedPages(wrapper)).toEqual(['Diff']);
         });
     });
 });
