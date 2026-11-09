@@ -254,6 +254,11 @@ Track bugs and limitations here.
   app on Apple Silicon. The accent is used everywhere else (window title, in-app UI, dmg volume
   name and filenames, Finder label). Carrying the accent there too would need a code-signing
   certificate, which this project does not use.
+- **The dashboard and notifications background can look split into two shades on some displays**
+  (issue [#41](https://github.com/yanergy/moire/issues/41)). It has only been seen in the dark
+  theme, in packaged builds, on one specific monitor, and it does not always show up in
+  screenshots. That points to how that display renders the near-black background rather than to
+  the app, so it is not being fixed.
 - **Windows and Linux packaged builds are unverified.** The `electron-builder` config targets
   them, but the app has only been built and run on macOS so far.
 - **The PR viewer (issue [#3](https://github.com/yanergy/moire/issues/3)) leaves two things out on
