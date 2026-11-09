@@ -1149,6 +1149,13 @@ describe('comparison store', () => {
                 expect(store.head).toBe('origin/feat/remote');
             });
 
+            it('selectRange sets the base and head in one step', () => {
+                const store = branchStore();
+
+                store.selectRange('origin/development', 'WORKING TREE');
+                expect([store.base, store.head]).toEqual(['origin/development', 'WORKING TREE']);
+            });
+
             it('leaves the range alone when a branch is not available', () => {
                 const store = branchStore();
                 store.base = 'main';

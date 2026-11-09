@@ -8,12 +8,17 @@ import {
     shell,
 } from 'electron';
 import path from 'node:path';
-import { registerIpcHandlers, isGitAvailable, getCurrentRepoPath } from './ipc/handlers';
+import {
+    registerIpcHandlers,
+    isGitAvailable,
+    getCurrentRepoPath,
+    getCurrentBranches,
+} from './ipc/handlers';
 import { getAccounts, switchAccount } from './github/gh';
 import { fetchSnapshot, getRepoIdentity } from './github/notifications';
 import { Notifier, type DashboardState, type NotificationContent } from './notifier';
 import { stopWatchingRepo } from './watcher/RepoWatcher';
-import { installAppMenu } from './menu';
+import { installAppMenu, comparisonPresets } from './menu';
 import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
 import { restoreWindowState, trackWindowState } from './window-state';
 import { initLogging, logError, logInfo } from './logger';
@@ -264,6 +269,10 @@ app.whenReady().then(async () => {
                 void setFlourishes(enabled);
                 sendToFocused('flourishes:changed', enabled);
             },
+            // Recomputed on every rebuild (repo open, ref change), so the presets
+            // follow the current branch and a missing ref disables its preset.
+            comparisonPresets: comparisonPresets(await getCurrentBranches()),
+            onSelectPreset: (base, head) => sendToFocused('menu:compare-preset', base, head),
             accounts,
             notificationPrefs: await getNotificationPrefs(),
             // The master switch starts or stops background polling (and clears
@@ -314,6 +323,7 @@ app.whenReady().then(async () => {
     registerIpcHandlers({
         onRecentsChanged: () => void buildMenu(),
         onRepoOpened: (repoPath) => void notifier.setRepo(repoPath),
+        onRefsChanged: () => void buildMenu(),
         dashboard: {
             get: async () => {
                 if (!notifier.getView().snapshot) {

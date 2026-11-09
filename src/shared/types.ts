@@ -461,6 +461,10 @@ export interface MoireApi {
     // Fired when a native File → Open Recent entry is chosen, with its path.
     // Returns an unsubscribe function.
     onMenuOpenRecent(cb: (path: string) => void): () => void;
+    // Fired when a native Git → Comparison Presets item is chosen, with the base and
+    // head (possibly the WORKING_TREE sentinel) it selects. Returns an unsubscribe
+    // function.
+    onMenuComparePreset(cb: (base: string, head: string) => void): () => void;
     // The GitHub dashboard for the open repository. `getDashboard` returns the
     // current state (fetching first if nothing was fetched yet); `refreshDashboard`
     // polls GitHub now; `setDashboardShowDrafts`, `setDashboardAuthors` and

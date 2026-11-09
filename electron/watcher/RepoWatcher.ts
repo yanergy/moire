@@ -234,8 +234,13 @@ export function watchRepo(
     repoPath: string,
     {
         getWindows = () => BrowserWindow.getAllWindows(),
+        onChange,
         ...options
-    }: { getWindows?: () => BrowserWindow[] } & RepoWatcherOptions = {}
+    }: {
+        getWindows?: () => BrowserWindow[];
+        // Main-process listener for the same coalesced events the renderer gets.
+        onChange?: (event: RepoChangeEvent) => void;
+    } & RepoWatcherOptions = {}
 ): RepoWatcher {
     stopWatchingRepo();
     current = new RepoWatcher(
@@ -244,6 +249,7 @@ export function watchRepo(
             for (const win of getWindows()) {
                 win.webContents.send(REPO_CHANGED_CHANNEL, event);
             }
+            onChange?.(event);
         },
         options
     ).start();

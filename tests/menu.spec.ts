@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildMenuTemplate, NOTIFICATION_EVENT_OPTIONS } from '../electron/menu';
+import { buildMenuTemplate, comparisonPresets, NOTIFICATION_EVENT_OPTIONS } from '../electron/menu';
+import type { BranchInfo } from '../src/shared/types';
 import { DEFAULT_NOTIFICATION_PREFS } from '../electron/settings';
 
 // menu.cjs is CommonJS loaded natively under vitest, so `require('electron')`
@@ -234,8 +235,37 @@ describe('application menu', () => {
         expect(onOpenLog).toHaveBeenCalledTimes(1);
     });
 
-    it('omits the Git menu when no gh accounts are connected', () => {
-        expect(gitSubmenu()).toBeUndefined();
+    it('always shows the Git menu with Comparison Presets, and no accounts without gh', () => {
+        expect(gitSubmenu()?.map((item) => item.label)).toEqual([
+            'Comparison Presets',
+            'Compare Current Branch to Development',
+            'Compare Working Tree to Origin',
+        ]);
+    });
+
+    it('adds the gh accounts below the presets when gh is connected', () => {
+        expect(gitSubmenu({ accounts })?.map((item) => item.label ?? item.type)).toEqual([
+            'Comparison Presets',
+            'Compare Current Branch to Development',
+            'Compare Working Tree to Origin',
+            'separator',
+            'Accounts',
+            'yanergy',
+            'octocat',
+        ]);
+    });
+
+    it('reports a chosen preset through onSelectPreset', () => {
+        const onSelectPreset = vi.fn<(base: string, head: string) => void>();
+        const presets = [{ label: 'Compare A to B', base: 'origin/a', head: 'b', enabled: true }];
+        const items = gitSubmenu({ comparisonPresets: presets, onSelectPreset })!;
+
+        expect(items.map((item) => [item.label, item.enabled])).toEqual([
+            ['Comparison Presets', false],
+            ['Compare A to B', true],
+        ]);
+        (items[1]!.click as () => void)();
+        expect(onSelectPreset).toHaveBeenCalledWith('origin/a', 'b');
     });
 
     it('lists gh accounts as radio items with the active one checked', () => {
@@ -356,5 +386,41 @@ describe('application menu', () => {
         expect(buildMenuTemplate({ isMac: true, currentTheme: 'system' })[0].role).toBe('appMenu');
         expect(buildMenuTemplate({ isMac: true, currentTheme: 'system' })[1].label).toBe('File');
         expect(buildMenuTemplate({ isMac: false, currentTheme: 'system' })[0].label).toBe('File');
+    });
+});
+
+describe('comparisonPresets', () => {
+    const branches: BranchInfo[] = [
+        { name: 'main', kind: 'local' },
+        { name: 'feat/x', kind: 'local', isCurrent: true },
+        { name: 'origin/development', kind: 'remote' },
+        { name: 'origin/feat/x', kind: 'remote' },
+    ];
+
+    it('compares origin/development to the current branch, and the working tree to its origin', () => {
+        expect(comparisonPresets(branches)).toEqual([
+            {
+                label: 'Compare Current Branch to Development',
+                base: 'origin/development',
+                head: 'feat/x',
+                enabled: true,
+            },
+            {
+                label: 'Compare Working Tree to Origin',
+                base: 'origin/feat/x',
+                head: 'WORKING TREE',
+                enabled: true,
+            },
+        ]);
+    });
+
+    it('disables a preset whose remote ref does not exist', () => {
+        const local = branches.filter((b) => b.kind === 'local');
+        expect(comparisonPresets(local).map((p) => p.enabled)).toEqual([false, false]);
+    });
+
+    it('disables both when there is no current branch', () => {
+        const presets = comparisonPresets(branches.map(({ name, kind }) => ({ name, kind })));
+        expect(presets.map((p) => p.enabled)).toEqual([false, false]);
     });
 });

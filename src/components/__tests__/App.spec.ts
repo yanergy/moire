@@ -31,6 +31,7 @@ function stubApi() {
         refresh: vi.fn<Unsub>(),
         openRepo: vi.fn<Unsub>(),
         openRecent: vi.fn<Unsub>(),
+        comparePreset: vi.fn<Unsub>(),
         repoChanged: vi.fn<Unsub>(),
         flourishes: vi.fn<Unsub>(),
         codeStyle: vi.fn<Unsub>(),
@@ -48,6 +49,9 @@ function stubApi() {
         onMenuRefresh: vi.fn<(cb: () => void) => Unsub>(() => unsub.refresh),
         onMenuOpenRepo: vi.fn<(cb: () => void) => Unsub>(() => unsub.openRepo),
         onMenuOpenRecent: vi.fn<(cb: (path: string) => void) => Unsub>(() => unsub.openRecent),
+        onMenuComparePreset: vi.fn<(cb: (base: string, head: string) => void) => Unsub>(
+            () => unsub.comparePreset
+        ),
         onRepoChanged: vi.fn<(cb: () => void) => Unsub>(() => unsub.repoChanged),
         getFlourishes: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
         onFlourishesChanged: vi.fn<(cb: (enabled: boolean) => void) => Unsub>(
@@ -142,6 +146,22 @@ describe('App', () => {
         expect(openRecent).toHaveBeenCalledWith('/repos/demo');
     });
 
+    it('applies a Git menu comparison preset and shows the diff', async () => {
+        const { api } = stubApi();
+        const comparison = useComparisonStore();
+        vi.spyOn(comparison, 'restoreLastRepo').mockResolvedValue(undefined);
+        const selectRange = vi.spyOn(comparison, 'selectRange').mockImplementation(() => {});
+        const ui = useUiStore();
+        ui.openDashboard();
+
+        mountApp();
+        await flushPromises();
+        api.onMenuComparePreset.mock.calls[0]![0]('origin/development', 'feat/x');
+
+        expect(selectRange).toHaveBeenCalledWith('origin/development', 'feat/x');
+        expect(ui.mainView).toBe('diff');
+    });
+
     it('unsubscribes every bridge listener on unmount', async () => {
         const { unsub } = stubApi();
         const comparison = useComparisonStore();
@@ -155,6 +175,7 @@ describe('App', () => {
         expect(unsub.refresh).toHaveBeenCalledTimes(1);
         expect(unsub.openRepo).toHaveBeenCalledTimes(1);
         expect(unsub.openRecent).toHaveBeenCalledTimes(1);
+        expect(unsub.comparePreset).toHaveBeenCalledTimes(1);
         expect(unsub.repoChanged).toHaveBeenCalledTimes(1);
         expect(unsub.flourishes).toHaveBeenCalledTimes(1);
         expect(unsub.codeStyle).toHaveBeenCalledTimes(1);

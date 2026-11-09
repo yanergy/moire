@@ -8,6 +8,8 @@ import { Menu, type MenuItemConstructorOptions } from 'electron';
 import type { CodeStyle, DiffLayout, NotificationPrefs, ThemePreference } from './settings';
 import type { GhAccount } from './github/gh';
 import type { DashboardEventKind } from './github/notifications';
+import { WORKING_TREE } from './git/GitService';
+import type { BranchInfo } from '../src/shared/types';
 
 interface ThemeOption {
     label: string;
@@ -57,6 +59,41 @@ export const NOTIFICATION_EVENT_OPTIONS: NotificationEventOption[] = [
     { label: 'New Comments', kind: 'commented' },
 ];
 
+// One Git → Comparison Presets item: the base and head it selects, and whether
+// both refs exist, so a preset that would compare against nothing is disabled.
+export interface ComparisonPreset {
+    label: string;
+    base: string;
+    head: string;
+    enabled: boolean;
+}
+
+const PRESET_BASE_BRANCH = 'origin/development';
+
+// The hardcoded comparison presets for the open repository's branches. With no
+// current branch (detached HEAD, or no repository) both are disabled.
+export function comparisonPresets(branches: BranchInfo[]): ComparisonPreset[] {
+    const current = branches.find((b) => b.kind === 'local' && b.isCurrent)?.name;
+    const hasRemote = (name: string) =>
+        branches.some((b) => b.kind === 'remote' && b.name === name);
+    const upstream = current ? `origin/${current}` : '';
+
+    return [
+        {
+            label: 'Compare Current Branch to Development',
+            base: PRESET_BASE_BRANCH,
+            head: current ?? '',
+            enabled: !!current && hasRemote(PRESET_BASE_BRANCH),
+        },
+        {
+            label: 'Compare Working Tree to Origin',
+            base: upstream,
+            head: WORKING_TREE,
+            enabled: !!current && hasRemote(upstream),
+        },
+    ];
+}
+
 export interface MenuOptions {
     isMac: boolean;
     currentTheme: ThemePreference;
@@ -90,9 +127,13 @@ export interface MenuOptions {
     // actually gates.
     flourishes?: boolean;
     onToggleFlourishes?: (enabled: boolean) => void;
-    // The authenticated gh accounts, for the Git menu's account switcher. That
-    // menu appears only when at least one account is present (gh is connected);
-    // choosing a non-active one switches through onSelectAccount.
+    // The Git → Comparison Presets items (see comparisonPresets); choosing an
+    // enabled one reports its base and head through onSelectPreset.
+    comparisonPresets?: ComparisonPreset[];
+    onSelectPreset?: (base: string, head: string) => void;
+    // The authenticated gh accounts, for the Git menu's account switcher, shown
+    // only when at least one account is present (gh is connected); choosing a
+    // non-active one switches through onSelectAccount.
     accounts?: GhAccount[];
     onSelectAccount?: (login: string, host: string) => void;
     // The Git → Notifications submenu: the master switch, one checkbox per event
@@ -138,6 +179,8 @@ export function buildMenuTemplate({
     activeRepo = null,
     flourishes = true,
     onToggleFlourishes,
+    comparisonPresets: presets = comparisonPresets([]),
+    onSelectPreset,
     accounts = [],
     onSelectAccount,
     notificationPrefs,
@@ -195,31 +238,41 @@ export function buildMenuTemplate({
           ]
         : [];
 
-    // The Git menu carries the gh account switcher and appears only when gh is
-    // connected with at least one account. Each account is a radio item; the
-    // active one is checked, and choosing another switches gh's active account.
-    const gitMenu: MenuItemConstructorOptions[] = accounts.length
+    // The gh account switcher and the notifications, only when gh is connected
+    // with at least one account. Each account is a radio item; the active one is
+    // checked, and choosing another switches gh's active account.
+    const accountItems: MenuItemConstructorOptions[] = accounts.length
         ? [
-              {
-                  label: 'Git',
-                  submenu: [
-                      { label: 'Accounts', enabled: false },
-                      { type: 'separator' },
-                      ...accounts.map((account): MenuItemConstructorOptions => ({
-                          label: account.login,
-                          type: 'radio',
-                          checked: account.active,
-                          click: () => {
-                              if (!account.active) {
-                                  onSelectAccount?.(account.login, account.host);
-                              }
-                          },
-                      })),
-                      ...notificationItems,
-                  ],
-              },
+              { type: 'separator' },
+              { label: 'Accounts', enabled: false },
+              ...accounts.map((account): MenuItemConstructorOptions => ({
+                  label: account.login,
+                  type: 'radio',
+                  checked: account.active,
+                  click: () => {
+                      if (!account.active) {
+                          onSelectAccount?.(account.login, account.host);
+                      }
+                  },
+              })),
+              ...notificationItems,
           ]
         : [];
+
+    // Always shown: the presets need only local git.
+    const gitMenu: MenuItemConstructorOptions = {
+        label: 'Git',
+        submenu: [
+            // A flat list under a disabled header, like the accounts below.
+            { label: 'Comparison Presets', enabled: false },
+            ...presets.map(({ label, base, head, enabled }): MenuItemConstructorOptions => ({
+                label,
+                enabled,
+                click: () => onSelectPreset?.(base, head),
+            })),
+            ...accountItems,
+        ],
+    };
 
     return [
         ...appMenu,
@@ -329,7 +382,7 @@ export function buildMenuTemplate({
                 },
             ],
         },
-        ...gitMenu,
+        gitMenu,
         { role: 'windowMenu' },
         {
             role: 'help',

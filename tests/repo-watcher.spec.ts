@@ -5,6 +5,8 @@ import {
     worktreeIgnored,
     refWatchPaths,
     coalesceReason,
+    watchRepo,
+    stopWatchingRepo,
 } from '../electron/watcher/RepoWatcher';
 
 // Stand-in for a native fs.watch FSWatcher: records the target and options it was
@@ -267,5 +269,34 @@ describe('RepoWatcher (chokidar fallback)', () => {
         const { watcher, created } = makeWatcher(() => {});
         await watcher.close();
         expect(created.every((w) => w.closed)).toBe(true);
+    });
+});
+
+describe('watchRepo', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+        stopWatchingRepo();
+        vi.useRealTimers();
+    });
+
+    it('sends each coalesced event to the windows and to the main-process listener', () => {
+        const { fsWatch, created } = fakeFsWatch();
+        const send = vi.fn<(channel: string, event: unknown) => void>();
+        const onChange = vi.fn<(event: { reason: string }) => void>();
+
+        watchRepo('/repo', {
+            fsWatch: fsWatch as never,
+            debounceMs: 10,
+            getWindows: () => [{ webContents: { send } }] as never,
+            onChange,
+        });
+        created[0]!.fire('change', '.git/HEAD');
+        vi.advanceTimersByTime(10);
+
+        expect(send).toHaveBeenCalledWith(
+            'repo:changed',
+            expect.objectContaining({ reason: 'refs' })
+        );
+        expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ reason: 'refs' }));
     });
 });
