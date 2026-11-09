@@ -112,12 +112,12 @@ the popup never appears.
    adjacent file at each end. Click the filename in the diff header to open the file in an editor
    (choose which under **View > Open Files In**). Renames, binary files, and images get their own
    previews, and very large files sit behind a click so they never lock up the window.
-6. **Review the pull request.** When a pull request exists for the selected branches, a PR button
-   appears next to them and opens a PR view with its description, status, labels, conversation,
-   and CI checks. Inline review comments and check annotations show on their lines in the diff. An
+6. **Review the pull request.** The **PR** tab next to **Diff** in the toolbar opens a PR view of
+   the pull request for the selected branches, with its description, status, labels, conversation,
+   and CI checks. The tab shows the PR number and a status dot; while there is no pull request it
+   stays in place but is disabled, and its tooltip says why (including how to fix a failed lookup). Inline review comments and check annotations show on their lines in the diff. An
    optional edit mode lets you reply to and resolve threads, post and edit your own comments, edit
-   the description, and tick task-list boxes. The **Diff** button in the middle of the toolbar
-   takes you back to the diff.
+   the description, and tick task-list boxes. The **Diff** tab takes you back to the diff.
 
    To review the pull request yourself, click **Review** at the top right of the PR view. The diff
    opens, and hovering a line of the PR's diff shows a **+** between the line numbers and the code;
@@ -125,7 +125,7 @@ the popup never appears.
    **Suggest change** adds a suggestion block with the selected code to edit. Your comments collect
    in a pending review, marked **Pending** on their lines, where you can still edit or delete them.
    While the review is pending, **Finish review** (with the number of pending comments) sits next
-   to the PR button in the toolbar and in the PR view. It opens a dialog to add a summary and submit
+   to the branches in the toolbar and in the PR view. It opens a dialog to add a summary and submit
    the review as **Comment**, **Approve** or **Request changes**, or to discard it. The pending
    review lives on GitHub, so a review started on github.com continues here, and the other way
    around.
@@ -249,9 +249,8 @@ last branch range are remembered per repository.
 - A Settings page (the toolbar's **Settings** button, or **Moiré > Settings…**, `Cmd/Ctrl+,`) with
   every setting kept per repository: the main and development branch, the notifications and the
   dashboard.
-- Page buttons in the middle of the toolbar (**Diff**, **Dashboard**, **Notifications** and
-  **Settings**, plus the PR button next to the branches) that go to a page and show which one you
-  are on.
+- Page tabs in the middle of the toolbar (**Diff**, **PR**, **Dashboard**, **Notifications** and
+  **Settings**) that go to a page and show which one you are on.
 - Back and forward history between the diff, the PR view, the dashboard and its cards, the
   notifications page and the Settings page, stepped through with the mouse's back and forward
   buttons.

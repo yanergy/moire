@@ -335,11 +335,11 @@ export const useComparisonStore = defineStore('comparison', () => {
     // otherwise linger and read as the new branch's until gh returns).
     const prLoading = ref(false);
 
-    // A PR exists for the current range: the only case that reveals the PR button
+    // A PR exists for the current range: the only case that enables the PR tab
     // and lets the main area switch to the PR view.
     const hasPullRequest = computed(() => prStatus.value === 'ok' && pullRequest.value !== null);
 
-    // The tooltip for the toolbar's warning triangle, shown when the PR lookup
+    // The PR tab's tooltip in its warning state, shown when the PR lookup
     // failed in a way worth surfacing: gh missing, signed out, or an access/network
     // error (which includes being on the wrong account for a private repo). Returned
     // as separate lines (the cause, then how to fix it, then any gh detail) so the
