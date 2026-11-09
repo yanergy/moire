@@ -105,6 +105,11 @@ describe('renderMarkdown', () => {
         expect(html).toContain('<li>just an item</li>');
     });
 
+    it("keeps an ordered list's start number, so the markers match the source", () => {
+        expect(renderMarkdown('1. one\n2. two')).toContain('<ol>');
+        expect(renderMarkdown('3. three\n4. four')).toContain('<ol start="3">');
+    });
+
     it('returns an empty string for empty or missing input', () => {
         expect(renderMarkdown('')).toBe('');
         expect(renderMarkdown(null)).toBe('');

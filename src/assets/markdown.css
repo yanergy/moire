@@ -1,0 +1,163 @@
+/* Rendered Markdown (the PR view's description, comments and reviews, and the review
+   comments in the diff viewer's popover). The HTML comes from v-html, so its elements
+   can't carry Tailwind classes; these element rules style it instead. They lean on the
+   --moire-* tokens so it matches the app in both themes. */
+.pr-markdown > *:first-child {
+    margin-top: 0;
+}
+
+.pr-markdown > *:last-child {
+    margin-bottom: 0;
+}
+
+.pr-markdown p {
+    margin: 0 0 10px;
+}
+
+.pr-markdown h1,
+.pr-markdown h2,
+.pr-markdown h3,
+.pr-markdown h4 {
+    margin: 16px 0 8px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--moire-fg);
+}
+
+.pr-markdown h1 {
+    font-size: 1.35em;
+}
+
+.pr-markdown h2 {
+    font-size: 1.2em;
+}
+
+.pr-markdown h3 {
+    font-size: 1.08em;
+}
+
+.pr-markdown h4 {
+    font-size: 1em;
+}
+
+.pr-markdown ul,
+.pr-markdown ol {
+    margin: 0 0 10px;
+    padding-left: 1.2em;
+}
+
+/* Tailwind's preflight removes list markers; bring GitHub's back. An ol keeps its
+   own start number (the sanitizer allows `start`), and nested bullets change shape
+   per level. */
+.pr-markdown ul {
+    list-style: disc;
+}
+
+.pr-markdown ol {
+    list-style: decimal;
+}
+
+.pr-markdown ul ul,
+.pr-markdown ol ul {
+    list-style: circle;
+}
+
+.pr-markdown ul ul ul,
+.pr-markdown ol ul ul,
+.pr-markdown ul ol ul,
+.pr-markdown ol ol ul {
+    list-style: square;
+}
+
+.pr-markdown ol ol,
+.pr-markdown ul ol {
+    list-style: lower-roman;
+}
+
+.pr-markdown li {
+    margin: 3px 0;
+}
+
+/* GitHub-style task list: the [ ]/[x] marker becomes a checkbox in place of the
+   bullet, pulled left so it aligns where the bullet was (the ul pads 1.2em). */
+.pr-markdown li.pr-task-item {
+    margin-left: -1.2em;
+    list-style: none;
+}
+
+.pr-markdown .pr-task-checkbox {
+    margin: 0 0.5em 0 0;
+    vertical-align: middle;
+    accent-color: var(--moire-accent);
+}
+
+/* Interactive (edit-mode) checkboxes read as clickable; disabled ones do not. */
+.pr-markdown .pr-task-checkbox:not([disabled]) {
+    cursor: pointer;
+}
+
+.pr-markdown li > ul,
+.pr-markdown li > ol {
+    margin: 3px 0;
+}
+
+.pr-markdown a {
+    color: var(--moire-accent);
+    text-decoration: none;
+}
+
+.pr-markdown a:hover {
+    text-decoration: underline;
+}
+
+.pr-markdown code {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--moire-hover);
+    font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.9em;
+}
+
+.pr-markdown pre {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--moire-border);
+    border-radius: 6px;
+    overflow-x: auto;
+    background: var(--moire-chrome);
+}
+
+.pr-markdown pre code {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 0.92em;
+}
+
+.pr-markdown blockquote {
+    margin: 0 0 10px;
+    padding: 2px 0 2px 12px;
+    border-left: 3px solid var(--moire-border);
+    color: var(--moire-muted);
+}
+
+.pr-markdown hr {
+    margin: 16px 0;
+    border: 0;
+    border-top: 1px solid var(--moire-border);
+}
+
+.pr-markdown img {
+    max-width: 100%;
+}
+
+.pr-markdown table {
+    margin: 0 0 12px;
+    border-collapse: collapse;
+}
+
+.pr-markdown th,
+.pr-markdown td {
+    padding: 4px 8px;
+    border: 1px solid var(--moire-border);
+}
