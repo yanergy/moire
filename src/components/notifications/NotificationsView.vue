@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
-import { CheckCheck } from '@lucide/vue';
+import { CheckCheck, Settings } from '@lucide/vue';
 import { useDashboardStore } from '@/stores/dashboard';
+import { useUiStore } from '@/stores/ui';
 import { activityId, groupActivityByDay } from '@/lib/dashboard';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import NotificationRow from '@/components/notifications/NotificationRow.vue';
-import NotificationSettingsMenu from '@/components/notifications/NotificationSettingsMenu.vue';
 
 // The notifications page, opened by the toolbar's bell: every notification sent
 // for the open repository (newest first, grouped by day), with mark read, delete and mark all
-// read, and the notification settings menu. The data is the dashboard
-// store's, which mirrors the notifier in the main process.
+// read, and a button to the notification settings on the Settings page. The data
+// is the dashboard store's, which mirrors the notifier in the main process.
 const dashboard = useDashboardStore();
+const ui = useUiStore();
 
 const subtitle = computed(() => {
     const total = dashboard.activity.length;
@@ -57,8 +58,8 @@ watch([sentinel, shown], async () => {
 });
 
 onMounted(() => {
-    // The settings come with the dashboard state, which nothing may have loaded
-    // yet (notifications off, dashboard never opened).
+    // The list comes with the dashboard state, which nothing may have loaded yet
+    // (notifications off, dashboard never opened).
     if (!dashboard.notificationSettings) {
         void dashboard.load();
     }
@@ -100,7 +101,15 @@ onBeforeUnmount(() => {
                         <CheckCheck :size="16" />
                         Mark all as read
                     </Button>
-                    <notification-settings-menu />
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                        @click="ui.openSettings('notifications')"
+                    >
+                        <Settings :size="16" />
+                        Notification settings
+                    </Button>
                 </div>
 
                 <div class="pt-6">

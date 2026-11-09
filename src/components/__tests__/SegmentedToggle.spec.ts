@@ -27,6 +27,19 @@ describe('SegmentedToggle', () => {
         expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['unified']);
     });
 
+    it('outlines the track and lights up inactive options on hover when bordered', () => {
+        const plain = mount(SegmentedToggle, { props: { options, modelValue: 'split' } });
+        const bordered = mount(SegmentedToggle, {
+            props: { options, modelValue: 'split', bordered: true },
+        });
+
+        expect(plain.classes()).not.toContain('border');
+        expect(bordered.classes()).toContain('border');
+        expect(bordered.findAll('button')[1]!.classes()).toContain(
+            'data-[state=off]:hover:bg-moire-hover'
+        );
+    });
+
     // Options may carry a tooltip (e.g. the compare-mode control), which wraps each
     // item in a tooltip. The item must still render and emit; the tooltip content
     // itself only mounts on hover and is not asserted here.

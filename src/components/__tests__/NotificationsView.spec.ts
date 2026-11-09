@@ -3,8 +3,8 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import NotificationsView from '@/components/notifications/NotificationsView.vue';
 import NotificationRow from '@/components/notifications/NotificationRow.vue';
-import NotificationSettingsMenu from '@/components/notifications/NotificationSettingsMenu.vue';
 import { useDashboardStore } from '@/stores/dashboard';
+import { useUiStore } from '@/stores/ui';
 import type { ActivityEntry } from '@/shared/types';
 import { dashboardState, stubTooltips } from './fixtures';
 
@@ -42,13 +42,23 @@ describe('NotificationsView', () => {
         return mount(NotificationsView, { global: { plugins: [pinia] } });
     }
 
-    it('lists the notifications newest first, with the settings menu in the header', () => {
+    it('lists the notifications newest first', () => {
         const wrapper = mountView(ACTIVITY);
 
         const rows = wrapper.findAllComponents(NotificationRow);
         expect(rows.map((row) => row.props('entry').number)).toEqual([2, 1]);
         expect(wrapper.text()).toContain('1 unread of 2');
-        expect(wrapper.findComponent(NotificationSettingsMenu).exists()).toBe(true);
+    });
+
+    it('opens the Settings page at its Notifications section', async () => {
+        const wrapper = mountView(ACTIVITY);
+        const ui = useUiStore();
+
+        const button = wrapper.findAll('button').find((b) => b.text() === 'Notification settings');
+        await button!.trigger('click');
+
+        expect(ui.mainView).toBe('settings');
+        expect(ui.settingsSection).toBe('notifications');
     });
 
     it('marks all read, offered only while something is unread', async () => {
@@ -75,9 +85,9 @@ describe('NotificationsView', () => {
         expect(openActivity).toHaveBeenCalledWith(ACTIVITY[0]);
     });
 
-    it('loads the dashboard state for the settings when nothing loaded it yet', async () => {
+    it('loads the dashboard state when nothing loaded it yet', async () => {
         const dashboard = useDashboardStore();
-        const load = vi.spyOn(dashboard, 'load').mockResolvedValue(undefined);
+        const load = vi.spyOn(dashboard, 'load').mockResolvedValue(true);
         mount(NotificationsView, { global: { plugins: [pinia] } });
         await flushPromises();
         expect(load).toHaveBeenCalledTimes(1);

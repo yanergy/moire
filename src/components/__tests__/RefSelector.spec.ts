@@ -81,9 +81,10 @@ describe('RefSelector', () => {
         await open(wrapper);
         expect(commandInput()).not.toBeNull();
         // Flat branches stay under "Local branches"; prefixed ones get a heading
-        // per prefix, with remotes under their remote name.
+        // per prefix. (The fixture's remotes are both recommended, so no remote
+        // group is left.)
         expect(headings()).toEqual(
-            expect.arrayContaining(['Local branches', 'feat', 'fix', 'release', 'origin'])
+            expect.arrayContaining(['Local branches', 'feat', 'fix', 'release'])
         );
         // A grouped branch is displayed as its leaf under the prefix heading.
         const label = document.querySelector(
@@ -96,18 +97,33 @@ describe('RefSelector', () => {
         const wrapper = mountSide('base');
         await open(wrapper);
 
-        // The fixture has no origin/development and no origin/HEAD, so the default
-        // branch falls back to origin/main. Both sit under a static heading, not
-        // a collapsible group header.
+        // The fixture has origin/develop (detected as the development branch) and
+        // no origin/HEAD, so the default branch falls back to origin/main. They sit
+        // under a static heading, not a collapsible group header.
         expect(recommendedHeading()).toBe('Recommended');
         expect(headings()).not.toContain('Recommended');
-        expect(itemTitles().slice(0, 2)).toEqual(['origin/main', 'main']);
+        expect(itemTitles().slice(0, 3)).toEqual(['origin/develop', 'origin/main', 'main']);
         expect(commandItem('origin/main')?.textContent).toContain('default');
         expect(commandItem('main')?.textContent).toContain('current');
 
         // They are dropped from the lists below, so each appears exactly once.
         expect(itemTitles().filter((title) => title === 'origin/main')).toHaveLength(1);
         expect(itemTitles().filter((title) => title === 'main')).toHaveLength(1);
+    });
+
+    it('recommends the development branch picked on the Settings page', async () => {
+        const store = useComparisonStore();
+        const wrapper = mountSide('base');
+        store.branches = [
+            { name: 'main', kind: 'local', isCurrent: true },
+            { name: 'origin/main', kind: 'remote' },
+            { name: 'origin/development', kind: 'remote' },
+            { name: 'origin/staging', kind: 'remote' },
+        ];
+        store.branchSettings = { development: 'origin/staging' };
+        await open(wrapper);
+
+        expect(itemTitles().slice(0, 3)).toEqual(['origin/staging', 'origin/main', 'main']);
     });
 
     it('leads the base recommendations with origin/development', async () => {
@@ -243,7 +259,12 @@ describe('RefSelector', () => {
         // The favorite shows its full name under a static heading after the
         // recommendations, and leaves its prefix group so it is listed once.
         expect(headingTexts()).toEqual(['Recommended', 'Favorites']);
-        expect(itemTitles().slice(0, 3)).toEqual(['origin/main', 'main', 'feat/monaco-spike']);
+        expect(itemTitles().slice(0, 4)).toEqual([
+            'origin/develop',
+            'origin/main',
+            'main',
+            'feat/monaco-spike',
+        ]);
         expect(commandItem('feat/monaco-spike')?.textContent).toContain('feat/monaco-spike');
         expect(itemTitles().filter((title) => title === 'feat/monaco-spike')).toHaveLength(1);
         expect(starButton('feat/monaco-spike')?.getAttribute('aria-pressed')).toBe('true');

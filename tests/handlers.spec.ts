@@ -24,6 +24,8 @@ const state = vi.hoisted(() => ({
     setBranchSelection: vi.fn<() => Promise<void>>(),
     getFavoriteBranches: vi.fn<(repoPath: string) => Promise<string[]>>(),
     setFavoriteBranches: vi.fn<(repoPath: string, names: string[]) => Promise<void>>(),
+    getRepoBranches: vi.fn<(repoPath: string) => Promise<unknown>>(),
+    setRepoBranches: vi.fn<(repoPath: string, settings: unknown) => Promise<void>>(),
     getFlourishes: vi.fn<() => Promise<boolean>>(),
     getCodeStyle: vi.fn<() => Promise<string>>(),
     getDiffLayout: vi.fn<() => Promise<string>>(),
@@ -32,7 +34,10 @@ const state = vi.hoisted(() => ({
     onRecentsChanged: vi.fn<() => void>(),
     onRepoOpened: vi.fn<(repoPath: string) => void>(),
     onRefsChanged: vi.fn<() => void>(),
+    onRepoBranchesChanged: vi.fn<() => void>(),
     dashboard: {
+        state: vi.fn<() => Promise<unknown>>(),
+        setMergedPeriod: vi.fn<(period: string) => Promise<unknown>>(),
         get: vi.fn<() => Promise<unknown>>(),
         refresh: vi.fn<() => Promise<unknown>>(),
         setShowDrafts: vi.fn<(show: boolean) => Promise<unknown>>(),
@@ -94,6 +99,8 @@ vi.mock('../electron/settings', () => ({
     setBranchSelection: state.setBranchSelection,
     getFavoriteBranches: state.getFavoriteBranches,
     setFavoriteBranches: state.setFavoriteBranches,
+    getRepoBranches: state.getRepoBranches,
+    setRepoBranches: state.setRepoBranches,
     getFlourishes: state.getFlourishes,
     getCodeStyle: state.getCodeStyle,
     getEditorPreference: state.getEditorPreference,
@@ -143,6 +150,7 @@ describe('registerIpcHandlers', () => {
             onRecentsChanged: state.onRecentsChanged,
             onRepoOpened: state.onRepoOpened,
             onRefsChanged: state.onRefsChanged,
+            onRepoBranchesChanged: state.onRepoBranchesChanged,
             dashboard: state.dashboard as never,
         });
     });
@@ -157,6 +165,8 @@ describe('registerIpcHandlers', () => {
             'settings:branch-selection:set',
             'settings:favorite-branches:get',
             'settings:favorite-branches:set',
+            'settings:repo-branches:get',
+            'settings:repo-branches:set',
             'theme:get',
             'flourishes:get',
             'code-style:get',
@@ -172,6 +182,8 @@ describe('registerIpcHandlers', () => {
             'dashboard:set-show-drafts',
             'dashboard:set-authors',
             'dashboard:set-hidden-cards',
+            'dashboard:set-merged-period',
+            'dashboard:state',
             'dashboard:set-notification-settings',
             'dashboard:mark-read',
             'dashboard:mark-unread',
@@ -271,7 +283,28 @@ describe('registerIpcHandlers', () => {
 
     it('rejects the dashboard channels before any repo is opened', async () => {
         await expect(invoke('dashboard:get')).rejects.toThrow('No repository is open');
+        // The settings are per repository too.
+        await expect(invoke('dashboard:state')).rejects.toThrow('No repository is open');
+        await expect(invoke('dashboard:set-merged-period', 'month')).rejects.toThrow(
+            'No repository is open'
+        );
         expect(state.dashboard.get).not.toHaveBeenCalled();
+    });
+
+    it('stores a repository branch setting, keeping only valid fields, and reports it', async () => {
+        await invoke('settings:repo-branches:set', '/repos/moire', {
+            main: 'origin/trunk',
+            development: null,
+            extra: 1,
+        });
+        expect(state.setRepoBranches).toHaveBeenCalledWith('/repos/moire', {
+            main: 'origin/trunk',
+            development: null,
+        });
+        expect(state.onRepoBranchesChanged).toHaveBeenCalledTimes(1);
+
+        await invoke('settings:repo-branches:set', '/repos/moire', { main: 3, development: 4 });
+        expect(state.setRepoBranches).toHaveBeenLastCalledWith('/repos/moire', {});
     });
 
     it('forwards the dashboard channels to the bridge once a repo is open', async () => {
@@ -282,6 +315,15 @@ describe('registerIpcHandlers', () => {
         state.dashboard.setShowDrafts.mockResolvedValue(dashboardState);
 
         expect(await invoke('dashboard:get')).toBe(dashboardState);
+        state.dashboard.state.mockResolvedValue(dashboardState);
+        expect(await invoke('dashboard:state')).toBe(dashboardState);
+
+        // Anything but 'month' is the default week.
+        state.dashboard.setMergedPeriod.mockResolvedValue(dashboardState);
+        await invoke('dashboard:set-merged-period', 'month');
+        expect(state.dashboard.setMergedPeriod).toHaveBeenCalledWith('month');
+        await invoke('dashboard:set-merged-period', 'year');
+        expect(state.dashboard.setMergedPeriod).toHaveBeenLastCalledWith('week');
         expect(await invoke('dashboard:refresh')).toBe(dashboardState);
         expect(await invoke('dashboard:set-show-drafts', false)).toBe(dashboardState);
         expect(state.dashboard.setShowDrafts).toHaveBeenCalledWith(false);
@@ -302,6 +344,7 @@ describe('registerIpcHandlers', () => {
         expect(
             await invoke('dashboard:set-notification-settings', {
                 enabled: false,
+                dockBadge: false,
                 notifyDrafts: 'no',
                 events: { approved: true, bogus: true, 'checks-failed': 1 },
                 extra: true,
@@ -309,6 +352,7 @@ describe('registerIpcHandlers', () => {
         ).toBe(dashboardState);
         expect(state.dashboard.setNotificationSettings).toHaveBeenCalledWith({
             enabled: false,
+            dockBadge: false,
             events: { approved: true },
         });
         await invoke('dashboard:set-notification-settings', null);

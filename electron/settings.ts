@@ -3,6 +3,8 @@
 // store off the module's synchronous init path.
 
 import type { ActivityEntry, DashboardEventKind, DashboardSnapshot } from './github/notifications';
+import type { MergedPeriod } from './notifier';
+import type { RepoBranchSettings } from '../src/shared/types';
 
 const MAX_RECENT_REPOS = 10;
 
@@ -54,6 +56,8 @@ function getStore(): Promise<SettingsStore> {
                         editor: 'auto',
                         branchSelections: {},
                         favoriteBranches: {},
+                        repoBranches: {},
+                        repoNotifications: {},
                         windowState: null,
                         flourishes: true,
                         diffLayout: 'single',
@@ -101,7 +105,33 @@ export async function removeRecentRepo(repoPath: string): Promise<string[]> {
         store.set('favoriteBranches', favorites);
     }
 
+    for (const key of ['repoBranches', 'repoNotifications']) {
+        const perRepo = store.get<Record<string, unknown>>(key, {});
+        if (repoPath in perRepo) {
+            delete perRepo[repoPath];
+            store.set(key, perRepo);
+        }
+    }
+
     return next;
+}
+
+// The main and development branch picked on the Settings page, keyed by repo path
+// since repos name them differently. An absent key means "detect it"; a null
+// development branch means the repo has none.
+export async function getRepoBranches(repoPath: string): Promise<RepoBranchSettings> {
+    const store = await getStore();
+    return store.get<Record<string, RepoBranchSettings>>('repoBranches', {})[repoPath] ?? {};
+}
+
+export async function setRepoBranches(
+    repoPath: string,
+    settings: RepoBranchSettings
+): Promise<void> {
+    const store = await getStore();
+    const all = store.get<Record<string, RepoBranchSettings>>('repoBranches', {});
+    all[repoPath] = settings;
+    store.set('repoBranches', all);
 }
 
 // The base/head refs a repo was last compared on, keyed by repo path so each
@@ -228,8 +258,9 @@ export type AuthorFilter = 'me' | 'all' | string[];
 // the review request count on the dock icon; `notifyDrafts` lets draft PRs send
 // notifications. The dashboard's own settings live here too: `dashboardShowDrafts`
 // includes draft PRs in its cards, `dashboardAuthors` picks whose PRs the cards
-// count, and `dashboardHiddenCards` lists the overview cards turned off in its
-// settings menu (the hidden ones, so a card added later shows by default). None
+// count, `dashboardHiddenCards` lists the overview cards turned off on the
+// Settings page (the hidden ones, so a card added later shows by default), and
+// `dashboardMergedPeriod` is the period the Merged card counts. None
 // of the dashboard ones affect notifications. Stored values are merged over the
 // defaults, so an event kind added later starts at its default instead of off.
 export interface NotificationPrefs {
@@ -240,6 +271,7 @@ export interface NotificationPrefs {
     dashboardShowDrafts: boolean;
     dashboardAuthors: AuthorFilter;
     dashboardHiddenCards: string[];
+    dashboardMergedPeriod: MergedPeriod;
 }
 
 // Before the dashboard and notifications had their own drafts toggle, one
@@ -264,36 +296,59 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
     dashboardShowDrafts: true,
     dashboardAuthors: 'me',
     dashboardHiddenCards: [],
+    dashboardMergedPeriod: 'week',
 };
 
-export async function getNotificationPrefs(): Promise<NotificationPrefs> {
-    const store = await getStore();
-    const { showDrafts, ...stored } = store.get<StoredNotificationPrefs>('notifications', {});
+type NotificationPrefsChange = Partial<Omit<NotificationPrefs, 'events'>> & {
+    events?: Partial<NotificationPrefs['events']>;
+};
+
+function mergePrefs(base: NotificationPrefs, stored: StoredNotificationPrefs): NotificationPrefs {
+    const { showDrafts, ...rest } = stored;
     return {
-        ...DEFAULT_NOTIFICATION_PREFS,
+        ...base,
         ...(showDrafts === undefined
             ? {}
             : { notifyDrafts: showDrafts, dashboardShowDrafts: showDrafts }),
-        ...stored,
-        events: { ...DEFAULT_NOTIFICATION_PREFS.events, ...stored.events },
+        ...rest,
+        events: { ...base.events, ...rest.events },
     };
 }
 
-// Merge a partial change (a single toggle) into the stored preferences and
+// The notification and dashboard preferences of one repository (or the shared
+// ones, with no repository). Each repo keeps its own once changed; until then it
+// starts from the shared `notifications` value, which holds what was set before
+// the settings became per repository, so nothing resets.
+export async function getNotificationPrefs(repoPath: string | null): Promise<NotificationPrefs> {
+    const store = await getStore();
+    const shared = mergePrefs(
+        DEFAULT_NOTIFICATION_PREFS,
+        store.get<StoredNotificationPrefs>('notifications', {})
+    );
+    if (!repoPath) {
+        return shared;
+    }
+
+    const perRepo = store.get<Record<string, StoredNotificationPrefs>>('repoNotifications', {});
+    return mergePrefs(shared, perRepo[repoPath] ?? {});
+}
+
+// Merge a partial change (a single toggle) into one repository's preferences and
 // return the result.
 export async function setNotificationPrefs(
-    change: Partial<Omit<NotificationPrefs, 'events'>> & {
-        events?: Partial<NotificationPrefs['events']>;
-    }
+    repoPath: string,
+    change: NotificationPrefsChange
 ): Promise<NotificationPrefs> {
     const store = await getStore();
-    const current = await getNotificationPrefs();
+    const current = await getNotificationPrefs(repoPath);
     const next: NotificationPrefs = {
         ...current,
         ...change,
         events: { ...current.events, ...change.events },
     };
-    store.set('notifications', next);
+    const perRepo = store.get<Record<string, NotificationPrefs>>('repoNotifications', {});
+    perRepo[repoPath] = next;
+    store.set('repoNotifications', perRepo);
     return next;
 }
 

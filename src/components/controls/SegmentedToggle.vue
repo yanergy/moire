@@ -1,4 +1,5 @@
 <script setup lang="ts" generic="T extends string">
+import { computed } from 'vue';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -10,9 +11,13 @@ interface Option {
     tooltip?: string;
 }
 
-defineProps<{
+const props = defineProps<{
     options: Option[];
     modelValue: T;
+    // Outlines the track, for a toggle placed on a surface that shares its
+    // background (such as a Settings panel), where it would otherwise not read
+    // as a control. The inactive options then also light up on hover.
+    bordered?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -21,8 +26,11 @@ const emit = defineEmits<{
 
 // One class string shared by the plain and tooltip-wrapped item variants below,
 // so the two stay visually identical.
-const itemClass =
+const BASE_ITEM_CLASS =
     'h-auto min-w-0 rounded px-2.5 py-1 font-medium text-moire-muted hover:bg-transparent hover:text-moire-fg data-[state=on]:bg-moire-seg-active data-[state=on]:text-moire-fg data-[state=on]:shadow-[var(--moire-seg-shadow)]';
+const itemClass = computed(() =>
+    props.bordered ? `${BASE_ITEM_CLASS} data-[state=off]:hover:bg-moire-hover` : BASE_ITEM_CLASS
+);
 
 // A single-select toggle group emits an empty string when the active item is
 // clicked again. The segmented control must always keep one option active, so
@@ -42,6 +50,7 @@ function onChange(value: unknown) {
         :spacing="1"
         :model-value="modelValue"
         class="gap-0.5 rounded-md bg-moire-chrome p-[3px]"
+        :class="bordered ? 'border border-moire-border' : ''"
         @update:model-value="onChange"
     >
         <template v-for="option in options" :key="option.value">

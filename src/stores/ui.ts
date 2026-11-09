@@ -12,6 +12,8 @@ import type { DashboardCategoryKey } from '@/stores/dashboard';
 
 // One page in the back/forward history: the main view and, for the dashboard,
 // the card whose PR list is open (null for the overview).
+export type SettingsSection = 'branches' | 'notifications' | 'dashboard';
+
 interface Page {
     mainView: MainView;
     dashboardCard: DashboardCategoryKey | null;
@@ -40,6 +42,9 @@ export const useUiStore = defineStore('ui', () => {
     // The dashboard card whose PR list is open, or null for the overview grid.
     // Here rather than in the dashboard view so the history can restore it.
     const dashboardCard = ref<DashboardCategoryKey | null>(null);
+    // The Settings page section to scroll to when the page opens (from the
+    // Dashboard or Notifications page's settings button), or null for the top.
+    const settingsSection = ref<SettingsSection | null>(null);
 
     // Back/forward history of the visible page, as in a browser (the mouse back
     // and forward buttons step through it). Every page change records the page
@@ -123,6 +128,11 @@ export const useUiStore = defineStore('ui', () => {
         navigate({ mainView: 'dashboard', dashboardCard: null });
     }
 
+    function openSettings(section: SettingsSection | null = null) {
+        settingsSection.value = section;
+        navigate({ mainView: 'settings', dashboardCard: null });
+    }
+
     function setDashboardCard(card: DashboardCategoryKey | null) {
         navigate({ ...currentPage(), dashboardCard: card });
     }
@@ -145,12 +155,14 @@ export const useUiStore = defineStore('ui', () => {
         viewMode,
         mainView,
         dashboardCard,
+        settingsSection,
         applyThemeState,
         setCodeStyle,
         setDiffLayout,
         setViewMode,
         setMainView,
         openDashboard,
+        openSettings,
         setDashboardCard,
         goBack,
         goForward,

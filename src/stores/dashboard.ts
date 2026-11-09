@@ -9,6 +9,7 @@ import type {
     DashboardPr,
     DashboardSnapshot,
     DashboardState,
+    MergedPeriod,
     NotificationSettings,
     NotificationSettingsChange,
     PrStatus,
@@ -54,7 +55,7 @@ export const STALE_DAYS = 7;
 
 // The Merged card counts PRs merged since the start of this week (Monday) or
 // this month, in local time.
-export type MergedPeriod = 'week' | 'month';
+export type { MergedPeriod };
 
 export function periodStart(period: MergedPeriod, at: Date): number {
     const start = new Date(at.getFullYear(), at.getMonth(), at.getDate());
@@ -138,11 +139,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const activity = ref<ActivityEntry[]>([]);
     const showDrafts = ref(true);
     const authors = ref<AuthorFilter>('me');
-    // The overview cards turned off in the Dashboard settings menu, by key.
+    // The overview cards turned off on the Settings page, by key.
     const hiddenCards = ref<string[]>([]);
-    // The notification settings shown on the notifications page (owned by main).
+    // The notification settings shown on the Settings page (owned by main).
     const notificationSettings = ref<NotificationSettings | null>(null);
-    // Kept in the renderer only, so it resets to this week on restart.
     const mergedPeriod = ref<MergedPeriod>('week');
     const loading = ref(false);
 
@@ -154,17 +154,20 @@ export const useDashboardStore = defineStore('dashboard', () => {
         showDrafts.value = state.showDrafts;
         authors.value = state.authors ?? 'me';
         hiddenCards.value = state.hiddenCards ?? [];
+        mergedPeriod.value = state.mergedPeriod ?? 'week';
         notificationSettings.value = state.notifications ?? null;
     }
 
-    // Run one dashboard call with the loading flag set. A rejection (no repository
-    // open) is swallowed: the dashboard is simply not shown then.
-    async function run(call: () => Promise<DashboardState>) {
+    // Run one dashboard call with the loading flag set, resolving whether it
+    // went through (the Settings page reports a failed save). A rejection (no
+    // repository open) is otherwise swallowed: the dashboard is simply not shown.
+    async function run(call: () => Promise<DashboardState>): Promise<boolean> {
         loading.value = true;
         try {
             applyState(await call());
+            return true;
         } catch {
-            // No repository is open; nothing to show.
+            return false;
         } finally {
             loading.value = false;
         }
@@ -172,19 +175,25 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     function load() {
         const api = window.api;
-        return api ? run(() => api.getDashboard()) : Promise.resolve();
+        return api ? run(() => api.getDashboard()) : Promise.resolve(false);
+    }
+
+    // The open repository's settings without fetching GitHub, for the Settings page.
+    function loadSettings() {
+        const api = window.api;
+        return api ? run(() => api.getDashboardState()) : Promise.resolve(false);
     }
 
     function refresh() {
         const api = window.api;
-        return api ? run(() => api.refreshDashboard()) : Promise.resolve();
+        return api ? run(() => api.refreshDashboard()) : Promise.resolve(false);
     }
 
     // Flip the toggle right away so the lists update without waiting on main.
     function setShowDrafts(show: boolean) {
         showDrafts.value = show;
         const api = window.api;
-        return api ? run(() => api.setDashboardShowDrafts(show)) : Promise.resolve();
+        return api ? run(() => api.setDashboardShowDrafts(show)) : Promise.resolve(false);
     }
 
     // Apply one notification settings toggle right away, then persist it.
@@ -198,23 +207,29 @@ export const useDashboardStore = defineStore('dashboard', () => {
             };
         }
         const api = window.api;
-        return api ? run(() => api.setNotificationSettings(change)) : Promise.resolve();
+        return api ? run(() => api.setNotificationSettings(change)) : Promise.resolve(false);
     }
 
     // Show or hide one overview card, right away, then persist the hidden list.
+    function setMergedPeriod(period: MergedPeriod) {
+        mergedPeriod.value = period;
+        const api = window.api;
+        return api ? run(() => api.setDashboardMergedPeriod(period)) : Promise.resolve(false);
+    }
+
     function toggleCard(key: DashboardCategoryKey) {
         const hidden = hiddenCards.value.includes(key)
             ? hiddenCards.value.filter((k) => k !== key)
             : [...hiddenCards.value, key];
         hiddenCards.value = hidden;
         const api = window.api;
-        return api ? run(() => api.setDashboardHiddenCards(hidden)) : Promise.resolve();
+        return api ? run(() => api.setDashboardHiddenCards(hidden)) : Promise.resolve(false);
     }
 
     function setAuthors(filter: AuthorFilter) {
         authors.value = filter;
         const api = window.api;
-        return api ? run(() => api.setDashboardAuthors(filter)) : Promise.resolve();
+        return api ? run(() => api.setDashboardAuthors(filter)) : Promise.resolve(false);
     }
 
     const me = computed(() => snapshot.value?.login ?? '');
@@ -511,6 +526,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
         setNotificationSettings,
         cardOptions,
         toggleCard,
+        setMergedPeriod,
+        loadSettings,
         knownAuthors,
         authorsLabel,
         loading,

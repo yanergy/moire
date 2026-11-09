@@ -62,6 +62,19 @@ describe('ui store', () => {
         expect(store.codeStyle).toBe('vscode');
     });
 
+    it('opens the Settings page at a section, as a page in the history', () => {
+        const store = useUiStore();
+        store.openDashboard();
+        store.openSettings('dashboard');
+
+        expect([store.mainView, store.settingsSection]).toEqual(['settings', 'dashboard']);
+        store.goBack();
+        expect(store.mainView).toBe('dashboard');
+
+        store.openSettings();
+        expect(store.settingsSection).toBeNull();
+    });
+
     describe('back/forward history', () => {
         it('steps back and forward through view changes, as in a browser', () => {
             const store = useUiStore();

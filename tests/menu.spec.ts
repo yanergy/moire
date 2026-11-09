@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildMenuTemplate, comparisonPresets, NOTIFICATION_EVENT_OPTIONS } from '../electron/menu';
+import { buildMenuTemplate, comparisonPresets, developmentBranch } from '../electron/menu';
 import type { BranchInfo } from '../src/shared/types';
-import { DEFAULT_NOTIFICATION_PREFS } from '../electron/settings';
 
 // menu.cjs is CommonJS loaded natively under vitest, so `require('electron')`
 // inside it resolves to the binary path (not the API) and Menu is undefined. The
@@ -294,74 +293,39 @@ describe('application menu', () => {
         expect(onSelectAccount).not.toHaveBeenCalled();
     });
 
-    describe('Notifications submenu', () => {
-        function notificationsSubmenu(extra = {}) {
-            return gitSubmenu({ accounts, ...extra })?.find(
-                (item) => item.label === 'Notifications'
-            )?.submenu as Electron.MenuItemConstructorOptions[] | undefined;
-        }
-
-        it('is omitted without notification preferences', () => {
-            expect(notificationsSubmenu()).toBeUndefined();
+    it('offers Settings… bound to Cmd/Ctrl+, in the macOS app menu, wired to onOpenSettings', () => {
+        const onOpenSettings = vi.fn<() => void>();
+        const template = buildMenuTemplate({
+            isMac: true,
+            currentTheme: 'system',
+            onSelectTheme: () => {},
+            onRefresh: () => {},
+            onOpenSettings,
         });
+        const appMenu = template[0]!.submenu as Electron.MenuItemConstructorOptions[];
+        const item = appMenu.find((entry) => entry.label === 'Settings…')!;
 
-        it('shows the master switch, every event kind with its default, and the dock badge', () => {
-            const items = notificationsSubmenu({ notificationPrefs: DEFAULT_NOTIFICATION_PREFS })!;
-            const checkboxes = items.filter((item) => item.type === 'checkbox');
+        expect(item.accelerator).toBe('CmdOrCtrl+,');
+        (item.click as () => void)();
+        expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    });
 
-            expect(checkboxes.map((item) => item.label)).toEqual([
-                'Enable Notifications',
-                ...NOTIFICATION_EVENT_OPTIONS.map((option) => option.label),
-                'Dock Badge',
-            ]);
-            expect(checkboxes.map((item) => item.checked)).toEqual([
-                true,
-                true,
-                true,
-                true,
-                true,
-                true,
-                true,
-                false,
-                false,
-                true,
-                true,
-            ]);
+    it('puts Settings… in the File menu on other platforms', () => {
+        const template = buildMenuTemplate({
+            isMac: false,
+            currentTheme: 'system',
+            onSelectTheme: () => {},
+            onRefresh: () => {},
         });
+        const file = template.find((menu) => menu.label === 'File')!
+            .submenu as Electron.MenuItemConstructorOptions[];
+        expect(file.some((entry) => entry.label === 'Settings…')).toBe(true);
+    });
 
-        it('disables the event and badge items while the master switch is off', () => {
-            const items = notificationsSubmenu({
-                notificationPrefs: { ...DEFAULT_NOTIFICATION_PREFS, enabled: false },
-            })!;
-            const checkboxes = items.filter((item) => item.type === 'checkbox');
-
-            expect(checkboxes[0]!.enabled).toBeUndefined();
-            expect(checkboxes.slice(1).every((item) => item.enabled === false)).toBe(true);
-        });
-
-        it('reports each toggle with its new state', () => {
-            const onToggleNotifications = vi.fn<(enabled: boolean) => void>();
-            const onToggleNotificationEvent = vi.fn<(kind: string, enabled: boolean) => void>();
-            const onToggleDockBadge = vi.fn<(enabled: boolean) => void>();
-            const items = notificationsSubmenu({
-                notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
-                onToggleNotifications,
-                onToggleNotificationEvent,
-                onToggleDockBadge,
-            })!;
-            const click = (label: string, checked: boolean) =>
-                (items.find((item) => item.label === label)!.click as (item: object) => void)({
-                    checked,
-                });
-
-            click('Enable Notifications', false);
-            click('Checks Failed', false);
-            click('Dock Badge', false);
-
-            expect(onToggleNotifications).toHaveBeenCalledWith(false);
-            expect(onToggleNotificationEvent).toHaveBeenCalledWith('checks-failed', false);
-            expect(onToggleDockBadge).toHaveBeenCalledWith(false);
-        });
+    it('has no Notifications submenu in the Git menu', () => {
+        expect(gitSubmenu({ accounts })?.some((item) => item.label === 'Notifications')).toBe(
+            false
+        );
     });
 
     it('enables View → Dashboard only while a repo is open, and reports the click', () => {
@@ -414,6 +378,17 @@ describe('comparisonPresets', () => {
         ]);
     });
 
+    it('compares against the development branch picked on the Settings page', () => {
+        const withStaging = [...branches, { name: 'origin/staging', kind: 'remote' as const }];
+        expect(comparisonPresets(withStaging, { development: 'origin/staging' })[0]!.base).toBe(
+            'origin/staging'
+        );
+    });
+
+    it('disables the development preset when the development branch is None', () => {
+        expect(comparisonPresets(branches, { development: null })[0]!.enabled).toBe(false);
+    });
+
     it('disables a preset whose remote ref does not exist', () => {
         const local = branches.filter((b) => b.kind === 'local');
         expect(comparisonPresets(local).map((p) => p.enabled)).toEqual([false, false]);
@@ -422,5 +397,23 @@ describe('comparisonPresets', () => {
     it('disables both when there is no current branch', () => {
         const presets = comparisonPresets(branches.map(({ name, kind }) => ({ name, kind })));
         expect(presets.map((p) => p.enabled)).toEqual([false, false]);
+    });
+});
+
+describe('developmentBranch', () => {
+    const list: BranchInfo[] = [
+        { name: 'dev', kind: 'local' },
+        { name: 'origin/develop', kind: 'remote' },
+    ];
+
+    it('detects the first conventional name, remotes first', () => {
+        expect(developmentBranch(list)).toBe('origin/develop');
+        expect(developmentBranch([{ name: 'main', kind: 'local' }])).toBeNull();
+    });
+
+    it('uses the configured branch while it exists, and none when set to None', () => {
+        expect(developmentBranch(list, { development: 'dev' })).toBe('dev');
+        expect(developmentBranch(list, { development: 'gone' })).toBe('origin/develop');
+        expect(developmentBranch(list, { development: null })).toBeNull();
     });
 });

@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.invoke('settings:favorite-branches:get', repoPath),
     setFavoriteBranches: (repoPath: string, names: string[]) =>
         ipcRenderer.invoke('settings:favorite-branches:set', repoPath, names),
+    getRepoBranches: (repoPath: string) =>
+        ipcRenderer.invoke('settings:repo-branches:get', repoPath),
+    setRepoBranches: (repoPath: string, settings: unknown) =>
+        ipcRenderer.invoke('settings:repo-branches:set', repoPath, settings),
     getBranches: () => ipcRenderer.invoke('git:branches'),
     getChangedFiles: (base: string, head: string, mode: string) =>
         ipcRenderer.invoke('git:changed-files', base, head, mode),
@@ -114,6 +118,12 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('menu:compare-preset', listener);
         return () => ipcRenderer.removeListener('menu:compare-preset', listener);
     },
+    // Fired when the native Settings… item is chosen. Returns an unsubscribe function.
+    onMenuOpenSettings: (callback: () => void) => {
+        const listener = () => callback();
+        ipcRenderer.on('menu:open-settings', listener);
+        return () => ipcRenderer.removeListener('menu:open-settings', listener);
+    },
     // The GitHub dashboard for the open repository, backed by the notifier in the
     // main process. `onDashboardChanged` fires after every background poll and
     // returns an unsubscribe function.
@@ -124,6 +134,9 @@ contextBridge.exposeInMainWorld('api', {
     setDashboardAuthors: (authors: unknown) => ipcRenderer.invoke('dashboard:set-authors', authors),
     setDashboardHiddenCards: (keys: string[]) =>
         ipcRenderer.invoke('dashboard:set-hidden-cards', keys),
+    setDashboardMergedPeriod: (period: string) =>
+        ipcRenderer.invoke('dashboard:set-merged-period', period),
+    getDashboardState: () => ipcRenderer.invoke('dashboard:state'),
     setNotificationSettings: (change: unknown) =>
         ipcRenderer.invoke('dashboard:set-notification-settings', change),
     // The dashboard's notification list: mark one read or unread, or all read, or

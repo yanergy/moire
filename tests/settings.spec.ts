@@ -150,10 +150,29 @@ describe('settings: theme and window state', () => {
     });
 });
 
+describe('settings: repository branches', () => {
+    it('is empty until set, keeps each repo its own, and is dropped with the recent entry', async () => {
+        const { getRepoBranches, setRepoBranches, addRecentRepo, removeRecentRepo } =
+            await loadSettings();
+        expect(await getRepoBranches('/repos/a')).toEqual({});
+
+        await addRecentRepo('/repos/a');
+        await setRepoBranches('/repos/a', { main: 'origin/trunk', development: null });
+        expect(await getRepoBranches('/repos/a')).toEqual({
+            main: 'origin/trunk',
+            development: null,
+        });
+        expect(await getRepoBranches('/repos/b')).toEqual({});
+
+        await removeRecentRepo('/repos/a');
+        expect(await getRepoBranches('/repos/a')).toEqual({});
+    });
+});
+
 describe('settings: notifications', () => {
     it('defaults to on, with ready to merge and merged by someone else off', async () => {
         const { getNotificationPrefs } = await loadSettings();
-        const prefs = await getNotificationPrefs();
+        const prefs = await getNotificationPrefs('/repos/a');
 
         expect(prefs.enabled).toBe(true);
         expect(prefs.dockBadge).toBe(true);
@@ -161,34 +180,58 @@ describe('settings: notifications', () => {
         expect(prefs.dashboardShowDrafts).toBe(true);
         expect(prefs.dashboardAuthors).toBe('me');
         expect(prefs.dashboardHiddenCards).toEqual([]);
+        expect(prefs.dashboardMergedPeriod).toBe('week');
         expect(prefs.events['checks-failed']).toBe(true);
         expect(prefs.events['ready-to-merge']).toBe(false);
         expect(prefs.events['merged-by-other']).toBe(false);
         expect(prefs.events.commented).toBe(true);
     });
 
-    it('merges a single toggle into the stored preferences', async () => {
+    it('merges a single toggle into the repository preferences', async () => {
         const { getNotificationPrefs, setNotificationPrefs } = await loadSettings();
-        await setNotificationPrefs({ events: { approved: false } });
-        await setNotificationPrefs({ enabled: false });
+        await setNotificationPrefs('/repos/a', { events: { approved: false } });
+        await setNotificationPrefs('/repos/a', { enabled: false });
 
-        const prefs = await getNotificationPrefs();
+        const prefs = await getNotificationPrefs('/repos/a');
         expect(prefs.enabled).toBe(false);
         expect(prefs.events.approved).toBe(false);
         expect(prefs.events['review-requested']).toBe(true);
+    });
+
+    it('keeps each repository its own preferences', async () => {
+        const { getNotificationPrefs, setNotificationPrefs } = await loadSettings();
+        await setNotificationPrefs('/repos/a', { enabled: false, dashboardMergedPeriod: 'month' });
+
+        expect((await getNotificationPrefs('/repos/a')).enabled).toBe(false);
+        expect((await getNotificationPrefs('/repos/a')).dashboardMergedPeriod).toBe('month');
+        expect((await getNotificationPrefs('/repos/b')).enabled).toBe(true);
+        expect((await getNotificationPrefs('/repos/b')).dashboardMergedPeriod).toBe('week');
+    });
+
+    it('starts a repository from the shared preferences stored before they were per repo', async () => {
+        const { getNotificationPrefs, setNotificationPrefs } = await loadSettings({
+            notifications: { dockBadge: false, events: { commented: false } },
+        });
+        await setNotificationPrefs('/repos/a', { enabled: false });
+
+        const a = await getNotificationPrefs('/repos/a');
+        const b = await getNotificationPrefs('/repos/b');
+        expect([a.dockBadge, a.events.commented, a.enabled]).toEqual([false, false, false]);
+        expect([b.dockBadge, b.events.commented, b.enabled]).toEqual([false, false, true]);
+        expect((await getNotificationPrefs(null)).enabled).toBe(true);
     });
 
     it('carries an old shared drafts toggle over to both new ones', async () => {
         const { getNotificationPrefs, setNotificationPrefs } = await loadSettings({
             notifications: { showDrafts: false },
         });
-        const prefs = await getNotificationPrefs();
+        const prefs = await getNotificationPrefs('/repos/a');
         expect(prefs.notifyDrafts).toBe(false);
         expect(prefs.dashboardShowDrafts).toBe(false);
 
         // Changing one no longer moves the other.
-        await setNotificationPrefs({ dashboardShowDrafts: true });
-        const next = await getNotificationPrefs();
+        await setNotificationPrefs('/repos/a', { dashboardShowDrafts: true });
+        const next = await getNotificationPrefs('/repos/a');
         expect(next.dashboardShowDrafts).toBe(true);
         expect(next.notifyDrafts).toBe(false);
     });

@@ -134,6 +134,7 @@ export function notificationSettings(
             'merged-by-other': false,
             commented: true,
         },
+        dockBadge: true,
         ...overrides,
     };
 }
@@ -146,6 +147,7 @@ export function dashboardState(overrides: Partial<DashboardState> = {}): Dashboa
         showDrafts: true,
         authors: 'me',
         hiddenCards: [],
+        mergedPeriod: 'week',
         notifications: notificationSettings(),
         ...overrides,
     };

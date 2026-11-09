@@ -11,9 +11,11 @@ import type {
     PrReviewThread,
     PrStatus,
     PullRequest,
+    RepoBranchSettings,
 } from '@/shared/types';
 import { WORKING_TREE } from '@/shared/types';
 import { repoLabel } from '@/lib/repo-path';
+import { resolveBranchRoles } from '@/lib/branch-recommendations';
 import { useUiStore } from '@/stores/ui';
 
 export interface DirNode {
@@ -186,19 +188,13 @@ function foldChain(
 }
 
 // The default base for a freshly opened repo is the branch the user is on, so
-// the diff opens against their current work. Falls back to main, then master,
-// then the first local branch, and to empty when the repo has no local branches
-// (a bare or unborn HEAD).
-function pickDefaultBase(list: BranchInfo[]): string {
+// the diff opens against their current work. Falls back to the repo's main
+// branch (configured on the Settings page, or detected), then the first local
+// branch, and to empty when the repo has no local branches (a bare or unborn
+// HEAD).
+function pickDefaultBase(list: BranchInfo[], main: string | undefined): string {
     const locals = list.filter((b) => b.kind === 'local');
-    const named = (name: string) => locals.find((b) => b.name === name)?.name;
-    return (
-        locals.find((b) => b.isCurrent)?.name ??
-        named('main') ??
-        named('master') ??
-        locals[0]?.name ??
-        ''
-    );
+    return locals.find((b) => b.isCurrent)?.name ?? main ?? locals[0]?.name ?? '';
 }
 
 export const useComparisonStore = defineStore('comparison', () => {
@@ -221,6 +217,11 @@ export const useComparisonStore = defineStore('comparison', () => {
     // Branches starred in the ref pickers, remembered per repo. Kept in starring
     // order; a name whose branch was deleted stays stored but is not listed.
     const favoriteBranches = ref<string[]>([]);
+
+    // The main and development branch picked on the Settings page, per repo, and
+    // what they resolve to against the live branch list (detected when unset).
+    const branchSettings = ref<RepoBranchSettings>({});
+    const branchRoles = computed(() => resolveBranchRoles(branches.value, branchSettings.value));
 
     const selectedPath = ref('');
     const viewed = ref<Record<string, boolean>>({});
@@ -1219,6 +1220,28 @@ export const useComparisonStore = defineStore('comparison', () => {
         favoriteBranches.value = (await window.api?.getFavoriteBranches?.(repoPath.value)) ?? [];
     }
 
+    async function loadBranchSettings() {
+        branchSettings.value = (await window.api?.getRepoBranches?.(repoPath.value)) ?? {};
+    }
+
+    // Pick the main or development branch on the Settings page. A development
+    // branch of null means the repo has none. Resolves whether it was saved.
+    async function setBranchSettings(change: RepoBranchSettings): Promise<boolean> {
+        branchSettings.value = { ...branchSettings.value, ...change };
+        const api = window.api;
+        if (!repoPath.value || !api) {
+            return false;
+        }
+
+        try {
+            // A copy, since a reactive proxy cannot be cloned across IPC.
+            await api.setRepoBranches(repoPath.value, { ...branchSettings.value });
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     function dismissMissingBranches() {
         disappearedBranches.value = [];
     }
@@ -1347,6 +1370,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         resetViewState();
         recentRepos.value = await api.getRecentRepos();
         await loadFavoriteBranches();
+        await loadBranchSettings();
         await loadBranches();
         return true;
     }
@@ -1365,7 +1389,7 @@ export const useComparisonStore = defineStore('comparison', () => {
     async function restoreSelection() {
         const saved = await window.api?.getBranchSelection?.(repoPath.value);
         if (!saved) {
-            base.value = pickDefaultBase(branches.value);
+            base.value = pickDefaultBase(branches.value, branchRoles.value.main);
             head.value = WORKING_TREE;
             disappearedBranches.value = [];
             return;
@@ -1507,6 +1531,8 @@ export const useComparisonStore = defineStore('comparison', () => {
         compareMode,
         disappearedBranches,
         favoriteBranches,
+        branchSettings,
+        branchRoles,
         selectedPath,
         viewed,
         treeFilter,
@@ -1585,6 +1611,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         dismissMissingBranches,
         isFavorite,
         toggleFavorite,
+        setBranchSettings,
         swap,
         loadRecentRepos,
         removeRecent,

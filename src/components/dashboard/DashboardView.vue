@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowLeft, LoaderCircle, RefreshCw, SlidersHorizontal, TriangleAlert } from '@lucide/vue';
+import {
+    ArrowLeft,
+    ChevronDown,
+    LoaderCircle,
+    RefreshCw,
+    Settings,
+    TriangleAlert,
+    Users,
+} from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
@@ -14,12 +22,7 @@ import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
     DropdownMenuSeparator,
-    DropdownMenuSub,
-    DropdownMenuSubContent,
-    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
@@ -92,8 +95,8 @@ const subtitle = computed(() => {
     return `${dashboard.openCount} ${dashboard.openLabel} in ${snapshot.repo}`;
 });
 
-// Keep the display menu open when a checkbox is toggled, so both can be set in
-// one go (as the file tree's filter menu does).
+// Keep the Users menu open when a checkbox is toggled, so several authors can be
+// picked in one go (as the file tree's filter menu does).
 function keepOpen(event: Event) {
     event.preventDefault();
 }
@@ -102,13 +105,6 @@ function keepOpen(event: Event) {
 const menuSurface = 'min-w-[180px] border-moire-border bg-moire-pop text-moire-fg';
 const menuSurfaceStyle = { boxShadow: 'var(--moire-pop-shadow)' };
 const menuRow = 'text-xs text-moire-file-fg focus:bg-moire-hover focus:text-moire-fg';
-
-// The Cards submenu trigger's summary: "All", or how many of the cards show.
-const cardsLabel = computed(() => {
-    const options = dashboard.cardOptions;
-    const shown = options.filter((card) => card.shown).length;
-    return shown === options.length ? 'All' : `${shown} of ${options.length}`;
-});
 
 const updated = computed(() =>
     dashboard.snapshot
@@ -153,18 +149,20 @@ const updated = computed(() =>
                     <div class="flex-1" />
 
                     <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
-                    <!-- Dashboard settings: drafts, whose PRs the cards count, which cards show,
-                         and the merged period. Notifications have their own, on the notifications page. -->
+                    <!-- Whose PRs the cards count: the signed in account by default,
+                         any mix of authors, or everyone. The other dashboard
+                         settings are on the Settings page. -->
                     <DropdownMenu>
                         <DropdownMenuTrigger as-child>
                             <Button
                                 variant="outline"
                                 size="sm"
                                 class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                aria-label="Dashboard settings"
+                                aria-label="Users"
                             >
-                                <SlidersHorizontal :size="16" />
-                                Dashboard settings
+                                <Users :size="16" />
+                                {{ dashboard.authorsLabel }}
+                                <ChevronDown class="size-3 text-moire-faint" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -174,110 +172,41 @@ const updated = computed(() =>
                             :style="menuSurfaceStyle"
                         >
                             <DropdownMenuCheckboxItem
-                                :model-value="dashboard.showDrafts"
+                                :model-value="dashboard.authors === 'all'"
                                 :class="menuRow"
-                                title="Include draft PRs in the dashboard"
                                 @select="keepOpen"
-                                @update:model-value="dashboard.setShowDrafts($event)"
+                                @update:model-value="dashboard.toggleAllAuthors()"
                             >
-                                Show drafts
+                                All
                             </DropdownMenuCheckboxItem>
-                            <!-- Whose PRs the cards count: the signed in account by
-                                 default, any mix of authors, or everyone. -->
-                            <DropdownMenuSub>
-                                <DropdownMenuSubTrigger :class="menuRow">
-                                    Users
-                                    <span class="flex-1 pl-3 text-right text-moire-faint">
-                                        {{ dashboard.authorsLabel }}
-                                    </span>
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent
-                                    :class="menuSurface"
-                                    :style="menuSurfaceStyle"
+                            <DropdownMenuSeparator class="bg-moire-border" />
+                            <DropdownMenuCheckboxItem
+                                v-for="login in dashboard.knownAuthors"
+                                :key="login"
+                                :model-value="dashboard.isAuthorSelected(login)"
+                                :class="menuRow"
+                                @select="keepOpen"
+                                @update:model-value="dashboard.toggleAuthorSelected(login)"
+                            >
+                                {{ login }}
+                                <span
+                                    v-if="login === dashboard.snapshot?.login"
+                                    class="text-moire-faint"
                                 >
-                                    <DropdownMenuCheckboxItem
-                                        :model-value="dashboard.authors === 'all'"
-                                        :class="menuRow"
-                                        @select="keepOpen"
-                                        @update:model-value="dashboard.toggleAllAuthors()"
-                                    >
-                                        All
-                                    </DropdownMenuCheckboxItem>
-                                    <DropdownMenuSeparator class="bg-moire-border" />
-                                    <DropdownMenuCheckboxItem
-                                        v-for="login in dashboard.knownAuthors"
-                                        :key="login"
-                                        :model-value="dashboard.isAuthorSelected(login)"
-                                        :class="menuRow"
-                                        @select="keepOpen"
-                                        @update:model-value="dashboard.toggleAuthorSelected(login)"
-                                    >
-                                        {{ login }}
-                                        <span
-                                            v-if="login === dashboard.snapshot?.login"
-                                            class="text-moire-faint"
-                                        >
-                                            (you)
-                                        </span>
-                                    </DropdownMenuCheckboxItem>
-                                </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                            <!-- Which overview cards show. -->
-                            <DropdownMenuSub>
-                                <DropdownMenuSubTrigger :class="menuRow">
-                                    Cards
-                                    <span class="flex-1 pl-3 text-right text-moire-faint">
-                                        {{ cardsLabel }}
-                                    </span>
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent
-                                    :class="menuSurface"
-                                    :style="menuSurfaceStyle"
-                                >
-                                    <DropdownMenuCheckboxItem
-                                        v-for="card in dashboard.cardOptions"
-                                        :key="card.key"
-                                        :model-value="card.shown"
-                                        :class="menuRow"
-                                        @select="keepOpen"
-                                        @update:model-value="dashboard.toggleCard(card.key)"
-                                    >
-                                        {{ card.label }}
-                                    </DropdownMenuCheckboxItem>
-                                </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                            <!-- The period the Merged card counts. -->
-                            <DropdownMenuSub>
-                                <DropdownMenuSubTrigger :class="menuRow">
-                                    Merged
-                                    <span class="flex-1 pl-3 text-right text-moire-faint">
-                                        {{ dashboard.mergedPeriod === 'week' ? 'Week' : 'Month' }}
-                                    </span>
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent
-                                    :class="menuSurface"
-                                    :style="menuSurfaceStyle"
-                                >
-                                    <DropdownMenuRadioGroup v-model="dashboard.mergedPeriod">
-                                        <DropdownMenuRadioItem
-                                            value="week"
-                                            :class="menuRow"
-                                            @select="keepOpen"
-                                        >
-                                            This week
-                                        </DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem
-                                            value="month"
-                                            :class="menuRow"
-                                            @select="keepOpen"
-                                        >
-                                            This month
-                                        </DropdownMenuRadioItem>
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuSubContent>
-                            </DropdownMenuSub>
+                                    (you)
+                                </span>
+                            </DropdownMenuCheckboxItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                        @click="ui.openSettings('dashboard')"
+                    >
+                        <Settings :size="16" />
+                        Dashboard settings
+                    </Button>
                     <Tooltip>
                         <TooltipTrigger as-child>
                             <Button
@@ -337,7 +266,7 @@ const updated = computed(() =>
                         v-if="!dashboard.categories.length"
                         class="py-10 text-[13px] text-moire-muted"
                     >
-                        Every card is hidden. Turn them back on under Dashboard settings, Cards.
+                        Every card is hidden. Turn them back on under Dashboard settings.
                     </p>
                     <div
                         v-else

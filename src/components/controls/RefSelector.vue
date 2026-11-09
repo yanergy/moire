@@ -134,7 +134,7 @@ const groups = computed<RefGroup[]>(() => {
     // below so none appears twice.
     const recommended =
         props.side === 'base'
-            ? recommendedBase(comparison.branches)
+            ? recommendedBase(comparison.branches, comparison.branchRoles)
             : recommendedHead(comparison.branches);
     if (recommended.length > 0) {
         result.push({
