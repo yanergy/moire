@@ -53,6 +53,18 @@ function selectedPages(wrapper: VueWrapper) {
     return wrapper.findAll('[aria-current="page"]').map((b) => b.text());
 }
 
+// The PR tab, found by its slot (it keeps its place in every state).
+function prTab(wrapper: VueWrapper) {
+    return wrapper.get('[data-slot="pr-tab"]');
+}
+
+// Opens a repository, so the PR tab shows.
+function openRepo() {
+    const comparison = useComparisonStore();
+    comparison.repoPath = '/repos/moire';
+    return comparison;
+}
+
 describe('ToolbarHeader', () => {
     let pinia: Pinia;
 
@@ -77,15 +89,6 @@ describe('ToolbarHeader', () => {
     });
 
     describe('PR tab', () => {
-        // The PR tab, found by its slot (it keeps its place in every state).
-        const prTab = (wrapper: VueWrapper) => wrapper.get('[data-slot="pr-tab"]');
-
-        function openRepo() {
-            const comparison = useComparisonStore();
-            comparison.repoPath = '/repos/moire';
-            return comparison;
-        }
-
         it('is absent without an open repo', () => {
             const wrapper = mountToolbar();
             expect(wrapper.find('[data-slot="pr-tab"]').exists()).toBe(false);
