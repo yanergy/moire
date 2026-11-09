@@ -112,11 +112,12 @@ the popup never appears.
    adjacent file at each end. Click the filename in the diff header to open the file in an editor
    (choose which under **View > Open Files In**). Renames, binary files, and images get their own
    previews, and very large files sit behind a click so they never lock up the window.
-6. **Review the pull request.** When a pull request exists for the selected branches, a PR view
-   becomes available with its description, status, labels, conversation, and CI checks. Inline
-   review comments and check annotations show on their lines in the diff. An optional edit mode lets
-   you reply to and resolve threads, post and edit your own comments, edit the description, and tick
-   task-list boxes.
+6. **Review the pull request.** When a pull request exists for the selected branches, a PR button
+   appears next to them and opens a PR view with its description, status, labels, conversation,
+   and CI checks. Inline review comments and check annotations show on their lines in the diff. An
+   optional edit mode lets you reply to and resolve threads, post and edit your own comments, edit
+   the description, and tick task-list boxes. The **Diff** button in the middle of the toolbar
+   takes you back to the diff.
 7. **Keep track of pull requests.** The dashboard button in the toolbar (or **View > Dashboard**,
    `Cmd/Ctrl+Shift+D`) shows an overview of the open repository's pull requests as cards: needs
    your review, changes requested, ready to merge, failing checks, merge conflicts, your open PRs,
@@ -228,6 +229,9 @@ last branch range are remembered per repository.
 - A Settings page (the toolbar's **Settings** button, or **Moiré > Settings…**, `Cmd/Ctrl+,`) with
   every setting kept per repository: the main and development branch, the notifications and the
   dashboard.
+- Page buttons in the middle of the toolbar (**Diff**, **Dashboard**, **Notifications** and
+  **Settings**, plus the PR button next to the branches) that go to a page and show which one you
+  are on.
 - Back and forward history between the diff, the PR view, the dashboard and its cards, the
   notifications page and the Settings page, stepped through with the mouse's back and forward
   buttons.

@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import {
     ArrowRightLeft,
+    FileDiff,
     GitPullRequest,
     GitPullRequestDraft,
     LayoutDashboard,
@@ -16,8 +17,8 @@ import RefSelector from '@/components/controls/RefSelector.vue';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
 import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 import NotificationsButton from '@/components/headers/NotificationsButton.vue';
+import ToolbarNavButton from '@/components/headers/ToolbarNavButton.vue';
 import { Button } from '@/components/ui/button';
-import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
@@ -43,31 +44,26 @@ const viewOptions: { value: ViewMode; label: string }[] = [
     { value: 'unified', label: 'unified' },
 ];
 
-// The PR toggle sits by the branches and only appears once a PR is detected for
-// the range. Its pressed state maps straight to which pane fills the main area.
-function setPrView(on: boolean) {
-    ui.setMainView(on ? 'pr' : 'diff');
-}
-
-// The dashboard toggle and the notifications bell show while a repository is open.
-function setDashboardView(on: boolean) {
-    if (on) {
-        ui.openDashboard();
-        return;
+// The page the main area shows, whose toolbar button is the selected one. It
+// follows MoirePage: the PR page needs a detected PR and the dashboard and
+// notifications pages an open repository, and the diff stands in otherwise, so
+// exactly one button is selected.
+const currentPage = computed(() => {
+    const view = ui.mainView;
+    if (view === 'pr' && !comparison.hasPullRequest) {
+        return 'diff';
     }
-
-    ui.setMainView('diff');
-}
-
-// The Settings toggle shows always: without a repository the page says it needs one.
-function setSettingsView(on: boolean) {
-    if (on) {
-        ui.openSettings();
-        return;
+    if ((view === 'dashboard' || view === 'notifications') && !comparison.repoPath) {
+        return 'diff';
     }
+    return view;
+});
 
-    ui.setMainView('diff');
-}
+// The page buttons all navigate through the ui store, so back and forward keep
+// working. The Diff and Settings buttons show always (without a repository the
+// diff area offers to open one, and Settings says it needs one); the PR button
+// once a PR is detected, the Dashboard and Notifications buttons while a
+// repository is open.
 
 // A status dot before the PR button label: vibrant green open, red closed,
 // purple merged, gray draft, and yellow when a PR has changes requested. Changes
@@ -97,9 +93,8 @@ const statusDotClass = computed(() => {
 
 <template>
     <TooltipProvider :delay-duration="300">
-        <!-- Three columns: the repository and range on the left, the dashboard
-             and notifications buttons in the middle and the diff options on the
-             right. The equal
+        <!-- Three columns: the repository and range on the left, the page
+             buttons in the middle and the diff options on the right. The equal
              side columns keep the middle centered on the header; a side that
              does not fit pushes it over rather than overlapping it. -->
         <div
@@ -143,24 +138,22 @@ const statusDotClass = computed(() => {
                     <TooltipContent>Checking for a pull request…</TooltipContent>
                 </Tooltip>
 
-                <Toggle
+                <toolbar-nav-button
                     v-else-if="comparison.hasPullRequest"
-                    variant="outline"
-                    size="sm"
-                    :model-value="ui.mainView === 'pr'"
+                    :selected="currentPage === 'pr'"
                     :class="[
-                        'h-7 gap-1.5 px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg',
+                        'h-7 gap-1.5 px-2.5',
                         // A draft PR reads as provisional: a dashed border, as
                         // GitHub renders draft state.
                         { 'border-dashed': comparison.pullRequest?.isDraft },
                     ]"
-                    @update:model-value="setPrView"
+                    @navigate="ui.setMainView('pr')"
                 >
                     <span class="size-2.5 shrink-0 rounded-full" :class="statusDotClass" />
                     <GitPullRequestDraft v-if="comparison.pullRequest?.isDraft" :size="16" />
                     <GitPullRequest v-else :size="16" />
                     PR #{{ comparison.pullRequest?.number }}
-                </Toggle>
+                </toolbar-nav-button>
 
                 <!-- Shown in the PR button's place when the gh lookup failed (gh
                  missing, signed out, or an access error), so a missing PR panel is
@@ -180,31 +173,40 @@ const statusDotClass = computed(() => {
                 </Tooltip>
             </div>
 
-            <!-- The repository wide pages, side by side. -->
-            <div class="flex justify-center gap-2">
-                <Toggle
+            <!-- The page navigation, side by side: the diff, then the repository
+                 wide pages. -->
+            <nav aria-label="Pages" class="flex items-stretch justify-center gap-4 self-stretch">
+                <toolbar-nav-button
+                    :selected="currentPage === 'diff'"
+                    look="tab"
+                    @navigate="ui.setMainView('diff')"
+                >
+                    <FileDiff :size="18" />
+                    Diff
+                </toolbar-nav-button>
+                <toolbar-nav-button
                     v-if="comparison.repoPath"
-                    variant="outline"
-                    size="sm"
-                    :model-value="ui.mainView === 'dashboard'"
-                    class="h-8 gap-2 px-3.5 text-[13px] font-medium text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                    @update:model-value="setDashboardView"
+                    :selected="currentPage === 'dashboard'"
+                    look="tab"
+                    @navigate="ui.openDashboard()"
                 >
                     <LayoutDashboard :size="18" />
                     Dashboard
-                </Toggle>
-                <notifications-button v-if="comparison.repoPath" />
-                <Toggle
-                    variant="outline"
-                    size="sm"
-                    :model-value="ui.mainView === 'settings'"
-                    class="h-8 gap-2 px-3.5 text-[13px] font-medium text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                    @update:model-value="setSettingsView"
+                </toolbar-nav-button>
+                <notifications-button
+                    v-if="comparison.repoPath"
+                    :selected="currentPage === 'notifications'"
+                    look="tab"
+                />
+                <toolbar-nav-button
+                    :selected="currentPage === 'settings'"
+                    look="tab"
+                    @navigate="ui.openSettings()"
                 >
                     <Settings :size="18" />
                     Settings
-                </Toggle>
-            </div>
+                </toolbar-nav-button>
+            </nav>
 
             <div class="flex items-center justify-end gap-2">
                 <segmented-toggle
