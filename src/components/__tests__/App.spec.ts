@@ -32,6 +32,7 @@ function stubApi() {
         openRepo: vi.fn<Unsub>(),
         openRecent: vi.fn<Unsub>(),
         comparePreset: vi.fn<Unsub>(),
+        openSettings: vi.fn<Unsub>(),
         repoChanged: vi.fn<Unsub>(),
         flourishes: vi.fn<Unsub>(),
         codeStyle: vi.fn<Unsub>(),
@@ -52,6 +53,7 @@ function stubApi() {
         onMenuComparePreset: vi.fn<(cb: (base: string, head: string) => void) => Unsub>(
             () => unsub.comparePreset
         ),
+        onMenuOpenSettings: vi.fn<(cb: () => void) => Unsub>(() => unsub.openSettings),
         onRepoChanged: vi.fn<(cb: () => void) => Unsub>(() => unsub.repoChanged),
         getFlourishes: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
         onFlourishesChanged: vi.fn<(cb: (enabled: boolean) => void) => Unsub>(
@@ -162,6 +164,18 @@ describe('App', () => {
         expect(ui.mainView).toBe('diff');
     });
 
+    it('opens the Settings page from the Settings… menu item', async () => {
+        const { api } = stubApi();
+        const comparison = useComparisonStore();
+        vi.spyOn(comparison, 'restoreLastRepo').mockResolvedValue(undefined);
+
+        mountApp();
+        await flushPromises();
+        api.onMenuOpenSettings.mock.calls[0]![0]();
+
+        expect(useUiStore().mainView).toBe('settings');
+    });
+
     it('unsubscribes every bridge listener on unmount', async () => {
         const { unsub } = stubApi();
         const comparison = useComparisonStore();
@@ -176,6 +190,7 @@ describe('App', () => {
         expect(unsub.openRepo).toHaveBeenCalledTimes(1);
         expect(unsub.openRecent).toHaveBeenCalledTimes(1);
         expect(unsub.comparePreset).toHaveBeenCalledTimes(1);
+        expect(unsub.openSettings).toHaveBeenCalledTimes(1);
         expect(unsub.repoChanged).toHaveBeenCalledTimes(1);
         expect(unsub.flourishes).toHaveBeenCalledTimes(1);
         expect(unsub.codeStyle).toHaveBeenCalledTimes(1);
@@ -249,6 +264,7 @@ describe('App', () => {
             showDrafts: false,
             authors: 'me',
             hiddenCards: [],
+            mergedPeriod: 'week',
             notifications: notificationSettings(),
         };
         api.onDashboardChanged.mock.calls[0]![0](state);

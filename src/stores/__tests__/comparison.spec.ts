@@ -825,6 +825,43 @@ describe('comparison store', () => {
             expect(api.setFavoriteBranches).toHaveBeenLastCalledWith('/repos/moire', ['main']);
         });
 
+        it('loads the branch settings of the opened repo and persists a change', async () => {
+            const setRepoBranches = vi
+                .fn<(path: string, settings: unknown) => Promise<void>>()
+                .mockResolvedValue(undefined);
+            stubApi({
+                getRepoBranches: vi
+                    .fn<(path: string) => Promise<unknown>>()
+                    .mockResolvedValue({ development: 'develop' }),
+                setRepoBranches,
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+            expect(store.branchRoles).toEqual({ main: 'origin/main', development: 'develop' });
+
+            store.setBranchSettings({ development: null });
+            expect(store.branchRoles).toEqual({ main: 'origin/main' });
+            expect(setRepoBranches).toHaveBeenLastCalledWith('/repos/moire', {
+                development: null,
+            });
+        });
+
+        it('defaults the base to the configured main branch when no branch is checked out', async () => {
+            stubApi({
+                getBranches: vi.fn<() => Promise<BranchInfo[]>>().mockResolvedValue([
+                    { name: 'main', kind: 'local' },
+                    { name: 'trunk', kind: 'local' },
+                ]),
+                getRepoBranches: vi
+                    .fn<(path: string) => Promise<unknown>>()
+                    .mockResolvedValue({ main: 'trunk' }),
+            });
+            const store = useComparisonStore();
+            await store.openRecent('/repos/moire');
+
+            expect(store.base).toBe('trunk');
+        });
+
         it('does not carry favorites over to another repo', async () => {
             const api = stubApi({
                 getFavoriteBranches: vi

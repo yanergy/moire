@@ -37,6 +37,7 @@ import {
     setNotificationPrefs,
     getNotifierState,
     setNotifierState,
+    getRepoBranches,
 } from './settings';
 import { detectEditors } from './editors';
 import { UpdateWatcher, checkForUpdate, showUpdatePrompt } from './updates';
@@ -109,7 +110,8 @@ const updateWatcher = new UpdateWatcher({
 const notifier = new Notifier({
     getRepoIdentity: (repoPath) => getRepoIdentity(repoPath),
     fetchSnapshot: (repoPath, repo, now) => fetchSnapshot(repoPath, repo, now),
-    getPrefs: getNotificationPrefs,
+    // The open repository's preferences, since each repo keeps its own.
+    getPrefs: () => getNotificationPrefs(getCurrentRepoPath()),
     loadState: getNotifierState,
     saveState: setNotifierState,
     notify: showNotification,
@@ -124,28 +126,52 @@ const notifier = new Notifier({
     logError,
 });
 
+// The open repository's notification and dashboard preferences, and a change
+// to them. The IPC handlers only reach these with a repository open.
+function repoPrefs() {
+    return getNotificationPrefs(getCurrentRepoPath());
+}
+
+function setRepoPrefs(change: Parameters<typeof setNotificationPrefs>[1]) {
+    const repoPath = getCurrentRepoPath();
+    if (!repoPath) {
+        throw new Error('No repository is open.');
+    }
+
+    return setNotificationPrefs(repoPath, change);
+}
+
 async function dashboardState(): Promise<DashboardState> {
-    const prefs = await getNotificationPrefs();
+    const prefs = await repoPrefs();
     return {
         ...notifier.getView(),
         showDrafts: prefs.dashboardShowDrafts,
         authors: prefs.dashboardAuthors,
         hiddenCards: prefs.dashboardHiddenCards,
+        mergedPeriod: prefs.dashboardMergedPeriod,
         notifications: {
             enabled: prefs.enabled,
             notifyDrafts: prefs.notifyDrafts,
             events: prefs.events,
+            dockBadge: prefs.dockBadge,
         },
     };
 }
 
-// Push the dashboard state to every window: after a poll, and after a change made
-// outside the renderer (the Git > Notifications menu) that its settings show.
+// Push the dashboard state to every window after a poll.
 async function broadcastDashboard(): Promise<void> {
     const state = await dashboardState();
     for (const win of BrowserWindow.getAllWindows()) {
         win.webContents.send('dashboard:changed', state);
     }
+}
+
+// The Git menu's comparison presets for the open repository, using the
+// development branch picked on its Settings page.
+async function currentComparisonPresets() {
+    const repoPath = getCurrentRepoPath();
+    const settings = repoPath ? await getRepoBranches(repoPath) : {};
+    return comparisonPresets(await getCurrentBranches(), settings);
 }
 
 async function createWindow(): Promise<BrowserWindow> {
@@ -271,31 +297,11 @@ app.whenReady().then(async () => {
             },
             // Recomputed on every rebuild (repo open, ref change), so the presets
             // follow the current branch and a missing ref disables its preset.
-            comparisonPresets: comparisonPresets(await getCurrentBranches()),
+            comparisonPresets: await currentComparisonPresets(),
             onSelectPreset: (base, head) => sendToFocused('menu:compare-preset', base, head),
             accounts,
-            notificationPrefs: await getNotificationPrefs(),
-            // The master switch starts or stops background polling (and clears
-            // the badge); the menu is rebuilt so the per event items enable or
-            // disable with it.
-            onToggleNotifications: (enabled) => {
-                void (async () => {
-                    await setNotificationPrefs({ enabled });
-                    await buildMenu();
-                    await notifier.restart();
-                })();
-            },
-            onToggleNotificationEvent: (kind, enabled) => {
-                void (async () => {
-                    await setNotificationPrefs({ events: { [kind]: enabled } });
-                    await broadcastDashboard();
-                })();
-            },
-            onToggleDockBadge: (enabled) => {
-                void (async () => {
-                    await setNotificationPrefs({ dockBadge: enabled });
-                    await notifier.restart();
-                })();
+            onOpenSettings: () => {
+                void revealWindow().then((win) => win.webContents.send('menu:open-settings'));
             },
             // Switch gh's active account, then rebuild the menu (to move the
             // checkmark) and refresh the renderer so the PR view reflects the
@@ -324,6 +330,7 @@ app.whenReady().then(async () => {
         onRecentsChanged: () => void buildMenu(),
         onRepoOpened: (repoPath) => void notifier.setRepo(repoPath),
         onRefsChanged: () => void buildMenu(),
+        onRepoBranchesChanged: () => void buildMenu(),
         dashboard: {
             get: async () => {
                 if (!notifier.getView().snapshot) {
@@ -337,25 +344,31 @@ app.whenReady().then(async () => {
             },
             // Dashboard only: whether draft PRs send notifications is its own setting.
             setShowDrafts: async (show) => {
-                await setNotificationPrefs({ dashboardShowDrafts: show });
+                await setRepoPrefs({ dashboardShowDrafts: show });
                 return dashboardState();
             },
             // Dashboard only: nothing in the notifier depends on it.
             setAuthors: async (authors) => {
-                await setNotificationPrefs({ dashboardAuthors: authors });
+                await setRepoPrefs({ dashboardAuthors: authors });
                 return dashboardState();
             },
             setHiddenCards: async (keys) => {
-                await setNotificationPrefs({ dashboardHiddenCards: keys });
+                await setRepoPrefs({ dashboardHiddenCards: keys });
                 return dashboardState();
             },
-            // The notifications menu's settings. The Git > Notifications menu is
-            // rebuilt to match; the master switch also starts or stops polling.
+            setMergedPeriod: async (period) => {
+                await setRepoPrefs({ dashboardMergedPeriod: period });
+                return dashboardState();
+            },
+            state: dashboardState,
+            // The notification settings from the Settings page. The master switch
+            // starts or stops polling, and the dock badge follows its toggle.
             setNotificationSettings: async (change) => {
-                const before = await getNotificationPrefs();
-                await setNotificationPrefs(change);
-                await buildMenu();
-                if (change.enabled !== undefined && change.enabled !== before.enabled) {
+                const before = await repoPrefs();
+                await setRepoPrefs(change);
+                const toggled = (key: 'enabled' | 'dockBadge') =>
+                    change[key] !== undefined && change[key] !== before[key];
+                if (toggled('enabled') || toggled('dockBadge')) {
                     await notifier.restart();
                 }
                 return dashboardState();

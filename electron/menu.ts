@@ -5,11 +5,10 @@
 // pushes the resolved theme to the renderer over the preload bridge.
 
 import { Menu, type MenuItemConstructorOptions } from 'electron';
-import type { CodeStyle, DiffLayout, NotificationPrefs, ThemePreference } from './settings';
+import type { CodeStyle, DiffLayout, ThemePreference } from './settings';
 import type { GhAccount } from './github/gh';
-import type { DashboardEventKind } from './github/notifications';
 import { WORKING_TREE } from './git/GitService';
-import type { BranchInfo } from '../src/shared/types';
+import type { BranchInfo, RepoBranchSettings } from '../src/shared/types';
 
 interface ThemeOption {
     label: string;
@@ -42,23 +41,6 @@ export const DIFF_LAYOUT_OPTIONS: DiffLayoutOption[] = [
     { label: 'All Files', layout: 'stacked' },
 ];
 
-interface NotificationEventOption {
-    label: string;
-    kind: DashboardEventKind;
-}
-
-export const NOTIFICATION_EVENT_OPTIONS: NotificationEventOption[] = [
-    { label: 'Review Requested', kind: 'review-requested' },
-    { label: 'Changes Requested', kind: 'changes-requested' },
-    { label: 'Closed Without Merge', kind: 'closed-unmerged' },
-    { label: 'Checks Failed', kind: 'checks-failed' },
-    { label: 'Approved', kind: 'approved' },
-    { label: 'Merge Conflict', kind: 'merge-conflict' },
-    { label: 'Ready to Merge', kind: 'ready-to-merge' },
-    { label: 'Merged by Someone Else', kind: 'merged-by-other' },
-    { label: 'New Comments', kind: 'commented' },
-];
-
 // One Git → Comparison Presets item: the base and head it selects, and whether
 // both refs exist, so a preset that would compare against nothing is disabled.
 export interface ComparisonPreset {
@@ -68,22 +50,55 @@ export interface ComparisonPreset {
     enabled: boolean;
 }
 
-const PRESET_BASE_BRANCH = 'origin/development';
+// Restated from DEVELOPMENT_BRANCH_CANDIDATES in src/lib/branch-recommendations.ts
+// (the process split forbids importing it); keep the two in sync.
+const DEVELOPMENT_BRANCH_CANDIDATES = [
+    'origin/development',
+    'origin/develop',
+    'origin/dev',
+    'development',
+    'develop',
+    'dev',
+];
+
+// The repo's development branch: the one picked on the Settings page while it
+// exists, otherwise the first conventional name present. Null when the Settings
+// page set it to None or nothing matches.
+export function developmentBranch(
+    branches: BranchInfo[],
+    settings: RepoBranchSettings = {}
+): string | null {
+    if (settings.development === null) {
+        return null;
+    }
+
+    const exists = (name: string) => branches.some((b) => b.name === name);
+    if (settings.development && exists(settings.development)) {
+        return settings.development;
+    }
+
+    return DEVELOPMENT_BRANCH_CANDIDATES.find(exists) ?? null;
+}
 
 // The hardcoded comparison presets for the open repository's branches. With no
-// current branch (detached HEAD, or no repository) both are disabled.
-export function comparisonPresets(branches: BranchInfo[]): ComparisonPreset[] {
+// current branch (detached HEAD, or no repository) both are disabled, and the
+// development one also when the repo has no development branch.
+export function comparisonPresets(
+    branches: BranchInfo[],
+    settings: RepoBranchSettings = {}
+): ComparisonPreset[] {
     const current = branches.find((b) => b.kind === 'local' && b.isCurrent)?.name;
     const hasRemote = (name: string) =>
         branches.some((b) => b.kind === 'remote' && b.name === name);
+    const development = developmentBranch(branches, settings);
     const upstream = current ? `origin/${current}` : '';
 
     return [
         {
             label: 'Compare Current Branch to Development',
-            base: PRESET_BASE_BRANCH,
+            base: development ?? '',
             head: current ?? '',
-            enabled: !!current && hasRemote(PRESET_BASE_BRANCH),
+            enabled: !!current && !!development,
         },
         {
             label: 'Compare Working Tree to Origin',
@@ -136,13 +151,8 @@ export interface MenuOptions {
     // non-active one switches through onSelectAccount.
     accounts?: GhAccount[];
     onSelectAccount?: (login: string, host: string) => void;
-    // The Git → Notifications submenu: the master switch, one checkbox per event
-    // kind and the dock badge. The per event and badge items are disabled while
-    // the master switch is off. Omitted prefs hide the submenu.
-    notificationPrefs?: NotificationPrefs;
-    onToggleNotifications?: (enabled: boolean) => void;
-    onToggleNotificationEvent?: (kind: DashboardEventKind, enabled: boolean) => void;
-    onToggleDockBadge?: (enabled: boolean) => void;
+    // Settings… (Cmd/Ctrl+,): in the app menu on macOS, the File menu elsewhere.
+    onOpenSettings?: () => void;
 }
 
 // The trailing path segment, for a readable "Open Recent" label (the full path
@@ -183,10 +193,7 @@ export function buildMenuTemplate({
     onSelectPreset,
     accounts = [],
     onSelectAccount,
-    notificationPrefs,
-    onToggleNotifications,
-    onToggleNotificationEvent,
-    onToggleDockBadge,
+    onOpenSettings,
 }: MenuOptions): MenuItemConstructorOptions[] {
     const recentItems: MenuItemConstructorOptions[] = recentRepos.length
         ? recentRepos.map((repoPath): MenuItemConstructorOptions => ({
@@ -199,47 +206,37 @@ export function buildMenuTemplate({
           }))
         : [{ label: 'No recent repositories', enabled: false }];
 
-    const appMenu: MenuItemConstructorOptions[] = isMac ? [{ role: 'appMenu' }] : [];
+    const settingsItem: MenuItemConstructorOptions = {
+        label: 'Settings…',
+        accelerator: 'CmdOrCtrl+,',
+        click: () => onOpenSettings?.(),
+    };
 
-    // GitHub notifications for the open repository. Lives in the Git menu, since
-    // it needs a connected gh just like the account switcher.
-    const notificationItems: MenuItemConstructorOptions[] = notificationPrefs
+    // The standard macOS app menu, spelled out so it can carry Settings… where
+    // macOS users look for it.
+    const appMenu: MenuItemConstructorOptions[] = isMac
         ? [
-              { type: 'separator' },
               {
-                  label: 'Notifications',
+                  role: 'appMenu',
                   submenu: [
-                      {
-                          label: 'Enable Notifications',
-                          type: 'checkbox',
-                          checked: notificationPrefs.enabled,
-                          click: (item) => onToggleNotifications?.(item.checked),
-                      },
+                      { role: 'about' },
                       { type: 'separator' },
-                      ...NOTIFICATION_EVENT_OPTIONS.map(
-                          ({ label, kind }): MenuItemConstructorOptions => ({
-                              label,
-                              type: 'checkbox',
-                              checked: notificationPrefs.events[kind],
-                              enabled: notificationPrefs.enabled,
-                              click: (item) => onToggleNotificationEvent?.(kind, item.checked),
-                          })
-                      ),
+                      settingsItem,
                       { type: 'separator' },
-                      {
-                          label: 'Dock Badge',
-                          type: 'checkbox',
-                          checked: notificationPrefs.dockBadge,
-                          enabled: notificationPrefs.enabled,
-                          click: (item) => onToggleDockBadge?.(item.checked),
-                      },
+                      { role: 'services' },
+                      { type: 'separator' },
+                      { role: 'hide' },
+                      { role: 'hideOthers' },
+                      { role: 'unhide' },
+                      { type: 'separator' },
+                      { role: 'quit' },
                   ],
               },
           ]
         : [];
 
-    // The gh account switcher and the notifications, only when gh is connected
-    // with at least one account. Each account is a radio item; the active one is
+    // The gh account switcher, only when gh is connected with at least one
+    // account. Each account is a radio item; the active one is
     // checked, and choosing another switches gh's active account.
     const accountItems: MenuItemConstructorOptions[] = accounts.length
         ? [
@@ -255,7 +252,6 @@ export function buildMenuTemplate({
                       }
                   },
               })),
-              ...notificationItems,
           ]
         : [];
 
@@ -285,6 +281,7 @@ export function buildMenuTemplate({
                     click: () => onOpenRepo?.(),
                 },
                 { label: 'Open Recent', submenu: recentItems },
+                ...(isMac ? [] : [{ type: 'separator' } as const, settingsItem]),
                 { type: 'separator' },
                 isMac ? { role: 'close' } : { role: 'quit' },
             ],

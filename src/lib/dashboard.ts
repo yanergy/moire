@@ -171,8 +171,7 @@ function dayLabel(day: Date, today: Date): string {
 }
 
 // The notification types, in the order the notification settings list them, with
-// the dot of their notification rows. Restates NOTIFICATION_EVENT_OPTIONS in
-// electron/menu.ts (the Git > Notifications menu); keep the two in step.
+// the dot of their notification rows.
 const NOTIFICATION_TYPE_LABELS: [DashboardEventKind, string][] = [
     ['review-requested', 'Review requested'],
     ['changes-requested', 'Changes requested'],

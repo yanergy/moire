@@ -9,9 +9,10 @@ export type FileStatus = 'A' | 'M' | 'D' | 'R';
 // the two in sync.
 export type CompareMode = 'merge-base' | 'direct';
 export type ViewMode = 'split' | 'unified';
-// Which pane fills the main area: the diff, or the pull-request view (reachable
-// only when a PR is detected for the compared branches). Renderer-only state.
-export type MainView = 'diff' | 'pr' | 'dashboard' | 'notifications';
+// Which pane fills the main area: the diff, the pull-request view (reachable
+// only when a PR is detected for the compared branches), the dashboard, the
+// notifications, or the Settings page. Renderer-only state.
+export type MainView = 'diff' | 'pr' | 'dashboard' | 'notifications' | 'settings';
 // The concrete theme the UI resolves to. `ThemePreference` is what the user
 // picks; `system` follows the OS and resolves to one of these.
 export type ThemeName = 'dark' | 'light';
@@ -63,6 +64,14 @@ export interface FilePair {
     image?: boolean;
     oldImage?: string | null;
     newImage?: string | null;
+}
+
+// A repo's main and development branch as picked on the Settings page. An absent
+// key means "detect it" (see src/lib/branch-recommendations.ts); a null
+// development branch means the repo has none.
+export interface RepoBranchSettings {
+    main?: string;
+    development?: string | null;
 }
 
 export interface BranchInfo {
@@ -335,6 +344,10 @@ export interface ActivityEntry {
 // names specific logins. Mirrors AuthorFilter in electron/settings.ts.
 export type AuthorFilter = 'me' | 'all' | string[];
 
+// The period the dashboard's Merged card counts. Mirrors MergedPeriod in
+// electron/notifier.ts.
+export type MergedPeriod = 'week' | 'month';
+
 // The notification settings the notifications page shows and changes: the master
 // switch, whether draft PRs notify, and one toggle per event kind. Mirrors
 // NotificationSettings in electron/notifier.ts.
@@ -342,6 +355,7 @@ export interface NotificationSettings {
     enabled: boolean;
     notifyDrafts: boolean;
     events: Record<DashboardEventKind, boolean>;
+    dockBadge: boolean;
 }
 
 // A partial change to them, as one toggle sends it.
@@ -349,6 +363,7 @@ export interface NotificationSettingsChange {
     enabled?: boolean;
     notifyDrafts?: boolean;
     events?: Partial<Record<DashboardEventKind, boolean>>;
+    dockBadge?: boolean;
 }
 
 // The dashboard for the open repository. `status` explains a missing or stale
@@ -363,8 +378,9 @@ export interface DashboardState {
     activity: ActivityEntry[];
     showDrafts: boolean;
     authors: AuthorFilter;
-    // The overview cards turned off in the Dashboard settings menu, by key.
+    // The overview cards turned off on the Settings page, by key.
     hiddenCards: string[];
+    mergedPeriod: MergedPeriod;
     notifications: NotificationSettings;
 }
 
@@ -378,6 +394,9 @@ export interface MoireApi {
     setBranchSelection(path: string, base: string, head: string): Promise<void>;
     getFavoriteBranches(path: string): Promise<string[]>; // empty when none are starred
     setFavoriteBranches(path: string, names: string[]): Promise<void>;
+    // The repo's main and development branch from the Settings page.
+    getRepoBranches(path: string): Promise<RepoBranchSettings>;
+    setRepoBranches(path: string, settings: RepoBranchSettings): Promise<void>;
     getBranches(): Promise<BranchInfo[]>;
     getChangedFiles(base: string, head: string, mode: CompareMode): Promise<ChangedFile[]>;
     // `full` refetches a large file's withheld content when the "Load diff" gate
@@ -465,19 +484,26 @@ export interface MoireApi {
     // head (possibly the WORKING_TREE sentinel) it selects. Returns an unsubscribe
     // function.
     onMenuComparePreset(cb: (base: string, head: string) => void): () => void;
+    // Fired when the native Settings… item (Cmd/Ctrl+,) is chosen. Returns an
+    // unsubscribe function.
+    onMenuOpenSettings(cb: () => void): () => void;
     // The GitHub dashboard for the open repository. `getDashboard` returns the
     // current state (fetching first if nothing was fetched yet); `refreshDashboard`
-    // polls GitHub now; `setDashboardShowDrafts`, `setDashboardAuthors` and
-    // `setDashboardHiddenCards` persist the dashboard's "Show drafts" toggle, the
-    // author filter and the cards turned off in its settings menu;
-    // `setNotificationSettings` persists a change to the notification settings.
-    // All three reject when no repository is open. `onDashboardChanged` fires after
-    // every background poll, and returns an unsubscribe function.
+    // polls GitHub now; `setDashboardShowDrafts`, `setDashboardAuthors`,
+    // `setDashboardHiddenCards` and `setDashboardMergedPeriod` persist the
+    // dashboard's "Show drafts" toggle, the author filter, the hidden cards and the
+    // Merged card's period; `setNotificationSettings` persists a change to the
+    // notification settings, all of them the open repository's own. Every call
+    // rejects when no repository is open. `onDashboardChanged`
+    // fires after every background poll, and returns an unsubscribe function.
     getDashboard(): Promise<DashboardState>;
     refreshDashboard(): Promise<DashboardState>;
     setDashboardShowDrafts(show: boolean): Promise<DashboardState>;
     setDashboardAuthors(authors: AuthorFilter): Promise<DashboardState>;
     setDashboardHiddenCards(keys: string[]): Promise<DashboardState>;
+    setDashboardMergedPeriod(period: MergedPeriod): Promise<DashboardState>;
+    // The current state without fetching, for the Settings page.
+    getDashboardState(): Promise<DashboardState>;
     setNotificationSettings(change: NotificationSettingsChange): Promise<DashboardState>;
     // The dashboard's notification list, by activity id (see activityId in
     // src/lib/dashboard.ts): mark one read or unread, mark all read, or delete one.

@@ -207,4 +207,18 @@ describe('ToolbarHeader', () => {
             expect(ui.mainView).toBe('diff');
         });
     });
+
+    describe('settings toggle', () => {
+        it('shows without an open repo and toggles the Settings page', async () => {
+            const ui = useUiStore();
+            const wrapper = mountToolbar();
+            const toggle = wrapper.findAll('button').find((b) => b.text() === 'Settings')!;
+
+            await toggle.trigger('click');
+            expect(ui.mainView).toBe('settings');
+
+            await toggle.trigger('click');
+            expect(ui.mainView).toBe('diff');
+        });
+    });
 });

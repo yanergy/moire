@@ -26,6 +26,8 @@ import {
     setBranchSelection,
     getFavoriteBranches,
     setFavoriteBranches,
+    getRepoBranches,
+    setRepoBranches,
     getFlourishes,
     getCodeStyle,
     getEditorPreference,
@@ -34,10 +36,10 @@ import {
 import { detectEditors, openWithEditor } from '../editors';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
-import type { DashboardState, NotificationSettingsChange } from '../notifier';
+import type { DashboardState, MergedPeriod, NotificationSettingsChange } from '../notifier';
 import { NOTIFICATION_EVENT_KINDS } from '../github/notifications';
 import type { AuthorFilter } from '../settings';
-import type { BranchInfo } from '../../src/shared/types';
+import type { BranchInfo, RepoBranchSettings } from '../../src/shared/types';
 
 // The dashboard's data comes from the Notifier, which main.ts owns; main hands
 // these in so the handlers stay free of polling and Electron notification code.
@@ -49,10 +51,13 @@ export interface DashboardBridge {
     refresh: () => Promise<DashboardState>;
     setShowDrafts: (show: boolean) => Promise<DashboardState>;
     setAuthors: (authors: AuthorFilter) => Promise<DashboardState>;
-    // The overview cards turned off in the Dashboard settings menu, by key.
+    // The overview cards turned off on the Settings page, by key.
     setHiddenCards: (keys: string[]) => Promise<DashboardState>;
-    // The notification settings changed in the app's notifications menu.
+    setMergedPeriod: (period: MergedPeriod) => Promise<DashboardState>;
+    // The notification settings changed on the Settings page.
     setNotificationSettings: (change: NotificationSettingsChange) => Promise<DashboardState>;
+    // The current state without fetching, for the Settings page.
+    state: () => Promise<DashboardState>;
     // The dashboard's notification list: mark one read or unread (by its
     // activity id), all read, or delete one.
     markRead: (id: string) => Promise<DashboardState>;
@@ -154,6 +159,9 @@ function notificationSettingsChange(value: unknown): NotificationSettingsChange 
     if (typeof input.notifyDrafts === 'boolean') {
         change.notifyDrafts = input.notifyDrafts;
     }
+    if (typeof input.dockBadge === 'boolean') {
+        change.dockBadge = input.dockBadge;
+    }
     if (typeof input.events === 'object' && input.events !== null) {
         const events = input.events as Record<string, unknown>;
         change.events = Object.fromEntries(
@@ -166,10 +174,30 @@ function notificationSettingsChange(value: unknown): NotificationSettingsChange 
     return change;
 }
 
+// Keep only a string main branch and a string or null development branch, so a
+// malformed value from the renderer never reaches the store.
+function repoBranchSettings(value: unknown): RepoBranchSettings {
+    if (typeof value !== 'object' || value === null) {
+        return {};
+    }
+
+    const input = value as Record<string, unknown>;
+    const settings: RepoBranchSettings = {};
+    if (typeof input.main === 'string') {
+        settings.main = input.main;
+    }
+    if (typeof input.development === 'string' || input.development === null) {
+        settings.development = input.development;
+    }
+
+    return settings;
+}
+
 function registerIpcHandlers({
     onRecentsChanged,
     onRepoOpened,
     onRefsChanged,
+    onRepoBranchesChanged,
     dashboard,
 }: {
     onRecentsChanged?: () => void;
@@ -177,6 +205,9 @@ function registerIpcHandlers({
     // The open repo's refs changed on disk (checkout, commit, fetch), so main can
     // rebuild the comparison presets for the new current branch and remotes.
     onRefsChanged?: () => void;
+    // The open repo's main or development branch changed on the Settings page, so
+    // main can rebuild the comparison presets that use it.
+    onRepoBranchesChanged?: () => void;
     dashboard?: DashboardBridge;
 } = {}): void {
     handle('dialog:open-repo', async () => {
@@ -240,6 +271,14 @@ function registerIpcHandlers({
         setFavoriteBranches(repoPath, names)
     );
 
+    // Per-repo main and development branch, picked on the Settings page.
+    handle('settings:repo-branches:get', (repoPath: string) => getRepoBranches(repoPath));
+
+    handle('settings:repo-branches:set', async (repoPath: string, settings: unknown) => {
+        await setRepoBranches(repoPath, repoBranchSettings(settings));
+        onRepoBranchesChanged?.();
+    });
+
     // Theme is owned by nativeTheme in the main process; the renderer reads the
     // current resolved state on launch, then stays in sync via 'theme:changed'.
     handle('theme:get', () => currentThemeState());
@@ -269,6 +308,8 @@ function registerIpcHandlers({
 
     handle('dashboard:get', () => requireDashboard().get());
     handle('dashboard:refresh', () => requireDashboard().refresh());
+    // The open repository's settings without fetching, for the Settings page.
+    handle('dashboard:state', () => requireDashboard().state());
     handle('dashboard:set-show-drafts', (show: boolean) => requireDashboard().setShowDrafts(show));
     handle('dashboard:set-authors', (authors: AuthorFilter) =>
         requireDashboard().setAuthors(authors)
@@ -277,6 +318,9 @@ function registerIpcHandlers({
         requireDashboard().setHiddenCards(
             Array.isArray(keys) ? keys.filter((key) => typeof key === 'string') : []
         )
+    );
+    handle('dashboard:set-merged-period', (period: unknown) =>
+        requireDashboard().setMergedPeriod(period === 'month' ? 'month' : 'week')
     );
     handle('dashboard:set-notification-settings', (change: unknown) =>
         requireDashboard().setNotificationSettings(notificationSettingsChange(change))

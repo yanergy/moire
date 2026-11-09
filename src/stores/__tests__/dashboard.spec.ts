@@ -66,6 +66,7 @@ function state(overrides: Partial<DashboardState> = {}): DashboardState {
         showDrafts: true,
         authors: 'me',
         hiddenCards: [],
+        mergedPeriod: 'week',
         notifications: notificationSettings(),
         ...overrides,
     };
@@ -415,6 +416,29 @@ describe('dashboard store', () => {
             expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
         });
 
+        it('loads the settings without fetching, and persists the merged period', async () => {
+            const api = stubApi(state({ mergedPeriod: 'month' }));
+            const settings = {
+                getDashboardState: vi
+                    .fn<() => Promise<DashboardState>>()
+                    .mockResolvedValue(state({ mergedPeriod: 'month' })),
+                setDashboardMergedPeriod: vi
+                    .fn<(period: string) => Promise<DashboardState>>()
+                    .mockResolvedValue(state({ mergedPeriod: 'week' })),
+            };
+            Object.assign(api, settings);
+            const store = useDashboardStore();
+
+            await store.loadSettings();
+            expect(store.mergedPeriod).toBe('month');
+            expect(api.getDashboard).not.toHaveBeenCalled();
+
+            const pending = store.setMergedPeriod('week');
+            expect(store.mergedPeriod).toBe('week');
+            await pending;
+            expect(settings.setDashboardMergedPeriod).toHaveBeenCalledWith('week');
+        });
+
         it('flips Show drafts right away and persists it', async () => {
             const api = stubApi(state({ showDrafts: false }));
             const store = useDashboardStore();
@@ -497,15 +521,15 @@ describe('dashboard store', () => {
             api.getDashboard.mockRejectedValue(new Error('No repository is open.'));
             const store = useDashboardStore();
 
-            await expect(store.load()).resolves.toBeUndefined();
+            await expect(store.load()).resolves.toBe(false);
             expect(store.loading).toBe(false);
             expect(store.snapshot).toBeNull();
         });
 
         it('does nothing without a bridge', async () => {
             const store = useDashboardStore();
-            await expect(store.load()).resolves.toBeUndefined();
-            await expect(store.refresh()).resolves.toBeUndefined();
+            await expect(store.load()).resolves.toBe(false);
+            await expect(store.refresh()).resolves.toBe(false);
         });
     });
 

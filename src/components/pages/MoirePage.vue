@@ -10,6 +10,7 @@ import StackedDiffPane from '@/components/diff/StackedDiffPane.vue';
 import PrView from '@/components/pr/PrView.vue';
 import DashboardView from '@/components/dashboard/DashboardView.vue';
 import NotificationsView from '@/components/notifications/NotificationsView.vue';
+import SettingsView from '@/components/settings/SettingsView.vue';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
@@ -53,11 +54,13 @@ watch(
         <TooltipProvider :delay-duration="300" ignore-non-keyboard-focus>
             <toolbar-header />
             <missing-branch-notice />
-            <!-- The dashboard and the notifications are repository wide, so they
-                 take the full width; the file tree only belongs to the diff and PR
+            <!-- The dashboard, the notifications and the settings are repository
+                 wide, so they take the full width; the file tree only belongs to the diff and PR
                  views. -->
             <dashboard-view v-if="showDashboard" />
             <notifications-view v-else-if="showNotifications" />
+            <!-- Opens without a repository too, to say it needs one. -->
+            <settings-view v-else-if="ui.mainView === 'settings'" />
             <div v-else class="flex min-h-0 flex-1">
                 <file-tree-sidebar />
                 <pr-view v-if="showPrView" />

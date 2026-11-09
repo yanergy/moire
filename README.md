@@ -88,13 +88,15 @@ the popup never appears.
 2. **Choose the two branches.** Set the **base** on the left and the **head** on the right. Base is
    the branch you compare against (often `main`); head is the branch whose changes you want to see.
    The swap button between them flips the two. Each picker opens with a **Recommended** section at
-   the top. For the base that is `origin/development` (when it exists), the remote's default
-   branch, and the checked-out branch. For the head it is the working tree and the checked-out
-   branch. Click the star on any branch row to add it to a **Favorites** group listed below the
+   the top. For the base that is the repository's development branch, its main branch, and the
+   checked-out branch. For the head it is the working tree and the checked-out branch. Moiré
+   detects the main and development branch from the usual names (`origin/HEAD`, then `main` or
+   `master`; `development`, `develop` or `dev`), and you can pick different ones under **Settings**.
+   Click the star on any branch row to add it to a **Favorites** group listed below the
    recommendations in both pickers.
-   For two common comparisons, **Git > Comparison Presets** sets both sides at once:
-   `origin/development` against the checked-out branch, or the checked-out branch's `origin` copy against the working
-   tree (everything not pushed yet).
+   For two common comparisons, **Git > Comparison Presets** sets both sides at once: the
+   development branch against the checked-out branch, or the checked-out branch's `origin` copy
+   against the working tree (everything not pushed yet).
 3. **Choose how to compare.** Toggle between:
     - **merge-base**: compares head to the point where it branched off base, showing only the changes
       head introduces. This matches what a GitHub pull request shows.
@@ -117,16 +119,20 @@ the popup never appears.
    task-list boxes.
 7. **Keep track of pull requests.** The dashboard button in the toolbar (or **View > Dashboard**,
    `Cmd/Ctrl+Shift+D`) shows an overview of the open repository's pull requests as cards: needs
-   your review, changes requested, ready to merge, failing checks, merge conflicts, your open PRs, stale, merged
-   (this week or this month, under **Dashboard settings > Merged**), and drafts. Click a card to list its PRs, then a PR to open it (or its **Open in browser** button
-   to open it on GitHub). The cards count your own PRs; under **Dashboard settings > Users**
-   you can pick other authors, or **All**, and **Dashboard settings > Cards** hides the cards you do not
-   need. The **Notifications** button next to it opens the notifications page, which lists the
-   notifications you were sent. The count on that button and on the dock icon is the
-   number of unread notifications. Moiré checks
-   GitHub every two minutes and sends a notification when something changes. Click a PR to open
-   it in the PR view. Choose which events notify you, and whether draft PRs do, under
-   **Notification settings** on that page (or under **Git > Notifications**).
+   your review, changes requested, ready to merge, failing checks, merge conflicts, your open PRs,
+   stale, merged (this week or this month), and drafts. Click a card to list its PRs, then a PR to
+   open it (or its **Open in browser** button to open it on GitHub). The cards count your own PRs;
+   the **Users** menu on the dashboard picks other authors, or **All**. The **Notifications**
+   button next to it opens the notifications page, which lists the notifications you were sent.
+   The count on that button and on the dock icon is the number of unread notifications. Moiré
+   checks GitHub every two minutes and sends a notification when something changes. Click a PR to
+   open it in the PR view.
+8. **Adjust the settings.** The **Settings** button in the toolbar (or **Moiré > Settings…**,
+   `Cmd/Ctrl+,`) opens the Settings page, also reached from the **Dashboard settings** and
+   **Notification settings** buttons on those pages.
+   It holds the repository's main and development branch, which events notify you (and whether
+   draft PRs and the dock badge do), and what the dashboard shows (drafts, the cards, and the
+   Merged card's period). Every setting is kept per repository, so the page needs one open.
 
 The diff refreshes on its own when the repository changes on disk. Use **View > Refresh**
 (`Cmd/Ctrl+R`) to re-scan manually. Set the appearance under **View > Theme** (System, Light, or
@@ -144,9 +150,12 @@ last branch range are remembered per repository.
   recommendations, in both the base and the head picker. A starred branch that is already
   recommended keeps its place there, so no branch is listed twice. Favorites are remembered per
   repository.
-- Comparison presets under **Git > Comparison Presets**: `origin/development` to the checked-out
+- Comparison presets under **Git > Comparison Presets**: the development branch to the checked-out
   branch, and the working tree to the checked-out branch's `origin` copy. A preset whose ref does
   not exist is disabled.
+- A per repository main and development branch, detected from the usual names and changeable on
+  the Settings page (the development branch can be set to None). The base recommendations, the
+  default base and the comparison presets follow them.
 - Recent-repository list and a native folder picker.
 - Auto-refresh when the working tree changes, plus a manual refresh.
 
@@ -190,10 +199,10 @@ last branch range are remembered per repository.
   or on GitHub when it comes from a fork or its branches are not available locally. Every row also
   has an **Open in browser** button.
 - A card with unread notifications about its PRs shows an "N new" pill.
-- The **Dashboard settings** menu holds a "Show drafts" toggle (for the dashboard only;
-  notifications have their own), a **Users** submenu that picks whose PRs the cards count (you by
-  default, any mix of authors, or all of them), a **Cards** submenu that hides the cards you do not
-  need, and the period of the Merged card.
+- A **Users** menu picks whose PRs the cards count (you by default, any mix of authors, or all of
+  them). Whether drafts count (for the dashboard only; notifications have their own toggle), which
+  cards show and the Merged card's period are on the Settings page, opened with the **Dashboard
+  settings** button.
 
 ### Notifications
 
@@ -207,18 +216,21 @@ last branch range are remembered per repository.
   notifications sent for the open repository (the last 500, grouped by day and loaded as you
   scroll). Unread ones are highlighted and counted on the button and the dock icon, and each can be
   marked read (or unread again) or deleted.
-- Each event has its own toggle in the **Notification settings** menu in the page header, next to
-  an **Enable notifications** switch (on by default) and a toggle for whether draft PRs notify.
-  **Git > Notifications** holds the same toggles plus a dock badge toggle, and the two stay in
-  step.
+- Each event has its own toggle on the Settings page (opened with the **Notification settings**
+  button in the page header), next to an **Enable notifications** switch (on by default) and
+  toggles for whether draft PRs notify and whether the dock icon shows the unread count.
 
 ### App
 
 - System, light, and dark themes, with theme and branch selections persisted per repository.
 - A selectable diff color style (GitHub or VS Code) under **View > Code Style**, persisted across
   launches.
-- Back and forward history between the diff, the PR view, the dashboard and its cards, and the
-  notifications page, stepped through with the mouse's back and forward buttons.
+- A Settings page (the toolbar's **Settings** button, or **Moiré > Settings…**, `Cmd/Ctrl+,`) with
+  every setting kept per repository: the main and development branch, the notifications and the
+  dashboard.
+- Back and forward history between the diff, the PR view, the dashboard and its cards, the
+  notifications page and the Settings page, stepped through with the mouse's back and forward
+  buttons.
 - Update checks while the app runs that tell you when a newer release is out on GitHub.
 
 ## Development
@@ -288,10 +300,6 @@ Track bugs and limitations here.
 - **GitHub notifications only arrive while Moiré is running.** Closing the window keeps the app
   running on macOS, quitting does not. They cover only the repository that is open, and only the
   active `gh` account.
-- **The Git > Notifications menu needs a connected `gh`.** The Git menu always shows, but it lists
-  the notifications only when `gh` is signed in, so they share the account list's refresh
-  limitation above. The same
-  settings, apart from the dock badge, are always on the notifications page.
 - **Clicking a notification while the window is closed may open the PR on GitHub.** The window
   reopens, but the repository's branches may not be loaded yet when the PR arrives, so it falls
   back to the browser.

@@ -6,6 +6,7 @@ import {
     GitPullRequestDraft,
     LayoutDashboard,
     LoaderCircle,
+    Settings,
     TriangleAlert,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
@@ -52,6 +53,16 @@ function setPrView(on: boolean) {
 function setDashboardView(on: boolean) {
     if (on) {
         ui.openDashboard();
+        return;
+    }
+
+    ui.setMainView('diff');
+}
+
+// The Settings toggle shows always: without a repository the page says it needs one.
+function setSettingsView(on: boolean) {
+    if (on) {
+        ui.openSettings();
         return;
     }
 
@@ -169,7 +180,7 @@ const statusDotClass = computed(() => {
                 </Tooltip>
             </div>
 
-            <!-- The two repository wide pages, side by side. -->
+            <!-- The repository wide pages, side by side. -->
             <div class="flex justify-center gap-2">
                 <Toggle
                     v-if="comparison.repoPath"
@@ -183,6 +194,16 @@ const statusDotClass = computed(() => {
                     Dashboard
                 </Toggle>
                 <notifications-button v-if="comparison.repoPath" />
+                <Toggle
+                    variant="outline"
+                    size="sm"
+                    :model-value="ui.mainView === 'settings'"
+                    class="h-8 gap-2 px-3.5 text-[13px] font-medium text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                    @update:model-value="setSettingsView"
+                >
+                    <Settings :size="18" />
+                    Settings
+                </Toggle>
             </div>
 
             <div class="flex items-center justify-end gap-2">

@@ -20,6 +20,9 @@ function stubApi(state: DashboardState) {
         setDashboardShowDrafts: vi
             .fn<(show: boolean) => Promise<DashboardState>>()
             .mockResolvedValue({ ...state, showDrafts: false }),
+        setDashboardAuthors: vi
+            .fn<(authors: unknown) => Promise<DashboardState>>()
+            .mockResolvedValue(state),
         openExternal: vi.fn<(url: string) => Promise<void>>().mockResolvedValue(undefined),
     };
     window.api = api as unknown as Window['api'];
@@ -44,7 +47,7 @@ describe('DashboardView', () => {
 
     async function mountView(state: DashboardState) {
         const api = stubApi(state);
-        // Attached so the Dashboard settings menu, which teleports to the body, can open.
+        // Attached so the Users menu, which teleports to the body, can open.
         const wrapper = mount(DashboardView, {
             global: { plugins: [pinia] },
             attachTo: document.body,
@@ -147,32 +150,28 @@ describe('DashboardView', () => {
         expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
     });
 
-    it('offers Show drafts, a Users submenu and a Merged period submenu in the Dashboard settings menu', async () => {
+    it('keeps the Users filter on the page and sends the rest to the Settings page', async () => {
         const { api, wrapper } = await mountView(dashboardState());
 
-        await wrapper.get('[aria-label="Dashboard settings"]').trigger('click');
+        await wrapper.get('[aria-label="Users"]').trigger('click');
         await flushPromises();
         await nextTick();
 
         const items = [
             ...document.querySelectorAll('[data-slot="dropdown-menu-checkbox-item"]'),
         ] as HTMLElement[];
-        const subTrigger = document.querySelector('[data-slot="dropdown-menu-sub-trigger"]');
-        expect(items.map((el) => el.textContent?.trim())).toEqual(['Show drafts']);
-        const subTriggers = [
-            ...document.querySelectorAll('[data-slot="dropdown-menu-sub-trigger"]'),
-        ].map((el) => el.textContent ?? '');
-        expect(subTriggers).toHaveLength(3);
-        expect(subTrigger?.textContent).toContain('Users');
-        expect(subTrigger?.textContent).toContain('You');
-        expect(subTriggers[1]).toContain('Cards');
-        expect(subTriggers[1]).toContain('All');
-        expect(subTriggers[2]).toContain('Merged');
-        expect(subTriggers[2]).toContain('Week');
-
+        expect(items.map((el) => el.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+            'All',
+            'me (you)',
+        ]);
         items[0]!.click();
         await flushPromises();
-        expect(api.setDashboardShowDrafts).toHaveBeenCalledWith(false);
+        expect(api.setDashboardAuthors).toHaveBeenCalledWith('all');
+
+        const settings = wrapper.findAll('button').find((b) => b.text() === 'Dashboard settings');
+        await settings!.trigger('click');
+        expect(useUiStore().mainView).toBe('settings');
+        expect(useUiStore().settingsSection).toBe('dashboard');
         wrapper.unmount();
     });
 

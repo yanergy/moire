@@ -21,6 +21,7 @@ let stopMenuRefresh: (() => void) | undefined;
 let stopMenuOpenRepo: (() => void) | undefined;
 let stopMenuOpenRecent: (() => void) | undefined;
 let stopMenuComparePreset: (() => void) | undefined;
+let stopMenuOpenSettings: (() => void) | undefined;
 let stopRepoChanged: (() => void) | undefined;
 let stopFlourishes: (() => void) | undefined;
 let stopCodeStyle: (() => void) | undefined;
@@ -89,6 +90,9 @@ onMounted(async () => {
     stopMenuOpenRepo = api.onMenuOpenRepo(() => void comparison.openRepository());
     stopMenuOpenRecent = api.onMenuOpenRecent((path) => void comparison.openRecent(path));
 
+    // Settings… (Cmd/Ctrl+,) opens the Settings page.
+    stopMenuOpenSettings = api.onMenuOpenSettings(() => ui.openSettings());
+
     // A Git → Comparison Presets item sets the range and shows its diff.
     stopMenuComparePreset = api.onMenuComparePreset((base, head) => {
         comparison.selectRange(base, head);
@@ -114,6 +118,7 @@ onUnmounted(() => {
     stopMenuOpenRepo?.();
     stopMenuOpenRecent?.();
     stopMenuComparePreset?.();
+    stopMenuOpenSettings?.();
     stopRepoChanged?.();
     stopFlourishes?.();
     stopCodeStyle?.();

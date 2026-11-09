@@ -44,12 +44,13 @@ export interface NotifierView {
     activity: ActivityEntry[];
 }
 
-// The notification settings the app's notifications menu shows and changes: the
-// master switch, whether draft PRs notify, and one toggle per event kind.
+// The notification settings the Settings page shows and changes: the master
+// switch, whether draft PRs notify, one toggle per event kind, and the dock badge.
 export interface NotificationSettings {
     enabled: boolean;
     notifyDrafts: boolean;
     events: Record<DashboardEventKind, boolean>;
+    dockBadge: boolean;
 }
 
 // A partial change to them, as one toggle sends it.
@@ -57,16 +58,21 @@ export interface NotificationSettingsChange {
     enabled?: boolean;
     notifyDrafts?: boolean;
     events?: Partial<Record<DashboardEventKind, boolean>>;
+    dockBadge?: boolean;
 }
 
+// The period the dashboard's Merged card counts. Mirrored in src/shared/types.ts.
+export type MergedPeriod = 'week' | 'month';
+
 // What the renderer's dashboard receives: the view plus its own "Show drafts"
-// toggle, the author filter and the hidden cards, which the dashboard applies to
-// its cards, and the notification settings. Mirrored as DashboardState in
+// toggle, the author filter, the hidden cards and the Merged card's period, which
+// the dashboard applies to its cards, and the notification settings. Mirrored as DashboardState in
 // src/shared/types.ts; keep the two in sync.
 export interface DashboardState extends NotifierView {
     showDrafts: boolean;
     authors: AuthorFilter;
     hiddenCards: string[];
+    mergedPeriod: MergedPeriod;
     notifications: NotificationSettings;
 }
 
