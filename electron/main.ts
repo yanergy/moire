@@ -34,7 +34,7 @@ import {
     setNotifierState,
 } from './settings';
 import { detectEditors } from './editors';
-import { promptUpdateIfAvailable } from './updates';
+import { UpdateWatcher, checkForUpdate, showUpdatePrompt } from './updates';
 
 // Send a menu-triggered message to the window the user is in (or the only one).
 function sendToFocused(channel: string, ...args: unknown[]): void {
@@ -90,6 +90,14 @@ async function showDashboard(): Promise<void> {
     const win = await revealWindow();
     win.webContents.send('dashboard:show');
 }
+
+// Checks the GitHub Releases feed for a newer Moiré while the app runs and pops
+// the update dialog once a window is focused. See updates.ts.
+const updateWatcher = new UpdateWatcher({
+    check: checkForUpdate,
+    prompt: showUpdatePrompt,
+    isAppFocused: () => BrowserWindow.getFocusedWindow() !== null,
+});
 
 // Polls GitHub for the open repository. See notifier.ts and
 // documentation/github-notifications-plan.md.
@@ -365,10 +373,11 @@ app.whenReady().then(async () => {
     await buildMenu();
     await createWindow();
 
-    // Best-effort update check against the GitHub Releases feed. Fire-and-forget
-    // so it never delays the window: it pops a native dialog when a newer release
-    // exists and stays silent when the build is current or the check fails.
-    void promptUpdateIfAvailable();
+    // Best-effort update checks against the GitHub Releases feed: at launch, hourly,
+    // and when the app is focused again. Never blocks the window; a release found
+    // while the app is in the background waits for the next focus to show its popup.
+    app.on('browser-window-focus', () => void updateWatcher.onFocus());
+    updateWatcher.start();
 });
 
 // macOS keeps the app running after its last window is closed (see
@@ -392,4 +401,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
     stopWatchingRepo();
     notifier.stop();
+    updateWatcher.stop();
 });
