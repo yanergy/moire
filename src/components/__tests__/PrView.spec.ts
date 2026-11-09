@@ -698,7 +698,7 @@ describe('PrView', () => {
         clickMenuItem('Refresh');
         await flushPromises();
 
-        // Called with no argument, so the toolbar's PR button keeps its status
+        // Called with no argument, so the toolbar's PR tab keeps its status
         // rather than flashing to a spinner (the range did not change).
         expect(load).toHaveBeenCalledTimes(1);
         expect(load).toHaveBeenCalledWith();

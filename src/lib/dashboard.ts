@@ -34,7 +34,7 @@ export const ROW_CLASS =
 // The age the actions overlay, hidden while they show.
 export const ROW_MARKER_CLASS = 'group-focus-within:invisible group-hover:invisible';
 
-// The status dot before a PR row, in the toolbar PR button's colors: gray draft,
+// The status dot before a PR row, in the toolbar PR tab's colors: gray draft,
 // purple merged, red closed, yellow changes requested, green open.
 export function prDotClass(pr: DashboardPr): string {
     if (pr.isDraft && pr.state === 'OPEN') return 'bg-moire-pr-draft';

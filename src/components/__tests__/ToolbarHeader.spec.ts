@@ -76,126 +76,125 @@ describe('ToolbarHeader', () => {
         expect(swap).toHaveBeenCalledTimes(1);
     });
 
-    it('hides the PR button when no pull request is detected', () => {
-        const wrapper = mountToolbar();
-        expect(wrapper.text()).not.toContain('PR #');
-    });
+    describe('PR tab', () => {
+        // The PR tab, found by its slot (it keeps its place in every state).
+        const prTab = (wrapper: VueWrapper) => wrapper.get('[data-slot="pr-tab"]');
 
-    it('shows the PR button once a PR is detected and goes to the PR page', async () => {
-        const comparison = useComparisonStore();
-        comparison.prStatus = 'ok';
-        comparison.pullRequest = PR;
-        const ui = useUiStore();
+        function openRepo() {
+            const comparison = useComparisonStore();
+            comparison.repoPath = '/repos/moire';
+            return comparison;
+        }
 
-        const wrapper = mountToolbar();
-        expect(wrapper.text()).toContain('PR #7');
+        it('is absent without an open repo', () => {
+            const wrapper = mountToolbar();
+            expect(wrapper.find('[data-slot="pr-tab"]').exists()).toBe(false);
+        });
 
-        const prButton = wrapper.findAll('button').find((b) => b.text().includes('PR #'))!;
-        await prButton.trigger('click');
-        expect(ui.mainView).toBe('pr');
-        expect(selectedPages(wrapper)).toEqual(['PR #7']);
+        it('sits right after Diff and goes to the PR page once a PR is detected', async () => {
+            const comparison = openRepo();
+            comparison.prStatus = 'ok';
+            comparison.pullRequest = PR;
+            const ui = useUiStore();
 
-        // Clicking the current page's button stays on it.
-        await prButton.trigger('click');
-        expect(ui.mainView).toBe('pr');
-    });
+            const wrapper = mountToolbar();
+            expect(pageLabels(wrapper)).toEqual([
+                'Diff',
+                'PR #7',
+                'Dashboard',
+                'Notifications',
+                'Settings',
+            ]);
 
-    it('uses the draft icon and a dashed border for a draft PR', () => {
-        const comparison = useComparisonStore();
-        comparison.prStatus = 'ok';
-        comparison.pullRequest = { ...PR, isDraft: true };
+            await prTab(wrapper).trigger('click');
+            expect(ui.mainView).toBe('pr');
+            expect(selectedPages(wrapper)).toEqual(['PR #7']);
 
-        const wrapper = mountToolbar();
-        expect(wrapper.find('.lucide-git-pull-request-draft').exists()).toBe(true);
-        expect(wrapper.find('.lucide-git-pull-request').exists()).toBe(false);
+            // Clicking the current page's tab stays on it.
+            await prTab(wrapper).trigger('click');
+            expect(ui.mainView).toBe('pr');
+        });
 
-        const prButton = wrapper.findAll('button').find((b) => b.text().includes('PR #'))!;
-        expect(prButton.classes()).toContain('border-dashed');
-    });
+        it('uses the draft icon for a draft PR', () => {
+            const comparison = openRepo();
+            comparison.prStatus = 'ok';
+            comparison.pullRequest = { ...PR, isDraft: true };
 
-    it('keeps a solid border for a non-draft PR', () => {
-        const comparison = useComparisonStore();
-        comparison.prStatus = 'ok';
-        comparison.pullRequest = { ...PR, isDraft: false };
+            const tab = prTab(mountToolbar());
+            expect(tab.find('.lucide-git-pull-request-draft').exists()).toBe(true);
+            expect(tab.find('.lucide-git-pull-request').exists()).toBe(false);
+        });
 
-        const wrapper = mountToolbar();
-        const prButton = wrapper.findAll('button').find((b) => b.text().includes('PR #'))!;
-        expect(prButton.classes()).not.toContain('border-dashed');
-    });
+        it('colors the status dot by the PR state', () => {
+            const comparison = openRepo();
+            comparison.prStatus = 'ok';
+            const dotClass = () => prTab(mountToolbar()).get('span.rounded-full').classes();
 
-    it('colors the status dot by the PR state', () => {
-        const comparison = useComparisonStore();
-        comparison.prStatus = 'ok';
-        const dotClass = () => {
-            const btn = mountToolbar()
-                .findAll('button')
-                .find((b) => b.text().includes('PR #'))!;
-            return btn.find('span.rounded-full').classes();
-        };
+            comparison.pullRequest = { ...PR, state: 'OPEN', isDraft: false };
+            expect(dotClass()).toContain('bg-moire-pr-open');
 
-        comparison.pullRequest = { ...PR, state: 'OPEN', isDraft: false };
-        expect(dotClass()).toContain('bg-moire-pr-open');
+            comparison.pullRequest = { ...PR, state: 'CLOSED', isDraft: false };
+            expect(dotClass()).toContain('bg-moire-pr-closed');
 
-        comparison.pullRequest = { ...PR, state: 'CLOSED', isDraft: false };
-        expect(dotClass()).toContain('bg-moire-pr-closed');
+            comparison.pullRequest = { ...PR, state: 'MERGED', isDraft: false };
+            expect(dotClass()).toContain('bg-moire-pr-merged');
 
-        comparison.pullRequest = { ...PR, state: 'MERGED', isDraft: false };
-        expect(dotClass()).toContain('bg-moire-pr-merged');
+            comparison.pullRequest = { ...PR, state: 'OPEN', isDraft: true };
+            expect(dotClass()).toContain('bg-moire-pr-draft');
 
-        comparison.pullRequest = { ...PR, state: 'OPEN', isDraft: true };
-        expect(dotClass()).toContain('bg-moire-pr-draft');
+            // Changes requested turns the dot yellow, also on a draft (whose icon
+            // still marks it as one).
+            comparison.pullRequest = { ...PR, isDraft: false, reviewDecision: 'CHANGES_REQUESTED' };
+            expect(dotClass()).toContain('bg-moire-changes-fg');
+            comparison.pullRequest = { ...PR, isDraft: true, reviewDecision: 'CHANGES_REQUESTED' };
+            expect(dotClass()).toContain('bg-moire-changes-fg');
+        });
 
-        // An open PR with changes requested turns the dot yellow.
-        comparison.pullRequest = {
-            ...PR,
-            state: 'OPEN',
-            isDraft: false,
-            reviewDecision: 'CHANGES_REQUESTED',
-        };
-        expect(dotClass()).toContain('bg-moire-changes-fg');
-    });
+        it('shows a disabled spinner tab while a lookup runs, hiding stale status', async () => {
+            const comparison = openRepo();
+            // A leftover PR from the previous branch must not show through while the
+            // new branch's lookup is in flight.
+            comparison.prStatus = 'ok';
+            comparison.pullRequest = PR;
+            comparison.prLoading = true;
+            const ui = useUiStore();
 
-    it('gives a draft with changes requested the yellow dot but keeps the dashed border', () => {
-        const comparison = useComparisonStore();
-        comparison.prStatus = 'ok';
-        comparison.pullRequest = { ...PR, isDraft: true, reviewDecision: 'CHANGES_REQUESTED' };
+            const wrapper = mountToolbar();
+            const tab = prTab(wrapper);
+            expect(tab.attributes('data-state')).toBe('loading');
+            expect(tab.attributes('aria-disabled')).toBe('true');
+            expect(tab.find('.lucide-loader-circle').exists()).toBe(true);
+            expect(wrapper.text()).not.toContain('PR #');
 
-        const wrapper = mountToolbar();
-        const prButton = wrapper.findAll('button').find((b) => b.text().includes('PR #'))!;
-        // Changes requested overrides the gray draft dot...
-        expect(prButton.find('span.rounded-full').classes()).toContain('bg-moire-changes-fg');
-        // ...but the dashed border still marks it as a draft.
-        expect(prButton.classes()).toContain('border-dashed');
-    });
+            await tab.trigger('click');
+            expect(ui.mainView).toBe('diff');
+        });
 
-    it('shows a spinner in the PR slot while a range-change lookup runs, hiding stale status', () => {
-        const comparison = useComparisonStore();
-        // A leftover PR from the previous branch must not show through while the new
-        // branch's lookup is in flight.
-        comparison.prStatus = 'ok';
-        comparison.pullRequest = PR;
-        comparison.prLoading = true;
+        it('shows a disabled warning tab when the gh lookup fails', () => {
+            const comparison = openRepo();
+            comparison.prStatus = 'not-installed';
 
-        const wrapper = mountToolbar();
-        expect(wrapper.find('.lucide-loader-circle').exists()).toBe(true);
-        expect(wrapper.text()).not.toContain('PR #');
-    });
+            const tab = prTab(mountToolbar());
+            expect(tab.attributes('data-state')).toBe('warning');
+            expect(tab.find('.lucide-triangle-alert').exists()).toBe(true);
+        });
 
-    it('shows a warning triangle in place of the PR button when the gh lookup fails', () => {
-        const comparison = useComparisonStore();
-        comparison.prStatus = 'not-installed';
+        it('is disabled without a warning when the branches have no PR', async () => {
+            const comparison = openRepo();
+            comparison.prStatus = 'no-pr';
+            const ui = useUiStore();
 
-        const wrapper = mountToolbar();
-        expect(wrapper.find('.lucide-triangle-alert').exists()).toBe(true);
-        expect(wrapper.text()).not.toContain('PR #');
-    });
+            const wrapper = mountToolbar();
+            const tab = prTab(wrapper);
+            expect(tab.text()).toBe('PR');
+            expect(tab.attributes('data-state')).toBe('none');
+            expect(tab.attributes('aria-disabled')).toBe('true');
+            expect(tab.find('.lucide-triangle-alert').exists()).toBe(false);
 
-    it('shows no warning for a normal absent PR', () => {
-        const comparison = useComparisonStore();
-        comparison.prStatus = 'no-pr';
-
-        const wrapper = mountToolbar();
-        expect(wrapper.find('.lucide-triangle-alert').exists()).toBe(false);
+            await tab.trigger('click');
+            expect(ui.mainView).toBe('diff');
+            expect(selectedPages(wrapper)).toEqual(['Diff']);
+        });
     });
 
     describe('page buttons', () => {
@@ -206,11 +205,17 @@ describe('ToolbarHeader', () => {
             expect(selectedPages(wrapper)).toEqual(['Diff']);
         });
 
-        it('adds Dashboard and Notifications while a repo is open', () => {
+        it('adds PR, Dashboard and Notifications while a repo is open', () => {
             useComparisonStore().repoPath = '/repos/moire';
             const wrapper = mountToolbar();
 
-            expect(pageLabels(wrapper)).toEqual(['Diff', 'Dashboard', 'Notifications', 'Settings']);
+            expect(pageLabels(wrapper)).toEqual([
+                'Diff',
+                'PR',
+                'Dashboard',
+                'Notifications',
+                'Settings',
+            ]);
         });
 
         it('goes to each page, selecting exactly its button', async () => {

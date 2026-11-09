@@ -22,7 +22,7 @@ const unreadLabel = computed(
 </script>
 
 <template>
-    <toolbar-nav-button :selected="selected" look="tab" @navigate="ui.setMainView('notifications')">
+    <toolbar-nav-button :selected="selected" @navigate="ui.setMainView('notifications')">
         <Bell :size="18" />
         Notifications
         <span
