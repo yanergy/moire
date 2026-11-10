@@ -729,11 +729,15 @@ function buildModels() {
         return;
     }
 
-    originalModel?.dispose();
-    modifiedModel?.dispose();
+    // Swap the new models in before disposing the old ones: Monaco throws when a
+    // model is disposed while the diff editor still holds it.
+    const previous = [originalModel, modifiedModel];
     originalModel = monaco.editor.createModel(props.original ?? '', props.language);
     modifiedModel = monaco.editor.createModel(props.modified ?? '', props.language);
     editor.setModel({ original: originalModel, modified: modifiedModel });
+    for (const model of previous) {
+        model?.dispose();
+    }
     // Clear the selected change once per real content change (a new file, a range
     // change, a refresh). onDidUpdateDiff deliberately does not, since it fires
     // repeatedly for the same content and would otherwise drop the selection.
@@ -1134,10 +1138,11 @@ onBeforeUnmount(() => {
     contentSizeListeners = [];
     window.removeEventListener('keydown', onKeydown);
     document.removeEventListener('mousedown', onDocMouseDown);
-    originalModel?.dispose();
-    modifiedModel?.dispose();
+    // The editor first, so it lets go of its models before they are disposed.
     editor?.dispose();
     editor = null;
+    originalModel?.dispose();
+    modifiedModel?.dispose();
     // The collections belong to the now-disposed inner editors; drop the refs.
     originalWordDecorations = null;
     modifiedWordDecorations = null;

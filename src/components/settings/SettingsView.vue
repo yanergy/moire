@@ -72,11 +72,15 @@ function setEvent(kind: DashboardEventKind, on: boolean) {
     void save(() => dashboard.setNotificationSettings({ events: { [kind]: on } }));
 }
 
+// The section elements, by key. The template ref names end in "Section" so they
+// can never match a setup binding: in a production build the compiler binds a
+// template ref to the setup variable of the same name (here `notifications` and
+// `dashboard` exist), which breaks rendering for the whole app.
 const sections = {
-    branches: useTemplateRef<HTMLElement>('branches'),
-    notifications: useTemplateRef<HTMLElement>('notifications'),
-    dashboard: useTemplateRef<HTMLElement>('dashboard'),
-    prView: useTemplateRef<HTMLElement>('prView'),
+    branches: useTemplateRef<HTMLElement>('branchesSection'),
+    notifications: useTemplateRef<HTMLElement>('notificationsSection'),
+    dashboard: useTemplateRef<HTMLElement>('dashboardSection'),
+    prView: useTemplateRef<HTMLElement>('prViewSection'),
 };
 
 // The side menu: one entry per section, in page order.
@@ -265,7 +269,7 @@ const groupLabel =
                 <ScrollArea class="settings-scroll-area min-h-0 min-w-0 flex-1">
                     <div class="flex w-full flex-col gap-14 p-3 pb-8">
                         <!-- Branches -->
-                        <section ref="branches" :class="sectionClass('branches')">
+                        <section ref="branchesSection" :class="sectionClass('branches')">
                             <h2 :class="sectionTitle">Branches</h2>
                             <p :class="sectionHint">
                                 Used for the base recommendations, the default base and the Git
@@ -326,7 +330,7 @@ const groupLabel =
                         </section>
 
                         <!-- Notifications -->
-                        <section ref="notifications" :class="sectionClass('notifications')">
+                        <section ref="notificationsSection" :class="sectionClass('notifications')">
                             <h2 :class="sectionTitle">Notifications</h2>
                             <p :class="sectionHint">
                                 Native notifications about this repository's pull requests, checked
@@ -413,7 +417,7 @@ const groupLabel =
                         </section>
 
                         <!-- Dashboard -->
-                        <section ref="dashboard" :class="sectionClass('dashboard')">
+                        <section ref="dashboardSection" :class="sectionClass('dashboard')">
                             <h2 :class="sectionTitle">Dashboard</h2>
                             <p :class="sectionHint">
                                 What the Dashboard's overview shows. Whose PRs it counts is picked
@@ -467,7 +471,7 @@ const groupLabel =
                         </section>
 
                         <!-- PR view -->
-                        <section ref="prView" :class="sectionClass('prView')">
+                        <section ref="prViewSection" :class="sectionClass('prView')">
                             <h2 :class="sectionTitle">PR view</h2>
                             <p :class="sectionHint">
                                 How the pull request view looks. Applies to every repository.
