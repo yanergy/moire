@@ -78,6 +78,9 @@ onMounted(async () => {
     ui.setDiffLayout(await api.getDiffLayout());
     stopDiffLayout = api.onDiffLayoutChanged((layout) => ui.setDiffLayout(layout));
 
+    // Whether the PR view's header stays pinned while scrolling (Settings page).
+    ui.stickyPrHeader = await api.getStickyPrHeader();
+
     // The review-complete flourishes, gated by the View menu toggle (persisted).
     setFlourishesEnabled(await api.getFlourishes());
     stopFlourishes = api.onFlourishesChanged((enabled) => setFlourishesEnabled(enabled));

@@ -205,6 +205,9 @@ last branch range are remembered per repository.
   diff jumps to it in the conversation.
 - **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the
   PR view. Each is enabled while its end is more than a screen away.
+- The PR view's whole header (title, Review and Edit mode buttons, author, labels, tabs and the
+  tab's status box) stays at the top while the conversation scrolls. Turn **Sticky header** off on the Settings page to let
+  it scroll away.
 - An edit mode (off by default) adds posting, editing, and deleting your own comments, editing the
   description, ticking task-list checkboxes, and replying to and resolving threads in place.
 - Code reviews from within the app: start a review, comment on lines or ranges in the diff
@@ -249,9 +252,9 @@ last branch range are remembered per repository.
 - System, light, and dark themes, with theme and branch selections persisted per repository.
 - A selectable diff color style (GitHub or VS Code) under **View > Code Style**, persisted across
   launches.
-- A Settings page (the toolbar's **Settings** button, or **Moiré > Settings…**, `Cmd/Ctrl+,`) with
-  every setting kept per repository: the main and development branch, the notifications and the
-  dashboard.
+- A Settings page (the toolbar's **Settings** button, or **Moiré > Settings…**, `Cmd/Ctrl+,`). The
+  main and development branch, the notifications and the dashboard are kept per repository; the PR
+  view's settings apply to every repository.
 - Page tabs in the middle of the toolbar (**Diff**, **PR**, **Dashboard**, **Notifications** and
   **Settings**) that go to a page and show which one you are on.
 - Back and forward history between the diff, the PR view, the dashboard and its cards, the

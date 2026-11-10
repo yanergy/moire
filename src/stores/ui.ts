@@ -12,7 +12,7 @@ import type { DashboardCategoryKey } from '@/stores/dashboard';
 
 // One page in the back/forward history: the main view and, for the dashboard,
 // the card whose PR list is open (null for the overview).
-export type SettingsSection = 'branches' | 'notifications' | 'dashboard';
+export type SettingsSection = 'branches' | 'notifications' | 'dashboard' | 'prView';
 
 interface Page {
     mainView: MainView;
@@ -33,6 +33,9 @@ export const useUiStore = defineStore('ui', () => {
     const codeStyle = ref<CodeStyle>('github');
     const diffLayout = ref<DiffLayout>('single');
     const viewMode = ref<ViewMode>('split');
+    // Whether the PR view's header stays pinned at the top while its conversation
+    // scrolls. App-wide, owned by main (read on launch); the Settings page changes it.
+    const stickyPrHeader = ref(true);
     // Which pane the main area shows: the diff (default), the pull-request view, the
     // GitHub dashboard, or the notifications. Local renderer state, like viewMode;
     // the PR view is only reachable when a PR is detected for the selected branches
@@ -118,6 +121,18 @@ export const useUiStore = defineStore('ui', () => {
         diffLayout.value = layout;
     }
 
+    // Apply the sticky PR header setting right away, then persist it. Resolves to
+    // whether the save landed (the Settings page reports it).
+    async function setStickyPrHeader(enabled: boolean): Promise<boolean> {
+        stickyPrHeader.value = enabled;
+        try {
+            await window.api?.setStickyPrHeader(enabled);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     function setViewMode(mode: ViewMode) {
         viewMode.value = mode;
     }
@@ -161,6 +176,7 @@ export const useUiStore = defineStore('ui', () => {
         isDark,
         codeStyle,
         diffLayout,
+        stickyPrHeader,
         viewMode,
         mainView,
         dashboardCard,
@@ -170,6 +186,7 @@ export const useUiStore = defineStore('ui', () => {
         applyThemeState,
         setCodeStyle,
         setDiffLayout,
+        setStickyPrHeader,
         setViewMode,
         setMainView,
         openDashboard,

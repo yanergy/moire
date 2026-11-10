@@ -534,6 +534,10 @@ export interface MoireApi {
     // unsubscribe function.
     getDiffLayout(): Promise<DiffLayout>;
     onDiffLayoutChanged(cb: (layout: DiffLayout) => void): () => void;
+    // Whether the PR view's header stays pinned at the top while its conversation
+    // scrolls. App-wide, owned by the main process, changed on the Settings page.
+    getStickyPrHeader(): Promise<boolean>;
+    setStickyPrHeader(enabled: boolean): Promise<void>;
     // Fired when the native View → Refresh item is chosen; the renderer re-reads
     // the repo for the current range. Returns an unsubscribe function.
     onMenuRefresh(cb: () => void): () => void;

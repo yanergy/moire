@@ -15,6 +15,7 @@ import {
     Check,
     CircleCheck,
     GitBranch,
+    GitPullRequest,
     LayoutDashboard,
     LoaderCircle,
     TriangleAlert,
@@ -30,8 +31,8 @@ import BranchPicker from '@/components/controls/BranchPicker.vue';
 import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 
 // The Settings page: the open repository's main and development branch, its
-// notification settings and its dashboard settings. Every setting is kept per
-// repository, so the page needs one open. The notification and dashboard values
+// notification settings and its dashboard settings, kept per repository (so the
+// page needs one open), and the PR view's settings, which apply to every one. The notification and dashboard values
 // are the main process's, mirrored by the dashboard store.
 const comparison = useComparisonStore();
 const dashboard = useDashboardStore();
@@ -75,6 +76,7 @@ const sections = {
     branches: useTemplateRef<HTMLElement>('branches'),
     notifications: useTemplateRef<HTMLElement>('notifications'),
     dashboard: useTemplateRef<HTMLElement>('dashboard'),
+    prView: useTemplateRef<HTMLElement>('prView'),
 };
 
 // The side menu: one entry per section, in page order.
@@ -82,6 +84,7 @@ const NAV: { key: SettingsSection; label: string; icon: Component }[] = [
     { key: 'branches', label: 'Branches', icon: GitBranch },
     { key: 'notifications', label: 'Notifications', icon: Bell },
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { key: 'prView', label: 'PR view', icon: GitPullRequest },
 ];
 
 // The section the side menu highlights: the last one whose top has reached the
@@ -204,7 +207,7 @@ const groupLabel =
                 <div class="flex min-w-0 flex-col gap-0.5">
                     <span class="text-[18px] font-bold text-moire-fg">Settings</span>
                     <span v-if="comparison.repoPath" class="truncate text-[12px] text-moire-muted">
-                        These settings apply to
+                        Unless a section says otherwise, these settings apply to
                         <span class="font-medium text-moire-fg">{{ comparison.repoName }}</span>
                         only
                     </span>
@@ -459,6 +462,35 @@ const groupLabel =
                                         <Check :size="11" />
                                     </Checkbox>
                                     {{ card.label }}
+                                </label>
+                            </div>
+                        </section>
+
+                        <!-- PR view -->
+                        <section ref="prView" :class="sectionClass('prView')">
+                            <h2 :class="sectionTitle">PR view</h2>
+                            <p :class="sectionHint">
+                                How the pull request view looks. Applies to every repository.
+                            </p>
+                            <div :class="panelClass">
+                                <label :class="rowClass">
+                                    <Checkbox
+                                        :model-value="ui.stickyPrHeader"
+                                        :class="checkboxClass"
+                                        data-slot="sticky-pr-header"
+                                        @update:model-value="
+                                            save(() => ui.setStickyPrHeader(!!$event))
+                                        "
+                                    >
+                                        <Check :size="11" />
+                                    </Checkbox>
+                                    <div class="flex min-w-0 flex-1 flex-col">
+                                        <span>Sticky header</span>
+                                        <span :class="rowHint">
+                                            Keep the title, the Review and Edit mode buttons and the
+                                            tabs at the top while the conversation scrolls
+                                        </span>
+                                    </div>
                                 </label>
                             </div>
                         </section>

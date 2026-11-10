@@ -103,6 +103,10 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('diff-layout:changed', listener);
         return () => ipcRenderer.removeListener('diff-layout:changed', listener);
     },
+    // Whether the PR view's header stays pinned at the top while scrolling, set on
+    // the Settings page. Read on launch; the Settings page writes changes.
+    getStickyPrHeader: () => ipcRenderer.invoke('sticky-pr-header:get'),
+    setStickyPrHeader: (enabled: boolean) => ipcRenderer.invoke('sticky-pr-header:set', enabled),
     // Fired when the native View → Refresh item is chosen. Returns an unsubscribe
     // function so the caller can drop the listener.
     onMenuRefresh: (callback: () => void) => {

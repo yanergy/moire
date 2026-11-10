@@ -290,6 +290,21 @@ describe('PrView', () => {
         });
     });
 
+    it('pins the header and tabs at the top unless the sticky header setting is off', async () => {
+        const wrapper = mountWith(PR);
+        const header = () => wrapper.get('[data-slot="pr-header"]');
+        expect(header().classes()).toContain('sticky');
+        // The tabs pin along with the header.
+        expect(header().text()).toContain('Conversation');
+        expect(header().text()).toContain('Checks');
+        // So does the active tab's status box (here the merge state).
+        expect(header().find('[data-slot="pr-tab-status"]').exists()).toBe(true);
+
+        useUiStore().stickyPrHeader = false;
+        await flushPromises();
+        expect(header().classes()).not.toContain('sticky');
+    });
+
     it('shows up to two author initials in the avatar', () => {
         expect(mountWith(PR).text()).toContain('ST'); // s.trivedi -> ST
     });
