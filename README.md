@@ -38,11 +38,12 @@ The window opens automatically. Code changes reload live.
 ### Option 2: build and install a standalone app
 
 ```bash
-npm run pack    # build the renderer and package the app into release/
+npm run pack    # build the renderer and package the app into release/<version>/
 ```
 
 On macOS this writes a `.dmg` and a `.zip` for both Apple Silicon (`arm64`) and Intel (`x64`) into
-`release/`. Open the `.dmg` and drag Moiré into Applications.
+`release/<version>/` (for example `release/1.3.0/`). Open the `.dmg` and drag Moiré into
+Applications.
 
 Because the app is not code-signed, macOS Gatekeeper blocks it on first launch. To open it the
 first time, right-click (or Control-click) the app in Applications and choose **Open**, then
@@ -65,12 +66,13 @@ For that check to work, a release has to be published and its tag has to match t
 `package.json`. To cut a release:
 
 1. Bump `version` in `package.json` (for example `1.0.0` becomes `1.1.0`).
-2. Run `npm run pack` to build the installers into `release/`.
+2. Run `npm run pack` to build the installers into `release/<version>/` (for example
+   `release/1.1.0/`), so builds of different versions stay apart.
 3. Publish a GitHub release whose tag is `v` followed by that version (for example `v1.1.0`), with
    the built `.dmg` and `.zip` files attached as assets. The `gh` CLI does both at once:
 
     ```bash
-    gh release create v1.1.0 release/*.dmg release/*.zip \
+    gh release create v1.1.0 release/1.1.0/*.dmg release/1.1.0/*.zip \
       --title "Moiré 1.1.0" --notes "What changed"
     ```
 
@@ -266,7 +268,7 @@ last branch range are remembered per repository.
 
 ```bash
 npm run dev           # start Vite and the Electron window with hot reload
-npm run pack          # build the renderer and package the app into release/
+npm run pack          # build the renderer and package the app into release/<version>/
 npm run test:unit     # run the Vitest suite
 npm run type-check    # vue-tsc project type check
 npm run lint          # oxlint with autofix

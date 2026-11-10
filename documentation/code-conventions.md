@@ -33,7 +33,7 @@ Stack: Vue 3 · Vite 8 · Electron 44 · TypeScript · Tailwind CSS v4 · shadcn
 - After making changes, run: `npm run lint`, `npm run format`, `npm run type-check`.
   For behavior changes, also `npm run test:unit`.
 - Never run `electron .` directly. Dev = `npm run dev` (vite-plugin-electron launches Electron
-  itself). Packaged smoke test = `npm run pack`, then run the binary in `release/linux-unpacked/`.
+  itself). Packaged smoke test = `npm run pack`, then run the binary in `release/<version>/linux-unpacked/`.
 - Never commit or edit anything in `dist/`, `dist-electron/`, or `release/` — build output only.
 - Config files that are the source of truth: `.oxlintrc.json` (linting), `.oxfmtrc.json`
   (formatting), `vite.config.ts` (build). Don't create parallel/duplicate configs.
