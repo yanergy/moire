@@ -831,6 +831,16 @@ const mergeStatus = computed<StatusBox | null>(() => {
     return null;
 });
 
+// The status box leading the active tab: the merge state on the Conversation tab,
+// the CI checks' state on the Checks tab (only when there are checks to sum up).
+const tabStatus = computed<StatusBox | null>(() =>
+    activeTab.value === 'conversation'
+        ? mergeStatus.value
+        : checks.value.length
+          ? checksStatus.value
+          : null
+);
+
 // Open a GitHub URL (the PR, or a check's run) in the user's browser through the
 // preload bridge. The main process only opens http(s).
 function openExternal(url: string) {
@@ -1172,245 +1182,255 @@ function renderComment(comment: PrComment): string {
     <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
         <ScrollArea v-if="pr" ref="scrollArea" class="pr-scroll-area min-h-0 flex-1">
             <div class="w-full max-w-[1040px]">
-                <!-- Header -->
-                <div class="border-b border-moire-border px-4 pt-4 pb-4">
-                    <div class="flex items-start gap-3">
-                        <div
-                            class="min-w-0 flex-1 text-[18px] leading-[1.35] font-bold text-moire-fg"
-                        >
-                            {{ pr.title }}
-                            <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
-                        </div>
-                        <div class="flex shrink-0 items-center gap-1.5">
-                            <!-- Starts a review of this PR, or finishes the pending one. -->
-                            <review-button />
-                            <!-- The conversation is read-only until this is on; then the
-                                 composer and per-comment Edit actions appear. -->
-                            <Toggle
-                                variant="outline"
-                                size="sm"
-                                :model-value="editing"
-                                class="h-7 gap-1.5 border border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=on]:bg-moire-hover data-[state=on]:text-moire-fg"
-                                aria-label="Toggle edit mode"
-                                title="Edit mode: post and edit comments"
-                                @update:model-value="editing = $event"
+                <!-- The header and the tabs, pinned at the top while the conversation
+                     scrolls when the Sticky PR header setting is on (the default). -->
+                <div
+                    data-slot="pr-header"
+                    :class="ui.stickyPrHeader ? 'sticky top-0 z-20 bg-moire-app' : ''"
+                >
+                    <!-- Header -->
+                    <div class="border-b border-moire-border px-4 pt-4 pb-4">
+                        <div class="flex items-start gap-3">
+                            <div
+                                class="min-w-0 flex-1 text-[18px] leading-[1.35] font-bold text-moire-fg"
                             >
-                                <!-- Checkbox look borrowed from the diff viewer's "Mark
+                                {{ pr.title }}
+                                <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
+                            </div>
+                            <div class="flex shrink-0 items-center gap-1.5">
+                                <!-- Starts a review of this PR, or finishes the pending one. -->
+                                <review-button />
+                                <!-- The conversation is read-only until this is on; then the
+                                 composer and per-comment Edit actions appear. -->
+                                <Toggle
+                                    variant="outline"
+                                    size="sm"
+                                    :model-value="editing"
+                                    class="h-7 gap-1.5 border border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=on]:bg-moire-hover data-[state=on]:text-moire-fg"
+                                    aria-label="Toggle edit mode"
+                                    title="Edit mode: post and edit comments"
+                                    @update:model-value="editing = $event"
+                                >
+                                    <!-- Checkbox look borrowed from the diff viewer's "Mark
                                      viewed" button: a bordered square that fills with a
                                      check when on, so the state is unmistakable. Kept
                                      neutral (filled with the foreground, not an accent),
                                      matching this toggle's neutral pressed state. Not the
                                      real Checkbox primitive: it renders a button, and a
                                      button inside this Toggle would be invalid. -->
-                                <span
-                                    class="flex size-[15px] shrink-0 items-center justify-center rounded-sm border"
-                                    :class="
-                                        editing
-                                            ? 'border-moire-fg bg-moire-fg text-moire-check-fg'
-                                            : 'border-current'
-                                    "
-                                >
-                                    <Check v-if="editing" class="size-[11px]" />
-                                </span>
-                                Edit mode
-                            </Toggle>
-                            <!-- Secondary actions (refresh, open on GitHub) tuck into an
+                                    <span
+                                        class="flex size-[15px] shrink-0 items-center justify-center rounded-sm border"
+                                        :class="
+                                            editing
+                                                ? 'border-moire-fg bg-moire-fg text-moire-check-fg'
+                                                : 'border-current'
+                                        "
+                                    >
+                                        <Check v-if="editing" class="size-[11px]" />
+                                    </span>
+                                    Edit mode
+                                </Toggle>
+                                <!-- Secondary actions (refresh, open on GitHub) tuck into an
                                  overflow menu so the header stays uncluttered. While a
                                  refresh runs, the trigger shows the spinner in place of
                                  the "..." glyph. -->
-                            <Popover :open="topMenuOpen" @update:open="topMenuOpen = $event">
-                                <!-- The popover's own anchor, outside the tooltip: nested in the tooltip,
+                                <Popover :open="topMenuOpen" @update:open="topMenuOpen = $event">
+                                    <!-- The popover's own anchor, outside the tooltip: nested in the tooltip,
                                      PopoverTrigger would register the button as the tooltip's anchor and
                                      leave the popover unpositioned (both build on Reka's Popper). -->
-                                <PopoverAnchor as-child>
-                                    <span class="inline-flex">
-                                        <Tooltip>
-                                            <TooltipTrigger as-child>
-                                                <PopoverTrigger as-child>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon-sm"
-                                                        class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                                        aria-label="More actions"
+                                    <PopoverAnchor as-child>
+                                        <span class="inline-flex">
+                                            <Tooltip>
+                                                <TooltipTrigger as-child>
+                                                    <PopoverTrigger as-child>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon-sm"
+                                                            class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                            aria-label="More actions"
+                                                        >
+                                                            <RefreshCw
+                                                                v-if="refreshing"
+                                                                :size="16"
+                                                                class="animate-spin"
+                                                            />
+                                                            <MoreHorizontal v-else :size="16" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                </TooltipTrigger>
+                                                <TooltipContent>More actions</TooltipContent>
+                                            </Tooltip>
+                                        </span>
+                                    </PopoverAnchor>
+                                    <PopoverContent
+                                        align="end"
+                                        :side-offset="6"
+                                        class="w-48 overflow-hidden border-moire-border bg-moire-pop p-0"
+                                        :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
+                                    >
+                                        <Command class="bg-transparent">
+                                            <CommandList>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="refresh"
+                                                        aria-label="Refresh pull request"
+                                                        class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                                        @select="refreshPr"
                                                     >
                                                         <RefreshCw
-                                                            v-if="refreshing"
-                                                            :size="16"
-                                                            class="animate-spin"
+                                                            :size="14"
+                                                            class="shrink-0 text-moire-faint"
                                                         />
-                                                        <MoreHorizontal v-else :size="16" />
-                                                    </Button>
-                                                </PopoverTrigger>
-                                            </TooltipTrigger>
-                                            <TooltipContent>More actions</TooltipContent>
-                                        </Tooltip>
-                                    </span>
-                                </PopoverAnchor>
-                                <PopoverContent
-                                    align="end"
-                                    :side-offset="6"
-                                    class="w-48 overflow-hidden border-moire-border bg-moire-pop p-0"
-                                    :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
+                                                        <span class="flex-1">Refresh</span>
+                                                    </CommandItem>
+                                                    <CommandItem
+                                                        value="github"
+                                                        class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                                        @select="openPrOnGitHub"
+                                                    >
+                                                        <ExternalLink
+                                                            :size="14"
+                                                            class="shrink-0 text-moire-faint"
+                                                        />
+                                                        <span class="flex-1">Open on GitHub</span>
+                                                    </CommandItem>
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </div>
+
+                        <!-- who / stats / labels, each on its own line. -->
+                        <div class="mt-4 flex flex-col gap-2">
+                            <div
+                                class="flex flex-wrap items-center gap-2 text-[13px] text-moire-muted"
+                            >
+                                <user-avatar :login="pr.author" :size="20" />
+                                <span class="text-moire-fg">{{ pr.author }}</span>
+                                <span>
+                                    wants to merge {{ pr.commitCount }}
+                                    {{ pr.commitCount === 1 ? 'commit' : 'commits' }} into
+                                </span>
+                                <span
+                                    class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
                                 >
-                                    <Command class="bg-transparent">
-                                        <CommandList>
-                                            <CommandGroup>
-                                                <CommandItem
-                                                    value="refresh"
-                                                    aria-label="Refresh pull request"
-                                                    class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
-                                                    @select="refreshPr"
-                                                >
-                                                    <RefreshCw
-                                                        :size="14"
-                                                        class="shrink-0 text-moire-faint"
-                                                    />
-                                                    <span class="flex-1">Refresh</span>
-                                                </CommandItem>
-                                                <CommandItem
-                                                    value="github"
-                                                    class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
-                                                    @select="openPrOnGitHub"
-                                                >
-                                                    <ExternalLink
-                                                        :size="14"
-                                                        class="shrink-0 text-moire-faint"
-                                                    />
-                                                    <span class="flex-1">Open on GitHub</span>
-                                                </CommandItem>
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                                    {{ pr.baseRefName }}
+                                </span>
+                                <ArrowRight :size="12" class="text-moire-faint" />
+                                <span
+                                    class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
+                                >
+                                    {{ pr.headRefName }}
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-3 text-[13px] text-moire-faint">
+                                <span v-if="openedOn">Opened {{ openedOn }}</span>
+                                <span class="text-moire-add-fg">+{{ pr.additions }}</span>
+                                <span class="text-moire-del-fg">−{{ pr.deletions }}</span>
+                                <span
+                                    >{{ pr.changedFiles }}
+                                    {{ pr.changedFiles === 1 ? 'file' : 'files' }}</span
+                                >
+                            </div>
+
+                            <div v-if="pr.labels.length" class="flex flex-wrap gap-1.5">
+                                <span
+                                    v-for="label in pr.labels"
+                                    :key="label.name"
+                                    :title="label.description"
+                                    class="rounded-full border px-2.5 py-0.5 text-[13px] font-medium whitespace-nowrap"
+                                    :style="labelStyle(label.color)"
+                                >
+                                    {{ label.name }}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- who / stats / labels, each on its own line. -->
-                    <div class="mt-4 flex flex-col gap-2">
-                        <div class="flex flex-wrap items-center gap-2 text-[13px] text-moire-muted">
-                            <user-avatar :login="pr.author" :size="20" />
-                            <span class="text-moire-fg">{{ pr.author }}</span>
-                            <span>
-                                wants to merge {{ pr.commitCount }}
-                                {{ pr.commitCount === 1 ? 'commit' : 'commits' }} into
-                            </span>
-                            <span
-                                class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
-                            >
-                                {{ pr.baseRefName }}
-                            </span>
-                            <ArrowRight :size="12" class="text-moire-faint" />
-                            <span
-                                class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
-                            >
-                                {{ pr.headRefName }}
-                            </span>
-                        </div>
-
-                        <div class="flex items-center gap-3 text-[13px] text-moire-faint">
-                            <span v-if="openedOn">Opened {{ openedOn }}</span>
-                            <span class="text-moire-add-fg">+{{ pr.additions }}</span>
-                            <span class="text-moire-del-fg">−{{ pr.deletions }}</span>
-                            <span
-                                >{{ pr.changedFiles }}
-                                {{ pr.changedFiles === 1 ? 'file' : 'files' }}</span
-                            >
-                        </div>
-
-                        <div v-if="pr.labels.length" class="flex flex-wrap gap-1.5">
-                            <span
-                                v-for="label in pr.labels"
-                                :key="label.name"
-                                :title="label.description"
-                                class="rounded-full border px-2.5 py-0.5 text-[13px] font-medium whitespace-nowrap"
-                                :style="labelStyle(label.color)"
-                            >
-                                {{ label.name }}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tabs: the description and conversation, or the CI checks. The
+                    <!-- Tabs: the description and conversation, or the CI checks. The
                      counts (comments, passed/total checks) sit faint beside the
                      label, as in the design. -->
-                <div class="flex flex-none items-center border-b border-moire-border px-3 py-2">
-                    <div class="flex items-center gap-0.5">
-                        <button
-                            type="button"
-                            class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
-                            :class="
-                                activeTab === 'conversation'
-                                    ? 'bg-moire-hover text-moire-fg'
-                                    : 'text-moire-muted hover:text-moire-fg'
-                            "
-                            @click="activeTab = 'conversation'"
-                        >
-                            Conversation
-                            <span v-if="comments.length" class="text-moire-faint">
-                                {{ comments.length }}
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
-                            :class="
-                                activeTab === 'checks'
-                                    ? 'bg-moire-hover text-moire-fg'
-                                    : 'text-moire-muted hover:text-moire-fg'
-                            "
-                            @click="activeTab = 'checks'"
-                        >
-                            <!-- A glance-able roll-up of the checks (same glyphs as the
+                    <div class="flex flex-none items-center border-b border-moire-border px-3 py-2">
+                        <div class="flex items-center gap-0.5">
+                            <button
+                                type="button"
+                                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                                :class="
+                                    activeTab === 'conversation'
+                                        ? 'bg-moire-hover text-moire-fg'
+                                        : 'text-moire-muted hover:text-moire-fg'
+                                "
+                                @click="activeTab = 'conversation'"
+                            >
+                                Conversation
+                                <span v-if="comments.length" class="text-moire-faint">
+                                    {{ comments.length }}
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                                :class="
+                                    activeTab === 'checks'
+                                        ? 'bg-moire-hover text-moire-fg'
+                                        : 'text-moire-muted hover:text-moire-fg'
+                                "
+                                @click="activeTab = 'checks'"
+                            >
+                                <!-- A glance-able roll-up of the checks (same glyphs as the
                                  rows and the summary box), colored even when the tab is
                                  inactive so a failure stands out without opening it. -->
-                            <component
-                                :is="checksStatus.icon"
-                                v-if="checksStatus"
-                                :size="13"
-                                :class="checksStatus.iconCls"
-                            />
-                            Checks
-                            <span v-if="checks.length" class="text-moire-faint">
-                                {{ checksSummary }}
-                            </span>
-                        </button>
-                    </div>
+                                <component
+                                    :is="checksStatus.icon"
+                                    v-if="checksStatus"
+                                    :size="13"
+                                    :class="checksStatus.iconCls"
+                                />
+                                Checks
+                                <span v-if="checks.length" class="text-moire-faint">
+                                    {{ checksSummary }}
+                                </span>
+                            </button>
+                        </div>
 
-                    <div class="flex-1" />
+                        <div class="flex-1" />
 
-                    <!-- Fold or unfold the whole conversation (description and
+                        <!-- Fold or unfold the whole conversation (description and
                          comments) at once, mirroring the file tree's collapse-all. Kept
                          on the right, in the empty space past the tabs, so it can appear
                          and disappear (it shows only on the conversation tab) without
                          shifting the tabs. Only when something can fold. -->
-                    <Tooltip v-if="activeTab === 'conversation' && hasCollapsible">
-                        <TooltipTrigger as-child>
-                            <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                class="text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                                :aria-label="allCollapsed ? 'Expand all' : 'Collapse all'"
-                                @click="toggleAll"
-                            >
-                                <ChevronsUpDown v-if="allCollapsed" :size="16" />
-                                <ChevronsDownUp v-else :size="16" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{{
-                            allCollapsed ? 'Expand all' : 'Collapse all'
-                        }}</TooltipContent>
-                    </Tooltip>
+                        <Tooltip v-if="activeTab === 'conversation' && hasCollapsible">
+                            <TooltipTrigger as-child>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    class="text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                    :aria-label="allCollapsed ? 'Expand all' : 'Collapse all'"
+                                    @click="toggleAll"
+                                >
+                                    <ChevronsUpDown v-if="allCollapsed" :size="16" />
+                                    <ChevronsDownUp v-else :size="16" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{{
+                                allCollapsed ? 'Expand all' : 'Collapse all'
+                            }}</TooltipContent>
+                        </Tooltip>
+                    </div>
+                    <!-- The active tab's status box (the merge state, or the CI
+                         checks' state), part of the header so it stays in view with it. -->
+                    <div v-if="tabStatus" data-slot="pr-tab-status" class="px-4 pt-4">
+                        <pr-status-box :status="tabStatus" />
+                    </div>
                 </div>
-
-                <div class="p-4">
+                <div :class="tabStatus ? 'px-4 pb-4' : 'p-4'">
                     <!-- Conversation timeline. Each entry has an avatar column with a
                          connector line linking it to the next, as in the design. -->
                     <div v-if="activeTab === 'conversation'">
-                        <!-- The PR's merge state leads the tab. -->
-                        <pr-status-box :status="mergeStatus" />
-
                         <!-- A task-list checkbox write that failed (e.g. no permission).
                              It lives here because the checkbox is inside read-only
                              rendered HTML with nowhere of its own to report. -->
@@ -2066,7 +2086,6 @@ function renderComment(comment: PrComment): string {
                          (status glyph, name, faint detail), or an empty state. -->
                     <div v-else-if="activeTab === 'checks'">
                         <div v-if="checks.length">
-                            <pr-status-box :status="checksStatus" />
                             <div
                                 v-for="(check, i) in checks"
                                 :key="i"

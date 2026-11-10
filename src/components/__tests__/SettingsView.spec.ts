@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import SettingsView from '@/components/settings/SettingsView.vue';
 import BranchPicker from '@/components/controls/BranchPicker.vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { useUiStore } from '@/stores/ui';
 import type { DashboardState, NotificationSettingsChange } from '@/shared/types';
 import { dashboardState, notificationSettings, stubTooltips } from './fixtures';
 
@@ -24,6 +25,7 @@ function stubApi(state: DashboardState) {
         setRepoBranches: vi
             .fn<(path: string, settings: unknown) => Promise<void>>()
             .mockResolvedValue(undefined),
+        setStickyPrHeader: vi.fn<(enabled: boolean) => Promise<void>>().mockResolvedValue(),
     };
     window.api = api as unknown as Window['api'];
     return api;
@@ -87,7 +89,9 @@ describe('SettingsView', () => {
         openRepo();
         const wrapper = await mountView();
 
-        expect(wrapper.text()).toContain('These settings apply to moire only');
+        expect(wrapper.text()).toContain(
+            'Unless a section says otherwise, these settings apply to moire only'
+        );
         expect(api.getDashboardState).toHaveBeenCalledTimes(1);
     });
 
@@ -145,6 +149,24 @@ describe('SettingsView', () => {
         expect(api.setDashboardHiddenCards).toHaveBeenCalledWith(['stale']);
     });
 
+    it('turns the sticky PR header off and on again, sticky by default', async () => {
+        const api = stubApi(dashboardState());
+        openRepo();
+        const ui = useUiStore();
+        const wrapper = await mountView();
+
+        const box = wrapper.get('[data-slot="sticky-pr-header"]');
+        expect(box.attributes('data-state')).toBe('checked');
+
+        await box.trigger('click');
+        expect(ui.stickyPrHeader).toBe(false);
+        expect(api.setStickyPrHeader).toHaveBeenLastCalledWith(false);
+
+        await box.trigger('click');
+        expect(ui.stickyPrHeader).toBe(true);
+        expect(api.setStickyPrHeader).toHaveBeenLastCalledWith(true);
+    });
+
     describe('side menu', () => {
         beforeEach(() => {
             Element.prototype.scrollIntoView =
@@ -162,6 +184,7 @@ describe('SettingsView', () => {
                 'Branches',
                 'Notifications',
                 'Dashboard',
+                'PR view',
             ]);
             expect(navItems(wrapper)[0]!.attributes('aria-current')).toBe('true');
         });

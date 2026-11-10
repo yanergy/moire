@@ -236,6 +236,22 @@ export async function setFlourishes(enabled: boolean): Promise<void> {
     store.set('flourishes', enabled);
 }
 
+// Whether the PR view's header stays pinned at the top while its conversation
+// scrolls, from the Settings page. App-wide (a display preference, not a repo's).
+// Defaults on; turned off, the header scrolls away with the conversation. Left out
+// of the store's `defaults` on purpose: electron-store writes those to disk, which
+// would freeze today's default into the file, so only an explicit choice is stored
+// and a missing key always means the current default.
+export async function getStickyPrHeader(): Promise<boolean> {
+    const store = await getStore();
+    return store.get<boolean>('stickyPrHeader', true);
+}
+
+export async function setStickyPrHeader(enabled: boolean): Promise<void> {
+    const store = await getStore();
+    store.set('stickyPrHeader', enabled);
+}
+
 // The main window's last size, position, and maximized state, restored on launch
 // so the app reopens where it was left. Null until the first window closes.
 export async function getWindowState(): Promise<WindowState | null> {

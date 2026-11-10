@@ -41,6 +41,8 @@ import {
     getCodeStyle,
     getEditorPreference,
     getDiffLayout,
+    getStickyPrHeader,
+    setStickyPrHeader,
 } from '../settings';
 import { detectEditors, openWithEditor } from '../editors';
 import { currentThemeState } from '../theme';
@@ -342,6 +344,15 @@ function registerIpcHandlers({
     // The diff layout (single-file vs stacked all-files). Read on launch; the
     // View → Diff Layout menu pushes later changes via 'diff-layout:changed'.
     handle('diff-layout:get', () => getDiffLayout());
+
+    // Whether the PR view's header stays pinned while scrolling (Settings page).
+    handle('sticky-pr-header:get', () => getStickyPrHeader());
+    handle('sticky-pr-header:set', (enabled: unknown) => {
+        if (typeof enabled !== 'boolean') {
+            throw new TypeError('sticky-pr-header:set expects a boolean');
+        }
+        return setStickyPrHeader(enabled);
+    });
 
     // The GitHub dashboard for the open repository (see electron/notifier.ts). Only
     // reachable with a repository open; main pushes later updates via

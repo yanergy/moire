@@ -62,6 +62,8 @@ function stubApi() {
         getCodeStyle: vi.fn<() => Promise<CodeStyle>>().mockResolvedValue('github'),
         onCodeStyleChanged: vi.fn<(cb: (style: CodeStyle) => void) => Unsub>(() => unsub.codeStyle),
         getDiffLayout: vi.fn<() => Promise<DiffLayout>>().mockResolvedValue('single'),
+        getStickyPrHeader: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
+        setStickyPrHeader: vi.fn<(enabled: boolean) => Promise<void>>().mockResolvedValue(),
         onDiffLayoutChanged: vi.fn<(cb: (layout: DiffLayout) => void) => Unsub>(
             () => unsub.diffLayout
         ),
