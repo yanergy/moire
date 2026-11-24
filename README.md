@@ -205,6 +205,7 @@ last branch range are remembered per repository.
   that opens it in the diff), the commented line or lines (highlighted, with a line of context above
   and below), and the thread's comments. The other way, **Show in PR** on a review comment in the
   diff jumps to it in the conversation.
+- Copy buttons next to the base and head branch names in the PR view's header.
 - Code blocks in the description, comments and review comments get a **Copy** button in their top
   right corner (shown on hover), which copies the block's text and briefly shows **Copied**.
 - **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the

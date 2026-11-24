@@ -118,6 +118,20 @@ describe('PrView', () => {
         expect(text).toContain('Does things.');
     });
 
+    it('copies the base and head branch names from the header', async () => {
+        const copyText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
+        window.api = { copyText } as unknown as Window['api'];
+        const wrapper = mountWith(PR);
+
+        const buttons = wrapper.findAll('[data-slot="copy-button"]');
+        expect(buttons.map((b) => b.attributes('aria-label'))).toEqual([
+            'Copy base branch name',
+            'Copy head branch name',
+        ]);
+        await buttons[1]!.trigger('click');
+        expect(copyText).toHaveBeenCalledWith('feature');
+    });
+
     it('offers to start a review at the top right, or to finish the pending one', async () => {
         const wrapper = mountWith(PR);
         expect(wrapper.find('[data-slot="start-review"]').text()).toBe('Review');
