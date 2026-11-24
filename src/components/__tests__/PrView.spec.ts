@@ -176,6 +176,44 @@ describe('PrView', () => {
             );
         });
 
+        it('starts a resolved thread folded, with a muted Resolved badge', () => {
+            useComparisonStore().reviewThreads = [thread({ isResolved: true })];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(false);
+            expect(wrapper.get('[data-slot="thread-resolved"]').text()).toBe('Resolved');
+        });
+
+        it('keeps a thread the user unfolded open when the threads refresh', async () => {
+            const store = useComparisonStore();
+            store.reviewThreads = [thread({ isResolved: true })];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            await wrapper.get('[data-slot="thread-toggle"]').trigger('click');
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(true);
+
+            // A refresh swaps in new thread objects; the hand-set state holds.
+            store.reviewThreads = [thread({ isResolved: true })];
+            await flushPromises();
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(true);
+        });
+
+        it('keeps an unresolved thread unfolded', () => {
+            useComparisonStore().reviewThreads = [thread()];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(true);
+            expect(wrapper.find('[data-slot="thread-resolved"]').exists()).toBe(false);
+        });
+
         it("adds the line below from the PR's file while the diff is the PR's", async () => {
             const store = useComparisonStore();
             store.base = 'main';

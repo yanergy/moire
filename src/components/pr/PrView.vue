@@ -37,6 +37,7 @@ import { useUiStore } from '@/stores/ui';
 import { renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
 import { parseHunkTail, type HunkLine } from '@/lib/diff-hunk';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
@@ -257,23 +258,24 @@ function hasCard(comment: PrComment): boolean {
     return Boolean(comment.body.trim()) || threadsFor(comment).length > 0;
 }
 
-// Line comments folded down to their file name, by thread id.
-const collapsedThreads = ref<Set<string>>(new Set());
+// Line comments folded down to their file name. As on GitHub, a resolved thread
+// starts folded and an open one unfolded; a thread the user folded or unfolded by
+// hand keeps that choice (by thread id) through refreshes, until the PR changes.
+const threadFoldOverrides = ref(new Map<string, boolean>());
+const resolvedThreads = computed(
+    () => new Set(comparison.reviewThreads.filter((t) => t.isResolved).map((t) => t.id))
+);
 function isThreadCollapsed(threadId: string): boolean {
-    return collapsedThreads.value.has(threadId);
+    return threadFoldOverrides.value.get(threadId) ?? resolvedThreads.value.has(threadId);
 }
 function toggleThreadCollapsed(threadId: string) {
     setThreadCollapsed(threadId, !isThreadCollapsed(threadId));
 }
-// Resolving a thread from its footer folds it, as on GitHub; unresolving opens it.
+// Also used by the thread footer: resolving a thread folds it, unresolving opens it.
 function setThreadCollapsed(threadId: string, collapsed: boolean) {
-    const next = new Set(collapsedThreads.value);
-    if (collapsed) {
-        next.add(threadId);
-    } else {
-        next.delete(threadId);
-    }
-    collapsedThreads.value = next;
+    const next = new Map(threadFoldOverrides.value);
+    next.set(threadId, collapsed);
+    threadFoldOverrides.value = next;
 }
 
 // The code a thread's comment is on: the commented line (or the lines of a range
@@ -549,6 +551,7 @@ watch(
     () => {
         cancelTaskSaves();
         editing.value = false;
+        threadFoldOverrides.value = new Map();
         topMenuOpen.value = false;
         openMenuId.value = null;
         confirmingDeleteId.value = null;
@@ -1934,12 +1937,14 @@ function renderComment(comment: PrComment): string {
                                                 >
                                                     Outdated
                                                 </span>
-                                                <span
+                                                <Badge
                                                     v-if="thread.isResolved"
-                                                    class="text-[10px] font-medium tracking-wide text-moire-status-a uppercase"
+                                                    variant="outline"
+                                                    data-slot="thread-resolved"
+                                                    class="rounded-full border-moire-border px-2 py-0 text-[11px] font-normal text-moire-muted"
                                                 >
                                                     Resolved
-                                                </span>
+                                                </Badge>
                                             </div>
                                             <div
                                                 v-if="
