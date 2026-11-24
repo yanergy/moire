@@ -12,8 +12,22 @@ describe('MarkdownPreview', () => {
             props: { oldSource: '# Before', newSource: '# After' },
         });
 
-        expect(wrapper.find('[data-side="old"]').html()).toContain('<h1>Before</h1>');
-        expect(wrapper.find('[data-side="new"]').html()).toContain('<h1>After</h1>');
+        expect(wrapper.get('[data-side="old"] h1').text()).toBe('Before');
+        expect(wrapper.get('[data-side="new"] h1').text()).toBe('After');
+    });
+
+    it('tints the blocks that changed between the two versions', () => {
+        const wrapper = mount(MarkdownPreview, {
+            props: { oldSource: 'Same.\n\nBefore.', newSource: 'Same.\n\nAfter.' },
+        });
+
+        expect(wrapper.get('[data-side="old"] .pr-md-removed').text()).toBe('Before.');
+        expect(wrapper.get('[data-side="new"] .pr-md-added').text()).toBe('After.');
+    });
+
+    it('tints nothing for an added file', () => {
+        const wrapper = mount(MarkdownPreview, { props: { oldSource: null, newSource: 'New.' } });
+        expect(wrapper.find('.pr-md-added').exists()).toBe(false);
     });
 
     it('shows only the existing side for an added file', () => {

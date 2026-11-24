@@ -4,6 +4,7 @@
 // file has one version only, which then takes the full width.
 import { computed } from 'vue';
 import { isRelativeUrl, renderMarkdownFile } from '@/lib/markdown';
+import { highlightBlockChanges } from '@/lib/markdown-diff';
 
 const props = defineProps<{
     // null when the file does not exist on that side (an add or a delete).
@@ -11,14 +12,20 @@ const props = defineProps<{
     newSource: string | null;
 }>();
 
-const sides = computed(() =>
-    [
-        { key: 'old', source: props.oldSource },
-        { key: 'new', source: props.newSource },
-    ]
-        .filter((side) => side.source !== null)
-        .map((side) => ({ key: side.key, html: renderMarkdownFile(side.source) }))
-);
+// With both versions present, the blocks that changed between them are tinted
+// (removed on the left, added on the right), so the edit is visible in the
+// rendered view too. An add or a delete has nothing to compare against.
+const sides = computed(() => {
+    const oldHtml = props.oldSource === null ? null : renderMarkdownFile(props.oldSource);
+    const newHtml = props.newSource === null ? null : renderMarkdownFile(props.newSource);
+    const marked =
+        oldHtml !== null && newHtml !== null ? highlightBlockChanges(oldHtml, newHtml) : null;
+
+    return [
+        { key: 'old', html: marked?.oldHtml ?? oldHtml },
+        { key: 'new', html: marked?.newHtml ?? newHtml },
+    ].filter((side): side is { key: string; html: string } => side.html !== null);
+});
 
 // A web link opens in the browser rather than navigating the app window. A
 // relative link points into the repository at some ref, which there is no page
