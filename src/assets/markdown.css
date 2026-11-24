@@ -151,8 +151,17 @@
     max-width: 100%;
 }
 
-.pr-markdown table {
+/* Tables keep their natural width rather than shrinking to the comment, which would
+   wrap words over several lines. A wider one scrolls inside its wrapper (added in
+   src/lib/markdown.ts), so nothing sticks out past the comment border. */
+.pr-markdown .pr-table-scroll {
+    max-width: 100%;
     margin: 0 0 12px;
+    overflow-x: auto;
+}
+
+.pr-markdown table {
+    width: max-content;
     border-collapse: collapse;
 }
 
