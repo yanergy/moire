@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderMarkdown, toggleTask } from '@/lib/markdown';
+import { hasTaskList, renderMarkdown, toggleTask } from '@/lib/markdown';
 
 describe('renderMarkdown', () => {
     it('renders common Markdown constructs', () => {
@@ -132,5 +132,15 @@ describe('toggleTask', () => {
     it('returns null when there is no marker at that index', () => {
         expect(toggleTask('- [ ] only', 1)).toBeNull();
         expect(toggleTask('plain text', 0)).toBeNull();
+    });
+});
+
+describe('hasTaskList', () => {
+    it('finds a task-list item the way toggleTask does', () => {
+        expect(hasTaskList('- [ ] todo')).toBe(true);
+        expect(hasTaskList('intro\n  * [x] done')).toBe(true);
+        expect(hasTaskList('1. [ ] numbered')).toBe(true);
+        expect(hasTaskList('- plain item\n[ ] not a list')).toBe(false);
+        expect(hasTaskList('')).toBe(false);
     });
 });

@@ -723,27 +723,27 @@ describe('PrView', () => {
         expect(mountWith(null, 'no-pr').text()).toBe('');
     });
 
-    describe('edit mode', () => {
-        // Turn on edit mode via the header toggle, returning the mounted wrapper.
-        // Attaches to the body so the per-comment "..." menu can be opened.
-        async function enableEditing(pr: PullRequest) {
+    describe('editing', () => {
+        // Mount attached to the body so the per-comment "..." menu can be opened.
+        async function mountEditable(pr: PullRequest) {
             const wrapper = mountWith(pr, 'ok', true);
-            await wrapper.get('button[aria-label="Toggle edit mode"]').trigger('click');
+            await flushPromises();
             return wrapper;
         }
 
-        it('is read-only by default: no composer, no comment actions', () => {
-            const wrapper = mountWith({
-                ...PR,
-                comments: [comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true })],
-            });
+        // Turn on checkbox mode for the nth block that has a task list (the
+        // description first, then the comments in order).
+        async function enableCheckboxes(wrapper: ReturnType<typeof mountWith>, nth = 0) {
+            await wrapper.findAll('[data-slot="checkbox-mode"]')[nth]!.trigger('click');
+        }
 
-            expect(wrapper.find('textarea').exists()).toBe(false);
-            expect(wrapper.find('button[aria-label="Comment actions"]').exists()).toBe(false);
+        it('has no global edit mode toggle', () => {
+            const wrapper = mountWith(PR);
+            expect(wrapper.find('button[aria-label="Toggle edit mode"]').exists()).toBe(false);
         });
 
-        it('reveals the composer once edit mode is on', async () => {
-            const wrapper = await enableEditing({ ...PR, comments: [] });
+        it('always shows the composer', () => {
+            const wrapper = mountWith({ ...PR, comments: [] });
             expect(wrapper.find('textarea[aria-label="Add a comment"]').exists()).toBe(true);
         });
 
@@ -752,7 +752,6 @@ describe('PrView', () => {
             const post = vi.spyOn(store, 'postComment').mockResolvedValue({ ok: true });
 
             const wrapper = mountWith({ ...PR, comments: [] });
-            await wrapper.get('button[aria-label="Toggle edit mode"]').trigger('click');
             await wrapper.get('textarea[aria-label="Add a comment"]').setValue('Looks good');
             const commentBtn = wrapper.findAll('button').find((b) => b.text() === 'Comment')!;
             await commentBtn.trigger('click');
@@ -761,8 +760,8 @@ describe('PrView', () => {
             expect(post).toHaveBeenCalledWith('Looks good');
         });
 
-        it('shows the actions menu only on the viewer’s own comments', async () => {
-            const wrapper = await enableEditing({
+        it('shows the pencil and actions menu only on the viewer’s own comments', async () => {
+            const wrapper = await mountEditable({
                 ...PR,
                 comments: [
                     comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true }),
@@ -771,20 +770,19 @@ describe('PrView', () => {
             });
 
             expect(wrapper.findAll('button[aria-label="Comment actions"]').length).toBe(1);
+            expect(wrapper.findAll('button[aria-label="Edit comment"]').length).toBe(1);
         });
 
         it('edits an own comment through the store', async () => {
             const store = useComparisonStore();
             const edit = vi.spyOn(store, 'editComment').mockResolvedValue({ ok: true });
 
-            const wrapper = await enableEditing({
+            const wrapper = await mountEditable({
                 ...PR,
                 comments: [comment({ author: 'me', body: 'Original.', id: 'IC_1', canEdit: true })],
             });
 
-            await wrapper.get('button[aria-label="Comment actions"]').trigger('click');
-            await flushPromises();
-            clickMenuItem('Edit comment');
+            await wrapper.get('button[aria-label="Edit comment"]').trigger('click');
             await flushPromises();
 
             const editBox = wrapper.get('textarea[aria-label="Edit comment body"]');
@@ -803,7 +801,7 @@ describe('PrView', () => {
             const store = useComparisonStore();
             const del = vi.spyOn(store, 'deleteComment').mockResolvedValue({ ok: true });
 
-            const wrapper = await enableEditing({
+            const wrapper = await mountEditable({
                 ...PR,
                 comments: [comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true })],
             });
@@ -827,16 +825,16 @@ describe('PrView', () => {
             expect(del).toHaveBeenCalledWith('IC_1');
         });
 
-        it('has no description edit action until edit mode is on', () => {
+        it('offers the description pencil without any mode', () => {
             const wrapper = mountWith(PR);
-            expect(wrapper.find('button[aria-label="Edit description"]').exists()).toBe(false);
+            expect(wrapper.find('button[aria-label="Edit description"]').exists()).toBe(true);
         });
 
         it('edits the description through the store', async () => {
             const store = useComparisonStore();
             const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
 
-            const wrapper = await enableEditing({ ...PR, body: 'Original body.' });
+            const wrapper = await mountEditable({ ...PR, body: 'Original body.' });
 
             await wrapper.get('button[aria-label="Edit description"]').trigger('click');
             // Opening the editor first flushes any pending task-list edit, so it is async.
@@ -853,9 +851,40 @@ describe('PrView', () => {
             expect(edit).toHaveBeenCalledWith('Rewritten body.');
         });
 
-        it('keeps task checkboxes read-only until edit mode is on', () => {
+        it('keeps task checkboxes read-only until the block’s checkbox mode is on', async () => {
             const wrapper = mountWith({ ...PR, body: '- [ ] todo' });
             expect(wrapper.get('input.pr-task-checkbox').attributes('disabled')).toBeDefined();
+
+            await enableCheckboxes(wrapper);
+            expect(wrapper.get('input.pr-task-checkbox').attributes('disabled')).toBeUndefined();
+        });
+
+        it('offers checkbox mode only on blocks with a task list', () => {
+            const wrapper = mountWith({
+                ...PR,
+                body: 'No tasks.',
+                comments: [
+                    comment({ author: 'me', body: '- [ ] task', id: 'IC_1', canEdit: true }),
+                    comment({ author: 'me', body: 'Plain.', id: 'IC_2', canEdit: true }),
+                    comment({ author: 'x', body: '- [ ] theirs', id: 'IC_3', canEdit: false }),
+                ],
+            });
+            expect(wrapper.findAll('[data-slot="checkbox-mode"]')).toHaveLength(1);
+        });
+
+        it('turns checkbox mode on per block', async () => {
+            const wrapper = mountWith({
+                ...PR,
+                body: '- [ ] in description',
+                comments: [
+                    comment({ author: 'me', body: '- [ ] in comment', id: 'IC_1', canEdit: true }),
+                ],
+            });
+
+            await enableCheckboxes(wrapper, 1);
+            const boxes = wrapper.findAll('input.pr-task-checkbox');
+            expect(boxes[0]!.attributes('disabled')).toBeDefined();
+            expect(boxes[1]!.attributes('disabled')).toBeUndefined();
         });
 
         it('ticks a description checkbox at once and writes it back after the debounce', async () => {
@@ -863,7 +892,8 @@ describe('PrView', () => {
             const store = useComparisonStore();
             const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
 
-            const wrapper = await enableEditing({ ...PR, body: '- [ ] todo\n- [ ] done' });
+            const wrapper = await mountEditable({ ...PR, body: '- [ ] todo\n- [ ] done' });
+            await enableCheckboxes(wrapper);
 
             const box = wrapper.get('input.pr-task-checkbox');
             expect(box.attributes('disabled')).toBeUndefined();
@@ -888,7 +918,8 @@ describe('PrView', () => {
             const store = useComparisonStore();
             const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
 
-            const wrapper = await enableEditing({ ...PR, body: '- [ ] a\n- [ ] b' });
+            const wrapper = await mountEditable({ ...PR, body: '- [ ] a\n- [ ] b' });
+            await enableCheckboxes(wrapper);
 
             // Tick both boxes in quick succession (each re-renders, so re-query).
             await wrapper.findAll('input.pr-task-checkbox')[0]!.trigger('click');
@@ -912,13 +943,14 @@ describe('PrView', () => {
             const store = useComparisonStore();
             const edit = vi.spyOn(store, 'editComment').mockResolvedValue({ ok: true });
 
-            const wrapper = await enableEditing({
+            const wrapper = await mountEditable({
                 ...PR,
                 body: 'No tasks here.',
                 comments: [
                     comment({ author: 'me', body: '- [ ] task', id: 'IC_9', canEdit: true }),
                 ],
             });
+            await enableCheckboxes(wrapper);
 
             await wrapper.get('input.pr-task-checkbox').trigger('click');
             await vi.advanceTimersByTimeAsync(2000);
@@ -937,7 +969,8 @@ describe('PrView', () => {
                 })
             );
 
-            const wrapper = await enableEditing({ ...PR, body: '- [ ] a' });
+            const wrapper = await mountEditable({ ...PR, body: '- [ ] a' });
+            await enableCheckboxes(wrapper);
             await wrapper.get('input.pr-task-checkbox').trigger('click');
 
             // Pending: the edit is queued but not yet written.
@@ -961,17 +994,18 @@ describe('PrView', () => {
             expect(wrapper.text()).not.toContain('Saved');
         });
 
-        it('flushes a pending tick immediately when edit mode is turned off', async () => {
+        it('flushes a pending tick immediately when checkbox mode is turned off', async () => {
             const store = useComparisonStore();
             const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
 
-            const wrapper = await enableEditing({ ...PR, body: '- [ ] a' });
+            const wrapper = await mountEditable({ ...PR, body: '- [ ] a' });
+            await enableCheckboxes(wrapper);
             await wrapper.get('input.pr-task-checkbox').trigger('click');
             // Still within the debounce window: nothing written yet.
             expect(edit).not.toHaveBeenCalled();
 
-            // Leaving edit mode must not lose the tick: it is saved at once.
-            await wrapper.get('button[aria-label="Toggle edit mode"]').trigger('click');
+            // Leaving checkbox mode must not lose the tick: it is saved at once.
+            await enableCheckboxes(wrapper);
             await flushPromises();
             expect(edit).toHaveBeenCalledWith('- [x] a');
         });
@@ -980,7 +1014,8 @@ describe('PrView', () => {
             const store = useComparisonStore();
             const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
 
-            const wrapper = await enableEditing({ ...PR, body: '- [ ] a' });
+            const wrapper = await mountEditable({ ...PR, body: '- [ ] a' });
+            await enableCheckboxes(wrapper);
             await wrapper.get('input.pr-task-checkbox').trigger('click');
             // Still within the debounce window: nothing written yet.
             expect(edit).not.toHaveBeenCalled();
@@ -1000,7 +1035,8 @@ describe('PrView', () => {
                 message: 'No permission.',
             });
 
-            const wrapper = await enableEditing({ ...PR, body: '- [ ] a' });
+            const wrapper = await mountEditable({ ...PR, body: '- [ ] a' });
+            await enableCheckboxes(wrapper);
             await wrapper.get('input.pr-task-checkbox').trigger('click');
             // The optimistic tick shows first.
             expect(

@@ -468,7 +468,7 @@ export interface MoireApi {
     // line), by head SHA, for the diff viewer's warning markers. Resolves an empty
     // list when there are none or the lookup fails, so markers are simply absent.
     getCheckAnnotations(headSha: string): Promise<CheckAnnotation[]>;
-    // Conversation writes, allowed only while the PR view is in edit mode.
+    // Conversation writes from the PR view.
     // `postComment` adds a new comment to the PR (addressed by its number);
     // `editComment` rewrites an existing comment by its node id, and
     // `deleteComment` removes one by its node id (the signed-in account must be
