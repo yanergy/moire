@@ -225,33 +225,33 @@ describe('DiffPane selection banner', () => {
     });
 });
 
+const mdFile: ChangedFile = {
+    path: 'README.md',
+    status: 'M',
+    additions: 1,
+    deletions: 1,
+    binary: false,
+};
+const mdPair: FilePair = {
+    path: 'README.md',
+    oldContent: '# Old',
+    newContent: '# New',
+    language: 'markdown',
+    binary: false,
+    tooLarge: false,
+    sizeBytes: 5,
+};
+
+function seed(file: ChangedFile, pair: FilePair) {
+    const store = useComparisonStore();
+    store.files = [file];
+    store.selectedPath = file.path;
+    store.selectedPair = { ...pair };
+    return store;
+}
+
 describe('DiffPane rendered Markdown', () => {
     beforeEach(() => setActivePinia(createPinia()));
-
-    const mdFile: ChangedFile = {
-        path: 'README.md',
-        status: 'M',
-        additions: 1,
-        deletions: 1,
-        binary: false,
-    };
-    const mdPair: FilePair = {
-        path: 'README.md',
-        oldContent: '# Old',
-        newContent: '# New',
-        language: 'markdown',
-        binary: false,
-        tooLarge: false,
-        sizeBytes: 5,
-    };
-
-    function seed(file: ChangedFile, pair: FilePair) {
-        const store = useComparisonStore();
-        store.files = [file];
-        store.selectedPath = file.path;
-        store.selectedPair = { ...pair };
-        return store;
-    }
 
     it('shows the source diff by default, with a toggle', () => {
         seed(mdFile, mdPair);
