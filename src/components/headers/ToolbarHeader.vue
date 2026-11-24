@@ -57,6 +57,12 @@ const currentPage = computed(() => {
 // area offers to open one, and Settings says it needs one); the PR, Dashboard and
 // Notifications tabs while a repository is open (the PR tab disabled until a PR
 // is detected).
+
+// Right click on the swap button opens the same comparison preset menu as the
+// branch pickers beside it (built in main, shared with the Git menu).
+function showPresetMenu() {
+    void window.api?.showBranchPickerMenu?.();
+}
 </script>
 
 <template>
@@ -81,7 +87,9 @@ const currentPage = computed(() => {
                                 variant="ghost"
                                 size="icon-sm"
                                 class="size-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                data-slot="swap-refs"
                                 @click="comparison.swap()"
+                                @contextmenu.prevent="showPresetMenu"
                             >
                                 <ArrowRightLeft :size="16" />
                             </Button>

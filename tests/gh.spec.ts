@@ -130,6 +130,7 @@ describe('getPullRequest', () => {
                 state: 'COMMENTED',
                 id: '',
                 canEdit: false,
+                canDelete: false,
                 reviewId: 'PRR_x',
             },
             {
@@ -137,9 +138,11 @@ describe('getPullRequest', () => {
                 body: 'nice',
                 createdAt: '2026-09-02T00:00:00Z',
                 kind: 'comment',
-                // The comment carries its node id, and viewerDidAuthor marks it editable.
+                // The comment carries its node id; without the permission lookup,
+                // viewerDidAuthor marks it editable and deletable.
                 id: 'IC_1',
                 canEdit: true,
+                canDelete: true,
             },
             {
                 author: 'ann',
@@ -150,9 +153,50 @@ describe('getPullRequest', () => {
                 // Reviews are not editable through this path.
                 id: '',
                 canEdit: false,
+                canDelete: false,
                 reviewId: 'PRR_ann',
             },
         ]);
+    });
+
+    it("takes a comment's edit and delete rights from GitHub's permissions", async () => {
+        const calls: string[][] = [];
+        const run: GhRunner = (args) => {
+            calls.push(args);
+            const stdout =
+                args[0] === 'pr'
+                    ? JSON.stringify([
+                          {
+                              ...ghPr,
+                              id: 'PR_1',
+                              comments: [{ ...ghPr.comments[0]!, viewerDidAuthor: false }],
+                          },
+                      ])
+                    : JSON.stringify({
+                          data: {
+                              node: {
+                                  comments: {
+                                      nodes: [
+                                          {
+                                              id: 'IC_1',
+                                              viewerCanUpdate: true,
+                                              viewerCanDelete: true,
+                                          },
+                                      ],
+                                  },
+                              },
+                          },
+                      });
+            return Promise.resolve({ stdout, stderr: '' });
+        };
+
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+
+        expect(calls[1]).toContain('id=PR_1');
+        expect(result.pr!.comments.find((c) => c.id === 'IC_1')).toMatchObject({
+            canEdit: true,
+            canDelete: true,
+        });
     });
 
     it('reports no-pr for an empty gh result', async () => {
@@ -443,6 +487,56 @@ describe('getPullRequest review decision', () => {
                 })
             ).toBe('CHANGES_REQUESTED');
         });
+
+        // Issue #66: a reply in a review thread is a COMMENTED review, and it used to
+        // count as the reviewer's latest stance, hiding their change request from the
+        // settle check.
+        it('settles when the reviewer commented after requesting changes', async () => {
+            expect(
+                await decisionFor({
+                    reviewDecision: 'CHANGES_REQUESTED',
+                    reviews: [
+                        review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z'),
+                        review('bob', 'COMMENTED', '2026-09-06T00:00:00Z'),
+                    ],
+                    reviewRequests: [{ __typename: 'User', login: 'bob' }],
+                })
+            ).toBe('REVIEW_REQUIRED');
+        });
+
+        it('settles a derived decision when the reviewer commented after requesting changes', async () => {
+            expect(
+                await decisionFor({
+                    reviewDecision: '',
+                    reviews: [
+                        review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z'),
+                        review('bob', 'COMMENTED', '2026-09-06T00:00:00Z'),
+                    ],
+                    reviewRequests: [{ __typename: 'User', login: 'bob' }],
+                })
+            ).toBe('');
+        });
+    });
+
+    it('keeps a change request standing after a later comment from the same reviewer', async () => {
+        expect(
+            await decisionFor({
+                reviewDecision: '',
+                reviews: [
+                    review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z'),
+                    review('bob', 'COMMENTED', '2026-09-06T00:00:00Z'),
+                ],
+            })
+        ).toBe('CHANGES_REQUESTED');
+    });
+
+    it('drops a dismissed change request from the derived decision', async () => {
+        expect(
+            await decisionFor({
+                reviewDecision: '',
+                reviews: [review('bob', 'DISMISSED', '2026-09-05T00:00:00Z')],
+            })
+        ).toBe('');
     });
 
     it('leaves the decision empty when there are only plain comments', async () => {
@@ -677,6 +771,9 @@ describe('getReviewThreads', () => {
                                 createdAt: '2026-09-02T00:00:00Z',
                                 state: 'SUBMITTED',
                                 viewerDidAuthor: false,
+                                // A maintainer may edit someone else's comment.
+                                viewerCanUpdate: true,
+                                viewerCanDelete: false,
                                 diffHunk: '@@ -10,2 +10,3 @@\n a\n+b',
                                 pullRequestReview: { id: 'PRR_bob' },
                             },
@@ -687,6 +784,8 @@ describe('getReviewThreads', () => {
                                 createdAt: '2026-09-03Z',
                                 state: 'SUBMITTED',
                                 viewerDidAuthor: true,
+                                viewerCanUpdate: true,
+                                viewerCanDelete: true,
                             },
                         ],
                     },
@@ -735,6 +834,8 @@ describe('getReviewThreads', () => {
                     createdAt: '2026-09-02T00:00:00Z',
                     isPending: false,
                     viewerDidAuthor: false,
+                    canEdit: true,
+                    canDelete: false,
                 },
                 {
                     id: 'RC_2',
@@ -743,6 +844,8 @@ describe('getReviewThreads', () => {
                     createdAt: '2026-09-03Z',
                     isPending: false,
                     viewerDidAuthor: true,
+                    canEdit: true,
+                    canDelete: true,
                 },
             ],
         });

@@ -46,10 +46,12 @@ export interface PrComment {
     kind: 'comment' | 'review';
     state?: string;
     // The GraphQL node id, used to edit the comment (empty for reviews, which this
-    // path does not edit). `canEdit` is gh's viewerDidAuthor: the signed-in account
-    // wrote it, so it may edit it.
+    // path does not edit). `canEdit` and `canDelete` are GitHub's viewerCanUpdate and
+    // viewerCanDelete, so a maintainer may also edit or delete someone else's comment.
+    // They fall back to viewerDidAuthor when that lookup fails.
     id: string;
     canEdit: boolean;
+    canDelete: boolean;
     // A review's own node id, which its line comments' threads point back to, so
     // the PR view can show them under the review.
     reviewId?: string;
@@ -157,6 +159,8 @@ interface GhLabel {
 // Markdown body, and when it was posted. `isPending` marks a comment still in the
 // viewer's unsubmitted review (only its author can see those); `viewerDidAuthor`
 // says whether the viewer wrote it, so a pending one can be edited or deleted.
+// `canEdit`/`canDelete` are GitHub's viewerCanUpdate/viewerCanDelete, for the PR
+// conversation's Edit and Delete actions on a posted comment.
 export interface PrReviewComment {
     id: string;
     author: string;
@@ -164,6 +168,8 @@ export interface PrReviewComment {
     createdAt: string;
     isPending: boolean;
     viewerDidAuthor: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
 }
 
 // An inline (line-anchored) code review thread on the PR, shown as a marker in the
@@ -290,6 +296,7 @@ function buildComments(pr: GhPr): PrComment[] {
             kind: 'comment',
             id: c.id ?? '',
             canEdit: !!c.viewerDidAuthor,
+            canDelete: !!c.viewerDidAuthor,
         });
     }
 
@@ -309,6 +316,7 @@ function buildComments(pr: GhPr): PrComment[] {
             // they carry no id and are never marked editable.
             id: '',
             canEdit: false,
+            canDelete: false,
             reviewId: r.id ?? '',
         });
     }
@@ -340,6 +348,8 @@ export function settleReRequestedChanges(
     return fromGitHub ? 'REVIEW_REQUIRED' : '';
 }
 
+const OPINIONATED_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED']);
+
 // The effective review decision. gh fills `reviewDecision` only when the repo
 // requires reviews (branch protection); otherwise it is empty even after a
 // "changes requested" review. So when it is empty, derive the decision from the
@@ -354,8 +364,10 @@ function reviewDecisionOf(pr: GhPr): string {
     const latest = new Map<string, string>();
     for (const r of reviews) {
         const login = r.author?.login ?? '';
-        // A pending review is not submitted yet, so it does not change a stance.
-        if (login && r.state && r.state !== 'PENDING') {
+        // Only an approval, a change request, or a dismissal sets a stance. A pending
+        // review is not submitted yet, and a COMMENTED review (every reply in a thread
+        // is one) leaves an earlier change request standing, as on GitHub.
+        if (login && r.state && OPINIONATED_STATES.has(r.state)) {
             latest.set(login, r.state);
         }
     }
@@ -572,7 +584,58 @@ export async function getPullRequest(
         return { status: 'no-pr', pr: null };
     }
 
-    return { status: 'ok', pr: toPullRequest(raw) };
+    const pr = toPullRequest(raw);
+    await applyCommentPermissions(repoPath, pr, run);
+    return { status: 'ok', pr };
+}
+
+// `gh pr list --json comments` only says whether the viewer wrote a comment, not
+// whether they may edit or delete it (a maintainer may, on anyone's). Those come
+// from GraphQL by the PR's node id. Best effort: on any failure, or for a comment
+// past the first 100, the viewerDidAuthor fallback stays.
+const COMMENT_PERMISSIONS_QUERY =
+    'query($id:ID!){node(id:$id){... on PullRequest{comments(first:100){nodes{' +
+    'id viewerCanUpdate viewerCanDelete}}}}}';
+
+interface GhCommentPermission {
+    id?: string | null;
+    viewerCanUpdate?: boolean | null;
+    viewerCanDelete?: boolean | null;
+}
+
+async function applyCommentPermissions(
+    repoPath: string,
+    pr: PullRequest,
+    run: GhRunner
+): Promise<void> {
+    if (!pr.id || !pr.comments.some((c) => c.kind === 'comment')) {
+        return;
+    }
+
+    let nodes: GhCommentPermission[];
+    try {
+        const { stdout } = await run(
+            ['api', 'graphql', '-f', `query=${COMMENT_PERMISSIONS_QUERY}`, '-f', `id=${pr.id}`],
+            repoPath
+        );
+        const parsed = JSON.parse(stdout) as {
+            data?: { node?: { comments?: { nodes?: GhCommentPermission[] | null } | null } };
+        };
+        nodes = parsed.data?.node?.comments?.nodes ?? [];
+    } catch {
+        return;
+    }
+
+    const byId = new Map(nodes.filter((n) => n.id).map((n) => [n.id!, n]));
+    for (const comment of pr.comments) {
+        const permission = byId.get(comment.id);
+        if (comment.kind !== 'comment' || !permission) {
+            continue;
+        }
+
+        comment.canEdit = !!permission.viewerCanUpdate;
+        comment.canDelete = !!permission.viewerCanDelete;
+    }
 }
 
 // --- Inline review threads (GraphQL) ---
@@ -605,12 +668,15 @@ interface GhReviewComment {
     createdAt: string | null;
     state?: string | null;
     viewerDidAuthor?: boolean | null;
+    viewerCanUpdate?: boolean | null;
+    viewerCanDelete?: boolean | null;
 }
 
 const REVIEW_THREADS_QUERY =
     'query($id:ID!){node(id:$id){... on PullRequest{reviewThreads(first:100){nodes{' +
     'id path line originalLine startLine originalStartLine diffSide isResolved isOutdated ' +
     'comments(first:100){nodes{id author{login} body createdAt state viewerDidAuthor ' +
+    'viewerCanUpdate viewerCanDelete ' +
     'diffHunk pullRequestReview{id}}}}}}}}';
 
 function toReviewThread(node: GhReviewThread): PrReviewThread {
@@ -622,6 +688,8 @@ function toReviewThread(node: GhReviewThread): PrReviewThread {
         createdAt: c.createdAt ?? '',
         isPending: c.state === 'PENDING',
         viewerDidAuthor: c.viewerDidAuthor ?? false,
+        canEdit: c.viewerCanUpdate ?? false,
+        canDelete: c.viewerCanDelete ?? false,
     }));
     return {
         id: node.id ?? '',
