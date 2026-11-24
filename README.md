@@ -192,6 +192,9 @@ last branch range are remembered per repository.
   that opens the working-tree copy, and **View > Open Files In** chooses the OS default app or a
   detected editor (auto-detected per machine and persisted across launches).
 - Rename detection, binary-file notices, and inline image previews.
+- A rendered view for Markdown files (`.md`, `.markdown`): a **Source / Rendered** toggle in the
+  file header shows the base and head versions rendered side by side, in both diff layouts.
+  Relative images in the rendered view show their alt text for now.
 - A large-file gate so oversized files never freeze the UI.
 - A status bar reporting line-ending style and how long ago the diff was synced.
 

@@ -6,6 +6,9 @@ import DiffViewer from '@/components/diff/DiffViewer.vue';
 import LargeFileGate from '@/components/diff/LargeFileGate.vue';
 import BinaryFileNotice from '@/components/diff/BinaryFileNotice.vue';
 import ImagePreview from '@/components/diff/ImagePreview.vue';
+import MarkdownPreview from '@/components/diff/MarkdownPreview.vue';
+import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
+import { useUiStore } from '@/stores/ui';
 import { useComparisonStore } from '@/stores/comparison';
 import type { ChangedFile, FilePair } from '@/shared/types';
 import { stubTooltips } from './fixtures';
@@ -144,5 +147,27 @@ describe('StackedDiffCard', () => {
 
         await wrapper.get('[title="src/app.ts"]').trigger('click');
         expect(openFile).toHaveBeenCalledWith('src/app.ts');
+    });
+
+    it('switches a Markdown file to the rendered view from its header', async () => {
+        const md: ChangedFile = { ...textFile, path: 'README.md' };
+        const { wrapper } = await mountCard(
+            md,
+            pairOf({ path: 'README.md', language: 'markdown' })
+        );
+        expect(wrapper.findComponent(DiffViewer).exists()).toBe(true);
+
+        const rendered = wrapper.findAll('button').find((b) => b.text() === 'Rendered');
+        await rendered!.trigger('click');
+        await flushPromises();
+
+        expect(useUiStore().isMarkdownRendered('README.md')).toBe(true);
+        expect(wrapper.findComponent(MarkdownPreview).exists()).toBe(true);
+        expect(wrapper.findComponent(DiffViewer).exists()).toBe(false);
+    });
+
+    it('offers no Markdown toggle for other files', async () => {
+        const { wrapper } = await mountCard(textFile, pairOf());
+        expect(wrapper.findComponent(SegmentedToggle).exists()).toBe(false);
     });
 });
