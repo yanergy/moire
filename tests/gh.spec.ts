@@ -443,6 +443,56 @@ describe('getPullRequest review decision', () => {
                 })
             ).toBe('CHANGES_REQUESTED');
         });
+
+        // Issue #66: a reply in a review thread is a COMMENTED review, and it used to
+        // count as the reviewer's latest stance, hiding their change request from the
+        // settle check.
+        it('settles when the reviewer commented after requesting changes', async () => {
+            expect(
+                await decisionFor({
+                    reviewDecision: 'CHANGES_REQUESTED',
+                    reviews: [
+                        review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z'),
+                        review('bob', 'COMMENTED', '2026-09-06T00:00:00Z'),
+                    ],
+                    reviewRequests: [{ __typename: 'User', login: 'bob' }],
+                })
+            ).toBe('REVIEW_REQUIRED');
+        });
+
+        it('settles a derived decision when the reviewer commented after requesting changes', async () => {
+            expect(
+                await decisionFor({
+                    reviewDecision: '',
+                    reviews: [
+                        review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z'),
+                        review('bob', 'COMMENTED', '2026-09-06T00:00:00Z'),
+                    ],
+                    reviewRequests: [{ __typename: 'User', login: 'bob' }],
+                })
+            ).toBe('');
+        });
+    });
+
+    it('keeps a change request standing after a later comment from the same reviewer', async () => {
+        expect(
+            await decisionFor({
+                reviewDecision: '',
+                reviews: [
+                    review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z'),
+                    review('bob', 'COMMENTED', '2026-09-06T00:00:00Z'),
+                ],
+            })
+        ).toBe('CHANGES_REQUESTED');
+    });
+
+    it('drops a dismissed change request from the derived decision', async () => {
+        expect(
+            await decisionFor({
+                reviewDecision: '',
+                reviews: [review('bob', 'DISMISSED', '2026-09-05T00:00:00Z')],
+            })
+        ).toBe('');
     });
 
     it('leaves the decision empty when there are only plain comments', async () => {
