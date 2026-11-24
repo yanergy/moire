@@ -1333,11 +1333,11 @@ describe('getPullRequest reviewers', () => {
                 ],
             })
         ).toEqual([
-            { login: 'ann', kind: 'user', state: 'APPROVED' },
-            { login: 'bob', kind: 'user', state: 'CHANGES_REQUESTED' },
-            { login: 'cid', kind: 'user', state: 'COMMENTED' },
-            { login: 'dan', kind: 'user', state: 'PENDING' },
-            { login: 'core', kind: 'team', state: 'PENDING' },
+            { login: 'ann', kind: 'user', state: 'APPROVED', rerequested: false },
+            { login: 'bob', kind: 'user', state: 'CHANGES_REQUESTED', rerequested: false },
+            { login: 'cid', kind: 'user', state: 'COMMENTED', rerequested: false },
+            { login: 'dan', kind: 'user', state: 'PENDING', rerequested: false },
+            { login: 'core', kind: 'team', state: 'PENDING', rerequested: false },
         ]);
     });
 
@@ -1352,18 +1352,18 @@ describe('getPullRequest reviewers', () => {
                 ],
             })
         ).toEqual([
-            { login: 'ann', kind: 'user', state: 'CHANGES_REQUESTED' },
-            { login: 'bob', kind: 'user', state: 'COMMENTED' },
+            { login: 'ann', kind: 'user', state: 'CHANGES_REQUESTED', rerequested: false },
+            { login: 'bob', kind: 'user', state: 'COMMENTED', rerequested: false },
         ]);
     });
 
-    it('shows a re-requested reviewer as pending, listed once', async () => {
+    it("keeps a re-requested reviewer's verdict, flagged as re-requested, listed once", async () => {
         expect(
             await reviewersFor({
                 reviews: [review('ann', 'CHANGES_REQUESTED', '2026-09-04T00:00:00Z')],
                 reviewRequests: [{ __typename: 'User', login: 'ann' }],
             })
-        ).toEqual([{ login: 'ann', kind: 'user', state: 'PENDING' }]);
+        ).toEqual([{ login: 'ann', kind: 'user', state: 'CHANGES_REQUESTED', rerequested: true }]);
     });
 
     it("leaves out the author's own replies and unsubmitted reviews", async () => {

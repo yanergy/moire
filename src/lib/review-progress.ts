@@ -11,12 +11,14 @@ export interface ReviewProgress {
     total: number;
 }
 
+// A re-requested reviewer counts under their earlier verdict and as pending too,
+// since a new response is still owed.
 export function reviewProgress(reviewers: PrReviewer[]): ReviewProgress {
     const count = (state: PrReviewer['state']) => reviewers.filter((r) => r.state === state).length;
     return {
         approved: count('APPROVED'),
         changesRequested: count('CHANGES_REQUESTED'),
-        pending: count('PENDING'),
+        pending: reviewers.filter((r) => r.state === 'PENDING' || r.rerequested).length,
         commented: count('COMMENTED'),
         total: reviewers.length,
     };

@@ -134,8 +134,8 @@ describe('PrView', () => {
         const wrapper = mountWith({
             ...PR,
             reviewers: [
-                { login: 'ann', kind: 'user', state: 'APPROVED' },
-                { login: 'bob', kind: 'user', state: 'PENDING' },
+                { login: 'ann', kind: 'user', state: 'APPROVED', rerequested: false },
+                { login: 'bob', kind: 'user', state: 'PENDING', rerequested: false },
             ],
         });
         const tab = wrapper.get('[data-slot="reviewers-tab"]');

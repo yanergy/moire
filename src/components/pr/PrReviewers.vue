@@ -52,6 +52,9 @@ const STATE: Record<PrReviewerState, { icon: Component; text: string; cls: strin
             >
                 <component :is="STATE[reviewer.state].icon" :size="14" />
                 {{ STATE[reviewer.state].text }}
+                <span v-if="reviewer.rerequested" data-slot="rerequested" class="text-moire-faint">
+                    · re-requested
+                </span>
             </span>
         </div>
     </div>

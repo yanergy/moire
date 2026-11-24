@@ -543,6 +543,7 @@ export function buildReviewers(pr: GhPr): PrReviewer[] {
         login,
         kind: 'user',
         state,
+        rerequested: false,
     }));
     for (const request of pr.reviewRequests ?? []) {
         const kind = request.login ? 'user' : 'team';
@@ -553,9 +554,9 @@ export function buildReviewers(pr: GhPr): PrReviewer[] {
 
         const existing = reviewers.find((r) => r.kind === kind && r.login === login);
         if (existing) {
-            existing.state = 'PENDING';
+            existing.rerequested = true;
         } else {
-            reviewers.push({ login, kind, state: 'PENDING' });
+            reviewers.push({ login, kind, state: 'PENDING', rerequested: false });
         }
     }
 
