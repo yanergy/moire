@@ -893,6 +893,77 @@ describe('PrView', () => {
             expect(del).toHaveBeenCalledWith('IC_1');
         });
 
+        it('deletes an own line comment in a review thread, after confirming', async () => {
+            const store = useComparisonStore();
+            store.reviewThreads = [thread()];
+            const del = vi.spyOn(store, 'deleteReviewComment').mockResolvedValue({ ok: true });
+            const issueDel = vi.spyOn(store, 'deleteComment');
+
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            await wrapper.get('[data-slot="thread-comment-menu"]').trigger('click');
+            await flushPromises();
+            clickMenuItem('Delete comment');
+            await flushPromises();
+            expect(document.body.textContent).toContain('Test 2');
+            expect(del).not.toHaveBeenCalled();
+
+            const confirmBtn = [...document.querySelectorAll('button')].find(
+                (b) => b.textContent?.trim() === 'Delete comment'
+            );
+            confirmBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await flushPromises();
+
+            expect(del).toHaveBeenCalledWith('RC_1');
+            expect(issueDel).not.toHaveBeenCalled();
+        });
+
+        it('edits an own line comment in a review thread through the store', async () => {
+            const store = useComparisonStore();
+            store.reviewThreads = [thread()];
+            const edit = vi.spyOn(store, 'editReviewComment').mockResolvedValue({ ok: true });
+            const issueEdit = vi.spyOn(store, 'editComment');
+
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            await wrapper.get('[data-slot="thread-comment-menu"]').trigger('click');
+            await flushPromises();
+            clickMenuItem('Edit comment');
+            await flushPromises();
+
+            const editBox = wrapper.get('textarea[aria-label="Edit comment body"]');
+            expect((editBox.element as HTMLTextAreaElement).value).toBe('Test 2');
+            await editBox.setValue('Test 3');
+            await wrapper
+                .findAll('button')
+                .find((b) => b.text() === 'Save')!
+                .trigger('click');
+            await flushPromises();
+
+            expect(edit).toHaveBeenCalledWith('RC_1', 'Test 3');
+            expect(issueEdit).not.toHaveBeenCalled();
+            expect(wrapper.find('textarea[aria-label="Edit comment body"]').exists()).toBe(false);
+        });
+
+        it("offers no actions on someone else's line comment", async () => {
+            const own = thread();
+            useComparisonStore().reviewThreads = [
+                { ...own, comments: [{ ...own.comments[0]!, viewerDidAuthor: false }] },
+            ];
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            expect(wrapper.find('[data-slot="thread-comment-menu"]').exists()).toBe(false);
+        });
+
         it('has no description edit action until edit mode is on', () => {
             const wrapper = mountWith(PR);
             expect(wrapper.find('button[aria-label="Edit description"]').exists()).toBe(false);
