@@ -118,6 +118,17 @@ describe('PrView', () => {
         expect(text).toContain('Does things.');
     });
 
+    it('disables Refresh for a moment after the PR was fetched', async () => {
+        const wrapper = mountWith(PR, 'ok', true);
+        useComparisonStore().prLoadedAt = Date.now();
+        await wrapper.get('button[aria-label="More actions"]').trigger('click');
+        await flushPromises();
+
+        const item = document.querySelector('[aria-label="Refresh pull request"]')!;
+        expect(item.hasAttribute('data-disabled')).toBe(true);
+        expect(item.textContent).toContain('Refreshed just now');
+    });
+
     it('offers to start a review at the top right, or to finish the pending one', async () => {
         const wrapper = mountWith(PR);
         expect(wrapper.find('[data-slot="start-review"]').text()).toBe('Review');

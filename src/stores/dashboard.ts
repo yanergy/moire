@@ -184,9 +184,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return api ? run(() => api.getDashboardState()) : Promise.resolve(false);
     }
 
+    // A manual refresh. Skipped while another call is in flight, so repeated clicks
+    // (or another caller) cannot stack up overlapping polls.
     function refresh() {
         const api = window.api;
-        return api ? run(() => api.refreshDashboard()) : Promise.resolve(false);
+        if (!api || loading.value) {
+            return Promise.resolve(false);
+        }
+
+        return run(() => api.refreshDashboard());
     }
 
     // Flip the toggle right away so the lists update without waiting on main.

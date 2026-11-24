@@ -416,6 +416,16 @@ describe('dashboard store', () => {
             expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
         });
 
+        it('skips a refresh while another call is in flight', async () => {
+            const api = stubApi(state());
+            const store = useDashboardStore();
+
+            const first = store.load();
+            expect(await store.refresh()).toBe(false);
+            await first;
+            expect(api.refreshDashboard).not.toHaveBeenCalled();
+        });
+
         it('loads the settings without fetching, and persists the merged period', async () => {
             const api = stubApi(state({ mergedPeriod: 'month' }));
             const settings = {
