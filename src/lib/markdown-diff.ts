@@ -4,6 +4,8 @@
 // items of lists and quotes) are matched up with a longest common subsequence, and
 // the unmatched ones are tagged: removed on the old side, added on the new side. A
 // block that was edited shows as removed on the left and added on the right.
+// Each run of changed blocks between two unchanged ones is one change, numbered in
+// order on both sides (`data-change`), so prev/next can step through them.
 
 const CHANGED_CLASS = { old: 'pr-md-removed', new: 'pr-md-added' } as const;
 
@@ -34,8 +36,13 @@ function keyOf(block: Element): string {
     return block.outerHTML.replace(/ data-task-index="\d+"/g, '');
 }
 
-// Which blocks on each side are part of the longest common subsequence.
-function matched(a: string[], b: string[]): { a: boolean[]; b: boolean[] } {
+// Each block's change number on both sides: null for a block kept unchanged,
+// otherwise the index of the run of changes it belongs to. Runs are cut by the
+// unchanged blocks of the longest common subsequence.
+function changeRuns(
+    a: string[],
+    b: string[]
+): { a: (number | null)[]; b: (number | null)[]; count: number } {
     const lengths: number[][] = Array.from({ length: a.length + 1 }, () =>
         Array.from({ length: b.length + 1 }, () => 0)
     );
@@ -48,22 +55,32 @@ function matched(a: string[], b: string[]): { a: boolean[]; b: boolean[] } {
         }
     }
 
-    const inA = Array.from({ length: a.length }, () => false);
-    const inB = Array.from({ length: b.length }, () => false);
+    const runA: (number | null)[] = Array.from({ length: a.length }, () => null);
+    const runB: (number | null)[] = Array.from({ length: b.length }, () => null);
+    let run = 0;
+    let open = false;
     let i = 0;
     let j = 0;
-    while (i < a.length && j < b.length) {
-        if (a[i] === b[j]) {
-            inA[i++] = true;
-            inB[j++] = true;
-        } else if (lengths[i + 1]![j]! >= lengths[i]![j + 1]!) {
+    while (i < a.length || j < b.length) {
+        if (i < a.length && j < b.length && a[i] === b[j]) {
             i++;
-        } else {
             j++;
+            if (open) {
+                run++;
+                open = false;
+            }
+            continue;
+        }
+
+        open = true;
+        if (j >= b.length || (i < a.length && lengths[i + 1]![j]! >= lengths[i]![j + 1]!)) {
+            runA[i++] = run;
+        } else {
+            runB[j++] = run;
         }
     }
 
-    return { a: inA, b: inB };
+    return { a: runA, b: runB, count: open ? run + 1 : run };
 }
 
 // Tag the changed blocks of two sanitized HTML strings. Parsed in inert templates,
@@ -72,7 +89,7 @@ function matched(a: string[], b: string[]): { a: boolean[]; b: boolean[] } {
 export function highlightBlockChanges(
     oldHtml: string,
     newHtml: string
-): { oldHtml: string; newHtml: string } {
+): { oldHtml: string; newHtml: string; changeCount: number } {
     const oldDoc = document.createElement('template');
     const newDoc = document.createElement('template');
     oldDoc.innerHTML = oldHtml;
@@ -81,20 +98,21 @@ export function highlightBlockChanges(
     const oldBlocks = blocksOf(oldDoc.content);
     const newBlocks = blocksOf(newDoc.content);
     if (oldBlocks.length * newBlocks.length > MAX_CELLS) {
-        return { oldHtml, newHtml };
+        return { oldHtml, newHtml, changeCount: 0 };
     }
 
-    const kept = matched(oldBlocks.map(keyOf), newBlocks.map(keyOf));
-    oldBlocks.forEach((block, i) => {
-        if (!kept.a[i]) {
-            block.classList.add(CHANGED_CLASS.old);
-        }
-    });
-    newBlocks.forEach((block, i) => {
-        if (!kept.b[i]) {
-            block.classList.add(CHANGED_CLASS.new);
-        }
-    });
+    const runs = changeRuns(oldBlocks.map(keyOf), newBlocks.map(keyOf));
+    const mark = (blocks: Element[], numbers: (number | null)[], cls: string) => {
+        blocks.forEach((block, i) => {
+            const number = numbers[i];
+            if (number !== null && number !== undefined) {
+                block.classList.add(cls);
+                block.setAttribute('data-change', String(number));
+            }
+        });
+    };
+    mark(oldBlocks, runs.a, CHANGED_CLASS.old);
+    mark(newBlocks, runs.b, CHANGED_CLASS.new);
 
-    return { oldHtml: oldDoc.innerHTML, newHtml: newDoc.innerHTML };
+    return { oldHtml: oldDoc.innerHTML, newHtml: newDoc.innerHTML, changeCount: runs.count };
 }

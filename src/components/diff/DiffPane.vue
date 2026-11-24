@@ -15,6 +15,7 @@ const comparison = useComparisonStore();
 const ui = useUiStore();
 
 const diffRef = ref<InstanceType<typeof DiffViewer> | null>(null);
+const previewRef = ref<InstanceType<typeof MarkdownPreview> | null>(null);
 const changeCount = ref(0);
 
 // A Markdown file offers a rendered view next to its source diff; undefined for any
@@ -75,8 +76,10 @@ function navigate(direction: 'next' | 'prev') {
     // viewer returns false at the file boundary (or when it has no changes); only
     // then do we cross into the next file. A non-text pane (image, binary, or the
     // size gate) has no viewer to step through, so we cross straight away.
-    if (showViewer.value && diffRef.value) {
-        const moved = direction === 'next' ? diffRef.value.next() : diffRef.value.prev();
+    // The rendered Markdown view steps through its changed blocks the same way.
+    const stepper = showViewer.value ? diffRef.value : showRendered.value ? previewRef.value : null;
+    if (stepper) {
+        const moved = direction === 'next' ? stepper.next() : stepper.prev();
         if (moved) {
             return;
         }
@@ -86,8 +89,8 @@ function navigate(direction: 'next' | 'prev') {
     // its diff updates (driven by pendingChangeEdge). A single-file set wraps onto
     // itself with no reload, so wrap within the mounted viewer directly.
     const switched = comparison.goToAdjacentFile(direction);
-    if (!switched && diffRef.value) {
-        diffRef.value.goToEdge(direction === 'next' ? 'first' : 'last');
+    if (!switched && stepper) {
+        stepper.goToEdge(direction === 'next' ? 'first' : 'last');
     }
 }
 
@@ -109,7 +112,7 @@ function openSelected() {
             v-if="comparison.selectedFile.path"
             :file="comparison.selectedFile"
             :viewed="comparison.isViewed(comparison.selectedFile.path)"
-            :change-count="showViewer ? changeCount : 0"
+            :change-count="showViewer || showRendered ? changeCount : 0"
             :markdown-view="markdownView"
             @prev="navigate('prev')"
             @next="navigate('next')"
@@ -154,9 +157,13 @@ function openSelected() {
         <binary-file-notice v-else-if="comparison.showBinaryNotice" class="min-h-0 flex-1" />
         <markdown-preview
             v-else-if="showRendered"
+            ref="previewRef"
             class="min-h-0 flex-1"
             :old-source="comparison.selectedPair.oldContent"
             :new-source="comparison.selectedPair.newContent"
+            :pending-edge="comparison.pendingChangeEdge"
+            @update:change-count="changeCount = $event"
+            @edge-consumed="comparison.clearChangeEdge()"
         />
         <diff-viewer
             v-else

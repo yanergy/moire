@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import MarkdownPreview from '@/components/diff/MarkdownPreview.vue';
 
 describe('MarkdownPreview', () => {
@@ -28,6 +28,45 @@ describe('MarkdownPreview', () => {
     it('tints nothing for an added file', () => {
         const wrapper = mount(MarkdownPreview, { props: { oldSource: null, newSource: 'New.' } });
         expect(wrapper.find('.pr-md-added').exists()).toBe(false);
+    });
+
+    describe('change navigation', () => {
+        const props = {
+            oldSource: 'One.\n\nTwo.\n\nThree.\n\nFour.',
+            newSource: 'One.\n\nTWO.\n\nThree.\n\nFOUR.',
+        };
+        const current = (wrapper: ReturnType<typeof mount>) =>
+            wrapper.findAll('.pr-md-current').map((el) => el.text());
+
+        it('reports the number of changes', async () => {
+            const wrapper = mount(MarkdownPreview, { props });
+            await flushPromises();
+            expect(wrapper.emitted('update:changeCount')![0]).toEqual([2]);
+            expect(current(wrapper)).toEqual([]);
+        });
+
+        it('steps through the changes, marking both sides, and stops at the ends', async () => {
+            const wrapper = mount(MarkdownPreview, { props });
+            await flushPromises();
+            const vm = wrapper.vm as unknown as { next(): boolean; prev(): boolean };
+
+            expect(vm.next()).toBe(true);
+            expect(current(wrapper)).toEqual(['Two.', 'TWO.']);
+            expect(vm.next()).toBe(true);
+            expect(current(wrapper)).toEqual(['Four.', 'FOUR.']);
+            expect(vm.next()).toBe(false);
+
+            expect(vm.prev()).toBe(true);
+            expect(current(wrapper)).toEqual(['Two.', 'TWO.']);
+            expect(vm.prev()).toBe(false);
+        });
+
+        it('lands on a pending edge from a cross-file step', async () => {
+            const wrapper = mount(MarkdownPreview, { props: { ...props, pendingEdge: 'last' } });
+            await flushPromises();
+            expect(current(wrapper)).toEqual(['Four.', 'FOUR.']);
+            expect(wrapper.emitted('edgeConsumed')).toHaveLength(1);
+        });
     });
 
     it('shows only the existing side for an added file', () => {

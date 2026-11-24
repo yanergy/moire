@@ -191,3 +191,11 @@
     border-left-color: var(--moire-add-fg);
     background: color-mix(in srgb, var(--moire-add-fg) 12%, transparent);
 }
+
+/* The change prev/next landed on, in the active change color the source diff's
+   marker uses, on both sides at once. */
+.pr-markdown .pr-md-removed.pr-md-current,
+.pr-markdown .pr-md-added.pr-md-current {
+    border-left-color: var(--moire-active-change);
+    background: var(--moire-active-change-bg);
+}

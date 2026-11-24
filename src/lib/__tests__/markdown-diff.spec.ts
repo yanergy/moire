@@ -45,4 +45,19 @@ describe('highlightBlockChanges', () => {
         expect(tagged(oldHtml, 'pr-md-removed')).toEqual([]);
         expect(tagged(newHtml, 'pr-md-added')).toEqual([]);
     });
+
+    it('numbers each run of changes on both sides', () => {
+        const result = diff('A.\n\nb.\n\nC.\n\nd.\n\ne.', 'A.\n\nB.\n\nC.\n\nD.');
+        expect(result.changeCount).toBe(2);
+
+        const runs = (html: string) => {
+            const holder = document.createElement('template');
+            holder.innerHTML = html;
+            return [...holder.content.querySelectorAll('[data-change]')].map(
+                (el) => `${el.textContent!.trim()}:${el.getAttribute('data-change')}`
+            );
+        };
+        expect(runs(result.oldHtml)).toEqual(['b.:0', 'd.:1', 'e.:1']);
+        expect(runs(result.newHtml)).toEqual(['B.:0', 'D.:1']);
+    });
 });
