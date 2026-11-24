@@ -53,6 +53,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
+import ReviewThreadActions from '@/components/pr/ReviewThreadActions.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
 import type {
@@ -262,9 +263,15 @@ function isThreadCollapsed(threadId: string): boolean {
     return collapsedThreads.value.has(threadId);
 }
 function toggleThreadCollapsed(threadId: string) {
+    setThreadCollapsed(threadId, !isThreadCollapsed(threadId));
+}
+// Resolving a thread from its footer folds it, as on GitHub; unresolving opens it.
+function setThreadCollapsed(threadId: string, collapsed: boolean) {
     const next = new Set(collapsedThreads.value);
-    if (!next.delete(threadId)) {
+    if (collapsed) {
         next.add(threadId);
+    } else {
+        next.delete(threadId);
     }
     collapsedThreads.value = next;
 }
@@ -2028,6 +2035,13 @@ function renderComment(comment: PrComment): string {
                                                     </div>
                                                 </div>
                                             </div>
+                                            <review-thread-actions
+                                                v-if="!isThreadCollapsed(thread.id)"
+                                                :thread="thread"
+                                                @resolved-change="
+                                                    setThreadCollapsed(thread.id, $event)
+                                                "
+                                            />
                                         </div>
                                     </div>
                                 </div>

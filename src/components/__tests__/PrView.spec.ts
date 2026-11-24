@@ -154,6 +154,28 @@ describe('PrView', () => {
             expect(lines.map((l) => l.attributes('data-commented'))).toEqual([undefined, 'true']);
         });
 
+        it('offers a reply box and a resolve button, and folds the thread once resolved', async () => {
+            const store = useComparisonStore();
+            store.reviewThreads = [thread()];
+            store.setReviewThreadResolved = vi
+                .fn<(id: string, resolved: boolean) => Promise<{ ok: boolean }>>()
+                .mockResolvedValue({ ok: true });
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            expect(wrapper.find('[data-slot="thread-reply-open"]').exists()).toBe(true);
+            await wrapper.get('[data-slot="thread-resolve"]').trigger('click');
+            await flushPromises();
+
+            expect(store.setReviewThreadResolved).toHaveBeenCalledWith('RT_1', true);
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(false);
+            expect(wrapper.get('[data-slot="thread-toggle"]').attributes('aria-expanded')).toBe(
+                'false'
+            );
+        });
+
         it("adds the line below from the PR's file while the diff is the PR's", async () => {
             const store = useComparisonStore();
             store.base = 'main';
