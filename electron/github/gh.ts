@@ -10,6 +10,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import type { PrStack, PrStackEntry } from '../../src/shared/types';
 
 const execFileAsync = promisify(execFile);
 
@@ -573,6 +574,126 @@ export async function getPullRequest(
     }
 
     return { status: 'ok', pr: toPullRequest(raw) };
+}
+
+// --- Stacked PRs ---
+//
+// A stack is a chain of PRs where each one's base branch is the head branch of the
+// PR below it, down to a trunk branch that is no PR's head. It is found from the
+// repository's open PRs alone, so it works however the stack was built (plain
+// branches, Graphite, ghstack): only the base/head pairing is trusted. Merged PRs
+// are fetched too, to spot a PR whose base PR has merged and that should now be
+// retargeted.
+
+interface GhStackPr {
+    number: number;
+    title: string;
+    url: string;
+    headRefName: string;
+    baseRefName: string;
+    isDraft?: boolean;
+    reviewDecision?: string | null;
+}
+
+const STACK_FIELDS = 'number,title,url,headRefName,baseRefName,isDraft,reviewDecision';
+
+// Build the stack around the PR whose head is `head` from the open and recently
+// merged PRs. Walks base branches down while they are open PRs' heads (a merged
+// PR's head ends the walk, as the base the bottom PR must be retargeted from),
+// then head branches up through every dependent PR, depth first. Null when the PR
+// is not in a stack (no PR below or above it). Pure, for testing.
+export function buildStack(head: string, open: GhStackPr[], merged: GhStackPr[]): PrStack | null {
+    const current = open.find((pr) => pr.headRefName === head);
+    if (!current) {
+        return null;
+    }
+
+    const openByHead = new Map(open.map((pr) => [pr.headRefName, pr]));
+    const mergedByHead = new Map(merged.map((pr) => [pr.headRefName, pr]));
+    const entry = (pr: GhStackPr, state: PrStackEntry['state']): PrStackEntry => ({
+        number: pr.number,
+        title: pr.title,
+        url: pr.url,
+        headRefName: pr.headRefName,
+        baseRefName: pr.baseRefName,
+        state,
+        isDraft: pr.isDraft ?? false,
+        reviewDecision: pr.reviewDecision ?? '',
+        depth: 0,
+        isCurrent: pr === current,
+        needsRetarget: state === 'OPEN' && mergedByHead.has(pr.baseRefName),
+    });
+
+    const below: PrStackEntry[] = [];
+    const seen = new Set<string>([current.headRefName]);
+    let cursor = current;
+    for (;;) {
+        const parent = openByHead.get(cursor.baseRefName);
+        if (parent && !seen.has(parent.headRefName)) {
+            seen.add(parent.headRefName);
+            below.unshift(entry(parent, 'OPEN'));
+            cursor = parent;
+            continue;
+        }
+
+        const mergedParent = mergedByHead.get(cursor.baseRefName);
+        if (mergedParent) {
+            below.unshift(entry(mergedParent, 'MERGED'));
+        }
+        break;
+    }
+
+    const above: PrStackEntry[] = [];
+    const climb = (pr: GhStackPr) => {
+        for (const child of open.filter((c) => c.baseRefName === pr.headRefName)) {
+            if (seen.has(child.headRefName)) {
+                continue;
+            }
+
+            seen.add(child.headRefName);
+            above.push(entry(child, 'OPEN'));
+            climb(child);
+        }
+    };
+    climb(current);
+
+    if (!below.length && !above.length) {
+        return null;
+    }
+
+    const entries = [...below, entry(current, 'OPEN'), ...above];
+    const depthByHead = new Map<string, number>();
+    for (const e of entries) {
+        e.depth = (depthByHead.get(e.baseRefName) ?? -1) + 1;
+        depthByHead.set(e.headRefName, e.depth);
+    }
+
+    return { trunk: entries[0]!.baseRefName, entries };
+}
+
+// The stack the PR with this head branch belongs to. Any gh failure reads as no
+// stack: the Stack tab is supplementary and simply does not show.
+export async function getPrStack(
+    repoPath: string,
+    head: string,
+    run: GhRunner = defaultRunner
+): Promise<PrStack | null> {
+    if (!repoPath || !head || head === WORKING_TREE) {
+        return null;
+    }
+
+    const list = async (state: string, limit: number): Promise<GhStackPr[]> => {
+        const args = ['pr', 'list', '--state', state, '--limit', String(limit)];
+        const { stdout } = await run([...args, '--json', STACK_FIELDS], repoPath);
+        return JSON.parse(stdout) as GhStackPr[];
+    };
+
+    try {
+        const [open, merged] = await Promise.all([list('open', 200), list('merged', 50)]);
+        return buildStack(head, open, merged);
+    } catch {
+        return null;
+    }
 }
 
 // --- Inline review threads (GraphQL) ---

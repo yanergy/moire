@@ -8,6 +8,7 @@ import { simpleGit, CheckRepoActions } from 'simple-git';
 import { GitService, type CompareMode } from '../git/GitService';
 import {
     getPullRequest,
+    getPrStack,
     getReviewThreads,
     getCheckAnnotations,
     postComment,
@@ -415,6 +416,49 @@ function registerIpcHandlers({
     handle('gh:pull-request', (base: string, head: string) =>
         getPullRequest(requireRepo().repoPath, base, head)
     );
+
+    // The stack the PR with this head branch belongs to (see getPrStack), with each
+    // PR checked against its parent: when the parent's head is no longer in its
+    // history, it needs a rebase. Read from the remote tracking branches, which is
+    // what the PRs show, falling back to local ones.
+    handle('gh:pr-stack', async (head: string) => {
+        const repo = requireRepo();
+        const stack = await getPrStack(repo.repoPath, head);
+        if (!stack) {
+            return null;
+        }
+
+        const branches = await getCurrentBranches();
+        const refFor = (name: string) => {
+            if (branches.some((b) => b.kind === 'remote' && b.name === `origin/${name}`)) {
+                return `origin/${name}`;
+            }
+            return branches.some((b) => b.kind === 'local' && b.name === name) ? name : null;
+        };
+
+        const byHead = new Map(stack.entries.map((e) => [e.headRefName, e]));
+        await Promise.all(
+            stack.entries.map(async (entry) => {
+                const parent = byHead.get(entry.baseRefName);
+                if (entry.state !== 'OPEN' || !parent || parent.state !== 'OPEN') {
+                    return;
+                }
+
+                const parentRef = refFor(parent.headRefName);
+                const ownRef = refFor(entry.headRefName);
+                if (!parentRef || !ownRef) {
+                    return;
+                }
+
+                const contained = await repo.isAncestor(parentRef, ownRef);
+                if (contained !== null) {
+                    entry.needsRebase = !contained;
+                }
+            })
+        );
+
+        return stack;
+    });
 
     // The PR's inline review threads (line-anchored comments), by node id, for the
     // diff viewer's in-code markers. Returns an empty list on any failure.

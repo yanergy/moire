@@ -251,6 +251,33 @@ export interface PullRequest {
     checks: PrCheck[];
 }
 
+// One PR in a stack (a PR whose base is another PR's head branch), for the PR
+// view's Stack tab. `depth` counts up from the PR nearest the trunk (0). A merged
+// PR shows up only as the base a stacked PR still points at, which then needs
+// retargeting. `needsRebase` is set when the parent PR's head is not in this PR's
+// history any more (the parent moved on), and left undefined when that could not
+// be checked (a branch not fetched).
+export interface PrStackEntry {
+    number: number;
+    title: string;
+    url: string;
+    headRefName: string;
+    baseRefName: string;
+    state: 'OPEN' | 'MERGED';
+    isDraft: boolean;
+    reviewDecision: string;
+    depth: number;
+    isCurrent: boolean;
+    needsRetarget: boolean;
+    needsRebase?: boolean;
+}
+
+// A PR's stack, bottom (nearest the trunk) first, and the trunk branch it sits on.
+export interface PrStack {
+    trunk: string;
+    entries: PrStackEntry[];
+}
+
 // Why a PR lookup produced no PR, so the renderer can show the right hint:
 // 'no-pr' (none for this branch, or the head is the working tree), 'not-installed'
 // (no `gh` on PATH), 'not-authenticated' (`gh auth login` needed),
@@ -506,6 +533,9 @@ export interface MoireApi {
     // Open a URL (a PR link) in the user's default browser, via the main process.
     // Restricted to http(s) URLs on the main side.
     openExternal(url: string): Promise<void>;
+    // The stack the PR with this head branch belongs to, or null when it is not
+    // stacked (or gh fails).
+    getPrStack(headBranch: string): Promise<PrStack | null>;
     // Open the working-tree copy of a repo-relative file, via the main process (which
     // resolves it against the repo root and refuses paths outside it). Uses the chosen
     // editor from the "Open Files In" menu, falling back to the OS default app.

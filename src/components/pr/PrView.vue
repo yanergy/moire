@@ -53,6 +53,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
+import PrStackList from '@/components/pr/PrStackList.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
 import type {
@@ -126,8 +127,18 @@ async function refreshPr() {
 }
 
 // The PR view is tabbed, as in the design: the description and conversation under
-// "Conversation", the CI checks under "Checks". Commits are a planned third tab.
-const activeTab = ref<'conversation' | 'checks'>('conversation');
+// "Conversation", the CI checks under "Checks", and, for a stacked PR, the PRs
+// stacked with it under "Stack".
+const activeTab = ref<'conversation' | 'checks' | 'stack'>('conversation');
+
+const stack = computed(() => comparison.prStack);
+
+// The Stack tab disappears when the PR is not (or no longer) stacked.
+watch(stack, (current) => {
+    if (!current && activeTab.value === 'stack') {
+        activeTab.value = 'conversation';
+    }
+});
 
 const checks = computed(() => pr.value?.checks ?? []);
 
@@ -833,13 +844,16 @@ const mergeStatus = computed<StatusBox | null>(() => {
 
 // The status box leading the active tab: the merge state on the Conversation tab,
 // the CI checks' state on the Checks tab (only when there are checks to sum up).
-const tabStatus = computed<StatusBox | null>(() =>
-    activeTab.value === 'conversation'
-        ? mergeStatus.value
-        : checks.value.length
-          ? checksStatus.value
-          : null
-);
+const tabStatus = computed<StatusBox | null>(() => {
+    if (activeTab.value === 'conversation') {
+        return mergeStatus.value;
+    }
+    if (activeTab.value === 'checks' && checks.value.length) {
+        return checksStatus.value;
+    }
+
+    return null;
+});
 
 // Open a GitHub URL (the PR, or a check's run) in the user's browser through the
 // preload bridge. The main process only opens http(s).
@@ -1392,6 +1406,23 @@ function renderComment(comment: PrComment): string {
                                 Checks
                                 <span v-if="checks.length" class="text-moire-faint">
                                     {{ checksSummary }}
+                                </span>
+                            </button>
+                            <button
+                                v-if="stack"
+                                type="button"
+                                data-slot="stack-tab"
+                                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                                :class="
+                                    activeTab === 'stack'
+                                        ? 'bg-moire-hover text-moire-fg'
+                                        : 'text-moire-muted hover:text-moire-fg'
+                                "
+                                @click="activeTab = 'stack'"
+                            >
+                                Stack
+                                <span class="text-moire-faint">
+                                    {{ stack.entries.length }}
                                 </span>
                             </button>
                         </div>
@@ -2084,6 +2115,7 @@ function renderComment(comment: PrComment): string {
 
                     <!-- Checks: a summary of the CI run, then one row per check
                          (status glyph, name, faint detail), or an empty state. -->
+                    <pr-stack-list v-else-if="activeTab === 'stack' && stack" :stack="stack" />
                     <div v-else-if="activeTab === 'checks'">
                         <div v-if="checks.length">
                             <div

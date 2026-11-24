@@ -205,6 +205,11 @@ last branch range are remembered per repository.
   that opens it in the diff), the commented line or lines (highlighted, with a line of context above
   and below), and the thread's comments. The other way, **Show in PR** on a review comment in the
   diff jumps to it in the conversation.
+- A **Stack** tab for stacked PRs (a PR whose base is another PR's head branch). It shows the chain
+  from the trunk up through every dependent PR, with each PR's draft and review state and the
+  current one marked. Clicking a PR compares its own base and head, so its diff is against its
+  parent. A PR whose parent moved on is flagged as needing a rebase, and one whose base PR has
+  merged as needing a retarget.
 - **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the
   PR view. Each is enabled while its end is more than a screen away.
 - The PR view's whole header (title, Review and Edit mode buttons, author, labels, tabs and the

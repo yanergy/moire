@@ -62,6 +62,9 @@ const state = vi.hoisted(() => ({
     detectEditors:
         vi.fn<() => Promise<{ id: string; label: string; kind: string; target: string }[]>>(),
     openWithEditor: vi.fn<(editor: unknown, p: string) => Promise<string>>(),
+    getPrStack: vi.fn<(repoPath: string, head: string) => Promise<unknown>>(),
+    branches: [] as { name: string; kind: string }[],
+    isAncestor: vi.fn<(a: string, b: string) => Promise<boolean | null>>(),
 }));
 
 vi.mock('electron', () => ({
@@ -90,13 +93,17 @@ vi.mock('../electron/git/GitService', () => ({
             this.repoPath = repoPath;
         }
         branches() {
-            return Promise.resolve([]);
+            return Promise.resolve(state.branches);
+        }
+        isAncestor(a: string, b: string) {
+            return state.isAncestor(a, b);
         }
     },
 }));
 
 vi.mock('../electron/github/gh', () => ({
     getPullRequest: state.getPullRequest,
+    getPrStack: state.getPrStack,
     addReviewComment: state.addReviewComment,
     submitReview: state.submitReview,
 }));
@@ -512,5 +519,42 @@ describe('registerIpcHandlers', () => {
         });
         expect(state.openPath).not.toHaveBeenCalled();
         expect(state.openWithEditor).not.toHaveBeenCalled();
+    });
+
+    describe('gh:pr-stack', () => {
+        const entry = (number: number, head: string, base: string, state = 'OPEN') => ({
+            number,
+            headRefName: head,
+            baseRefName: base,
+            state,
+        });
+
+        it('marks a PR whose parent moved on as needing a rebase', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.branches = [
+                { name: 'origin/a', kind: 'remote' },
+                { name: 'origin/b', kind: 'remote' },
+                { name: 'c', kind: 'local' },
+            ];
+            state.getPrStack.mockResolvedValue({
+                trunk: 'main',
+                entries: [entry(1, 'a', 'main'), entry(2, 'b', 'a'), entry(3, 'c', 'b')],
+            });
+            state.isAncestor.mockImplementation((parent) => Promise.resolve(parent === 'origin/a'));
+
+            const stack = (await invoke('gh:pr-stack', 'b')) as {
+                entries: { needsRebase?: boolean }[];
+            };
+
+            expect(state.isAncestor).toHaveBeenCalledWith('origin/a', 'origin/b');
+            expect(state.isAncestor).toHaveBeenCalledWith('origin/b', 'c');
+            expect(stack.entries.map((e) => e.needsRebase)).toEqual([undefined, false, true]);
+        });
+
+        it('passes on no stack', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.getPrStack.mockResolvedValue(null);
+            expect(await invoke('gh:pr-stack', 'b')).toBeNull();
+        });
     });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { GitService, WORKING_TREE } from '../electron/git/GitService';
 
@@ -339,5 +340,24 @@ describe('GitService.filePair images', () => {
         expect(pair.oldImage).toBeNull();
         expect(pair.newImage).toBeNull();
         expect(pair.sizeBytes).toBe(huge.length);
+    });
+});
+
+describe('GitService.isAncestor', () => {
+    it('tells whether one ref is in the history of another, and null when unknown', async () => {
+        const repo = await mkdtemp(path.join(tmpdir(), 'moire-ancestor-'));
+        const git = (...args: string[]) =>
+            execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args]);
+        git('init', '-q', '-b', 'main');
+        git('commit', '-q', '--allow-empty', '-m', 'one');
+        git('checkout', '-q', '-b', 'child');
+        git('commit', '-q', '--allow-empty', '-m', 'two');
+        git('checkout', '-q', 'main');
+        git('commit', '-q', '--allow-empty', '-m', 'moved on');
+
+        const service = new GitService(repo);
+        expect(await service.isAncestor('main~1', 'child')).toBe(true);
+        expect(await service.isAncestor('main', 'child')).toBe(false);
+        expect(await service.isAncestor('missing', 'child')).toBeNull();
     });
 });

@@ -18,6 +18,8 @@ import {
     deleteReviewComment,
     submitReview,
     discardReview,
+    buildStack,
+    getPrStack,
     type GhRunner,
 } from '../electron/github/gh';
 
@@ -1206,5 +1208,75 @@ describe('submitReview and discardReview', () => {
             ok: false,
             message: 'Can not approve your own pull request',
         });
+    });
+});
+
+describe('stacked PRs', () => {
+    const pr = (number: number, head: string, base: string) => ({
+        number,
+        title: `PR ${number}`,
+        url: `https://github.com/o/r/pull/${number}`,
+        headRefName: head,
+        baseRefName: base,
+        isDraft: false,
+        reviewDecision: '',
+    });
+
+    it('walks base branches down to the trunk and head branches up', () => {
+        const open = [pr(1, 'a', 'main'), pr(2, 'b', 'a'), pr(3, 'c', 'b'), pr(9, 'x', 'main')];
+        const stack = buildStack('b', open, [])!;
+
+        expect(stack.trunk).toBe('main');
+        expect(stack.entries.map((e) => [e.number, e.depth, e.isCurrent])).toEqual([
+            [1, 0, false],
+            [2, 1, true],
+            [3, 2, false],
+        ]);
+    });
+
+    it('lists every dependent PR when the stack branches', () => {
+        const open = [pr(1, 'a', 'main'), pr(2, 'b', 'a'), pr(3, 'c', 'a')];
+        const stack = buildStack('a', open, [])!;
+        expect(stack.entries.map((e) => [e.number, e.depth])).toEqual([
+            [1, 0],
+            [2, 1],
+            [3, 1],
+        ]);
+    });
+
+    it('is null for a PR that is not stacked', () => {
+        expect(buildStack('x', [pr(9, 'x', 'main')], [])).toBeNull();
+        expect(buildStack('nope', [pr(9, 'x', 'main')], [])).toBeNull();
+    });
+
+    it('flags a PR whose base PR merged, which needs retargeting', () => {
+        const stack = buildStack('b', [pr(2, 'b', 'a')], [pr(1, 'a', 'main')])!;
+
+        expect(stack.trunk).toBe('main');
+        expect(stack.entries.map((e) => [e.number, e.state, e.needsRetarget])).toEqual([
+            [1, 'MERGED', false],
+            [2, 'OPEN', true],
+        ]);
+    });
+
+    it('stops on a cycle instead of looping', () => {
+        const open = [pr(1, 'a', 'b'), pr(2, 'b', 'a')];
+        expect(buildStack('a', open, [])!.entries).toHaveLength(2);
+    });
+
+    it('reads the open and merged PRs through gh, and reads a failure as no stack', async () => {
+        const calls: string[][] = [];
+        const run: GhRunner = (args) => {
+            calls.push(args);
+            const state = args[args.indexOf('--state') + 1];
+            const list = state === 'open' ? [pr(1, 'a', 'main'), pr(2, 'b', 'a')] : [];
+            return Promise.resolve({ stdout: JSON.stringify(list), stderr: '' });
+        };
+        const stack = await getPrStack('/repo', 'b', run);
+        expect(stack!.entries.map((e) => e.number)).toEqual([1, 2]);
+        expect(calls.map((c) => c[c.indexOf('--state') + 1]).sort()).toEqual(['merged', 'open']);
+
+        const failing: GhRunner = () => Promise.reject(new Error('offline'));
+        expect(await getPrStack('/repo', 'b', failing)).toBeNull();
     });
 });
