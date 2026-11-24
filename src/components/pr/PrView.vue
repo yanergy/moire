@@ -1939,7 +1939,7 @@ function renderComment(comment: PrComment): string {
                                                             variant="outline"
                                                             data-slot="thread-outdated"
                                                             aria-label="Outdated"
-                                                            class="border-moire-changes-edge bg-moire-changes px-1 text-moire-changes-fg"
+                                                            class="size-[22px] border-moire-changes-edge bg-moire-changes px-0 text-moire-changes-fg"
                                                         >
                                                             <History />
                                                         </Badge>
@@ -1950,7 +1950,7 @@ function renderComment(comment: PrComment): string {
                                                     v-else-if="thread.isOutdated"
                                                     variant="outline"
                                                     data-slot="thread-outdated"
-                                                    class="border-moire-changes-edge bg-moire-changes text-[11px] text-moire-changes-fg"
+                                                    class="h-[22px] border-moire-changes-edge bg-moire-changes text-[11px] text-moire-changes-fg"
                                                 >
                                                     <History />
                                                     Outdated
@@ -1959,7 +1959,7 @@ function renderComment(comment: PrComment): string {
                                                     v-if="thread.isResolved"
                                                     variant="outline"
                                                     data-slot="thread-resolved"
-                                                    class="border-moire-viewed-edge bg-moire-viewed text-[11px] text-moire-viewed-fg"
+                                                    class="h-[22px] border-moire-viewed-edge bg-moire-viewed text-[11px] text-moire-viewed-fg"
                                                 >
                                                     <CircleCheck />
                                                     Resolved
