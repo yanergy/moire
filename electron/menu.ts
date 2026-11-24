@@ -141,9 +141,7 @@ export function branchPickerMenuTemplate({
         copyItems.push({ label: `Copy "${ref}"`, click: () => onCopy(ref) });
     }
 
-    return [
-        ...copyItems,
-        { type: 'separator' },
+    const presetItems: MenuItemConstructorOptions[] = [
         { label: 'Comparison Presets', enabled: false },
         ...presets.map(({ label, base, head, enabled }): MenuItemConstructorOptions => ({
             label,
@@ -151,6 +149,13 @@ export function branchPickerMenuTemplate({
             click: () => onSelectPreset(base, head),
         })),
     ];
+    // Without a ref (the swap button between the pickers) there is no branch to
+    // copy, so the menu is just the presets.
+    if (!ref) {
+        return presetItems;
+    }
+
+    return [...copyItems, { type: 'separator' }, ...presetItems];
 }
 
 export interface MenuOptions {

@@ -473,6 +473,15 @@ describe('branchPickerMenuTemplate', () => {
         expect(onCopy).toHaveBeenLastCalledWith('origin/feature/login');
     });
 
+    it('is just the presets without a ref (the swap button)', () => {
+        const { items } = template('');
+        expect(items.map((i) => i.label)).toEqual([
+            'Comparison Presets',
+            'Compare Current Branch to Development',
+            'Compare Working Tree to Origin',
+        ]);
+    });
+
     it('disables copying for the working tree', () => {
         const { item, items } = template('WORKING TREE');
         expect(item('Copy Branch Name').enabled).toBe(false);
