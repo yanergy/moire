@@ -2086,4 +2086,63 @@ describe('comparison store', () => {
             );
         });
     });
+
+    describe('git add mode', () => {
+        afterEach(() => {
+            delete window.api;
+        });
+
+        function stageStore(staged: string[]) {
+            const api = {
+                getStagedPaths: vi.fn<() => Promise<string[]>>().mockResolvedValue(staged),
+                stagePaths: vi.fn<(paths: string[]) => Promise<void>>().mockResolvedValue(),
+                unstagePaths: vi.fn<(paths: string[]) => Promise<void>>().mockResolvedValue(),
+            };
+            window.api = api as unknown as Window['api'];
+            const store = seededStore();
+            store.repoPath = '/repo';
+            store.head = 'WORKING TREE';
+            return { store, api };
+        }
+
+        it('is only available against the working tree', () => {
+            const { store } = stageStore([]);
+            store.setTreeMode('stage');
+            expect(store.treeStageMode).toBe(true);
+
+            store.head = 'feature';
+            expect(store.canStage).toBe(false);
+            expect(store.treeStageMode).toBe(false);
+        });
+
+        it('stages a whole folder, then unstages it once all of it is staged', async () => {
+            const { store, api } = stageStore([]);
+            const under = store.files
+                .filter((f) => f.path.startsWith('electron/'))
+                .map((f) => f.path);
+
+            store.toggleDirStaged('electron');
+            await flushPromises();
+            expect(api.stagePaths).toHaveBeenCalledWith(under);
+
+            api.getStagedPaths.mockResolvedValue(under);
+            await store.loadStagedPaths();
+            expect(store.dirStagedCount('electron')).toEqual({
+                staged: under.length,
+                total: under.length,
+            });
+
+            store.toggleDirStaged('electron');
+            await flushPromises();
+            expect(api.unstagePaths).toHaveBeenCalledWith(under);
+        });
+
+        it('reports a failed stage', async () => {
+            const { store, api } = stageStore([]);
+            api.stagePaths.mockRejectedValue(new Error('index.lock'));
+            store.toggleStaged('shared/types.ts');
+            await flushPromises();
+            expect(store.stageError).toBe('Could not stage the files.');
+        });
+    });
 });

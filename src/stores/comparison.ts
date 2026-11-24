@@ -228,6 +228,13 @@ export const useComparisonStore = defineStore('comparison', () => {
 
     const selectedPath = ref('');
     const viewed = ref<Record<string, boolean>>({});
+    // The file tree's per-file control: 'viewed' ticks files off as viewed, 'stage'
+    // stages and unstages them with git add. Staging only makes sense against the
+    // working tree, so `treeStageMode` is off for two committed refs whatever the
+    // chosen mode. `stagedPaths` mirrors the index, re-read with the change set.
+    const treeMode = ref<'viewed' | 'stage'>('viewed');
+    const stagedPaths = ref<Set<string>>(new Set());
+    const stageError = ref('');
     const treeFilter = ref('');
     const collapsed = ref<Record<string, boolean>>({});
 
@@ -1308,6 +1315,59 @@ export const useComparisonStore = defineStore('comparison', () => {
         viewed.value = next;
     }
 
+    const canStage = computed(() => head.value === WORKING_TREE && Boolean(repoPath.value));
+    const treeStageMode = computed(() => canStage.value && treeMode.value === 'stage');
+    const stagedCount = computed(() => files.value.filter((f) => isStaged(f.path)).length);
+
+    function isStaged(path: string): boolean {
+        return stagedPaths.value.has(path);
+    }
+
+    // Stage or unstage paths, then re-read the index so the tree shows what git did.
+    // A failure (a lock file, say) shows under the tree's header.
+    async function setStaged(paths: string[], stage: boolean) {
+        const api = window.api;
+        if (!api || !paths.length) {
+            return;
+        }
+
+        stageError.value = '';
+        try {
+            await (stage ? api.stagePaths(paths) : api.unstagePaths(paths));
+        } catch {
+            stageError.value = stage
+                ? 'Could not stage the files.'
+                : 'Could not unstage the files.';
+        }
+
+        await loadStagedPaths();
+    }
+
+    function toggleStaged(path: string) {
+        void setStaged([path], !isStaged(path));
+    }
+
+    // Stage every shown file under a folder, or unstage them all when they already
+    // are, mirroring toggleDirViewed.
+    function toggleDirStaged(path: string) {
+        const prefix = path + '/';
+        const targets = shownFiles.value
+            .filter((f) => f.path.startsWith(prefix))
+            .map((f) => f.path);
+        void setStaged(targets, !targets.every(isStaged));
+    }
+
+    // How many shown files under a folder are staged, for its checkbox state.
+    function dirStagedCount(path: string): { staged: number; total: number } {
+        const prefix = path + '/';
+        const targets = shownFiles.value.filter((f) => f.path.startsWith(prefix));
+        return { staged: targets.filter((f) => isStaged(f.path)).length, total: targets.length };
+    }
+
+    function setTreeMode(mode: 'viewed' | 'stage') {
+        treeMode.value = mode;
+    }
+
     function toggleDir(path: string) {
         collapsed.value = { ...collapsed.value, [path]: !collapsed.value[path] };
     }
@@ -1661,6 +1721,24 @@ export const useComparisonStore = defineStore('comparison', () => {
         if (!files.value.some((f) => f.path === selectedPath.value)) {
             selectedPath.value = files.value[0]?.path ?? '';
         }
+
+        await loadStagedPaths();
+    }
+
+    // Re-read what is staged, for the tree's git add mode. Only against the working
+    // tree; any failure reads as nothing staged.
+    async function loadStagedPaths() {
+        const api = window.api;
+        if (!api?.getStagedPaths || head.value !== WORKING_TREE) {
+            stagedPaths.value = new Set();
+            return;
+        }
+
+        try {
+            stagedPaths.value = new Set(await api.getStagedPaths());
+        } catch {
+            stagedPaths.value = new Set();
+        }
     }
 
     // Drop a base or head whose branch has vanished from the refreshed list, and
@@ -1803,6 +1881,18 @@ export const useComparisonStore = defineStore('comparison', () => {
         clearChangeEdge,
         toggleViewed,
         toggleDirViewed,
+        treeMode,
+        setTreeMode,
+        stagedPaths,
+        stageError,
+        canStage,
+        treeStageMode,
+        stagedCount,
+        isStaged,
+        toggleStaged,
+        toggleDirStaged,
+        dirStagedCount,
+        loadStagedPaths,
         toggleDir,
         expandAll,
         collapseAll,

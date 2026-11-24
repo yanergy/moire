@@ -65,6 +65,9 @@ describe('preload bridge', () => {
             'discardReview',
             'resolveCommit',
             'openExternal',
+            'getStagedPaths',
+            'stagePaths',
+            'unstagePaths',
             'openFile',
             'getTheme',
             'onThemeChanged',
@@ -145,6 +148,9 @@ describe('preload bridge', () => {
             'shell:open-external',
             'https://github.com/o/r/pull/1'
         );
+
+        await api().stagePaths!(['a.ts']);
+        expect(bridge.invoke).toHaveBeenCalledWith('git:stage', ['a.ts']);
 
         await api().openFile!('src/a.ts');
         expect(bridge.invoke).toHaveBeenCalledWith('shell:open-path', 'src/a.ts');

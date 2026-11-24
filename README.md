@@ -183,6 +183,10 @@ last branch range are remembered per repository.
   clicking a file in the tree jumps to it.
 - A virtualized file tree that stays smooth on large change sets, with per-file and per-folder
   "mark viewed" progress.
+- Staging from the file tree. While the head is the working tree, a **Check off / Git add** toggle
+  under the search box switches the tree's checkboxes from marking files viewed to staging them
+  (`git add`, deletions included) and unstaging them. A folder's checkbox stages or unstages
+  everything under it, and the header counts the staged files.
 - A file-tree search box plus a tiered filter menu (next to the changed-files count) that narrows
   the tree by filetype, mutation type, or marker (files carrying an error, warning, or review
   comment). Filters are multi-select and combine, and a reset clears them at once.

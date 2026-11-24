@@ -1,5 +1,5 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
-import { beforeEach, afterEach, describe, it, expect } from 'vitest';
+import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import FileTreeSidebar from '@/components/sidebar/FileTreeSidebar.vue';
@@ -41,6 +41,53 @@ describe('FileTreeSidebar', () => {
         wrapper = mount(FileTreeSidebar, { global: { plugins: [pinia] } });
         return wrapper;
     }
+
+    describe('git add mode', () => {
+        function stageApi(staged: string[]) {
+            const api = {
+                getStagedPaths: vi.fn<() => Promise<string[]>>().mockResolvedValue(staged),
+                stagePaths: vi.fn<(paths: string[]) => Promise<void>>().mockResolvedValue(),
+                unstagePaths: vi.fn<(paths: string[]) => Promise<void>>().mockResolvedValue(),
+            };
+            window.api = api as unknown as Window['api'];
+            return api;
+        }
+
+        afterEach(() => {
+            delete window.api;
+        });
+
+        it('offers the mode toggle only against the working tree', async () => {
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.head = 'feature';
+            const wrapper = mountTree();
+            expect(wrapper.find('[data-slot="tree-mode"]').exists()).toBe(false);
+
+            store.head = 'WORKING TREE';
+            await nextTick();
+            expect(wrapper.find('[data-slot="tree-mode"]').exists()).toBe(true);
+        });
+
+        it('stages a file from its checkbox and shows the staged tally', async () => {
+            const api = stageApi([]);
+            const store = useComparisonStore();
+            store.repoPath = '/repo';
+            store.head = 'WORKING TREE';
+            const wrapper = mountTree();
+            store.setTreeMode('stage');
+            await nextTick();
+            expect(wrapper.text()).toContain('0 staged');
+
+            api.getStagedPaths.mockResolvedValue(['electron/git/parsers.ts']);
+            await wrapper.get('[aria-label="Stage file"]').trigger('click');
+            await flushPromises();
+
+            expect(api.stagePaths).toHaveBeenCalledWith(['electron/git/parsers.ts']);
+            expect(wrapper.text()).toContain('1 staged');
+            expect(wrapper.find('[aria-label="Unstage file"]').exists()).toBe(true);
+        });
+    });
 
     it('renders the header with count and viewed tally', () => {
         const wrapper = mountTree();
