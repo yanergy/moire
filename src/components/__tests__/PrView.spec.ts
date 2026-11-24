@@ -205,6 +205,22 @@ describe('PrView', () => {
             expect(shown[2]!.attributes('data-commented')).toBeUndefined();
         });
 
+        it('starts a resolved thread folded, and opens it on a click', async () => {
+            useComparisonStore().reviewThreads = [{ ...thread(), isResolved: true }];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            const toggle = wrapper.get('[data-slot="thread-toggle"]');
+            expect(toggle.attributes('aria-expanded')).toBe('false');
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(false);
+
+            await toggle.trigger('click');
+            expect(toggle.attributes('aria-expanded')).toBe('true');
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(true);
+        });
+
         it('folds a line comment down to its file name', async () => {
             useComparisonStore().reviewThreads = [thread()];
             const wrapper = mountWith({
