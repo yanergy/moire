@@ -79,6 +79,8 @@ const thread = (over: Partial<PrReviewThread> = {}): PrReviewThread => ({
             createdAt: '',
             isPending: false,
             viewerDidAuthor: false,
+            canEdit: false,
+            canDelete: false,
         },
     ],
     ...over,
@@ -739,6 +741,8 @@ describe('DiffViewer', () => {
                         createdAt: '',
                         isPending: true,
                         viewerDidAuthor: true,
+                        canEdit: true,
+                        canDelete: true,
                     },
                 ],
             });

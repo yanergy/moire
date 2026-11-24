@@ -206,8 +206,12 @@ last branch range are remembered per repository.
   flags each file that carries review threads or annotations.
 - In the PR view's conversation, each review lists its line comments under it: the file (a link
   that opens it in the diff), the commented line or lines (highlighted, with a line of context above
-  and below), and the thread's comments. The other way, **Show in PR** on a review comment in the
-  diff jumps to it in the conversation.
+  and below), and the thread's comments. Under each thread, a **Reply** box posts into it and
+  **Resolve conversation** resolves it (folding it) or unresolves it, without reloading the PR. A
+  resolved thread starts folded, with a Resolved badge (and an Outdated one when its code moved on).
+  In edit mode line comments get the same Edit and Delete menu as conversation comments. Both follow
+  GitHub's own permissions, so a maintainer can also edit or delete other people's comments. The
+  other way, **Show in PR** on a review comment in the diff jumps to it in the conversation.
 - **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the
   PR view. Each is enabled while its end is more than a screen away.
 - The PR view's whole header (title, Review and Edit mode buttons, author, labels, tabs and the
