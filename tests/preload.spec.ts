@@ -65,6 +65,7 @@ describe('preload bridge', () => {
             'discardReview',
             'resolveCommit',
             'openExternal',
+            'showBranchPickerMenu',
             'openFile',
             'getTheme',
             'onThemeChanged',
@@ -145,6 +146,9 @@ describe('preload bridge', () => {
             'shell:open-external',
             'https://github.com/o/r/pull/1'
         );
+
+        await api().showBranchPickerMenu!('origin/main');
+        expect(bridge.invoke).toHaveBeenCalledWith('menu:branch-picker', 'origin/main');
 
         await api().openFile!('src/a.ts');
         expect(bridge.invoke).toHaveBeenCalledWith('shell:open-path', 'src/a.ts');

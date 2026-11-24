@@ -1,5 +1,5 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
-import { beforeEach, afterEach, describe, it, expect } from 'vitest';
+import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import RefSelector from '@/components/controls/RefSelector.vue';
 import { useComparisonStore } from '@/stores/comparison';
@@ -72,6 +72,19 @@ describe('RefSelector', () => {
             global: { plugins: [pinia] },
         });
     }
+
+    it('opens the native preset menu on right click, not the picker', async () => {
+        const showBranchPickerMenu = vi.fn<(ref: string) => Promise<void>>().mockResolvedValue();
+        window.api = { showBranchPickerMenu } as unknown as Window['api'];
+        const wrapper = mountSide('base');
+
+        await wrapper.find('button').trigger('contextmenu');
+        await flushPromises();
+
+        expect(showBranchPickerMenu).toHaveBeenCalledWith('main');
+        expect(commandInput()).toBeNull();
+        delete window.api;
+    });
 
     it('shows the current ref and groups branches by prefix on open', async () => {
         const wrapper = mountSide('base');

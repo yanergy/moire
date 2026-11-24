@@ -69,6 +69,7 @@ const comment = (over: Partial<PrComment> = {}): PrComment => ({
     kind: 'comment',
     id: '',
     canEdit: false,
+    canDelete: false,
     ...over,
 });
 
@@ -92,6 +93,8 @@ const thread = (over: Partial<PrReviewThread> = {}): PrReviewThread => ({
             createdAt: '',
             isPending: false,
             viewerDidAuthor: true,
+            canEdit: true,
+            canDelete: true,
         },
     ],
     ...over,
@@ -171,6 +174,28 @@ describe('PrView', () => {
             expect(lines.map((l) => l.attributes('data-commented'))).toEqual([undefined, 'true']);
         });
 
+        it('offers a reply box and a resolve button, and folds the thread once resolved', async () => {
+            const store = useComparisonStore();
+            store.reviewThreads = [thread()];
+            store.setReviewThreadResolved = vi
+                .fn<(id: string, resolved: boolean) => Promise<{ ok: boolean }>>()
+                .mockResolvedValue({ ok: true });
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            expect(wrapper.find('[data-slot="thread-reply-open"]').exists()).toBe(true);
+            await wrapper.get('[data-slot="thread-resolve"]').trigger('click');
+            await flushPromises();
+
+            expect(store.setReviewThreadResolved).toHaveBeenCalledWith('RT_1', true);
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(false);
+            expect(wrapper.get('[data-slot="thread-toggle"]').attributes('aria-expanded')).toBe(
+                'false'
+            );
+        });
+
         it("adds the line below from the PR's file while the diff is the PR's", async () => {
             const store = useComparisonStore();
             store.base = 'main';
@@ -198,6 +223,50 @@ describe('PrView', () => {
             expect(shown[2]!.text()).toContain('129');
             expect(shown[2]!.text()).toContain('file line 129');
             expect(shown[2]!.attributes('data-commented')).toBeUndefined();
+        });
+
+        it('starts a resolved thread folded, and opens it on a click', async () => {
+            useComparisonStore().reviewThreads = [{ ...thread(), isResolved: true }];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            expect(wrapper.get('[data-slot="thread-resolved"]').text()).toBe('Resolved');
+            expect(wrapper.find('[data-slot="thread-outdated"]').exists()).toBe(false);
+            const toggle = wrapper.get('[data-slot="thread-toggle"]');
+            expect(toggle.attributes('aria-expanded')).toBe('false');
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(false);
+
+            await toggle.trigger('click');
+            expect(toggle.attributes('aria-expanded')).toBe('true');
+            expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(true);
+        });
+
+        it('badges an outdated thread', () => {
+            useComparisonStore().reviewThreads = [{ ...thread(), isOutdated: true }];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            expect(wrapper.get('[data-slot="thread-outdated"]').text()).toBe('Outdated');
+            expect(wrapper.find('[data-slot="thread-resolved"]').exists()).toBe(false);
+        });
+
+        it('shrinks the outdated badge to its icon once the thread is resolved', () => {
+            useComparisonStore().reviewThreads = [
+                { ...thread(), isOutdated: true, isResolved: true },
+            ];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            const outdated = wrapper.get('[data-slot="thread-outdated"]');
+            expect(outdated.text()).toBe('');
+            expect(outdated.attributes('aria-label')).toBe('Outdated');
+            expect(wrapper.get('[data-slot="thread-resolved"]').text()).toBe('Resolved');
         });
 
         it('folds a line comment down to its file name', async () => {
@@ -752,7 +821,15 @@ describe('PrView', () => {
         it('is read-only by default: no composer, no comment actions', () => {
             const wrapper = mountWith({
                 ...PR,
-                comments: [comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true })],
+                comments: [
+                    comment({
+                        author: 'me',
+                        body: 'Mine.',
+                        id: 'IC_1',
+                        canEdit: true,
+                        canDelete: true,
+                    }),
+                ],
             });
 
             expect(wrapper.find('textarea').exists()).toBe(false);
@@ -782,7 +859,13 @@ describe('PrView', () => {
             const wrapper = await enableEditing({
                 ...PR,
                 comments: [
-                    comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true }),
+                    comment({
+                        author: 'me',
+                        body: 'Mine.',
+                        id: 'IC_1',
+                        canEdit: true,
+                        canDelete: true,
+                    }),
                     comment({ author: 'other', body: 'Theirs.', id: 'IC_2', canEdit: false }),
                 ],
             });
@@ -796,7 +879,15 @@ describe('PrView', () => {
 
             const wrapper = await enableEditing({
                 ...PR,
-                comments: [comment({ author: 'me', body: 'Original.', id: 'IC_1', canEdit: true })],
+                comments: [
+                    comment({
+                        author: 'me',
+                        body: 'Original.',
+                        id: 'IC_1',
+                        canEdit: true,
+                        canDelete: true,
+                    }),
+                ],
             });
 
             await wrapper.get('button[aria-label="Comment actions"]').trigger('click');
@@ -822,7 +913,15 @@ describe('PrView', () => {
 
             const wrapper = await enableEditing({
                 ...PR,
-                comments: [comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true })],
+                comments: [
+                    comment({
+                        author: 'me',
+                        body: 'Mine.',
+                        id: 'IC_1',
+                        canEdit: true,
+                        canDelete: true,
+                    }),
+                ],
             });
 
             await wrapper.get('button[aria-label="Comment actions"]').trigger('click');
@@ -842,6 +941,100 @@ describe('PrView', () => {
             await flushPromises();
 
             expect(del).toHaveBeenCalledWith('IC_1');
+        });
+
+        it('deletes an own line comment in a review thread, after confirming', async () => {
+            const store = useComparisonStore();
+            store.reviewThreads = [thread()];
+            const del = vi.spyOn(store, 'deleteReviewComment').mockResolvedValue({ ok: true });
+            const issueDel = vi.spyOn(store, 'deleteComment');
+
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            await wrapper.get('[data-slot="thread-comment-menu"]').trigger('click');
+            await flushPromises();
+            clickMenuItem('Delete comment');
+            await flushPromises();
+            expect(document.body.textContent).toContain('Test 2');
+            expect(del).not.toHaveBeenCalled();
+
+            const confirmBtn = [...document.querySelectorAll('button')].find(
+                (b) => b.textContent?.trim() === 'Delete comment'
+            );
+            confirmBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await flushPromises();
+
+            expect(del).toHaveBeenCalledWith('RC_1');
+            expect(issueDel).not.toHaveBeenCalled();
+        });
+
+        it('edits an own line comment in a review thread through the store', async () => {
+            const store = useComparisonStore();
+            store.reviewThreads = [thread()];
+            const edit = vi.spyOn(store, 'editReviewComment').mockResolvedValue({ ok: true });
+            const issueEdit = vi.spyOn(store, 'editComment');
+
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            await wrapper.get('[data-slot="thread-comment-menu"]').trigger('click');
+            await flushPromises();
+            clickMenuItem('Edit comment');
+            await flushPromises();
+
+            const editBox = wrapper.get('textarea[aria-label="Edit comment body"]');
+            expect((editBox.element as HTMLTextAreaElement).value).toBe('Test 2');
+            await editBox.setValue('Test 3');
+            await wrapper
+                .findAll('button')
+                .find((b) => b.text() === 'Save')!
+                .trigger('click');
+            await flushPromises();
+
+            expect(edit).toHaveBeenCalledWith('RC_1', 'Test 3');
+            expect(issueEdit).not.toHaveBeenCalled();
+            expect(wrapper.find('textarea[aria-label="Edit comment body"]').exists()).toBe(false);
+        });
+
+        it('offers no actions on a line comment the viewer may not change', async () => {
+            const own = thread();
+            useComparisonStore().reviewThreads = [
+                {
+                    ...own,
+                    comments: [
+                        {
+                            ...own.comments[0]!,
+                            viewerDidAuthor: false,
+                            canEdit: false,
+                            canDelete: false,
+                        },
+                    ],
+                },
+            ];
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            expect(wrapper.find('[data-slot="thread-comment-menu"]').exists()).toBe(false);
+        });
+
+        it("lets a maintainer edit someone else's comment, as GitHub allows", async () => {
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ author: 'bot', id: 'IC_1', canEdit: true, canDelete: false })],
+            });
+
+            await wrapper.get('button[aria-label="Comment actions"]').trigger('click');
+            await flushPromises();
+            const labels = menuItems().map((el) => el.getAttribute('aria-label'));
+            expect(labels).toContain('Edit comment');
+            expect(labels).not.toContain('Delete comment');
         });
 
         it('has no description edit action until edit mode is on', () => {
