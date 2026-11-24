@@ -97,7 +97,7 @@ the popup never appears.
    Click the star on any branch row to add it to a **Favorites** group listed below the
    recommendations in both pickers.
    For two common comparisons, **Git > Comparison Presets** (or a right click on either branch
-   picker) sets both sides at once: the development branch against the checked-out branch, or the
+   picker or the swap button between them) sets both sides at once: the development branch against the checked-out branch, or the
    checked-out branch's `origin` copy against the working tree (everything not pushed yet).
 3. **Choose how to compare.** Toggle between:
     - **merge-base**: compares head to the point where it branched off base, showing only the changes
