@@ -252,6 +252,34 @@ export async function setStickyPrHeader(enabled: boolean): Promise<void> {
     store.set('stickyPrHeader', enabled);
 }
 
+// How the diff compares and lays out its two sides, from the Settings page:
+// merge-base (three-dot, the GitHub PR view) or direct (two-dot), and split or
+// unified. App-wide. Left out of `defaults` for the same reason as stickyPrHeader.
+export interface DiffDisplay {
+    compareMode: 'merge-base' | 'direct';
+    viewMode: 'split' | 'unified';
+}
+
+export async function getDiffDisplay(): Promise<DiffDisplay> {
+    const store = await getStore();
+    const compareMode = store.get<string>('compareMode', 'merge-base');
+    const viewMode = store.get<string>('viewMode', 'split');
+    return {
+        compareMode: compareMode === 'direct' ? 'direct' : 'merge-base',
+        viewMode: viewMode === 'unified' ? 'unified' : 'split',
+    };
+}
+
+export async function setCompareMode(mode: DiffDisplay['compareMode']): Promise<void> {
+    const store = await getStore();
+    store.set('compareMode', mode);
+}
+
+export async function setViewMode(mode: DiffDisplay['viewMode']): Promise<void> {
+    const store = await getStore();
+    store.set('viewMode', mode);
+}
+
 // The main window's last size, position, and maximized state, restored on launch
 // so the app reopens where it was left. Null until the first window closes.
 export async function getWindowState(): Promise<WindowState | null> {

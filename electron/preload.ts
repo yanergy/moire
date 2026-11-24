@@ -105,6 +105,10 @@ contextBridge.exposeInMainWorld('api', {
     },
     // Whether the PR view's header stays pinned at the top while scrolling, set on
     // the Settings page. Read on launch; the Settings page writes changes.
+    getDiffDisplay: () => ipcRenderer.invoke('diff-display:get'),
+    setCompareModePreference: (mode: string) =>
+        ipcRenderer.invoke('diff-display:set-compare-mode', mode),
+    setViewModePreference: (mode: string) => ipcRenderer.invoke('diff-display:set-view-mode', mode),
     getStickyPrHeader: () => ipcRenderer.invoke('sticky-pr-header:get'),
     setStickyPrHeader: (enabled: boolean) => ipcRenderer.invoke('sticky-pr-header:set', enabled),
     // Fired when the native View → Refresh item is chosen. Returns an unsubscribe

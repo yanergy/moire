@@ -3,10 +3,8 @@ import { computed } from 'vue';
 import { ArrowRightLeft, FileDiff, LayoutDashboard, Settings } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import type { CompareMode, ViewMode } from '@/shared/types';
 import RefSelector from '@/components/controls/RefSelector.vue';
 import RepoPicker from '@/components/controls/RepoPicker.vue';
-import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 import NotificationsButton from '@/components/headers/NotificationsButton.vue';
 import PrTab from '@/components/headers/PrTab.vue';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
@@ -16,26 +14,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 const comparison = useComparisonStore();
 const ui = useUiStore();
-
-const compareOptions: { value: CompareMode; label: string; tooltip: string }[] = [
-    {
-        value: 'merge-base',
-        label: 'merge-base',
-        tooltip:
-            'Compare head to where it branched from base (the merge base), showing only the changes head introduces. Matches what a GitHub pull request shows.',
-    },
-    {
-        value: 'direct',
-        label: 'direct',
-        tooltip:
-            'Compare the base and head tips directly. Commits added to base after head branched off also appear as changes.',
-    },
-];
-
-const viewOptions: { value: ViewMode; label: string }[] = [
-    { value: 'split', label: 'split' },
-    { value: 'unified', label: 'unified' },
-];
 
 // The page the main area shows, whose toolbar button is the selected one. It
 // follows MoirePage: the PR page needs a detected PR and the dashboard and
@@ -62,7 +40,7 @@ const currentPage = computed(() => {
 <template>
     <TooltipProvider :delay-duration="300">
         <!-- Three columns: the repository and range on the left, the page
-             buttons in the middle and the diff options on the right. The equal
+             buttons in the middle and an empty one on the right. The equal
              side columns keep the middle centered on the header; a side that
              does not fit pushes it over rather than overlapping it. -->
         <div
@@ -127,19 +105,9 @@ const currentPage = computed(() => {
                 </toolbar-nav-button>
             </nav>
 
-            <div class="flex items-center justify-end gap-2">
-                <segmented-toggle
-                    :options="compareOptions"
-                    :model-value="comparison.compareMode"
-                    @update:model-value="comparison.setCompareMode"
-                />
-
-                <segmented-toggle
-                    :options="viewOptions"
-                    :model-value="ui.viewMode"
-                    @update:model-value="ui.setViewMode"
-                />
-            </div>
+            <!-- Empty, so the side columns stay equal and the nav stays centered. The
+                 compare and view modes moved to the Settings page. -->
+            <div />
         </div>
     </TooltipProvider>
 </template>

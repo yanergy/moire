@@ -43,6 +43,9 @@ import {
     getDiffLayout,
     getStickyPrHeader,
     setStickyPrHeader,
+    getDiffDisplay,
+    setCompareMode,
+    setViewMode,
 } from '../settings';
 import { detectEditors, openWithEditor } from '../editors';
 import { currentThemeState } from '../theme';
@@ -346,6 +349,20 @@ function registerIpcHandlers({
     handle('diff-layout:get', () => getDiffLayout());
 
     // Whether the PR view's header stays pinned while scrolling (Settings page).
+    handle('diff-display:get', () => getDiffDisplay());
+    handle('diff-display:set-compare-mode', (mode: unknown) => {
+        if (mode !== 'merge-base' && mode !== 'direct') {
+            throw new TypeError('diff-display:set-compare-mode expects merge-base or direct');
+        }
+        return setCompareMode(mode);
+    });
+    handle('diff-display:set-view-mode', (mode: unknown) => {
+        if (mode !== 'split' && mode !== 'unified') {
+            throw new TypeError('diff-display:set-view-mode expects split or unified');
+        }
+        return setViewMode(mode);
+    });
+
     handle('sticky-pr-header:get', () => getStickyPrHeader());
     handle('sticky-pr-header:set', (enabled: unknown) => {
         if (typeof enabled !== 'boolean') {

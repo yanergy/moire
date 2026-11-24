@@ -33,7 +33,7 @@ const PR: PullRequest = {
 // reach the electron bridge or teleport their content and carry their own tests.
 // Stub them here and exercise the piece ToolbarHeader owns directly: the swap
 // button. (The theme toggle moved to the native View menu; see tests/menu.spec.ts.)
-const stubs = { RepoPicker: true, RefSelector: true, SegmentedToggle: true };
+const stubs = { RepoPicker: true, RefSelector: true };
 
 // A page button, found by its label.
 function pageButton(wrapper: VueWrapper, label: string) {
@@ -76,6 +76,12 @@ describe('ToolbarHeader', () => {
     function mountToolbar() {
         return mount(ToolbarHeader, { global: { plugins: [pinia], stubs } });
     }
+
+    it('no longer carries the compare and view mode toggles (moved to Settings)', () => {
+        const wrapper = mountToolbar();
+        expect(wrapper.text()).not.toContain('merge-base');
+        expect(wrapper.text()).not.toContain('unified');
+    });
 
     it('swaps base and head when the swap button is clicked', async () => {
         const wrapper = mountToolbar();

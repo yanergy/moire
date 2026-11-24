@@ -12,7 +12,7 @@ import type { DashboardCategoryKey } from '@/stores/dashboard';
 
 // One page in the back/forward history: the main view and, for the dashboard,
 // the card whose PR list is open (null for the overview).
-export type SettingsSection = 'branches' | 'notifications' | 'dashboard' | 'prView';
+export type SettingsSection = 'branches' | 'diff' | 'notifications' | 'dashboard' | 'prView';
 
 interface Page {
     mainView: MainView;
@@ -133,8 +133,16 @@ export const useUiStore = defineStore('ui', () => {
         }
     }
 
-    function setViewMode(mode: ViewMode) {
+    // Switch split/unified (Settings page) and persist it. Resolves to whether the
+    // save landed (the Settings page reports it).
+    async function setViewMode(mode: ViewMode): Promise<boolean> {
         viewMode.value = mode;
+        try {
+            await window.api?.setViewModePreference(mode);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     function setMainView(view: MainView) {
