@@ -62,6 +62,8 @@ const state = vi.hoisted(() => ({
     detectEditors:
         vi.fn<() => Promise<{ id: string; label: string; kind: string; target: string }[]>>(),
     openWithEditor: vi.fn<(editor: unknown, p: string) => Promise<string>>(),
+    menuTemplate: [] as { label?: string; enabled?: boolean; click?: () => void }[],
+    menuPopup: vi.fn<(options: unknown) => void>(),
 }));
 
 vi.mock('electron', () => ({
@@ -71,6 +73,13 @@ vi.mock('electron', () => ({
     },
     dialog: { showOpenDialog: state.showOpenDialog, showErrorBox: state.showErrorBox },
     shell: { openExternal: state.openExternal, openPath: state.openPath },
+    BrowserWindow: { fromWebContents: () => ({ id: 1 }) },
+    Menu: {
+        buildFromTemplate: (template: typeof state.menuTemplate) => {
+            state.menuTemplate = template;
+            return { popup: state.menuPopup };
+        },
+    },
 }));
 
 vi.mock('../electron/editors', () => ({
@@ -84,6 +93,7 @@ vi.mock('simple-git', () => ({
 }));
 
 vi.mock('../electron/git/GitService', () => ({
+    WORKING_TREE: 'WORKING TREE',
     GitService: class {
         repoPath: string;
         constructor(repoPath: string) {
@@ -512,5 +522,24 @@ describe('registerIpcHandlers', () => {
         });
         expect(state.openPath).not.toHaveBeenCalled();
         expect(state.openWithEditor).not.toHaveBeenCalled();
+    });
+
+    describe('menu:branch-picker', () => {
+        it('pops up the comparison presets and sends a pick back to the window', async () => {
+            const send = vi.fn<(channel: string, ...args: unknown[]) => void>();
+            // This channel reads the event's sender, so call it with one.
+            await state.handlers.get('menu:branch-picker')!({ sender: { send } });
+
+            expect(state.menuPopup).toHaveBeenCalledWith({ window: { id: 1 } });
+            const labels = state.menuTemplate.map((item) => item.label);
+            expect(labels).toEqual([
+                'Comparison Presets',
+                'Compare Current Branch to Development',
+                'Compare Working Tree to Origin',
+            ]);
+
+            state.menuTemplate[2]!.click!();
+            expect(send).toHaveBeenCalledWith('menu:compare-preset', '', 'WORKING TREE');
+        });
     });
 });

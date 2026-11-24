@@ -109,6 +109,23 @@ export function comparisonPresets(
     ];
 }
 
+// The context menu of a toolbar branch picker: the same comparison presets as Git →
+// Comparison Presets, under the same disabled header, so both menus share one list
+// and one click path (the renderer's onMenuComparePreset).
+export function branchPickerMenuTemplate(
+    presets: ComparisonPreset[],
+    onSelectPreset: (base: string, head: string) => void
+): MenuItemConstructorOptions[] {
+    return [
+        { label: 'Comparison Presets', enabled: false },
+        ...presets.map(({ label, base, head, enabled }): MenuItemConstructorOptions => ({
+            label,
+            enabled,
+            click: () => onSelectPreset(base, head),
+        })),
+    ];
+}
+
 export interface MenuOptions {
     isMac: boolean;
     currentTheme: ThemePreference;
