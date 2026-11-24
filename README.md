@@ -99,12 +99,13 @@ the popup never appears.
    For two common comparisons, **Git > Comparison Presets** sets both sides at once: the
    development branch against the checked-out branch, or the checked-out branch's `origin` copy
    against the working tree (everything not pushed yet).
-3. **Choose how to compare.** Toggle between:
+3. **Choose how to compare.** On the Settings page, under **Diff**, pick the compare mode:
     - **merge-base**: compares head to the point where it branched off base, showing only the changes
       head introduces. This matches what a GitHub pull request shows.
     - **direct**: compares the base and head tips directly, so commits added to base after head
       branched off also show up.
-4. **Choose the layout.** Toggle between **split** (side by side) and **unified** (single column).
+4. **Choose the layout.** Also under **Diff** on the Settings page, pick **split** (side by side) or
+   **unified** (single column). Both choices are remembered across launches.
    Under **View > Diff Layout** you can switch the whole review area between the single-file view
    and an **All Files** list that stacks every changed file's diff in one scroll, GitHub style.
 5. **Browse the changes.** The sidebar lists every changed file as a tree. Click a file to open its
@@ -159,7 +160,7 @@ last branch range are remembered per repository.
 ### Comparing branches
 
 - Two-branch diff for any local Git repository, with `merge-base` (pull-request style) and `direct`
-  comparison modes.
+  comparison modes, chosen on the Settings page.
 - Searchable branch pickers that group branches by prefix and recommend a likely base and head.
 - Favorite branches. Star a branch in either picker to pin it in a "Favorites" group below the
   recommendations, in both the base and the head picker. A starred branch that is already
@@ -255,8 +256,8 @@ last branch range are remembered per repository.
 - A selectable diff color style (GitHub or VS Code) under **View > Code Style**, persisted across
   launches.
 - A Settings page (the toolbar's **Settings** button, or **Moiré > Settings…**, `Cmd/Ctrl+,`). The
-  main and development branch, the notifications and the dashboard are kept per repository; the PR
-  view's settings apply to every repository.
+  main and development branch, the notifications and the dashboard are kept per repository; the
+  diff's compare mode and layout and the PR view's settings apply to every repository.
 - Page tabs in the middle of the toolbar (**Diff**, **PR**, **Dashboard**, **Notifications** and
   **Settings**) that go to a page and show which one you are on.
 - Back and forward history between the diff, the PR view, the dashboard and its cards, the
