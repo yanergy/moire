@@ -249,6 +249,21 @@ export interface PullRequest {
     reviewDecision: string;
     // The CI checks on the head commit, for the Checks tab. Empty when none ran.
     checks: PrCheck[];
+    // Everyone asked to review or who reviewed, with where each stands, for the
+    // Reviewers tab. Optional because older fetches and test fixtures may omit it.
+    reviewers?: PrReviewer[];
+}
+
+// One reviewer of a PR. A user or a team with a pending request is PENDING (a
+// re-requested reviewer too, until they review again). Otherwise a user's state is
+// their latest approval or change request, or COMMENTED when they only commented
+// (or their verdict was dismissed).
+export type PrReviewerState = 'PENDING' | 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED';
+
+export interface PrReviewer {
+    login: string; // a user login, or a team's slug
+    kind: 'user' | 'team';
+    state: PrReviewerState;
 }
 
 // Why a PR lookup produced no PR, so the renderer can show the right hint:

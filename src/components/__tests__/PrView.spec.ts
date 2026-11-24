@@ -127,6 +127,23 @@ describe('PrView', () => {
         expect(wrapper.find('[data-slot="finish-review"]').text()).toContain('Finish review');
     });
 
+    it('lists the reviewers under the Reviewers tab, with approvals in the tab label', async () => {
+        const wrapper = mountWith({
+            ...PR,
+            reviewers: [
+                { login: 'ann', kind: 'user', state: 'APPROVED' },
+                { login: 'bob', kind: 'user', state: 'PENDING' },
+            ],
+        });
+        const tab = wrapper.get('[data-slot="reviewers-tab"]');
+        expect(tab.text()).toContain('1/2');
+
+        await tab.trigger('click');
+        expect(wrapper.findAll('[data-slot="reviewer"]')).toHaveLength(2);
+        expect(wrapper.text()).toContain('1/2 approved · 1 pending');
+        expect(wrapper.find('[data-slot="pr-tab-status"]').exists()).toBe(false);
+    });
+
     describe("a review's line comments", () => {
         it('shows them under their review: the file, the code and the comments', () => {
             useComparisonStore().reviewThreads = [thread()];

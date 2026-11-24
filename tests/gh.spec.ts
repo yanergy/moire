@@ -1208,3 +1208,70 @@ describe('submitReview and discardReview', () => {
         });
     });
 });
+
+describe('getPullRequest reviewers', () => {
+    async function reviewersFor(overrides: Record<string, unknown>) {
+        const { run } = okRunner(JSON.stringify([{ ...ghPr, ...overrides }]));
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+        return result.pr!.reviewers;
+    }
+
+    it('lists each reviewer with their verdict, then the pending requests', async () => {
+        expect(
+            await reviewersFor({
+                reviews: [
+                    review('ann', 'APPROVED', '2026-09-04T00:00:00Z'),
+                    review('bob', 'CHANGES_REQUESTED', '2026-09-05T00:00:00Z'),
+                    review('cid', 'COMMENTED', '2026-09-06T00:00:00Z'),
+                ],
+                reviewRequests: [
+                    { __typename: 'User', login: 'dan' },
+                    { __typename: 'Team', slug: 'core', name: 'Core' },
+                ],
+            })
+        ).toEqual([
+            { login: 'ann', kind: 'user', state: 'APPROVED' },
+            { login: 'bob', kind: 'user', state: 'CHANGES_REQUESTED' },
+            { login: 'cid', kind: 'user', state: 'COMMENTED' },
+            { login: 'dan', kind: 'user', state: 'PENDING' },
+            { login: 'core', kind: 'team', state: 'PENDING' },
+        ]);
+    });
+
+    it('keeps a verdict after a later comment, and drops a dismissed one', async () => {
+        expect(
+            await reviewersFor({
+                reviews: [
+                    review('ann', 'CHANGES_REQUESTED', '2026-09-04T00:00:00Z'),
+                    review('ann', 'COMMENTED', '2026-09-05T00:00:00Z'),
+                    review('bob', 'APPROVED', '2026-09-04T00:00:00Z'),
+                    review('bob', 'DISMISSED', '2026-09-05T00:00:00Z'),
+                ],
+            })
+        ).toEqual([
+            { login: 'ann', kind: 'user', state: 'CHANGES_REQUESTED' },
+            { login: 'bob', kind: 'user', state: 'COMMENTED' },
+        ]);
+    });
+
+    it('shows a re-requested reviewer as pending, listed once', async () => {
+        expect(
+            await reviewersFor({
+                reviews: [review('ann', 'CHANGES_REQUESTED', '2026-09-04T00:00:00Z')],
+                reviewRequests: [{ __typename: 'User', login: 'ann' }],
+            })
+        ).toEqual([{ login: 'ann', kind: 'user', state: 'PENDING' }]);
+    });
+
+    it("leaves out the author's own replies and unsubmitted reviews", async () => {
+        const author = ghPr.author.login;
+        expect(
+            await reviewersFor({
+                reviews: [
+                    review(author, 'COMMENTED', '2026-09-04T00:00:00Z'),
+                    review('ann', 'PENDING', '2026-09-04T00:00:00Z'),
+                ],
+            })
+        ).toEqual([]);
+    });
+});

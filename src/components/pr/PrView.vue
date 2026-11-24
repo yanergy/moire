@@ -53,6 +53,8 @@ import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
+import PrReviewers from '@/components/pr/PrReviewers.vue';
+import { reviewProgress } from '@/lib/review-progress';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
 import type {
@@ -126,8 +128,16 @@ async function refreshPr() {
 }
 
 // The PR view is tabbed, as in the design: the description and conversation under
-// "Conversation", the CI checks under "Checks". Commits are a planned third tab.
-const activeTab = ref<'conversation' | 'checks'>('conversation');
+// "Conversation", the CI checks under "Checks", and who reviews under "Reviewers".
+const activeTab = ref<'conversation' | 'checks' | 'reviewers'>('conversation');
+
+const reviewers = computed(() => pr.value?.reviewers ?? []);
+
+// The Reviewers tab label shows approvals over reviewers, like the Checks tab.
+const reviewersSummary = computed(() => {
+    const { approved, total } = reviewProgress(reviewers.value);
+    return `${approved}/${total}`;
+});
 
 const checks = computed(() => pr.value?.checks ?? []);
 
@@ -833,13 +843,17 @@ const mergeStatus = computed<StatusBox | null>(() => {
 
 // The status box leading the active tab: the merge state on the Conversation tab,
 // the CI checks' state on the Checks tab (only when there are checks to sum up).
-const tabStatus = computed<StatusBox | null>(() =>
-    activeTab.value === 'conversation'
-        ? mergeStatus.value
-        : checks.value.length
-          ? checksStatus.value
-          : null
-);
+// The Reviewers tab carries its own summary line instead.
+const tabStatus = computed<StatusBox | null>(() => {
+    if (activeTab.value === 'conversation') {
+        return mergeStatus.value;
+    }
+    if (activeTab.value === 'checks' && checks.value.length) {
+        return checksStatus.value;
+    }
+
+    return null;
+});
 
 // Open a GitHub URL (the PR, or a check's run) in the user's browser through the
 // preload bridge. The main process only opens http(s).
@@ -1392,6 +1406,22 @@ function renderComment(comment: PrComment): string {
                                 Checks
                                 <span v-if="checks.length" class="text-moire-faint">
                                     {{ checksSummary }}
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                data-slot="reviewers-tab"
+                                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                                :class="
+                                    activeTab === 'reviewers'
+                                        ? 'bg-moire-hover text-moire-fg'
+                                        : 'text-moire-muted hover:text-moire-fg'
+                                "
+                                @click="activeTab = 'reviewers'"
+                            >
+                                Reviewers
+                                <span v-if="reviewers.length" class="text-moire-faint">
+                                    {{ reviewersSummary }}
                                 </span>
                             </button>
                         </div>
@@ -2084,6 +2114,7 @@ function renderComment(comment: PrComment): string {
 
                     <!-- Checks: a summary of the CI run, then one row per check
                          (status glyph, name, faint detail), or an empty state. -->
+                    <pr-reviewers v-else-if="activeTab === 'reviewers'" :reviewers="reviewers" />
                     <div v-else-if="activeTab === 'checks'">
                         <div v-if="checks.length">
                             <div

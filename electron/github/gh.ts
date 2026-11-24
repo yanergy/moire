@@ -10,6 +10,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import type { PrReviewer, PrReviewerState } from '../../src/shared/types';
 
 const execFileAsync = promisify(execFile);
 
@@ -108,6 +109,8 @@ export interface PullRequest {
     reviewDecision: string;
     // The CI checks on the head commit, for the Checks tab. Empty when none ran.
     checks: PrCheck[];
+    // The reviewers and where each stands, for the Reviewers tab.
+    reviewers?: PrReviewer[];
 }
 
 export interface PullRequestResult {
@@ -141,10 +144,11 @@ interface GhReview {
     submittedAt: string | null;
 }
 
-// A pending review request: a user (login) or a team (slug).
+// A pending review request: a user (login) or a team (slug and name).
 interface GhReviewRequest {
     login?: string;
     slug?: string;
+    name?: string;
 }
 
 interface GhLabel {
@@ -494,7 +498,56 @@ function toPullRequest(pr: GhPr): PullRequest {
         mergeStateStatus: pr.mergeStateStatus ?? '',
         reviewDecision: reviewDecisionOf(pr),
         checks: buildChecks(pr),
+        reviewers: buildReviewers(pr),
     };
+}
+
+// The PR's reviewers for the Reviewers tab: everyone who reviewed (the author's
+// own replies aside) in the order they first did, then the pending requests not
+// already listed. A pending request wins over an earlier review, since a
+// re-requested reviewer owes a new one. A user's verdict is their latest approval
+// or change request, as for the review decision (see reviewDecisionOf): a later
+// comment does not undo it, and a dismissal drops it back to COMMENTED.
+export function buildReviewers(pr: GhPr): PrReviewer[] {
+    const author = pr.author?.login ?? '';
+    const reviews = (pr.reviews ?? []).toSorted((a, b) =>
+        (a.submittedAt ?? '').localeCompare(b.submittedAt ?? '')
+    );
+    const states = new Map<string, PrReviewerState>();
+    for (const review of reviews) {
+        const login = review.author?.login ?? '';
+        if (!login || login === author || review.state === 'PENDING') {
+            continue;
+        }
+
+        if (review.state === 'APPROVED' || review.state === 'CHANGES_REQUESTED') {
+            states.set(login, review.state);
+        } else if (review.state === 'DISMISSED' || !states.has(login)) {
+            states.set(login, 'COMMENTED');
+        }
+    }
+
+    const reviewers: PrReviewer[] = [...states].map(([login, state]) => ({
+        login,
+        kind: 'user',
+        state,
+    }));
+    for (const request of pr.reviewRequests ?? []) {
+        const kind = request.login ? 'user' : 'team';
+        const login = request.login || request.slug || request.name || '';
+        if (!login) {
+            continue;
+        }
+
+        const existing = reviewers.find((r) => r.kind === kind && r.login === login);
+        if (existing) {
+            existing.state = 'PENDING';
+        } else {
+            reviewers.push({ login, kind, state: 'PENDING' });
+        }
+    }
+
+    return reviewers;
 }
 
 // Map a gh failure onto a status the renderer can act on. A spawn ENOENT means gh
