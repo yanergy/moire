@@ -62,6 +62,7 @@ const state = vi.hoisted(() => ({
     detectEditors:
         vi.fn<() => Promise<{ id: string; label: string; kind: string; target: string }[]>>(),
     openWithEditor: vi.fn<(editor: unknown, p: string) => Promise<string>>(),
+    writeText: vi.fn<(text: string) => void>(),
 }));
 
 vi.mock('electron', () => ({
@@ -71,6 +72,7 @@ vi.mock('electron', () => ({
     },
     dialog: { showOpenDialog: state.showOpenDialog, showErrorBox: state.showErrorBox },
     shell: { openExternal: state.openExternal, openPath: state.openPath },
+    clipboard: { writeText: state.writeText },
 }));
 
 vi.mock('../electron/editors', () => ({
@@ -512,5 +514,19 @@ describe('registerIpcHandlers', () => {
         });
         expect(state.openPath).not.toHaveBeenCalled();
         expect(state.openWithEditor).not.toHaveBeenCalled();
+    });
+
+    describe('clipboard:write-text', () => {
+        it('writes text to the clipboard', async () => {
+            await invoke('clipboard:write-text', 'npm install');
+            expect(state.writeText).toHaveBeenCalledWith('npm install');
+        });
+
+        it('refuses anything but text', async () => {
+            await expect(invoke('clipboard:write-text', { x: 1 })).rejects.toThrow(
+                'Only text can be copied.'
+            );
+            expect(state.writeText).not.toHaveBeenCalled();
+        });
     });
 });

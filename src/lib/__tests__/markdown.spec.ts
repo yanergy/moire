@@ -30,6 +30,21 @@ describe('renderMarkdown', () => {
         );
     });
 
+    it('gives every code block a copy button, fenced or raw HTML', () => {
+        const holder = document.createElement('div');
+        holder.innerHTML = renderMarkdown('```bash\nls\n```\n\n<pre>raw</pre>\n\n`inline`');
+        const blocks = holder.querySelectorAll('.pr-code-block');
+        expect(blocks).toHaveLength(2);
+        for (const block of blocks) {
+            expect(block.querySelector('pre')).not.toBeNull();
+            expect(block.querySelector('button.pr-copy-code')?.textContent).toBe('Copy');
+        }
+    });
+
+    it('drops a button smuggled in through raw HTML', () => {
+        expect(renderMarkdown('<button class="pr-copy-code">x</button>')).not.toContain('<button');
+    });
+
     it('strips dangerous raw HTML: scripts, event handlers, and frames', () => {
         const script = renderMarkdown('<script>alert(1)</script>');
         expect(script).not.toContain('<script');

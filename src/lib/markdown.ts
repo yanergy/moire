@@ -119,7 +119,35 @@ const ALLOWED_ATTR = [
 // Sanitize rendered HTML down to the allow-list. Kept in one place so every
 // v-html string in the PR view goes through the same policy.
 function sanitize(html: string): string {
-    return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR });
+    const fragment = DOMPurify.sanitize(html, {
+        ALLOWED_TAGS,
+        ALLOWED_ATTR,
+        RETURN_DOM_FRAGMENT: true,
+    });
+    addCopyButtons(fragment);
+
+    const holder = document.createElement('div');
+    holder.append(fragment);
+    return holder.innerHTML;
+}
+
+// Give every code block a "Copy" button in its top right corner, as GitHub does.
+// Added after sanitizing, so it covers raw HTML <pre>s as well as fenced blocks and
+// the button never has to pass the allow-list (a comment cannot forge one). The
+// click is handled by one delegated listener (see lib/copy-code), since the HTML
+// is inserted with v-html in several places.
+function addCopyButtons(root: DocumentFragment): void {
+    for (const pre of root.querySelectorAll('pre')) {
+        const block = document.createElement('div');
+        block.className = 'pr-code-block';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'pr-copy-code';
+        button.setAttribute('aria-label', 'Copy code');
+        button.textContent = 'Copy';
+        pre.replaceWith(block);
+        block.append(pre, button);
+    }
 }
 
 // GitHub task-list support: render "- [ ] item" and "- [x] item" as a checkbox

@@ -3,7 +3,7 @@
 // entry in MoireApi (src/shared/types.ts). Keep the three in sync.
 
 import path from 'node:path';
-import { ipcMain, dialog, shell } from 'electron';
+import { clipboard, ipcMain, dialog, shell } from 'electron';
 import { simpleGit, CheckRepoActions } from 'simple-git';
 import { GitService, type CompareMode } from '../git/GitService';
 import {
@@ -487,6 +487,16 @@ function registerIpcHandlers({
 
     // Open an external URL (a PR link) in the default browser. Restricted to
     // http(s) so a crafted PR field can't launch another scheme or a local path.
+    // Copy text to the system clipboard (a code block's copy button, a branch name).
+    // Done here so the renderer needs no clipboard access of its own.
+    handle('clipboard:write-text', (text: unknown) => {
+        if (typeof text !== 'string') {
+            throw new Error('Only text can be copied.');
+        }
+
+        clipboard.writeText(text);
+    });
+
     handle('shell:open-external', async (url: string) => {
         if (/^https?:\/\//i.test(url)) {
             await shell.openExternal(url);

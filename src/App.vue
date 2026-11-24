@@ -4,6 +4,7 @@ import { setupMonacoEnv } from '@/lib/monaco-env';
 import { defineMonacoThemes } from '@/lib/monaco-themes';
 import { windowTitle } from '@/lib/window-title';
 import { setFlourishesEnabled } from '@/lib/celebrate';
+import { onCopyCodeClick } from '@/lib/copy-code';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
@@ -54,6 +55,7 @@ function onMouseUp(event: MouseEvent) {
 
 onMounted(async () => {
     window.addEventListener('mouseup', onMouseUp, true);
+    window.addEventListener('click', onCopyCodeClick);
     // Reopen the most recently opened repo on launch.
     comparison.restoreLastRepo();
     // Theme is owned by the main process (nativeTheme). Pull the current resolved
@@ -116,6 +118,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
     window.removeEventListener('mouseup', onMouseUp, true);
+    window.removeEventListener('click', onCopyCodeClick);
     stopThemeSync?.();
     stopMenuRefresh?.();
     stopMenuOpenRepo?.();
