@@ -3,7 +3,7 @@
 // entry in MoireApi (src/shared/types.ts). Keep the three in sync.
 
 import path from 'node:path';
-import { BrowserWindow, Menu, ipcMain, dialog, shell } from 'electron';
+import { BrowserWindow, Menu, clipboard, ipcMain, dialog, shell } from 'electron';
 import { simpleGit, CheckRepoActions } from 'simple-git';
 import { GitService, type CompareMode } from '../git/GitService';
 import {
@@ -498,14 +498,21 @@ function registerIpcHandlers({
     // http(s) so a crafted PR field can't launch another scheme or a local path.
     // A toolbar branch picker was right clicked: pop up its native context menu at
     // the cursor, in the window that asked. A picked preset goes back to that window
-    // over the Git menu's channel, so the renderer handles both the same way. Uses
-    // ipcMain directly because it needs the sender, which `handle` drops.
-    ipcMain.handle('menu:branch-picker', async (event) => {
+    // over the Git menu's channel, so the renderer handles both the same way, and a
+    // copy goes straight to the system clipboard. Uses ipcMain directly because it
+    // needs the sender, which `handle` drops.
+    ipcMain.handle('menu:branch-picker', async (event, ref: unknown) => {
         try {
-            const presets = await getCurrentComparisonPresets();
-            const template = branchPickerMenuTemplate(presets, (base, head) =>
-                event.sender.send('menu:compare-preset', base, head)
-            );
+            const pickerRef = typeof ref === 'string' ? ref : '';
+            const branches = await getCurrentBranches();
+            const template = branchPickerMenuTemplate({
+                ref: pickerRef,
+                isRemote: branches.some((b) => b.kind === 'remote' && b.name === pickerRef),
+                presets: await getCurrentComparisonPresets(),
+                onCopy: (text) => clipboard.writeText(text),
+                onSelectPreset: (base, head) =>
+                    event.sender.send('menu:compare-preset', base, head),
+            });
             const window = BrowserWindow.fromWebContents(event.sender) ?? undefined;
             Menu.buildFromTemplate(template).popup({ window });
         } catch (error) {

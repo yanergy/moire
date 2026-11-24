@@ -168,6 +168,9 @@ last branch range are remembered per repository.
 - Comparison presets under **Git > Comparison Presets**, and in the context menu of both toolbar
   branch pickers (right click): the development branch to the checked-out branch, and the working
   tree to the checked-out branch's `origin` copy. A preset whose ref does not exist is disabled.
+- **Copy Branch Name** in the same right click menu copies the picker's branch. For a remote branch
+  it copies the name without the remote (`feature/x`), with a second item for the full ref
+  (`origin/feature/x`).
 - A per repository main and development branch, detected from the usual names and changeable on
   the Settings page (the development branch can be set to None). The base recommendations, the
   default base and the comparison presets follow them.

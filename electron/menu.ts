@@ -109,14 +109,41 @@ export function comparisonPresets(
     ];
 }
 
-// The context menu of a toolbar branch picker: the same comparison presets as Git →
-// Comparison Presets, under the same disabled header, so both menus share one list
-// and one click path (the renderer's onMenuComparePreset).
-export function branchPickerMenuTemplate(
-    presets: ComparisonPreset[],
-    onSelectPreset: (base: string, head: string) => void
-): MenuItemConstructorOptions[] {
+// The context menu of a toolbar branch picker. It copies the picker's ref and
+// lists the same comparison presets as Git → Comparison Presets, under the same
+// disabled header, so both menus share one list and one click path (the renderer's
+// onMenuComparePreset). A remote ref copies as the plain branch name, with a second
+// item for the full ref; the working tree has no name to copy.
+export interface BranchPickerMenuOptions {
+    ref: string;
+    isRemote: boolean;
+    presets: ComparisonPreset[];
+    onCopy: (text: string) => void;
+    onSelectPreset: (base: string, head: string) => void;
+}
+
+export function branchPickerMenuTemplate({
+    ref,
+    isRemote,
+    presets,
+    onCopy,
+    onSelectPreset,
+}: BranchPickerMenuOptions): MenuItemConstructorOptions[] {
+    const name = isRemote ? ref.slice(ref.indexOf('/') + 1) : ref;
+    const copyItems: MenuItemConstructorOptions[] = [
+        {
+            label: 'Copy Branch Name',
+            enabled: Boolean(ref) && ref !== WORKING_TREE,
+            click: () => onCopy(name),
+        },
+    ];
+    if (isRemote) {
+        copyItems.push({ label: `Copy "${ref}"`, click: () => onCopy(ref) });
+    }
+
     return [
+        ...copyItems,
+        { type: 'separator' },
         { label: 'Comparison Presets', enabled: false },
         ...presets.map(({ label, base, head, enabled }): MenuItemConstructorOptions => ({
             label,

@@ -506,9 +506,10 @@ export interface MoireApi {
     // Open a URL (a PR link) in the user's default browser, via the main process.
     // Restricted to http(s) URLs on the main side.
     openExternal(url: string): Promise<void>;
-    // Pop up a toolbar branch picker's native context menu at the cursor. A
-    // comparison preset picked there arrives through onMenuComparePreset.
-    showBranchPickerMenu(): Promise<void>;
+    // Pop up a toolbar branch picker's native context menu at the cursor, for the
+    // picker's current ref (copied by its "Copy Branch Name" item). A comparison
+    // preset picked there arrives through onMenuComparePreset.
+    showBranchPickerMenu(ref: string): Promise<void>;
     // Open the working-tree copy of a repo-relative file, via the main process (which
     // resolves it against the repo root and refuses paths outside it). Uses the chosen
     // editor from the "Open Files In" menu, falling back to the OS default app.

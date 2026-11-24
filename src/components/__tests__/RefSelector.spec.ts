@@ -74,14 +74,14 @@ describe('RefSelector', () => {
     }
 
     it('opens the native preset menu on right click, not the picker', async () => {
-        const showBranchPickerMenu = vi.fn<() => Promise<void>>().mockResolvedValue();
+        const showBranchPickerMenu = vi.fn<(ref: string) => Promise<void>>().mockResolvedValue();
         window.api = { showBranchPickerMenu } as unknown as Window['api'];
         const wrapper = mountSide('base');
 
         await wrapper.find('button').trigger('contextmenu');
         await flushPromises();
 
-        expect(showBranchPickerMenu).toHaveBeenCalledTimes(1);
+        expect(showBranchPickerMenu).toHaveBeenCalledWith('main');
         expect(commandInput()).toBeNull();
         delete window.api;
     });

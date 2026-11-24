@@ -228,10 +228,10 @@ function pick(name: string) {
     open.value = false;
 }
 
-// Right click opens the native context menu with the comparison presets (built in
-// main, shared with the Git menu) instead of the picker.
+// Right click opens the native context menu (built in main) instead of the picker:
+// copy this picker's ref, or pick a comparison preset shared with the Git menu.
 function showContextMenu() {
-    void window.api?.showBranchPickerMenu?.();
+    void window.api?.showBranchPickerMenu?.(current.value);
 }
 </script>
 

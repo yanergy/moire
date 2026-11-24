@@ -65,7 +65,7 @@ contextBridge.exposeInMainWorld('api', {
     resolveCommit: (ref: string) => ipcRenderer.invoke('git:resolve-commit', ref),
     // Open a PR link in the default browser (main restricts it to http(s)).
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
-    showBranchPickerMenu: () => ipcRenderer.invoke('menu:branch-picker'),
+    showBranchPickerMenu: (ref: string) => ipcRenderer.invoke('menu:branch-picker', ref),
     openFile: (filePath: string) => ipcRenderer.invoke('shell:open-path', filePath),
     // Theme is owned by main (nativeTheme). `getTheme` reads the resolved state;
     // `onThemeChanged` fires when the View → Theme selection or the OS theme

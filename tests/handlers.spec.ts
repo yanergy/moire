@@ -64,6 +64,7 @@ const state = vi.hoisted(() => ({
     openWithEditor: vi.fn<(editor: unknown, p: string) => Promise<string>>(),
     menuTemplate: [] as { label?: string; enabled?: boolean; click?: () => void }[],
     menuPopup: vi.fn<(options: unknown) => void>(),
+    writeText: vi.fn<(text: string) => void>(),
 }));
 
 vi.mock('electron', () => ({
@@ -74,6 +75,7 @@ vi.mock('electron', () => ({
     dialog: { showOpenDialog: state.showOpenDialog, showErrorBox: state.showErrorBox },
     shell: { openExternal: state.openExternal, openPath: state.openPath },
     BrowserWindow: { fromWebContents: () => ({ id: 1 }) },
+    clipboard: { writeText: state.writeText },
     Menu: {
         buildFromTemplate: (template: typeof state.menuTemplate) => {
             state.menuTemplate = template;
@@ -528,18 +530,28 @@ describe('registerIpcHandlers', () => {
         it('pops up the comparison presets and sends a pick back to the window', async () => {
             const send = vi.fn<(channel: string, ...args: unknown[]) => void>();
             // This channel reads the event's sender, so call it with one.
-            await state.handlers.get('menu:branch-picker')!({ sender: { send } });
+            await state.handlers.get('menu:branch-picker')!({ sender: { send } }, 'feature');
 
             expect(state.menuPopup).toHaveBeenCalledWith({ window: { id: 1 } });
             const labels = state.menuTemplate.map((item) => item.label);
             expect(labels).toEqual([
+                'Copy Branch Name',
+                undefined,
                 'Comparison Presets',
                 'Compare Current Branch to Development',
                 'Compare Working Tree to Origin',
             ]);
 
-            state.menuTemplate[2]!.click!();
+            state.menuTemplate[4]!.click!();
             expect(send).toHaveBeenCalledWith('menu:compare-preset', '', 'WORKING TREE');
+        });
+
+        it("copies the picker's ref to the clipboard", async () => {
+            const send = vi.fn<(channel: string, ...args: unknown[]) => void>();
+            await state.handlers.get('menu:branch-picker')!({ sender: { send } }, 'feature');
+
+            state.menuTemplate[0]!.click!();
+            expect(state.writeText).toHaveBeenCalledWith('feature');
         });
     });
 });
