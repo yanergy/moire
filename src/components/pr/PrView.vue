@@ -26,6 +26,7 @@ import {
     GitMerge,
     GitPullRequestClosed,
     GitPullRequestDraft,
+    History,
     LoaderCircle,
     MoreHorizontal,
     Pencil,
@@ -37,6 +38,7 @@ import { useUiStore } from '@/stores/ui';
 import { renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
 import { parseHunkTail, type HunkLine } from '@/lib/diff-hunk';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
@@ -1924,18 +1926,27 @@ function renderComment(comment: PrComment): string {
                                                 >
                                                     {{ thread.path }}
                                                 </button>
-                                                <span
+                                                <!-- Tinted badges, so the thread's state reads at a
+                                                     glance even when it is folded: amber for code
+                                                     that moved on, green for a settled thread. -->
+                                                <Badge
                                                     v-if="thread.isOutdated"
-                                                    class="text-[10px] font-medium tracking-wide text-moire-faint uppercase"
+                                                    variant="outline"
+                                                    data-slot="thread-outdated"
+                                                    class="border-moire-changes-edge bg-moire-changes text-[11px] text-moire-changes-fg"
                                                 >
+                                                    <History />
                                                     Outdated
-                                                </span>
-                                                <span
+                                                </Badge>
+                                                <Badge
                                                     v-if="thread.isResolved"
-                                                    class="text-[10px] font-medium tracking-wide text-moire-status-a uppercase"
+                                                    variant="outline"
+                                                    data-slot="thread-resolved"
+                                                    class="border-moire-viewed-edge bg-moire-viewed text-[11px] text-moire-viewed-fg"
                                                 >
+                                                    <CircleCheck />
                                                     Resolved
-                                                </span>
+                                                </Badge>
                                             </div>
                                             <div
                                                 v-if="

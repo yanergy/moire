@@ -212,6 +212,8 @@ describe('PrView', () => {
                 comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
             });
 
+            expect(wrapper.get('[data-slot="thread-resolved"]').text()).toBe('Resolved');
+            expect(wrapper.find('[data-slot="thread-outdated"]').exists()).toBe(false);
             const toggle = wrapper.get('[data-slot="thread-toggle"]');
             expect(toggle.attributes('aria-expanded')).toBe('false');
             expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(false);
@@ -219,6 +221,17 @@ describe('PrView', () => {
             await toggle.trigger('click');
             expect(toggle.attributes('aria-expanded')).toBe('true');
             expect(wrapper.find('[data-slot="thread-comment"]').exists()).toBe(true);
+        });
+
+        it('badges an outdated thread', () => {
+            useComparisonStore().reviewThreads = [{ ...thread(), isOutdated: true }];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            expect(wrapper.get('[data-slot="thread-outdated"]').text()).toBe('Outdated');
+            expect(wrapper.find('[data-slot="thread-resolved"]').exists()).toBe(false);
         });
 
         it('folds a line comment down to its file name', async () => {
