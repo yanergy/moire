@@ -36,6 +36,46 @@ describe('renderMarkdown', () => {
         );
     });
 
+    describe('tables', () => {
+        const scrollBoxes = (html: string) => {
+            const holder = document.createElement('div');
+            holder.innerHTML = html;
+            return [...holder.querySelectorAll('.pr-table-scroll')];
+        };
+
+        it('wraps a Markdown table in a horizontally scrolling box', () => {
+            const boxes = scrollBoxes(renderMarkdown('| a | b |\n| - | - |\n| 1 | 2 |'));
+            expect(boxes).toHaveLength(1);
+            expect(boxes[0]!.firstElementChild?.tagName).toBe('TABLE');
+            expect(boxes[0]!.children).toHaveLength(1);
+        });
+
+        it('wraps a raw HTML table the same way', () => {
+            const boxes = scrollBoxes(renderMarkdown('<table><tr><td>1</td></tr></table>'));
+            expect(boxes).toHaveLength(1);
+            expect(boxes[0]!.firstElementChild?.tagName).toBe('TABLE');
+        });
+
+        it('wraps each table once, nested ones included', () => {
+            const html = renderMarkdown(
+                '<table><tr><td><table><tr><td>in</td></tr></table></td></tr></table>\n\n' +
+                    '| a |\n| - |\n| 1 |'
+            );
+            expect(scrollBoxes(html)).toHaveLength(3);
+        });
+
+        it('keeps the text around a table in place', () => {
+            const html = renderMarkdown('before\n\n| a |\n| - |\n| 1 |\n\nafter');
+            expect(html.indexOf('before')).toBeLessThan(html.indexOf('pr-table-scroll'));
+            expect(html.indexOf('after')).toBeGreaterThan(html.indexOf('</table>'));
+        });
+
+        it('still strips event handlers from a wrapped table', () => {
+            const html = renderMarkdown('<table onclick="alert(1)"><tr><td>1</td></tr></table>');
+            expect(html).not.toContain('onclick');
+        });
+    });
+
     it('strips dangerous raw HTML: scripts, event handlers, and frames', () => {
         const script = renderMarkdown('<script>alert(1)</script>');
         expect(script).not.toContain('<script');

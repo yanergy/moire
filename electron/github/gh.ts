@@ -340,6 +340,8 @@ export function settleReRequestedChanges(
     return fromGitHub ? 'REVIEW_REQUIRED' : '';
 }
 
+const OPINIONATED_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED']);
+
 // The effective review decision. gh fills `reviewDecision` only when the repo
 // requires reviews (branch protection); otherwise it is empty even after a
 // "changes requested" review. So when it is empty, derive the decision from the
@@ -354,8 +356,10 @@ function reviewDecisionOf(pr: GhPr): string {
     const latest = new Map<string, string>();
     for (const r of reviews) {
         const login = r.author?.login ?? '';
-        // A pending review is not submitted yet, so it does not change a stance.
-        if (login && r.state && r.state !== 'PENDING') {
+        // Only an approval, a change request, or a dismissal sets a stance. A pending
+        // review is not submitted yet, and a COMMENTED review (every reply in a thread
+        // is one) leaves an earlier change request standing, as on GitHub.
+        if (login && r.state && OPINIONATED_STATES.has(r.state)) {
             latest.set(login, r.state);
         }
     }

@@ -120,7 +120,29 @@ const ALLOWED_ATTR = [
 // Sanitize rendered HTML down to the allow-list. Kept in one place so every
 // v-html string in the PR view goes through the same policy.
 function sanitize(html: string): string {
-    return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR });
+    const fragment = DOMPurify.sanitize(html, {
+        ALLOWED_TAGS,
+        ALLOWED_ATTR,
+        RETURN_DOM_FRAGMENT: true,
+    });
+    wrapTables(fragment);
+
+    const holder = document.createElement('div');
+    holder.append(fragment);
+    return holder.innerHTML;
+}
+
+// Wrap every table in a horizontally scrolling box. The table keeps its natural
+// width (markdown.css), so a wide one scrolls inside the comment instead of
+// overflowing its border or squeezing its columns. Done after sanitizing so it
+// covers raw HTML <table>s as well as Markdown ones, and the wrapper is trusted.
+function wrapTables(root: DocumentFragment): void {
+    for (const table of root.querySelectorAll('table')) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'pr-table-scroll';
+        table.replaceWith(wrapper);
+        wrapper.append(table);
+    }
 }
 
 // GitHub task-list support: render "- [ ] item" and "- [x] item" as a checkbox
