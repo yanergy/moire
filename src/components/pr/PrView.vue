@@ -257,23 +257,21 @@ function hasCard(comment: PrComment): boolean {
     return Boolean(comment.body.trim()) || threadsFor(comment).length > 0;
 }
 
-// Line comments folded down to their file name, by thread id.
-const collapsedThreads = ref<Set<string>>(new Set());
-function isThreadCollapsed(threadId: string): boolean {
-    return collapsedThreads.value.has(threadId);
+// Line comments folded down to their file name. A resolved thread starts folded and
+// an open one expanded, as on GitHub; a click (or resolving from the footer) records
+// an explicit choice by thread id, which then wins over that default.
+const threadFolds = ref<Map<string, boolean>>(new Map());
+function isThreadCollapsed(thread: PrReviewThread): boolean {
+    return threadFolds.value.get(thread.id) ?? thread.isResolved;
 }
-function toggleThreadCollapsed(threadId: string) {
-    setThreadCollapsed(threadId, !isThreadCollapsed(threadId));
+function toggleThreadCollapsed(thread: PrReviewThread) {
+    setThreadCollapsed(thread.id, !isThreadCollapsed(thread));
 }
 // Resolving a thread from its footer folds it, as on GitHub; unresolving opens it.
 function setThreadCollapsed(threadId: string, collapsed: boolean) {
-    const next = new Set(collapsedThreads.value);
-    if (collapsed) {
-        next.add(threadId);
-    } else {
-        next.delete(threadId);
-    }
-    collapsedThreads.value = next;
+    const next = new Map(threadFolds.value);
+    next.set(threadId, collapsed);
+    threadFolds.value = next;
 }
 
 // The code a thread's comment is on: the commented line (or the lines of a range
@@ -367,9 +365,7 @@ async function focusRequestedThread() {
     if (isCollapsed(index)) {
         toggleCollapsed(index);
     }
-    if (isThreadCollapsed(threadId)) {
-        toggleThreadCollapsed(threadId);
-    }
+    setThreadCollapsed(threadId, false);
 
     await nextTick();
     document
@@ -1896,7 +1892,7 @@ function renderComment(comment: PrComment): string {
                                                 class="flex items-center gap-2 bg-moire-chrome px-4 py-2.5 text-[12px]"
                                                 :class="{
                                                     'border-b border-moire-border':
-                                                        !isThreadCollapsed(thread.id),
+                                                        !isThreadCollapsed(thread),
                                                 }"
                                             >
                                                 <!-- Fold this line comment down to its file
@@ -1905,16 +1901,16 @@ function renderComment(comment: PrComment): string {
                                                     type="button"
                                                     data-slot="thread-toggle"
                                                     class="-ml-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                    :aria-expanded="!isThreadCollapsed(thread.id)"
+                                                    :aria-expanded="!isThreadCollapsed(thread)"
                                                     :aria-label="
-                                                        isThreadCollapsed(thread.id)
+                                                        isThreadCollapsed(thread)
                                                             ? 'Expand line comment'
                                                             : 'Collapse line comment'
                                                     "
-                                                    @click="toggleThreadCollapsed(thread.id)"
+                                                    @click="toggleThreadCollapsed(thread)"
                                                 >
                                                     <ChevronRight
-                                                        v-if="isThreadCollapsed(thread.id)"
+                                                        v-if="isThreadCollapsed(thread)"
                                                         :size="14"
                                                     />
                                                     <ChevronDown v-else :size="14" />
@@ -1943,7 +1939,7 @@ function renderComment(comment: PrComment): string {
                                             </div>
                                             <div
                                                 v-if="
-                                                    !isThreadCollapsed(thread.id) &&
+                                                    !isThreadCollapsed(thread) &&
                                                     threadLines(thread).length
                                                 "
                                                 class="border-b border-moire-border py-1 font-mono text-[12px] leading-6"
@@ -1978,7 +1974,7 @@ function renderComment(comment: PrComment): string {
                                                 </div>
                                             </div>
                                             <div
-                                                v-if="!isThreadCollapsed(thread.id)"
+                                                v-if="!isThreadCollapsed(thread)"
                                                 class="flex flex-col px-4 py-4"
                                             >
                                                 <!-- A line down from each avatar to the next
@@ -2036,7 +2032,7 @@ function renderComment(comment: PrComment): string {
                                                 </div>
                                             </div>
                                             <review-thread-actions
-                                                v-if="!isThreadCollapsed(thread.id)"
+                                                v-if="!isThreadCollapsed(thread)"
                                                 :thread="thread"
                                                 @resolved-change="
                                                     setThreadCollapsed(thread.id, $event)
