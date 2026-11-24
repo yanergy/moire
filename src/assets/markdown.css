@@ -170,3 +170,32 @@
     padding: 4px 8px;
     border: 1px solid var(--moire-border);
 }
+
+/* The rendered Markdown diff (src/lib/markdown-diff.ts): blocks removed from the
+   base version and added in the head version, tinted from the diff colors with a
+   bar on the left, so a change stands out in the rendered view. */
+.pr-markdown .pr-md-removed,
+.pr-markdown .pr-md-added {
+    margin-left: -10px;
+    padding-left: 7px;
+    border-left: 3px solid;
+    border-radius: 2px;
+}
+
+.pr-markdown .pr-md-removed {
+    border-left-color: var(--moire-del-fg);
+    background: color-mix(in srgb, var(--moire-del-fg) 12%, transparent);
+}
+
+.pr-markdown .pr-md-added {
+    border-left-color: var(--moire-add-fg);
+    background: color-mix(in srgb, var(--moire-add-fg) 12%, transparent);
+}
+
+/* The change prev/next landed on, in the active change color the source diff's
+   marker uses, on both sides at once. */
+.pr-markdown .pr-md-removed.pr-md-current,
+.pr-markdown .pr-md-added.pr-md-current {
+    border-left-color: var(--moire-active-change);
+    background: var(--moire-active-change-bg);
+}

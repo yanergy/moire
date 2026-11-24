@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { renderMarkdown, toggleTask } from '@/lib/markdown';
+import {
+    isMarkdownFile,
+    isRelativeUrl,
+    renderMarkdown,
+    renderMarkdownFile,
+    toggleTask,
+} from '@/lib/markdown';
 
 describe('renderMarkdown', () => {
     it('renders common Markdown constructs', () => {
@@ -172,5 +178,57 @@ describe('toggleTask', () => {
     it('returns null when there is no marker at that index', () => {
         expect(toggleTask('- [ ] only', 1)).toBeNull();
         expect(toggleTask('plain text', 0)).toBeNull();
+    });
+});
+
+describe('renderMarkdownFile', () => {
+    it('renders without hard line breaks, like a Markdown file on GitHub', () => {
+        expect(renderMarkdownFile('one\ntwo')).not.toContain('<br');
+        expect(renderMarkdown('one\ntwo')).toContain('<br');
+    });
+
+    it('keeps the shared plugins: emoji and task lists', () => {
+        expect(renderMarkdownFile(':tada:')).toContain('🎉');
+        expect(renderMarkdownFile('- [x] done')).toContain('pr-task-checkbox');
+    });
+
+    it('renders task list checkboxes read only', () => {
+        expect(renderMarkdownFile('- [ ] todo')).toContain('disabled');
+    });
+
+    it('replaces a relative image with its alt text and keeps web images', () => {
+        const html = renderMarkdownFile(
+            '![Screenshot](./docs/shot.png) ![Badge](https://example.com/badge.svg)'
+        );
+        expect(html).not.toContain('docs/shot.png');
+        expect(html).toContain('Screenshot');
+        expect(html).toContain('src="https://example.com/badge.svg"');
+    });
+
+    it('returns an empty string for empty input', () => {
+        expect(renderMarkdownFile('')).toBe('');
+        expect(renderMarkdownFile(null)).toBe('');
+    });
+});
+
+describe('isRelativeUrl', () => {
+    it('tells repository paths from web URLs', () => {
+        expect(isRelativeUrl('./docs/a.md')).toBe(true);
+        expect(isRelativeUrl('docs/a.png')).toBe(true);
+        expect(isRelativeUrl('/docs/a.png')).toBe(true);
+        expect(isRelativeUrl('#section')).toBe(true);
+        expect(isRelativeUrl('https://example.com')).toBe(false);
+        expect(isRelativeUrl('mailto:a@b.c')).toBe(false);
+        expect(isRelativeUrl('//cdn.example.com/a.png')).toBe(false);
+    });
+});
+
+describe('isMarkdownFile', () => {
+    it('matches .md and .markdown, case insensitively', () => {
+        expect(isMarkdownFile('README.md')).toBe(true);
+        expect(isMarkdownFile('docs/guide.markdown')).toBe(true);
+        expect(isMarkdownFile('CHANGELOG.MD')).toBe(true);
+        expect(isMarkdownFile('src/md.ts')).toBe(false);
+        expect(isMarkdownFile('notes.mdx')).toBe(false);
     });
 });
