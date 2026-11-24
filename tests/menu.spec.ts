@@ -433,10 +433,19 @@ describe('branchPickerMenuTemplate', () => {
         },
         { label: 'Compare Working Tree to Origin', base: '', head: 'WORKING TREE', enabled: false },
     ];
+    const template = (ref: string, isRemote = false) => {
+        const onCopy = vi.fn<(text: string) => void>();
+        const onSelectPreset = vi.fn<(base: string, head: string) => void>();
+        const items = branchPickerMenuTemplate({ ref, isRemote, presets, onCopy, onSelectPreset });
+        const item = (label: string) => items.find((i) => i.label === label)!;
+        return { items, item, onCopy, onSelectPreset };
+    };
 
-    it('lists the presets under a disabled header, keeping their enabled state', () => {
-        const items = branchPickerMenuTemplate(presets, () => {});
-        expect(items.map((i) => [i.label, i.enabled])).toEqual([
+    it('lists the copy item, then the presets under a disabled header', () => {
+        const { items } = template('feat');
+        expect(items.map((i) => (i.type === 'separator' ? '---' : [i.label, i.enabled]))).toEqual([
+            ['Copy Branch Name', true],
+            '---',
             ['Comparison Presets', false],
             ['Compare Current Branch to Development', true],
             ['Compare Working Tree to Origin', false],
@@ -444,9 +453,38 @@ describe('branchPickerMenuTemplate', () => {
     });
 
     it('selects the base and head of a clicked preset', () => {
-        const onSelect = vi.fn<(base: string, head: string) => void>();
-        const items = branchPickerMenuTemplate(presets, onSelect);
-        (items[1]!.click as () => void)();
-        expect(onSelect).toHaveBeenCalledWith('develop', 'feat');
+        const { item, onSelectPreset } = template('feat');
+        (item('Compare Current Branch to Development').click as () => void)();
+        expect(onSelectPreset).toHaveBeenCalledWith('develop', 'feat');
+    });
+
+    it('copies a local branch name as is', () => {
+        const { item, onCopy } = template('feature/login');
+        (item('Copy Branch Name').click as () => void)();
+        expect(onCopy).toHaveBeenCalledWith('feature/login');
+    });
+
+    it('copies a remote branch without its remote, with the full ref as a second item', () => {
+        const { item, onCopy } = template('origin/feature/login', true);
+        (item('Copy Branch Name').click as () => void)();
+        expect(onCopy).toHaveBeenLastCalledWith('feature/login');
+
+        (item('Copy "origin/feature/login"').click as () => void)();
+        expect(onCopy).toHaveBeenLastCalledWith('origin/feature/login');
+    });
+
+    it('is just the presets without a ref (the swap button)', () => {
+        const { items } = template('');
+        expect(items.map((i) => i.label)).toEqual([
+            'Comparison Presets',
+            'Compare Current Branch to Development',
+            'Compare Working Tree to Origin',
+        ]);
+    });
+
+    it('disables copying for the working tree', () => {
+        const { item, items } = template('WORKING TREE');
+        expect(item('Copy Branch Name').enabled).toBe(false);
+        expect(items.filter((i) => i.label?.startsWith('Copy'))).toHaveLength(1);
     });
 });
