@@ -1333,11 +1333,11 @@ describe('getPullRequest reviewers', () => {
                 ],
             })
         ).toEqual([
-            { login: 'ann', kind: 'user', state: 'APPROVED', rerequested: false },
-            { login: 'bob', kind: 'user', state: 'CHANGES_REQUESTED', rerequested: false },
-            { login: 'cid', kind: 'user', state: 'COMMENTED', rerequested: false },
-            { login: 'dan', kind: 'user', state: 'PENDING', rerequested: false },
-            { login: 'core', kind: 'team', state: 'PENDING', rerequested: false },
+            { login: 'ann', kind: 'user', state: 'APPROVED', previousState: null },
+            { login: 'bob', kind: 'user', state: 'CHANGES_REQUESTED', previousState: null },
+            { login: 'cid', kind: 'user', state: 'COMMENTED', previousState: null },
+            { login: 'dan', kind: 'user', state: 'PENDING', previousState: null },
+            { login: 'core', kind: 'team', state: 'PENDING', previousState: null },
         ]);
     });
 
@@ -1352,18 +1352,20 @@ describe('getPullRequest reviewers', () => {
                 ],
             })
         ).toEqual([
-            { login: 'ann', kind: 'user', state: 'CHANGES_REQUESTED', rerequested: false },
-            { login: 'bob', kind: 'user', state: 'COMMENTED', rerequested: false },
+            { login: 'ann', kind: 'user', state: 'CHANGES_REQUESTED', previousState: null },
+            { login: 'bob', kind: 'user', state: 'COMMENTED', previousState: null },
         ]);
     });
 
-    it("keeps a re-requested reviewer's verdict, flagged as re-requested, listed once", async () => {
+    it('shows a re-requested reviewer as pending with their earlier verdict, listed once', async () => {
         expect(
             await reviewersFor({
                 reviews: [review('ann', 'CHANGES_REQUESTED', '2026-09-04T00:00:00Z')],
                 reviewRequests: [{ __typename: 'User', login: 'ann' }],
             })
-        ).toEqual([{ login: 'ann', kind: 'user', state: 'CHANGES_REQUESTED', rerequested: true }]);
+        ).toEqual([
+            { login: 'ann', kind: 'user', state: 'PENDING', previousState: 'CHANGES_REQUESTED' },
+        ]);
     });
 
     it("leaves out the author's own replies and unsubmitted reviews", async () => {

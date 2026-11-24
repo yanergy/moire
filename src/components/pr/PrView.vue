@@ -57,6 +57,7 @@ import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 import PrReviewers from '@/components/pr/PrReviewers.vue';
 import { reviewProgress } from '@/lib/review-progress';
+import { reviewActivityByLogin, type ReviewActivityTarget } from '@/lib/review-activity';
 import ReviewThreadActions from '@/components/pr/ReviewThreadActions.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
@@ -394,6 +395,31 @@ async function focusRequestedThread() {
 onMounted(() => void focusRequestedThread());
 watch([() => ui.prFocusThread, comments], () => void focusRequestedThread());
 onBeforeUnmount(() => clearTimeout(focusTimer));
+
+// Each reviewer's reviews and line comments, for their row in the Reviewers tab.
+const reviewerActivity = computed(() =>
+    reviewActivityByLogin(comments.value, comparison.reviewThreads)
+);
+
+// A jump from the Reviewers tab: back to the conversation, then to the thread (as
+// "Show in PR" does) or to the review entry, unfolded and outlined for a moment.
+const focusedEntry = ref<number | null>(null);
+async function jumpToActivity(target: ReviewActivityTarget) {
+    activeTab.value = 'conversation';
+    if ('thread' in target) {
+        ui.prFocusThread = target.thread;
+        return;
+    }
+
+    expandComment(target.entry);
+    await nextTick();
+    document
+        .querySelector(`[data-entry-index="${target.entry}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    focusedEntry.value = target.entry;
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => (focusedEntry.value = null), FOCUS_MS);
+}
 
 // The file name above a thread's code opens that file in the diff, as picking it
 // in the file tree does (the stacked layout scrolls to it).
@@ -1701,7 +1727,12 @@ function renderComment(comment: PrComment): string {
                         <!-- Conversation entries. One with a body renders as a card
                              matching the description (header bar, then body); a bare
                              review verdict stays a compact one-line row, as on GitHub. -->
-                        <div v-for="(comment, i) in comments" :key="i" class="flex gap-3">
+                        <div
+                            v-for="(comment, i) in comments"
+                            :key="i"
+                            :data-entry-index="i"
+                            class="flex gap-3"
+                        >
                             <div class="flex w-6 shrink-0 flex-col items-center">
                                 <!-- Center the avatar in the header band so it lines up
                                      with the header's middle, with an equal margin above
@@ -1722,7 +1753,8 @@ function renderComment(comment: PrComment): string {
                             <div class="min-w-0 flex-1 pb-5">
                                 <div
                                     v-if="hasCard(comment)"
-                                    class="rounded-lg border border-moire-border bg-moire-app"
+                                    class="rounded-lg border border-moire-border bg-moire-app ring-offset-2 ring-offset-moire-app transition-shadow duration-500"
+                                    :class="focusedEntry === i ? 'ring-2 ring-moire-accent' : ''"
                                 >
                                     <div
                                         class="flex items-center justify-between gap-1.5 px-3.5 py-2.5 text-[13px] text-moire-faint"
@@ -2303,7 +2335,8 @@ function renderComment(comment: PrComment): string {
                                      and no chevron. -->
                                 <div
                                     v-else
-                                    class="flex flex-wrap items-center gap-1.5 text-[13px] text-moire-faint"
+                                    class="flex flex-wrap items-center gap-1.5 rounded text-[13px] text-moire-faint ring-offset-4 ring-offset-moire-app transition-shadow duration-500"
+                                    :class="focusedEntry === i ? 'ring-2 ring-moire-accent' : ''"
                                 >
                                     <span class="text-[14px] font-medium text-moire-fg">
                                         {{ comment.author }}
@@ -2351,7 +2384,12 @@ function renderComment(comment: PrComment): string {
 
                     <!-- Checks: a summary of the CI run, then one row per check
                          (status glyph, name, faint detail), or an empty state. -->
-                    <pr-reviewers v-else-if="activeTab === 'reviewers'" :reviewers="reviewers" />
+                    <pr-reviewers
+                        v-else-if="activeTab === 'reviewers'"
+                        :reviewers="reviewers"
+                        :activity="reviewerActivity"
+                        @jump="jumpToActivity"
+                    />
                     <div v-else-if="activeTab === 'checks'">
                         <div v-if="checks.length">
                             <div

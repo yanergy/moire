@@ -134,8 +134,8 @@ describe('PrView', () => {
         const wrapper = mountWith({
             ...PR,
             reviewers: [
-                { login: 'ann', kind: 'user', state: 'APPROVED', rerequested: false },
-                { login: 'bob', kind: 'user', state: 'PENDING', rerequested: false },
+                { login: 'ann', kind: 'user', state: 'APPROVED', previousState: null },
+                { login: 'bob', kind: 'user', state: 'PENDING', previousState: null },
             ],
         });
         const tab = wrapper.get('[data-slot="reviewers-tab"]');
@@ -145,6 +145,38 @@ describe('PrView', () => {
         expect(wrapper.findAll('[data-slot="reviewer"]')).toHaveLength(2);
         expect(wrapper.text()).toContain('1/2 approved · 1 pending');
         expect(wrapper.find('[data-slot="pr-tab-status"]').exists()).toBe(false);
+    });
+
+    it("jumps from a reviewer's comment to it in the conversation", async () => {
+        const store = useComparisonStore();
+        store.reviewThreads = [thread()];
+        const wrapper = mountWith({
+            ...PR,
+            reviewers: [
+                { login: 'ann', kind: 'user', state: 'APPROVED', previousState: null },
+                { login: 'yanergy', kind: 'user', state: 'COMMENTED', previousState: null },
+            ],
+            comments: [
+                comment({ author: 'ann', kind: 'review', state: 'APPROVED', body: 'Ship it' }),
+                comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' }),
+            ],
+        });
+
+        // To a review: back on the Conversation tab, outlined.
+        await wrapper.get('[data-slot="reviewers-tab"]').trigger('click');
+        await wrapper.findAll('[data-slot="reviewer-row"]')[0]!.trigger('click');
+        await wrapper.get('[data-slot="activity-jump"]').trigger('click');
+        await flushPromises();
+        expect(wrapper.find('[data-slot="reviewer"]').exists()).toBe(false);
+        expect(wrapper.get('[data-entry-index="0"]').html()).toContain('ring-moire-accent');
+
+        // To a line comment: the thread's own focus request.
+        await wrapper.get('[data-slot="reviewers-tab"]').trigger('click');
+        await wrapper.findAll('[data-slot="reviewer-row"]')[1]!.trigger('click');
+        const jumps = wrapper.findAll('[data-slot="activity-jump"]');
+        await jumps[jumps.length - 1]!.trigger('click');
+        await flushPromises();
+        expect(wrapper.get('[data-thread-id="RT_1"]').classes()).toContain('ring-moire-accent');
     });
 
     describe("a review's line comments", () => {

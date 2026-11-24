@@ -1,26 +1,83 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
+import type { ReviewActivity } from '@/lib/review-activity';
+import { stubTooltips } from './fixtures';
+
+stubTooltips();
 import PrReviewers from '@/components/pr/PrReviewers.vue';
 import type { PrReviewer } from '@/shared/types';
 
 const reviewers: PrReviewer[] = [
-    { login: 'ann', kind: 'user', state: 'APPROVED', rerequested: false },
-    { login: 'bob', kind: 'user', state: 'CHANGES_REQUESTED', rerequested: false },
-    { login: 'core', kind: 'team', state: 'PENDING', rerequested: false },
+    { login: 'ann', kind: 'user', state: 'APPROVED', previousState: null },
+    { login: 'bob', kind: 'user', state: 'CHANGES_REQUESTED', previousState: null },
+    { login: 'core', kind: 'team', state: 'PENDING', previousState: null },
 ];
 
 describe('PrReviewers', () => {
-    it('adds "re-requested" after a re-requested reviewer\'s verdict', () => {
+    it('unfolds a reviewer to their comments, each with a jump to it', async () => {
+        const items: ReviewActivity[] = [
+            {
+                key: 'entry:2',
+                kind: 'review',
+                state: 'APPROVED',
+                preview: 'Ship it',
+                createdAt: '',
+                target: { entry: 2 },
+            },
+            {
+                key: 'comment:RC_1',
+                kind: 'line',
+                path: 'src/a.ts',
+                preview: 'this can race',
+                createdAt: '',
+                target: { thread: 'RT_1' },
+            },
+        ];
+        const wrapper = mount(PrReviewers, {
+            props: { reviewers, activity: new Map([['ann', items]]) },
+        });
+
+        const rows = wrapper.findAll('[data-slot="reviewer-row"]');
+        // Only a reviewer with activity folds; it starts folded.
+        expect(rows[0]!.element.tagName).toBe('BUTTON');
+        expect(rows[0]!.attributes('aria-expanded')).toBe('false');
+        expect(rows[0]!.text()).toContain('2 comments');
+        expect(rows[1]!.element.tagName).toBe('DIV');
+        expect(wrapper.find('[data-slot="reviewer-activity"]').exists()).toBe(false);
+
+        await rows[0]!.trigger('click');
+        const shown = wrapper.findAll('[data-slot="reviewer-activity"]');
+        expect(shown.map((r) => r.text())).toEqual([
+            expect.stringContaining('Approved'),
+            expect.stringContaining('src/a.ts'),
+        ]);
+        expect(shown[1]!.text()).toContain('this can race');
+
+        await shown[1]!.get('[data-slot="activity-jump"]').trigger('click');
+        expect(wrapper.emitted('jump')).toEqual([[{ thread: 'RT_1' }]]);
+    });
+
+    it('shows a re-requested reviewer as awaiting review, with their earlier verdict after it', () => {
         const wrapper = mount(PrReviewers, {
             props: {
-                reviewers: [{ login: 'ann', kind: 'user', state: 'APPROVED', rerequested: true }],
+                reviewers: [
+                    {
+                        login: 'ann',
+                        kind: 'user',
+                        state: 'PENDING',
+                        previousState: 'CHANGES_REQUESTED',
+                    },
+                ],
             },
         });
 
         const row = wrapper.get('[data-slot="reviewer"]');
-        expect(row.text()).toContain('Approved');
-        expect(row.get('[data-slot="rerequested"]').text()).toBe('· re-requested');
-        expect(wrapper.get('[data-slot="review-summary"]').text()).toBe('1/1 approved · 1 pending');
+        expect(row.text()).toContain('Awaiting review');
+        expect(row.get('[data-slot="previous-state"]').text()).toBe(
+            '· previously requested changes'
+        );
+        // It counts as pending only, not as an open change request.
+        expect(wrapper.get('[data-slot="review-summary"]').text()).toBe('0/1 approved · 1 pending');
     });
 
     it('shows the progress summary and one row per reviewer with its state', () => {

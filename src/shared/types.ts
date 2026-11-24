@@ -260,18 +260,18 @@ export interface PullRequest {
     reviewers?: PrReviewer[];
 }
 
-// One reviewer of a PR. A user's state is their latest approval or change request,
-// or COMMENTED when they only commented (or their verdict was dismissed). A user or
-// team with a request but no review yet is PENDING. Someone who reviewed and was
-// asked again keeps that earlier state, with `rerequested` set, as GitHub's sidebar
-// shows the old verdict next to the re-request.
+// One reviewer of a PR. A user or team with a pending request is PENDING, a
+// re-requested reviewer too: the review is owed again. Otherwise a user's state is
+// their latest approval or change request, or COMMENTED when they only commented
+// (or their verdict was dismissed). For a re-requested reviewer, `previousState` is
+// the verdict they gave before (shown as "previously ..."); null otherwise.
 export type PrReviewerState = 'PENDING' | 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED';
 
 export interface PrReviewer {
     login: string; // a user login, or a team's slug
     kind: 'user' | 'team';
     state: PrReviewerState;
-    rerequested: boolean;
+    previousState: Exclude<PrReviewerState, 'PENDING'> | null;
 }
 
 // Why a PR lookup produced no PR, so the renderer can show the right hint:
