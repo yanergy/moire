@@ -234,6 +234,21 @@ describe('PrView', () => {
             expect(wrapper.find('[data-slot="thread-resolved"]').exists()).toBe(false);
         });
 
+        it('shrinks the outdated badge to its icon once the thread is resolved', () => {
+            useComparisonStore().reviewThreads = [
+                { ...thread(), isOutdated: true, isResolved: true },
+            ];
+            const wrapper = mountWith({
+                ...PR,
+                comments: [comment({ kind: 'review', state: 'COMMENTED', reviewId: 'PRR_1' })],
+            });
+
+            const outdated = wrapper.get('[data-slot="thread-outdated"]');
+            expect(outdated.text()).toBe('');
+            expect(outdated.attributes('aria-label')).toBe('Outdated');
+            expect(wrapper.get('[data-slot="thread-resolved"]').text()).toBe('Resolved');
+        });
+
         it('folds a line comment down to its file name', async () => {
             useComparisonStore().reviewThreads = [thread()];
             const wrapper = mountWith({

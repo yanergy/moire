@@ -1928,9 +1928,26 @@ function renderComment(comment: PrComment): string {
                                                 </button>
                                                 <!-- Tinted badges, so the thread's state reads at a
                                                      glance even when it is folded: amber for code
-                                                     that moved on, green for a settled thread. -->
+                                                     that moved on, green for a settled thread. Once
+                                                     resolved, being outdated matters less, so it
+                                                     shrinks to its icon (named by a tooltip). -->
+                                                <Tooltip
+                                                    v-if="thread.isOutdated && thread.isResolved"
+                                                >
+                                                    <TooltipTrigger as-child>
+                                                        <Badge
+                                                            variant="outline"
+                                                            data-slot="thread-outdated"
+                                                            aria-label="Outdated"
+                                                            class="border-moire-changes-edge bg-moire-changes px-1 text-moire-changes-fg"
+                                                        >
+                                                            <History />
+                                                        </Badge>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Outdated</TooltipContent>
+                                                </Tooltip>
                                                 <Badge
-                                                    v-if="thread.isOutdated"
+                                                    v-else-if="thread.isOutdated"
                                                     variant="outline"
                                                     data-slot="thread-outdated"
                                                     class="border-moire-changes-edge bg-moire-changes text-[11px] text-moire-changes-fg"
