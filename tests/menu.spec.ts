@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildMenuTemplate, comparisonPresets, developmentBranch } from '../electron/menu';
+import {
+    branchPickerMenuTemplate,
+    buildMenuTemplate,
+    comparisonPresets,
+    developmentBranch,
+} from '../electron/menu';
 import type { BranchInfo } from '../src/shared/types';
 
 // menu.cjs is CommonJS loaded natively under vitest, so `require('electron')`
@@ -415,5 +420,33 @@ describe('developmentBranch', () => {
         expect(developmentBranch(list, { development: 'dev' })).toBe('dev');
         expect(developmentBranch(list, { development: 'gone' })).toBe('origin/develop');
         expect(developmentBranch(list, { development: null })).toBeNull();
+    });
+});
+
+describe('branchPickerMenuTemplate', () => {
+    const presets = [
+        {
+            label: 'Compare Current Branch to Development',
+            base: 'develop',
+            head: 'feat',
+            enabled: true,
+        },
+        { label: 'Compare Working Tree to Origin', base: '', head: 'WORKING TREE', enabled: false },
+    ];
+
+    it('lists the presets under a disabled header, keeping their enabled state', () => {
+        const items = branchPickerMenuTemplate(presets, () => {});
+        expect(items.map((i) => [i.label, i.enabled])).toEqual([
+            ['Comparison Presets', false],
+            ['Compare Current Branch to Development', true],
+            ['Compare Working Tree to Origin', false],
+        ]);
+    });
+
+    it('selects the base and head of a clicked preset', () => {
+        const onSelect = vi.fn<(base: string, head: string) => void>();
+        const items = branchPickerMenuTemplate(presets, onSelect);
+        (items[1]!.click as () => void)();
+        expect(onSelect).toHaveBeenCalledWith('develop', 'feat');
     });
 });

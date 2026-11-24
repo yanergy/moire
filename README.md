@@ -96,9 +96,9 @@ the popup never appears.
    `master`; `development`, `develop` or `dev`), and you can pick different ones under **Settings**.
    Click the star on any branch row to add it to a **Favorites** group listed below the
    recommendations in both pickers.
-   For two common comparisons, **Git > Comparison Presets** sets both sides at once: the
-   development branch against the checked-out branch, or the checked-out branch's `origin` copy
-   against the working tree (everything not pushed yet).
+   For two common comparisons, **Git > Comparison Presets** (or a right click on either branch
+   picker or the swap button between them) sets both sides at once: the development branch against the checked-out branch, or the
+   checked-out branch's `origin` copy against the working tree (everything not pushed yet).
 3. **Choose how to compare.** Toggle between:
     - **merge-base**: compares head to the point where it branched off base, showing only the changes
       head introduces. This matches what a GitHub pull request shows.
@@ -165,9 +165,9 @@ last branch range are remembered per repository.
   recommendations, in both the base and the head picker. A starred branch that is already
   recommended keeps its place there, so no branch is listed twice. Favorites are remembered per
   repository.
-- Comparison presets under **Git > Comparison Presets**: the development branch to the checked-out
-  branch, and the working tree to the checked-out branch's `origin` copy. A preset whose ref does
-  not exist is disabled.
+- Comparison presets under **Git > Comparison Presets**, and in the context menu of both toolbar
+  branch pickers (right click): the development branch to the checked-out branch, and the working
+  tree to the checked-out branch's `origin` copy. A preset whose ref does not exist is disabled.
 - A per repository main and development branch, detected from the usual names and changeable on
   the Settings page (the development branch can be set to None). The base recommendations, the
   default base and the comparison presets follow them.
