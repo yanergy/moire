@@ -114,9 +114,11 @@ export interface PrComment {
     kind: 'comment' | 'review';
     state?: string;
     // The GraphQL node id used to edit the comment (empty for reviews), and whether
-    // the signed-in gh account authored it, so the PR view can offer an Edit action.
+    // the signed-in gh account may edit or delete it (GitHub's viewerCanUpdate and
+    // viewerCanDelete, so a maintainer can on others' comments too).
     id: string;
     canEdit: boolean;
+    canDelete: boolean;
     // A review's own node id, which its line comments' threads point back to.
     reviewId?: string;
 }
@@ -133,6 +135,10 @@ export interface PrReviewComment {
     createdAt: string;
     isPending: boolean;
     viewerDidAuthor: boolean;
+    // Whether the viewer may edit or delete it once posted (viewerCanUpdate and
+    // viewerCanDelete), for the PR conversation's comment menu.
+    canEdit: boolean;
+    canDelete: boolean;
 }
 
 // An inline (line-anchored) code review thread on the PR, shown as a marker in the

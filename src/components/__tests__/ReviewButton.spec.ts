@@ -33,6 +33,8 @@ const pendingThread = (comments: number): PrReviewThread => ({
         createdAt: '',
         isPending: true,
         viewerDidAuthor: true,
+        canEdit: true,
+        canDelete: true,
     })),
 });
 

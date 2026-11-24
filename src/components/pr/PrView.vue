@@ -1744,7 +1744,7 @@ function renderComment(comment: PrComment): string {
                                             <Popover
                                                 v-if="
                                                     editing &&
-                                                    comment.canEdit &&
+                                                    (comment.canEdit || comment.canDelete) &&
                                                     editingId !== comment.id &&
                                                     confirmingDeleteId !== comment.id
                                                 "
@@ -1790,6 +1790,7 @@ function renderComment(comment: PrComment): string {
                                                         <CommandList>
                                                             <CommandGroup>
                                                                 <CommandItem
+                                                                    v-if="comment.canEdit"
                                                                     value="edit"
                                                                     aria-label="Edit comment"
                                                                     class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
@@ -1802,6 +1803,7 @@ function renderComment(comment: PrComment): string {
                                                                     <span class="flex-1">Edit</span>
                                                                 </CommandItem>
                                                                 <CommandItem
+                                                                    v-if="comment.canDelete"
                                                                     value="delete"
                                                                     aria-label="Delete comment"
                                                                     class="gap-2 text-xs text-moire-status-d data-[highlighted]:bg-moire-danger data-[highlighted]:text-moire-status-d"
@@ -2081,13 +2083,15 @@ function renderComment(comment: PrComment): string {
                                                             <span>{{
                                                                 relative(threadComment.createdAt)
                                                             }}</span>
-                                                            <!-- Edit and Delete for the viewer's own
-                                                                 line comment, in edit mode, like the
-                                                                 conversation's comment menus. -->
+                                                            <!-- Edit and Delete where GitHub allows them
+                                                                 (the viewer's own line comments, or any
+                                                                 as a maintainer), in edit mode, like
+                                                                 the conversation's comment menus. -->
                                                             <Popover
                                                                 v-if="
                                                                     editing &&
-                                                                    threadComment.viewerDidAuthor &&
+                                                                    (threadComment.canEdit ||
+                                                                        threadComment.canDelete) &&
                                                                     editingId !==
                                                                         threadComment.id &&
                                                                     confirmingDeleteId !==
@@ -2147,6 +2151,9 @@ function renderComment(comment: PrComment): string {
                                                                         <CommandList>
                                                                             <CommandGroup>
                                                                                 <CommandItem
+                                                                                    v-if="
+                                                                                        threadComment.canEdit
+                                                                                    "
                                                                                     value="edit"
                                                                                     aria-label="Edit comment"
                                                                                     class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
@@ -2166,6 +2173,9 @@ function renderComment(comment: PrComment): string {
                                                                                     >
                                                                                 </CommandItem>
                                                                                 <CommandItem
+                                                                                    v-if="
+                                                                                        threadComment.canDelete
+                                                                                    "
                                                                                     value="delete"
                                                                                     aria-label="Delete comment"
                                                                                     class="gap-2 text-xs text-moire-status-d data-[highlighted]:bg-moire-danger data-[highlighted]:text-moire-status-d"

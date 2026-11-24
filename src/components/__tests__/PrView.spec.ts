@@ -69,6 +69,7 @@ const comment = (over: Partial<PrComment> = {}): PrComment => ({
     kind: 'comment',
     id: '',
     canEdit: false,
+    canDelete: false,
     ...over,
 });
 
@@ -92,6 +93,8 @@ const thread = (over: Partial<PrReviewThread> = {}): PrReviewThread => ({
             createdAt: '',
             isPending: false,
             viewerDidAuthor: true,
+            canEdit: true,
+            canDelete: true,
         },
     ],
     ...over,
@@ -801,7 +804,15 @@ describe('PrView', () => {
         it('is read-only by default: no composer, no comment actions', () => {
             const wrapper = mountWith({
                 ...PR,
-                comments: [comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true })],
+                comments: [
+                    comment({
+                        author: 'me',
+                        body: 'Mine.',
+                        id: 'IC_1',
+                        canEdit: true,
+                        canDelete: true,
+                    }),
+                ],
             });
 
             expect(wrapper.find('textarea').exists()).toBe(false);
@@ -831,7 +842,13 @@ describe('PrView', () => {
             const wrapper = await enableEditing({
                 ...PR,
                 comments: [
-                    comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true }),
+                    comment({
+                        author: 'me',
+                        body: 'Mine.',
+                        id: 'IC_1',
+                        canEdit: true,
+                        canDelete: true,
+                    }),
                     comment({ author: 'other', body: 'Theirs.', id: 'IC_2', canEdit: false }),
                 ],
             });
@@ -845,7 +862,15 @@ describe('PrView', () => {
 
             const wrapper = await enableEditing({
                 ...PR,
-                comments: [comment({ author: 'me', body: 'Original.', id: 'IC_1', canEdit: true })],
+                comments: [
+                    comment({
+                        author: 'me',
+                        body: 'Original.',
+                        id: 'IC_1',
+                        canEdit: true,
+                        canDelete: true,
+                    }),
+                ],
             });
 
             await wrapper.get('button[aria-label="Comment actions"]').trigger('click');
@@ -871,7 +896,15 @@ describe('PrView', () => {
 
             const wrapper = await enableEditing({
                 ...PR,
-                comments: [comment({ author: 'me', body: 'Mine.', id: 'IC_1', canEdit: true })],
+                comments: [
+                    comment({
+                        author: 'me',
+                        body: 'Mine.',
+                        id: 'IC_1',
+                        canEdit: true,
+                        canDelete: true,
+                    }),
+                ],
             });
 
             await wrapper.get('button[aria-label="Comment actions"]').trigger('click');
@@ -951,10 +984,20 @@ describe('PrView', () => {
             expect(wrapper.find('textarea[aria-label="Edit comment body"]').exists()).toBe(false);
         });
 
-        it("offers no actions on someone else's line comment", async () => {
+        it('offers no actions on a line comment the viewer may not change', async () => {
             const own = thread();
             useComparisonStore().reviewThreads = [
-                { ...own, comments: [{ ...own.comments[0]!, viewerDidAuthor: false }] },
+                {
+                    ...own,
+                    comments: [
+                        {
+                            ...own.comments[0]!,
+                            viewerDidAuthor: false,
+                            canEdit: false,
+                            canDelete: false,
+                        },
+                    ],
+                },
             ];
             const wrapper = await enableEditing({
                 ...PR,
@@ -962,6 +1005,19 @@ describe('PrView', () => {
             });
 
             expect(wrapper.find('[data-slot="thread-comment-menu"]').exists()).toBe(false);
+        });
+
+        it("lets a maintainer edit someone else's comment, as GitHub allows", async () => {
+            const wrapper = await enableEditing({
+                ...PR,
+                comments: [comment({ author: 'bot', id: 'IC_1', canEdit: true, canDelete: false })],
+            });
+
+            await wrapper.get('button[aria-label="Comment actions"]').trigger('click');
+            await flushPromises();
+            const labels = menuItems().map((el) => el.getAttribute('aria-label'));
+            expect(labels).toContain('Edit comment');
+            expect(labels).not.toContain('Delete comment');
         });
 
         it('has no description edit action until edit mode is on', () => {
