@@ -865,26 +865,31 @@ describe('PrView', () => {
             expect(wrapper.find('textarea[aria-label="Add a comment"]').exists()).toBe(true);
         });
 
-        it('pins the composer to the bottom, folded until it is used', async () => {
+        it('pins the composer to the bottom, its Comment button disabled until typed in', async () => {
             const wrapper = mountWith({ ...PR, comments: [] });
-            const composer = wrapper.get('[data-slot="comment-composer"]');
             const commentButton = () =>
-                wrapper.findAll('button').find((b) => b.text() === 'Comment');
+                wrapper.findAll('button').find((b) => b.text() === 'Comment')!;
 
-            expect(composer.classes()).toContain('sticky');
-            expect(composer.attributes('data-open')).toBeUndefined();
-            expect(commentButton()).toBeUndefined();
+            expect(wrapper.get('[data-slot="comment-composer"]').classes()).toContain('sticky');
+            expect(commentButton().attributes('disabled')).toBeDefined();
 
-            // Focus opens it; leaving it empty folds it back.
-            await composer.trigger('focusin');
-            expect(commentButton()).toBeDefined();
-            await composer.trigger('focusout');
-            expect(commentButton()).toBeUndefined();
-
-            // A draft keeps it open after focus leaves.
             await wrapper.get('textarea[aria-label="Add a comment"]').setValue('Draft');
-            await composer.trigger('focusout');
-            expect(commentButton()).toBeDefined();
+            expect(commentButton().attributes('disabled')).toBeUndefined();
+        });
+
+        it('collapses the composer to a one-line bar, keeping the draft', async () => {
+            const wrapper = mountWith({ ...PR, comments: [] });
+            await wrapper.get('textarea[aria-label="Add a comment"]').setValue('Half a thought');
+
+            await wrapper.get('[data-slot="composer-collapse"]').trigger('click');
+            expect(wrapper.find('textarea[aria-label="Add a comment"]').exists()).toBe(false);
+            // The bar previews the draft, so nothing typed is lost from sight.
+            const bar = wrapper.get('[data-slot="composer-expand"]');
+            expect(bar.text()).toContain('Half a thought');
+
+            await bar.trigger('click');
+            const box = wrapper.get('textarea[aria-label="Add a comment"]');
+            expect((box.element as HTMLTextAreaElement).value).toBe('Half a thought');
         });
 
         it('posts a new comment through the store', async () => {

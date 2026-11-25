@@ -13,6 +13,7 @@ import {
     ArrowRight,
     Check,
     ChevronDown,
+    ChevronUp,
     ChevronRight,
     ChevronsDownUp,
     ChevronsUpDown,
@@ -522,23 +523,18 @@ function toggleAll() {
 // checkboxMode above). Posting, editing, and deleting go through the store, which
 // writes via gh and re-fetches so it shows.
 
-// New-comment composer. Pinned to the bottom of the conversation as a one-line
-// field that grows into the full editor (with the Comment button) while it has
-// focus, a draft, a post in flight or an error to show, and shrinks back after.
+// New-comment composer, pinned to the bottom of the conversation. Its Comment
+// button is always shown, disabled until something is typed. It can be collapsed
+// to a one-line bar to free the view; expanding it focuses the field.
 const draft = ref('');
 const posting = ref(false);
 const postError = ref('');
-const composerFocused = ref(false);
-const composerOpen = computed(
-    () => composerFocused.value || !!draft.value.trim() || posting.value || !!postError.value
-);
-// Focus moving between the textarea and the Comment button stays inside the
-// composer, so it only folds when focus leaves it altogether.
-function onComposerFocusOut(event: FocusEvent) {
-    const composer = event.currentTarget as HTMLElement;
-    if (!composer.contains(event.relatedTarget as Node | null)) {
-        composerFocused.value = false;
-    }
+const composerCollapsed = ref(false);
+const composerInput = ref<InstanceType<typeof Textarea> | null>(null);
+async function expandComposer() {
+    composerCollapsed.value = false;
+    await nextTick();
+    (composerInput.value?.$el as HTMLTextAreaElement | undefined)?.focus();
 }
 
 // The comment currently being edited (its node id), plus its working copy.
@@ -2377,38 +2373,56 @@ function renderComment(comment: PrComment): string {
 
                         <!-- New-comment composer, pinned to the bottom of the view while
                              the conversation scrolls (on an opaque band so entries pass
-                             under it). Indented to the cards' left edge. Folded to a
-                             one-line field until used (see composerOpen). Posts through
-                             the store, which re-fetches so the comment appears. gap, not
-                             margin (the unlayered reset). -->
+                             under it). Indented to the cards' left edge. Collapsible to a
+                             one-line bar (see composerCollapsed). Posts through the store,
+                             which re-fetches so the comment appears. gap, not margin (the
+                             unlayered reset). -->
                         <div
                             data-slot="comment-composer"
-                            :data-open="composerOpen || undefined"
+                            :data-collapsed="composerCollapsed || undefined"
                             class="sticky bottom-0 z-10 bg-moire-app pt-4 pb-8 pl-9"
-                            @focusin="composerFocused = true"
-                            @focusout="onComposerFocusOut"
                         >
+                            <button
+                                v-if="composerCollapsed"
+                                type="button"
+                                data-slot="composer-expand"
+                                class="flex h-10 w-full cursor-pointer items-center justify-between rounded-lg border border-moire-border bg-moire-app px-3.5 text-left text-[14px] text-moire-faint transition-colors hover:border-moire-ring"
+                                aria-label="Expand comment box"
+                                @click="expandComposer"
+                            >
+                                <span class="truncate">{{ draft.trim() || 'Add a comment…' }}</span>
+                                <ChevronUp :size="16" class="shrink-0" />
+                            </button>
                             <div
-                                class="rounded-lg border border-moire-border bg-moire-app"
-                                :class="composerOpen ? 'p-3.5' : 'p-2'"
+                                v-else
+                                class="rounded-lg border border-moire-border bg-moire-app p-3.5"
                             >
                                 <div class="flex flex-col gap-2.5">
                                     <Textarea
+                                        ref="composerInput"
                                         v-model="draft"
                                         placeholder="Add a comment…"
                                         aria-label="Add a comment"
-                                        :rows="composerOpen ? undefined : 1"
-                                        class="border-moire-border bg-transparent text-[14px] leading-[1.6] text-moire-file-fg focus-visible:border-moire-ring focus-visible:ring-0"
-                                        :class="
-                                            composerOpen
-                                                ? 'min-h-20'
-                                                : 'min-h-16 resize-none border-transparent'
-                                        "
+                                        class="min-h-20 border-moire-border bg-transparent text-[14px] leading-[1.6] text-moire-file-fg focus-visible:border-moire-ring focus-visible:ring-0"
                                     />
                                     <span v-if="postError" class="text-[12px] text-moire-status-d">
                                         {{ postError }}
                                     </span>
-                                    <div v-if="composerOpen" class="flex justify-end">
+                                    <div class="flex items-center justify-between">
+                                        <Tooltip>
+                                            <TooltipTrigger as-child>
+                                                <button
+                                                    type="button"
+                                                    data-slot="composer-collapse"
+                                                    class="inline-flex size-7 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                    aria-label="Collapse comment box"
+                                                    @click="composerCollapsed = true"
+                                                >
+                                                    <ChevronDown :size="16" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Collapse comment box</TooltipContent>
+                                        </Tooltip>
                                         <Button
                                             size="sm"
                                             class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
