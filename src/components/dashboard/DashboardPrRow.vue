@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ExternalLink } from '@lucide/vue';
+import { ExternalLink, Layers } from '@lucide/vue';
 import type { DashboardPr } from '@/shared/types';
+import type { StackPosition } from '@/lib/pr-stacks';
 import { ciVisual, prDotClass, ROW_ACTION_CLASS } from '@/lib/dashboard';
 import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,8 @@ import UserAvatar from '@/components/pr/UserAvatar.vue';
 // Moiré; the always visible "Open in browser" button at its right end opens it on
 // GitHub instead. `now` (epoch ms) is passed in so every row ages against the same
 // ticking clock.
-const props = defineProps<{ pr: DashboardPr; now: number }>();
+// `stack` is the PR's place in its stack, when it is stacked (see lib/pr-stacks).
+const props = defineProps<{ pr: DashboardPr; now: number; stack?: StackPosition | null }>();
 defineEmits<{ open: [pr: DashboardPr]; openInBrowser: [pr: DashboardPr] }>();
 
 const ci = computed(() => ciVisual(props.pr));
@@ -39,6 +41,16 @@ const age = computed(() => {
             <user-avatar :login="pr.author" :size="20" />
             <div class="min-w-0 flex-1">
                 <div class="truncate text-[13px] text-moire-fg">
+                    <!-- A stacked PR's place in its stack, as in the PR view's title. -->
+                    <span
+                        v-if="stack"
+                        data-slot="stack-badge"
+                        class="mr-1.5 inline-flex h-5 items-center gap-1 rounded-full border border-moire-ring px-2 align-[1px] text-[11px] text-moire-file-fg"
+                        :title="`PR ${stack.index} of ${stack.total} in its stack`"
+                    >
+                        <Layers :size="12" />
+                        {{ stack.index }}/{{ stack.total }}
+                    </span>
                     <span class="font-medium">{{ pr.title }}</span>
                     <span class="text-moire-faint"> #{{ pr.number }}</span>
                 </div>

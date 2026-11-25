@@ -3,6 +3,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { activityId } from '@/lib/dashboard';
+import { stackPositions } from '@/lib/pr-stacks';
 import type {
     ActivityEntry,
     AuthorFilter,
@@ -371,6 +372,24 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     const toReview = computed(() => visible(snapshot.value?.toReview ?? []));
 
+    // Each open PR's place in its stack, by PR number, for the rows' stack badges.
+    // Worked out over every open PR the snapshot has, so a stack shows whole even
+    // when a card lists only part of it.
+    const prStackPositions = computed(() => {
+        const snap = snapshot.value;
+        const byNumber = new Map<number, DashboardPr>();
+        for (const pr of [
+            ...(snap?.open ?? []),
+            ...(snap?.toReview ?? []),
+            ...(snap?.mine ?? []),
+        ]) {
+            if (pr.state === 'OPEN') {
+                byNumber.set(pr.number, pr);
+            }
+        }
+        return stackPositions([...byNumber.values()]);
+    });
+
     // The open PRs the cards count, by the author filter. The viewer's own come from
     // their own search, which covers more of them than the repository wide list
     // (capped at 100) and exists in snapshots saved before that list did.
@@ -532,6 +551,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         authorsLabel,
         loading,
         toReview,
+        prStackPositions,
         categories,
         openCount,
         openLabel,

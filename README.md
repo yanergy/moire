@@ -225,7 +225,8 @@ last branch range are remembered per repository.
   right corner (shown on hover), which copies the block's text and briefly shows **Copied**.
 - Copy buttons next to the base and head branch names in the PR view's header.
 - A **Stack** tab for stacked PRs (a PR whose base is another PR's head branch), and a badge before
-  the title with the PR's place in the stack (such as 1/3) that opens it. The tab shows the chain
+  the title with the PR's place in the stack (such as 1/3) that opens it. The Dashboard's PR rows
+  carry the same badge. The tab shows the chain
   from the trunk up through every dependent PR, with each PR's draft and review state and the
   current one marked. Clicking a PR compares its own base and head, so its diff is against its
   parent. A PR whose parent moved on is flagged as needing a rebase, and one whose base PR has

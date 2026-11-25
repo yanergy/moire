@@ -20,6 +20,16 @@ describe('DashboardPrRow', () => {
         expect(text).toContain('−2');
     });
 
+    it("shows a stacked PR's place in its stack before the title", () => {
+        const plain = mount(DashboardPrRow, { props: { pr: dashboardPr(), now: NOW } });
+        expect(plain.find('[data-slot="stack-badge"]').exists()).toBe(false);
+
+        const stacked = mount(DashboardPrRow, {
+            props: { pr: dashboardPr(), now: NOW, stack: { index: 2, total: 3 } },
+        });
+        expect(stacked.get('[data-slot="stack-badge"]').text()).toBe('2/3');
+    });
+
     it('ages a closed PR by when it closed', () => {
         const pr = dashboardPr({ state: 'CLOSED', closedAt: '2026-10-25T12:00:00Z' });
         const wrapper = mount(DashboardPrRow, { props: { pr, now: NOW } });

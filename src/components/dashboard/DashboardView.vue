@@ -250,6 +250,7 @@ const updated = computed(() =>
                             :key="pr.id"
                             :pr="pr"
                             :now="now"
+                            :stack="dashboard.prStackPositions.get(pr.number)"
                             @open="dashboard.openPr"
                             @open-in-browser="openInBrowser"
                         />
