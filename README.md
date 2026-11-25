@@ -96,9 +96,9 @@ the popup never appears.
    `master`; `development`, `develop` or `dev`), and you can pick different ones under **Settings**.
    Click the star on any branch row to add it to a **Favorites** group listed below the
    recommendations in both pickers.
-   For two common comparisons, **Git > Comparison Presets** sets both sides at once: the
-   development branch against the checked-out branch, or the checked-out branch's `origin` copy
-   against the working tree (everything not pushed yet).
+   For two common comparisons, **Git > Comparison Presets** (or a right click on either branch
+   picker or the swap button between them) sets both sides at once: the development branch against the checked-out branch, or the
+   checked-out branch's `origin` copy against the working tree (everything not pushed yet).
 3. **Choose how to compare.** Toggle between:
     - **merge-base**: compares head to the point where it branched off base, showing only the changes
       head introduces. This matches what a GitHub pull request shows.
@@ -165,9 +165,12 @@ last branch range are remembered per repository.
   recommendations, in both the base and the head picker. A starred branch that is already
   recommended keeps its place there, so no branch is listed twice. Favorites are remembered per
   repository.
-- Comparison presets under **Git > Comparison Presets**: the development branch to the checked-out
-  branch, and the working tree to the checked-out branch's `origin` copy. A preset whose ref does
-  not exist is disabled.
+- Comparison presets under **Git > Comparison Presets**, and in the context menu of both toolbar
+  branch pickers (right click): the development branch to the checked-out branch, and the working
+  tree to the checked-out branch's `origin` copy. A preset whose ref does not exist is disabled.
+- **Copy Branch Name** in the same right click menu copies the picker's branch. For a remote branch
+  it copies the name without the remote (`feature/x`), with a second item for the full ref
+  (`origin/feature/x`).
 - A per repository main and development branch, detected from the usual names and changeable on
   the Settings page (the development branch can be set to None). The base recommendations, the
   default base and the comparison presets follow them.
@@ -192,19 +195,31 @@ last branch range are remembered per repository.
   that opens the working-tree copy, and **View > Open Files In** chooses the OS default app or a
   detected editor (auto-detected per machine and persisted across launches).
 - Rename detection, binary-file notices, and inline image previews.
+- A rendered view for Markdown files (`.md`, `.markdown`): a **Source / Rendered** toggle in the
+  file header shows the base and head versions rendered side by side, in both diff layouts.
+  Relative images in the rendered view show their alt text for now.
 - A large-file gate so oversized files never freeze the UI.
 - A status bar reporting line-ending style and how long ago the diff was synced.
 
 ### Pull requests
 
-- A pull-request viewer for the compared branches: title, status, merge state, labels, description
-  and conversation as Markdown, and a Checks tab with the head commit's CI.
+- A pull-request viewer for the compared branches, on a full-width page of its own (no file tree): title, status, merge state, labels, description
+  and conversation as Markdown, a Checks tab with the head commit's CI, and a Reviewers tab listing
+  the requested reviewers (users and teams) and everyone who reviewed, each with their state
+  (awaiting review, approved, requested changes, commented) under a summary such as
+  "1/2 approved · 1 pending". A re-requested reviewer shows as awaiting review, with their earlier
+  verdict after it ("previously requested changes"). A reviewer's row unfolds to one short line per
+  review or line comment they left, each with a button that jumps to it in the conversation.
 - Inline review threads and CI check annotations show on their lines in the diff. The file tree
   flags each file that carries review threads or annotations.
 - In the PR view's conversation, each review lists its line comments under it: the file (a link
   that opens it in the diff), the commented line or lines (highlighted, with a line of context above
-  and below), and the thread's comments. The other way, **Show in PR** on a review comment in the
-  diff jumps to it in the conversation.
+  and below), and the thread's comments. Under each thread, a **Reply** box posts into it and
+  **Resolve conversation** resolves it (folding it) or unresolves it, without reloading the PR. A
+  resolved thread starts folded, with a Resolved badge (and an Outdated one when its code moved on).
+  Line comments get the same pencil (Edit) and Delete menu as conversation comments. Both follow
+  GitHub's own permissions, so a maintainer can also edit or delete other people's comments. The
+  other way, **Show in PR** on a review comment in the diff jumps to it in the conversation.
 - **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the
   PR view. Each is enabled while its end is more than a screen away.
 - The PR view's whole header (title, Review button, author, labels, tabs and the

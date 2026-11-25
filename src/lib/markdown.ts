@@ -14,6 +14,8 @@ import DOMPurify from 'dompurify';
 //
 // `linkify` turns bare URLs into links (common in PR bodies) and `breaks`
 // renders single newlines as line breaks, matching how GitHub shows PR text.
+// Markdown files (README, docs) render without hard breaks, as GitHub's file view
+// does, so they get a second instance with the same plugins (see the end of this setup).
 const md = new MarkdownIt({
     html: true,
     linkify: true,
@@ -21,13 +23,12 @@ const md = new MarkdownIt({
     typographer: false,
 });
 
-// GitHub renders emoji shortcodes (:white_check_mark:, :robot:, :tada:, ...) as
-// their emoji, and bot comments lean on them heavily. markdown-it-emoji's `full`
-// dataset mirrors GitHub's gemoji set. As an inline rule it only rewrites plain
-// text, so a shortcode inside a code span or fenced block stays literal, matching
-// GitHub; an unknown shortcode is left untouched. It emits Unicode characters, not
-// tags, so the sanitizer allow-list below is unaffected.
-md.use(emojiPlugin);
+const fileMd = new MarkdownIt({
+    html: true,
+    linkify: true,
+    breaks: false,
+    typographer: false,
+});
 
 // The HTML the viewer keeps after sanitizing: GitHub's comment formatting set
 // (text, lists, tables, collapsible <details>, the usual inline tags) plus the
@@ -119,7 +120,29 @@ const ALLOWED_ATTR = [
 // Sanitize rendered HTML down to the allow-list. Kept in one place so every
 // v-html string in the PR view goes through the same policy.
 function sanitize(html: string): string {
-    return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR });
+    const fragment = DOMPurify.sanitize(html, {
+        ALLOWED_TAGS,
+        ALLOWED_ATTR,
+        RETURN_DOM_FRAGMENT: true,
+    });
+    wrapTables(fragment);
+
+    const holder = document.createElement('div');
+    holder.append(fragment);
+    return holder.innerHTML;
+}
+
+// Wrap every table in a horizontally scrolling box. The table keeps its natural
+// width (markdown.css), so a wide one scrolls inside the comment instead of
+// overflowing its border or squeezing its columns. Done after sanitizing so it
+// covers raw HTML <table>s as well as Markdown ones, and the wrapper is trusted.
+function wrapTables(root: DocumentFragment): void {
+    for (const table of root.querySelectorAll('table')) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'pr-table-scroll';
+        table.replaceWith(wrapper);
+        wrapper.append(table);
+    }
 }
 
 // GitHub task-list support: render "- [ ] item" and "- [x] item" as a checkbox
@@ -133,7 +156,7 @@ function sanitize(html: string): string {
 // toggleTask). It is `disabled` unless the caller renders interactively (edit
 // mode), which is when the click handler is wired. Its <input> is on the allow-list
 // above, so it survives sanitizing along with the rest of the rendered HTML.
-md.use((markdown) => {
+function taskLists(markdown: typeof md): void {
     markdown.core.ruler.after('inline', 'task-lists', (state) => {
         const { tokens } = state;
         let taskIndex = 0;
@@ -178,7 +201,17 @@ md.use((markdown) => {
             : ' disabled';
         return `<input class="pr-task-checkbox" type="checkbox" data-task-index="${meta?.index ?? 0}"${disabled}${checked}> `;
     };
-});
+}
+
+// GitHub renders emoji shortcodes (:white_check_mark:, :robot:, :tada:, ...) as
+// their emoji, and bot comments lean on them heavily. markdown-it-emoji's `full`
+// dataset mirrors GitHub's gemoji set. As an inline rule it only rewrites plain
+// text, so a shortcode inside a code span or fenced block stays literal, matching
+// GitHub; an unknown shortcode is left untouched. It emits Unicode characters, not
+// tags, so the sanitizer allow-list is unaffected.
+for (const instance of [md, fileMd]) {
+    instance.use(emojiPlugin).use(taskLists);
+}
 
 // Render Markdown source to a sanitized HTML string. Empty or missing input
 // yields an empty string so callers can treat "no description" uniformly. When
@@ -198,6 +231,35 @@ const TASK_MARKER = /^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]/;
 // its checkboxes tickable. Matches the same lines toggleTask flips.
 export function hasTaskList(source: string): boolean {
     return source.split('\n').some((line) => TASK_MARKER.test(line));
+}
+
+// Render a Markdown file (a README or a doc from either branch) to sanitized HTML,
+// as GitHub's file view does: no hard breaks, read only task lists. Relative image
+// and link targets point into the repository at some ref, which the renderer cannot
+// load, so images keep only their alt text and links are left for the caller to
+// neutralise (see MarkdownPreview).
+export function renderMarkdownFile(source: string | null | undefined): string {
+    if (!source) {
+        return '';
+    }
+
+    // A <template> parses into an inert document, so the relative images are never
+    // requested (a plain detached <div> would start loading them).
+    const holder = document.createElement('template');
+    holder.innerHTML = sanitize(fileMd.render(source));
+    for (const img of holder.content.querySelectorAll('img')) {
+        if (isRelativeUrl(img.getAttribute('src') ?? '')) {
+            img.replaceWith(document.createTextNode(img.getAttribute('alt') ?? ''));
+        }
+    }
+
+    return holder.innerHTML;
+}
+
+// Whether a URL points into the repository rather than at the web: no scheme and
+// not protocol relative. `#anchor` links count as relative too.
+export function isRelativeUrl(url: string): boolean {
+    return !/^[a-z][a-z0-9+.-]*:|^\/\//i.test(url.trim());
 }
 
 // Flip the nth (0-based, document order) task-list marker in the Markdown source,
@@ -226,3 +288,17 @@ export function toggleTask(source: string, index: number): string | null {
 
     return null;
 }
+
+// Whether a path is a Markdown file that can be shown rendered.
+export function isMarkdownFile(path: string): boolean {
+    return /\.(md|markdown)$/i.test(path);
+}
+
+// A Markdown file's two views in the diff pane: the source diff (the default) or
+// the rendered before and after.
+export type MarkdownView = 'source' | 'rendered';
+
+export const MARKDOWN_VIEW_OPTIONS: { value: MarkdownView; label: string }[] = [
+    { value: 'source', label: 'Source' },
+    { value: 'rendered', label: 'Rendered' },
+];

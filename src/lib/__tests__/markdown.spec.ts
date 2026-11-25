@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { hasTaskList, renderMarkdown, toggleTask } from '@/lib/markdown';
+import {
+    hasTaskList,
+    isMarkdownFile,
+    isRelativeUrl,
+    renderMarkdown,
+    renderMarkdownFile,
+    toggleTask,
+} from '@/lib/markdown';
 
 describe('renderMarkdown', () => {
     it('renders common Markdown constructs', () => {
@@ -28,6 +35,46 @@ describe('renderMarkdown', () => {
         expect(renderMarkdown('<table><tr><td align="right">1</td></tr></table>')).toContain(
             'align="right"'
         );
+    });
+
+    describe('tables', () => {
+        const scrollBoxes = (html: string) => {
+            const holder = document.createElement('div');
+            holder.innerHTML = html;
+            return [...holder.querySelectorAll('.pr-table-scroll')];
+        };
+
+        it('wraps a Markdown table in a horizontally scrolling box', () => {
+            const boxes = scrollBoxes(renderMarkdown('| a | b |\n| - | - |\n| 1 | 2 |'));
+            expect(boxes).toHaveLength(1);
+            expect(boxes[0]!.firstElementChild?.tagName).toBe('TABLE');
+            expect(boxes[0]!.children).toHaveLength(1);
+        });
+
+        it('wraps a raw HTML table the same way', () => {
+            const boxes = scrollBoxes(renderMarkdown('<table><tr><td>1</td></tr></table>'));
+            expect(boxes).toHaveLength(1);
+            expect(boxes[0]!.firstElementChild?.tagName).toBe('TABLE');
+        });
+
+        it('wraps each table once, nested ones included', () => {
+            const html = renderMarkdown(
+                '<table><tr><td><table><tr><td>in</td></tr></table></td></tr></table>\n\n' +
+                    '| a |\n| - |\n| 1 |'
+            );
+            expect(scrollBoxes(html)).toHaveLength(3);
+        });
+
+        it('keeps the text around a table in place', () => {
+            const html = renderMarkdown('before\n\n| a |\n| - |\n| 1 |\n\nafter');
+            expect(html.indexOf('before')).toBeLessThan(html.indexOf('pr-table-scroll'));
+            expect(html.indexOf('after')).toBeGreaterThan(html.indexOf('</table>'));
+        });
+
+        it('still strips event handlers from a wrapped table', () => {
+            const html = renderMarkdown('<table onclick="alert(1)"><tr><td>1</td></tr></table>');
+            expect(html).not.toContain('onclick');
+        });
     });
 
     it('strips dangerous raw HTML: scripts, event handlers, and frames', () => {
@@ -142,5 +189,57 @@ describe('hasTaskList', () => {
         expect(hasTaskList('1. [ ] numbered')).toBe(true);
         expect(hasTaskList('- plain item\n[ ] not a list')).toBe(false);
         expect(hasTaskList('')).toBe(false);
+    });
+});
+
+describe('renderMarkdownFile', () => {
+    it('renders without hard line breaks, like a Markdown file on GitHub', () => {
+        expect(renderMarkdownFile('one\ntwo')).not.toContain('<br');
+        expect(renderMarkdown('one\ntwo')).toContain('<br');
+    });
+
+    it('keeps the shared plugins: emoji and task lists', () => {
+        expect(renderMarkdownFile(':tada:')).toContain('🎉');
+        expect(renderMarkdownFile('- [x] done')).toContain('pr-task-checkbox');
+    });
+
+    it('renders task list checkboxes read only', () => {
+        expect(renderMarkdownFile('- [ ] todo')).toContain('disabled');
+    });
+
+    it('replaces a relative image with its alt text and keeps web images', () => {
+        const html = renderMarkdownFile(
+            '![Screenshot](./docs/shot.png) ![Badge](https://example.com/badge.svg)'
+        );
+        expect(html).not.toContain('docs/shot.png');
+        expect(html).toContain('Screenshot');
+        expect(html).toContain('src="https://example.com/badge.svg"');
+    });
+
+    it('returns an empty string for empty input', () => {
+        expect(renderMarkdownFile('')).toBe('');
+        expect(renderMarkdownFile(null)).toBe('');
+    });
+});
+
+describe('isRelativeUrl', () => {
+    it('tells repository paths from web URLs', () => {
+        expect(isRelativeUrl('./docs/a.md')).toBe(true);
+        expect(isRelativeUrl('docs/a.png')).toBe(true);
+        expect(isRelativeUrl('/docs/a.png')).toBe(true);
+        expect(isRelativeUrl('#section')).toBe(true);
+        expect(isRelativeUrl('https://example.com')).toBe(false);
+        expect(isRelativeUrl('mailto:a@b.c')).toBe(false);
+        expect(isRelativeUrl('//cdn.example.com/a.png')).toBe(false);
+    });
+});
+
+describe('isMarkdownFile', () => {
+    it('matches .md and .markdown, case insensitively', () => {
+        expect(isMarkdownFile('README.md')).toBe(true);
+        expect(isMarkdownFile('docs/guide.markdown')).toBe(true);
+        expect(isMarkdownFile('CHANGELOG.MD')).toBe(true);
+        expect(isMarkdownFile('src/md.ts')).toBe(false);
+        expect(isMarkdownFile('notes.mdx')).toBe(false);
     });
 });

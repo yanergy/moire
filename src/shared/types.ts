@@ -114,9 +114,11 @@ export interface PrComment {
     kind: 'comment' | 'review';
     state?: string;
     // The GraphQL node id used to edit the comment (empty for reviews), and whether
-    // the signed-in gh account authored it, so the PR view can offer an Edit action.
+    // the signed-in gh account may edit or delete it (GitHub's viewerCanUpdate and
+    // viewerCanDelete, so a maintainer can on others' comments too).
     id: string;
     canEdit: boolean;
+    canDelete: boolean;
     // A review's own node id, which its line comments' threads point back to.
     reviewId?: string;
 }
@@ -133,6 +135,10 @@ export interface PrReviewComment {
     createdAt: string;
     isPending: boolean;
     viewerDidAuthor: boolean;
+    // Whether the viewer may edit or delete it once posted (viewerCanUpdate and
+    // viewerCanDelete), for the PR conversation's comment menu.
+    canEdit: boolean;
+    canDelete: boolean;
 }
 
 // An inline (line-anchored) code review thread on the PR, shown as a marker in the
@@ -249,6 +255,23 @@ export interface PullRequest {
     reviewDecision: string;
     // The CI checks on the head commit, for the Checks tab. Empty when none ran.
     checks: PrCheck[];
+    // Everyone asked to review or who reviewed, with where each stands, for the
+    // Reviewers tab. Optional because older fetches and test fixtures may omit it.
+    reviewers?: PrReviewer[];
+}
+
+// One reviewer of a PR. A user or team with a pending request is PENDING, a
+// re-requested reviewer too: the review is owed again. Otherwise a user's state is
+// their latest approval or change request, or COMMENTED when they only commented
+// (or their verdict was dismissed). For a re-requested reviewer, `previousState` is
+// the verdict they gave before (shown as "previously ..."); null otherwise.
+export type PrReviewerState = 'PENDING' | 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED';
+
+export interface PrReviewer {
+    login: string; // a user login, or a team's slug
+    kind: 'user' | 'team';
+    state: PrReviewerState;
+    previousState: Exclude<PrReviewerState, 'PENDING'> | null;
 }
 
 // Why a PR lookup produced no PR, so the renderer can show the right hint:
@@ -506,6 +529,10 @@ export interface MoireApi {
     // Open a URL (a PR link) in the user's default browser, via the main process.
     // Restricted to http(s) URLs on the main side.
     openExternal(url: string): Promise<void>;
+    // Pop up a toolbar branch picker's native context menu at the cursor, for the
+    // picker's current ref (copied by its "Copy Branch Name" item). A comparison
+    // preset picked there arrives through onMenuComparePreset.
+    showBranchPickerMenu(ref?: string): Promise<void>;
     // Open the working-tree copy of a repo-relative file, via the main process (which
     // resolves it against the repo root and refuses paths outside it). Uses the chosen
     // editor from the "Open Files In" menu, falling back to the OS default app.

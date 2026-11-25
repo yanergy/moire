@@ -88,6 +88,19 @@ describe('ToolbarHeader', () => {
         expect(swap).toHaveBeenCalledTimes(1);
     });
 
+    it('opens the comparison preset menu on a right click of the swap button', async () => {
+        const showBranchPickerMenu = vi.fn<() => Promise<void>>().mockResolvedValue();
+        window.api = { showBranchPickerMenu } as unknown as Window['api'];
+        const wrapper = mountToolbar();
+        const swap = vi.spyOn(useComparisonStore(), 'swap');
+
+        await wrapper.get('[data-slot="swap-refs"]').trigger('contextmenu');
+
+        expect(showBranchPickerMenu).toHaveBeenCalledTimes(1);
+        expect(swap).not.toHaveBeenCalled();
+        delete window.api;
+    });
+
     describe('PR tab', () => {
         it('is absent without an open repo', () => {
             const wrapper = mountToolbar();
