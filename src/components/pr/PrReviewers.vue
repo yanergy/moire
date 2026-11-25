@@ -120,7 +120,7 @@ function relative(iso: string): string {
 
 <template>
     <div v-if="reviewers.length">
-        <div class="flex items-center gap-2 pb-1">
+        <div class="flex items-center gap-2 pb-3">
             <!-- Rotated so the first arc starts at the top, as a clock does. A
                  small gap between arcs only when there is more than one. -->
             <svg
