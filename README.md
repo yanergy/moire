@@ -261,7 +261,8 @@ last branch range are remembered per repository.
   drafts.
 - Each card opens a list of its PRs. Clicking a PR opens it in the PR view on its remote branches,
   or on GitHub when it comes from a fork or its branches are not available locally. Every row also
-  has an **Open in browser** button.
+  has an **Open in browser** button, and shows the PR's labels in their GitHub colors (the first
+  three, plus a count of the rest).
 - A card with unread notifications about its PRs shows an "N new" pill.
 - A **Users** menu picks whose PRs the cards count (you by default, any mix of authors, or all of
   them). Whether drafts count (for the dashboard only; notifications have their own toggle), which
