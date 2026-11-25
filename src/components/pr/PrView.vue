@@ -1323,7 +1323,7 @@ function renderComment(comment: PrComment): string {
                                         <button
                                             type="button"
                                             data-slot="stack-badge"
-                                            class="mr-2 inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-full border border-moire-border px-2.5 align-top text-[14px] font-medium text-moire-muted transition-colors hover:border-moire-ring hover:text-moire-fg"
+                                            class="mr-2 inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-full border border-moire-ring px-2.5 align-top text-[14px] font-medium text-moire-file-fg transition-colors hover:border-moire-fg hover:text-moire-fg"
                                             :aria-label="`PR ${stackPosition.index} of ${stackPosition.total} in its stack`"
                                             @click="activeTab = 'stack'"
                                         >
