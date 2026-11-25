@@ -406,9 +406,11 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
             <div
                 v-if="comparison.canStage"
                 data-slot="tree-mode"
-                class="flex items-center gap-2 px-3 pb-2.5 text-[11px]"
+                class="flex flex-col gap-1.5 px-3 pb-2.5 text-[11px]"
             >
                 <segmented-toggle
+                    block
+                    bordered
                     :options="TREE_MODE_OPTIONS"
                     :model-value="comparison.treeMode"
                     @update:model-value="comparison.setTreeMode"

@@ -43,6 +43,17 @@ describe('SegmentedToggle', () => {
     // Options may carry a tooltip (e.g. the compare-mode control), which wraps each
     // item in a tooltip. The item must still render and emit; the tooltip content
     // itself only mounts on hover and is not asserted here.
+    it('fills the width with equal options when block', () => {
+        const plain = mount(SegmentedToggle, { props: { options, modelValue: 'split' } });
+        expect(plain.classes()).not.toContain('w-full');
+
+        const block = mount(SegmentedToggle, {
+            props: { options, modelValue: 'split', block: true },
+        });
+        expect(block.classes()).toContain('w-full');
+        expect(block.findAll('button').every((b) => b.classes().includes('flex-1'))).toBe(true);
+    });
+
     it('renders tooltip-carrying options and still emits on click', async () => {
         const tipOptions = [
             { value: 'merge-base', label: 'merge-base', tooltip: 'Explains merge-base' },
