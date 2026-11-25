@@ -203,7 +203,7 @@ last branch range are remembered per repository.
 
 ### Pull requests
 
-- A pull-request viewer for the compared branches: title, status, merge state, labels, description
+- A pull-request viewer for the compared branches, on a full-width page of its own (no file tree): title, status, merge state, labels, description
   and conversation as Markdown, a Checks tab with the head commit's CI, and a Reviewers tab listing
   the requested reviewers (users and teams) and everyone who reviewed, each with their state
   (awaiting review, approved, requested changes, commented) under a summary such as
