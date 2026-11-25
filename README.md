@@ -220,6 +220,8 @@ last branch range are remembered per repository.
   Line comments get the same pencil (Edit) and Delete menu as conversation comments. Both follow
   GitHub's own permissions, so a maintainer can also edit or delete other people's comments. The
   other way, **Show in PR** on a review comment in the diff jumps to it in the conversation.
+- Code blocks in the description, comments and review comments get a **Copy** button in their top
+  right corner (shown on hover), which copies the block's text and briefly shows **Copied**.
 - **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the
   PR view. Each is enabled while its end is more than a screen away.
 - The PR view's whole header (title, Review button, author, labels, tabs and the

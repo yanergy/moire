@@ -148,6 +148,50 @@
     background: var(--moire-chrome);
 }
 
+/* A code block with its "Copy" button (added in src/lib/markdown.ts) pinned to the
+   top right corner. The button shows on hover or keyboard focus, as on GitHub. */
+.pr-markdown .pr-code-block {
+    position: relative;
+    margin: 0 0 12px;
+}
+
+/* The wrapper carries the block's spacing, so the first/last-child margin resets on
+   .pr-markdown's direct children still apply. */
+.pr-markdown .pr-code-block > pre {
+    margin: 0;
+}
+
+.pr-markdown .pr-copy-code {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    padding: 2px 8px;
+    border: 1px solid var(--moire-border);
+    border-radius: 5px;
+    background: var(--moire-app);
+    color: var(--moire-muted);
+    font-size: 11px;
+    line-height: 18px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms;
+}
+
+.pr-markdown .pr-code-block:hover .pr-copy-code,
+.pr-markdown .pr-copy-code:focus-visible,
+.pr-markdown .pr-copy-code[data-copied] {
+    opacity: 1;
+}
+
+.pr-markdown .pr-copy-code:hover {
+    background: var(--moire-hover);
+    color: var(--moire-fg);
+}
+
+.pr-markdown .pr-copy-code[data-copied] {
+    color: var(--moire-status-a);
+}
+
 .pr-markdown pre code {
     padding: 0;
     border-radius: 0;

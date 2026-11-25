@@ -127,11 +127,31 @@ function sanitize(html: string): string {
         ALLOWED_ATTR,
         RETURN_DOM_FRAGMENT: true,
     });
+    addCopyButtons(fragment);
     wrapTables(fragment);
 
     const holder = document.createElement('div');
     holder.append(fragment);
     return holder.innerHTML;
+}
+
+// Give every code block a "Copy" button in its top right corner, as GitHub does.
+// Added after sanitizing, so it covers raw HTML <pre>s as well as fenced blocks and
+// the button never has to pass the allow-list (a comment cannot forge one). The
+// click is handled by one delegated listener (see lib/copy-code), since the HTML
+// is inserted with v-html in several places.
+function addCopyButtons(root: DocumentFragment): void {
+    for (const pre of root.querySelectorAll('pre')) {
+        const block = document.createElement('div');
+        block.className = 'pr-code-block';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'pr-copy-code';
+        button.setAttribute('aria-label', 'Copy code');
+        button.textContent = 'Copy';
+        pre.replaceWith(block);
+        block.append(pre, button);
+    }
 }
 
 // Wrap every table in a horizontally scrolling box. The table keeps its natural

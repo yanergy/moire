@@ -529,6 +529,8 @@ export interface MoireApi {
     // Open a URL (a PR link) in the user's default browser, via the main process.
     // Restricted to http(s) URLs on the main side.
     openExternal(url: string): Promise<void>;
+    // Write text to the system clipboard.
+    copyText(text: string): Promise<void>;
     // Pop up a toolbar branch picker's native context menu at the cursor, for the
     // picker's current ref (copied by its "Copy Branch Name" item). A comparison
     // preset picked there arrives through onMenuComparePreset.

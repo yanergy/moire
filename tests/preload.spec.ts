@@ -65,6 +65,7 @@ describe('preload bridge', () => {
             'discardReview',
             'resolveCommit',
             'openExternal',
+            'copyText',
             'showBranchPickerMenu',
             'openFile',
             'getTheme',
@@ -146,6 +147,9 @@ describe('preload bridge', () => {
             'shell:open-external',
             'https://github.com/o/r/pull/1'
         );
+
+        await api().copyText!('npm install');
+        expect(bridge.invoke).toHaveBeenCalledWith('clipboard:write-text', 'npm install');
 
         await api().showBranchPickerMenu!('origin/main');
         expect(bridge.invoke).toHaveBeenCalledWith('menu:branch-picker', 'origin/main');

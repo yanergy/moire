@@ -526,6 +526,20 @@ describe('registerIpcHandlers', () => {
         expect(state.openWithEditor).not.toHaveBeenCalled();
     });
 
+    describe('clipboard:write-text', () => {
+        it('writes text to the clipboard', async () => {
+            await invoke('clipboard:write-text', 'npm install');
+            expect(state.writeText).toHaveBeenCalledWith('npm install');
+        });
+
+        it('refuses anything but text', async () => {
+            await expect(invoke('clipboard:write-text', { x: 1 })).rejects.toThrow(
+                'Only text can be copied.'
+            );
+            expect(state.writeText).not.toHaveBeenCalled();
+        });
+    });
+
     describe('menu:branch-picker', () => {
         it('pops up the comparison presets and sends a pick back to the window', async () => {
             const send = vi.fn<(channel: string, ...args: unknown[]) => void>();
