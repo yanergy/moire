@@ -182,17 +182,38 @@ describe('DashboardView', () => {
         [['ann'], false],
         ['all', true],
         [['ann', 'bob'], true],
-    ] as const)('shows avatars on the rows for authors %j: %s', async (authors, shown) => {
+    ] as const)('shows avatars on the open card for authors %j: %s', async (authors, shown) => {
+        const pr = dashboardPr({ id: 'O', number: 8, author: 'ann' });
         const { wrapper } = await mountView(
             dashboardState({
                 authors: authors as DashboardState['authors'],
-                snapshot: dashboardSnapshot({ toReview: [dashboardPr({ id: 'R', number: 8 })] }),
+                snapshot: dashboardSnapshot({ mine: [pr], open: [pr] }),
             })
         );
 
-        await wrapper.getComponent(DashboardCard).trigger('click');
+        const open = wrapper
+            .findAllComponents(DashboardCard)
+            .find((card) => card.props('category').key === 'open');
+        await open!.trigger('click');
         expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(shown);
     });
+
+    it.each(['me', ['ann']] as const)(
+        'always shows avatars on the review card, even for authors %j',
+        async (authors) => {
+            const { wrapper } = await mountView(
+                dashboardState({
+                    authors: authors as DashboardState['authors'],
+                    snapshot: dashboardSnapshot({
+                        toReview: [dashboardPr({ id: 'R', number: 8 })],
+                    }),
+                })
+            );
+
+            await wrapper.getComponent(DashboardCard).trigger('click');
+            expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(true);
+        }
+    );
 
     it('splits the stack progress ring by where its PRs stand', async () => {
         const ready = { reviewDecision: 'APPROVED', ci: 'passing' } as const;

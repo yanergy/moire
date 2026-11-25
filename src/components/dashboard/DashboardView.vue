@@ -77,7 +77,9 @@ function stackProgressOf(item: { members: { pr: DashboardPr }[] }) {
 
 // The rows show their author's avatar only when the author filter can list
 // several people (everyone, or two or more chosen); with one author it repeats.
+// Review requests are always someone else's PRs, so that card always shows them.
 const showAvatars = computed(() => {
+    if (ui.dashboardCard === 'review') return true;
     const authors = dashboard.authors;
     return authors === 'all' || (Array.isArray(authors) && authors.length > 1);
 });
