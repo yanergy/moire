@@ -55,6 +55,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
+import CopyButton from '@/components/controls/CopyButton.vue';
 import CheckboxModeToggle from '@/components/pr/CheckboxModeToggle.vue';
 import PrReviewers from '@/components/pr/PrReviewers.vue';
 import { reviewProgress } from '@/lib/review-progress';
@@ -1385,16 +1386,28 @@ function renderComment(comment: PrComment): string {
                                     wants to merge {{ pr.commitCount }}
                                     {{ pr.commitCount === 1 ? 'commit' : 'commits' }} into
                                 </span>
-                                <span
-                                    class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
-                                >
-                                    {{ pr.baseRefName }}
+                                <span class="inline-flex items-center gap-0.5">
+                                    <span
+                                        class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
+                                    >
+                                        {{ pr.baseRefName }}
+                                    </span>
+                                    <copy-button
+                                        :text="pr.baseRefName"
+                                        label="Copy base branch name"
+                                    />
                                 </span>
                                 <ArrowRight :size="12" class="text-moire-faint" />
-                                <span
-                                    class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
-                                >
-                                    {{ pr.headRefName }}
+                                <span class="inline-flex items-center gap-0.5">
+                                    <span
+                                        class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
+                                    >
+                                        {{ pr.headRefName }}
+                                    </span>
+                                    <copy-button
+                                        :text="pr.headRefName"
+                                        label="Copy head branch name"
+                                    />
                                 </span>
                             </div>
 
