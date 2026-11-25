@@ -14,6 +14,7 @@ export { default as CommandShortcut } from './CommandShortcut.vue';
 export const [useCommand, provideCommandContext] = createContext<{
     allItems: Ref<Map<string, string>>;
     allGroups: Ref<Map<string, Set<string>>>;
+    shouldFilter: Readonly<Ref<boolean>>;
     filterState: {
         search: string;
         filtered: { count: number; items: Map<string, number>; groups: Set<string> };
