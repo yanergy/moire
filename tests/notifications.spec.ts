@@ -333,6 +333,47 @@ describe('fetchSnapshot', () => {
         ]);
     });
 
+    // Issue #66: latestReviews holds a reviewer's latest review, which is COMMENTED
+    // after they reply in a thread. The decision reads the opinionated reviews, so
+    // their change request still counts and a re-request settles it.
+    it('settles changes requested when the reviewer commented after asking for changes', async () => {
+        const run = searchRunner({
+            mineOpen: {
+                nodes: [
+                    gqlPr({
+                        id: 'A',
+                        number: 1,
+                        reviewDecision: 'CHANGES_REQUESTED',
+                        latestReviews: reviews(['COMMENTED']),
+                        latestOpinionatedReviews: reviews(['CHANGES_REQUESTED']),
+                        reviewRequests: requests(['r0']),
+                    }),
+                    gqlPr({
+                        id: 'B',
+                        number: 2,
+                        latestReviews: reviews(['COMMENTED']),
+                        latestOpinionatedReviews: reviews(['CHANGES_REQUESTED']),
+                    }),
+                ],
+            },
+        });
+        const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
+
+        expect(snap!.mine.map((p) => p.reviewDecision)).toEqual([
+            'REVIEW_REQUIRED',
+            'CHANGES_REQUESTED',
+        ]);
+    });
+
+    it('asks for the opinionated reviews and bot review requests', async () => {
+        const run = searchRunner({ mineOpen: { nodes: [] } });
+        await fetchSnapshot('/repo', 'o/r', now, run);
+
+        const query = JSON.stringify(run.mock.calls);
+        expect(query).toContain('latestOpinionatedReviews');
+        expect(query).toContain('... on Bot { login }');
+    });
+
     it('maps the check rollup to a CI state with the failed check names', async () => {
         const run = searchRunner({
             mineOpen: {

@@ -13,6 +13,7 @@ import type {
     PrReviewThread,
     ReviewCommentInput,
     PrStatus,
+    PrStack,
     PullRequest,
     RepoBranchSettings,
 } from '@/shared/types';
@@ -190,6 +191,21 @@ function foldChain(
     return { label, path, dir };
 }
 
+// Every directory path a folded row stands for, from its top folder down to the
+// deepest one (the row's own path). `electron/git` under the root gives `electron` and
+// `electron/git`.
+function chainPaths(path: string, label: string): string[] {
+    const parent = path.slice(0, path.length - label.length);
+    const out: string[] = [];
+    let current = parent;
+    for (const segment of label.split('/')) {
+        current += (current === parent ? '' : '/') + segment;
+        out.push(current);
+    }
+
+    return out;
+}
+
 // The default base for a freshly opened repo is the branch the user is on, so
 // the diff opens against their current work. Falls back to the repo's main
 // branch (configured on the Settings page, or detected), then the first local
@@ -309,6 +325,9 @@ export const useComparisonStore = defineStore('comparison', () => {
     // Empty when there are none or the lookup fails. `annotationsForFile` narrows by
     // file.
     const checkAnnotations = ref<CheckAnnotation[]>([]);
+    // The stack the open PR belongs to (see loadPrStack), or null when it is not
+    // stacked.
+    const prStack = ref<PrStack | null>(null);
     function annotationsForFile(path: string): CheckAnnotation[] {
         return path ? checkAnnotations.value.filter((a) => a.path === path) : [];
     }
@@ -594,6 +613,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             reviewState.value = { ...NO_REVIEW };
             headCommit.value = null;
             checkAnnotations.value = [];
+            prStack.value = null;
             prLoading.value = false;
             return;
         }
@@ -616,6 +636,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             void loadReviewState(result.pr?.id, token);
             void loadHeadCommit(head.value, token);
             void loadCheckAnnotations(result.pr?.headRefOid, token);
+            void loadPrStack(result.pr?.headRefName, token);
         } catch {
             if (token === prRequest) {
                 pullRequest.value = null;
@@ -625,8 +646,28 @@ export const useComparisonStore = defineStore('comparison', () => {
                 reviewState.value = { ...NO_REVIEW };
                 headCommit.value = null;
                 checkAnnotations.value = [];
+                prStack.value = null;
                 prLoading.value = false;
             }
+        }
+    }
+
+    // Fetch the stack the PR belongs to, for the PR view's Stack tab, guarded by the
+    // same request token as the PR load. Supplementary: no PR, or any failure, just
+    // clears it.
+    async function loadPrStack(headBranch: string | undefined, token: number) {
+        const api = window.api;
+        let stack: PrStack | null = null;
+        if (api?.getPrStack && headBranch) {
+            try {
+                stack = await api.getPrStack(headBranch);
+            } catch {
+                stack = null;
+            }
+        }
+
+        if (token === prRequest) {
+            prStack.value = stack;
         }
     }
 
@@ -730,7 +771,7 @@ export const useComparisonStore = defineStore('comparison', () => {
     //
     // A review collects line comments on GitHub as a pending review, then submits
     // them at once. Starting one is the user's explicit choice (the toolbar's Review
-    // button), like edit mode in the PR view. Each write re-reads the threads and the
+    // button). Each write re-reads the threads and the
     // review state, so the diff and the toolbar follow.
 
     const hasPendingReview = computed(() => !!reviewState.value.pendingReviewId);
@@ -908,7 +949,7 @@ export const useComparisonStore = defineStore('comparison', () => {
     // range change swaps the PR, so this run drives the spinner.
     watch([base, head], () => void loadPullRequest(true));
 
-    // Post a new comment on the current PR (edit mode only), then re-fetch so it
+    // Post a new comment on the current PR, then re-fetch so it
     // shows. Returns gh's ok/message result for the view to surface an inline error.
     async function postComment(body: string): Promise<CommentMutationResult> {
         const api = window.api;
@@ -1138,7 +1179,6 @@ export const useComparisonStore = defineStore('comparison', () => {
     });
 
     const treeNodes = computed<TreeNode[]>(() => {
-        const filter = treeFilter.value.toLowerCase();
         const root = buildTree(shownFiles.value);
 
         const tallyOf = (node: RawDir): { total: number; seen: number } => {
@@ -1162,7 +1202,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         const walk = (node: RawDir, depth: number, prefix: string) => {
             for (const [name, child] of node.dirs) {
                 const { label, path, dir } = foldChain(name, child, prefix);
-                const open = filter ? true : !collapsed.value[path];
+                const open = !isRowClosed(path, label);
                 // Folded intermediates carry no files, so the deepest directory's
                 // tally is the tally of the whole combined row.
                 const { total, seen } = tallyOf(dir);
@@ -1368,40 +1408,69 @@ export const useComparisonStore = defineStore('comparison', () => {
         treeMode.value = mode;
     }
 
-    function toggleDir(path: string) {
-        collapsed.value = { ...collapsed.value, [path]: !collapsed.value[path] };
+    // The user's collapse state holds while searching too. A search can fold a chain
+    // differently than the full tree (`electron` becomes `electron/git`), so a row is
+    // closed when any folder it stands for was collapsed. A folder the user never
+    // toggled has no entry and stays open, so matches are not hidden behind it.
+    function isRowClosed(path: string, label: string): boolean {
+        return chainPaths(path, label).some((p) => collapsed.value[p] === true);
     }
 
     // The collapsible directory rows, folded the same way the tree renders them,
-    // so collapse-all and the all-collapsed check target exactly what is shown.
-    const directoryPaths = computed<string[]>(() => {
-        const root = buildTree(files.value);
-        const paths: string[] = [];
+    // so collapse-all and the all-collapsed check target exactly what is shown. Built
+    // from the shown files, so they act on the filtered tree during a search.
+    const directoryRows = computed<{ path: string; label: string }[]>(() => {
+        const root = buildTree(shownFiles.value);
+        const rows: { path: string; label: string }[] = [];
         const walk = (node: RawDir, prefix: string) => {
             for (const [name, child] of node.dirs) {
-                const { path, dir } = foldChain(name, child, prefix);
-                paths.push(path);
+                const { label, path, dir } = foldChain(name, child, prefix);
+                rows.push({ path, label });
                 walk(dir, path);
             }
         };
 
         walk(root, '');
-        return paths;
+        return rows;
     });
+
+    function toggleDir(path: string) {
+        const row = directoryRows.value.find((r) => r.path === path);
+        if (!row || !isRowClosed(row.path, row.label)) {
+            collapsed.value = { ...collapsed.value, [path]: true };
+            return;
+        }
+
+        const next = { ...collapsed.value };
+        for (const p of chainPaths(row.path, row.label)) {
+            delete next[p];
+        }
+
+        collapsed.value = next;
+    }
 
     const allCollapsed = computed(
         () =>
-            directoryPaths.value.length > 0 &&
-            directoryPaths.value.every((path) => collapsed.value[path] === true)
+            directoryRows.value.length > 0 &&
+            directoryRows.value.every((row) => isRowClosed(row.path, row.label))
     );
 
+    // Both act on the shown folders only and keep the state of folders a search hides,
+    // so clearing the search restores what the user had set.
     function expandAll() {
-        collapsed.value = {};
+        const next = { ...collapsed.value };
+        for (const row of directoryRows.value) {
+            for (const p of chainPaths(row.path, row.label)) {
+                delete next[p];
+            }
+        }
+
+        collapsed.value = next;
     }
 
     function collapseAll() {
-        const next: Record<string, boolean> = {};
-        for (const path of directoryPaths.value) {
+        const next = { ...collapsed.value };
+        for (const { path } of directoryRows.value) {
             next[path] = true;
         }
 
@@ -1500,9 +1569,17 @@ export const useComparisonStore = defineStore('comparison', () => {
         disappearedBranches.value = [];
     }
 
-    function setCompareMode(mode: CompareMode) {
+    // Switch the compare mode (Settings page), reload the change set, and persist
+    // the choice. Resolves to whether the save landed (the Settings page reports it).
+    async function setCompareMode(mode: CompareMode): Promise<boolean> {
         compareMode.value = mode;
         void loadChangedFiles();
+        try {
+            await window.api?.setCompareModePreference(mode);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     function swap() {
@@ -1845,6 +1922,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         submitReview,
         discardReview,
         checkAnnotations,
+        prStack,
         annotationsForFile,
         annotationLevelForFile,
         loadPullRequest,

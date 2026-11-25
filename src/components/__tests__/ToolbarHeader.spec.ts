@@ -33,7 +33,7 @@ const PR: PullRequest = {
 // reach the electron bridge or teleport their content and carry their own tests.
 // Stub them here and exercise the piece ToolbarHeader owns directly: the swap
 // button. (The theme toggle moved to the native View menu; see tests/menu.spec.ts.)
-const stubs = { RepoPicker: true, RefSelector: true, SegmentedToggle: true };
+const stubs = { RepoPicker: true, RefSelector: true };
 
 // A page button, found by its label.
 function pageButton(wrapper: VueWrapper, label: string) {
@@ -77,6 +77,12 @@ describe('ToolbarHeader', () => {
         return mount(ToolbarHeader, { global: { plugins: [pinia], stubs } });
     }
 
+    it('no longer carries the compare and view mode toggles (moved to Settings)', () => {
+        const wrapper = mountToolbar();
+        expect(wrapper.text()).not.toContain('merge-base');
+        expect(wrapper.text()).not.toContain('unified');
+    });
+
     it('swaps base and head when the swap button is clicked', async () => {
         const wrapper = mountToolbar();
         const comparison = useComparisonStore();
@@ -86,6 +92,19 @@ describe('ToolbarHeader', () => {
         // button the toolbar owns.
         await wrapper.get('button').trigger('click');
         expect(swap).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens the comparison preset menu on a right click of the swap button', async () => {
+        const showBranchPickerMenu = vi.fn<() => Promise<void>>().mockResolvedValue();
+        window.api = { showBranchPickerMenu } as unknown as Window['api'];
+        const wrapper = mountToolbar();
+        const swap = vi.spyOn(useComparisonStore(), 'swap');
+
+        await wrapper.get('[data-slot="swap-refs"]').trigger('contextmenu');
+
+        expect(showBranchPickerMenu).toHaveBeenCalledTimes(1);
+        expect(swap).not.toHaveBeenCalled();
+        delete window.api;
     });
 
     describe('PR tab', () => {

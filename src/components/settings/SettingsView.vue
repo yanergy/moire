@@ -13,6 +13,7 @@ import { useEventListener } from '@vueuse/core';
 import {
     Bell,
     Check,
+    FileDiff,
     CircleCheck,
     GitBranch,
     GitPullRequest,
@@ -24,7 +25,7 @@ import { useComparisonStore } from '@/stores/comparison';
 import { useDashboardStore, type MergedPeriod } from '@/stores/dashboard';
 import { useUiStore, type SettingsSection } from '@/stores/ui';
 import { NOTIFICATION_TYPES } from '@/lib/dashboard';
-import type { DashboardEventKind } from '@/shared/types';
+import type { CompareMode, DashboardEventKind, ViewMode } from '@/shared/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import BranchPicker from '@/components/controls/BranchPicker.vue';
@@ -44,6 +45,17 @@ const notificationsOn = computed(() => notifications.value?.enabled ?? false);
 // The picker notes "detected" until a branch is picked here.
 const mainDetected = computed(() => !comparison.branchSettings.main);
 const developmentDetected = computed(() => comparison.branchSettings.development === undefined);
+
+// The diff's compare mode and layout, with the explanations the toolbar used to
+// show as tooltips, now written out under each setting.
+const COMPARE_OPTIONS: { value: CompareMode; label: string }[] = [
+    { value: 'merge-base', label: 'Merge base' },
+    { value: 'direct', label: 'Direct' },
+];
+const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
+    { value: 'split', label: 'Split' },
+    { value: 'unified', label: 'Unified' },
+];
 
 const MERGED_OPTIONS: { value: MergedPeriod; label: string }[] = [
     { value: 'week', label: 'This week' },
@@ -78,6 +90,7 @@ function setEvent(kind: DashboardEventKind, on: boolean) {
 // `dashboard` exist), which breaks rendering for the whole app.
 const sections = {
     branches: useTemplateRef<HTMLElement>('branchesSection'),
+    diff: useTemplateRef<HTMLElement>('diffSection'),
     notifications: useTemplateRef<HTMLElement>('notificationsSection'),
     dashboard: useTemplateRef<HTMLElement>('dashboardSection'),
     prView: useTemplateRef<HTMLElement>('prViewSection'),
@@ -86,6 +99,7 @@ const sections = {
 // The side menu: one entry per section, in page order.
 const NAV: { key: SettingsSection; label: string; icon: Component }[] = [
     { key: 'branches', label: 'Branches', icon: GitBranch },
+    { key: 'diff', label: 'Diff', icon: FileDiff },
     { key: 'notifications', label: 'Notifications', icon: Bell },
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { key: 'prView', label: 'PR view', icon: GitPullRequest },
@@ -329,6 +343,51 @@ const groupLabel =
                             </div>
                         </section>
 
+                        <!-- Diff -->
+                        <section ref="diffSection" :class="sectionClass('diff')">
+                            <h2 :class="sectionTitle">Diff</h2>
+                            <p :class="sectionHint">
+                                How the two branches are compared and laid out. Applies to every
+                                repository.
+                            </p>
+                            <div :class="panelClass">
+                                <div :class="rowClass" data-slot="compare-mode-setting">
+                                    <div class="flex min-w-0 flex-1 flex-col">
+                                        <span>Compare mode</span>
+                                        <span :class="rowHint">
+                                            Merge base compares head to where it branched from base,
+                                            showing only the changes head introduces, as a GitHub
+                                            pull request does. Direct compares the two tips, so
+                                            commits added to base since also show as changes.
+                                        </span>
+                                    </div>
+                                    <segmented-toggle
+                                        :options="COMPARE_OPTIONS"
+                                        bordered
+                                        :model-value="comparison.compareMode"
+                                        @update:model-value="
+                                            save(() => comparison.setCompareMode($event))
+                                        "
+                                    />
+                                </div>
+                                <div :class="rowClass" data-slot="view-mode-setting">
+                                    <div class="flex min-w-0 flex-1 flex-col">
+                                        <span>Layout</span>
+                                        <span :class="rowHint">
+                                            Split shows base and head side by side. Unified shows
+                                            one column with the removed and added lines inline.
+                                        </span>
+                                    </div>
+                                    <segmented-toggle
+                                        :options="VIEW_OPTIONS"
+                                        bordered
+                                        :model-value="ui.viewMode"
+                                        @update:model-value="save(() => ui.setViewMode($event))"
+                                    />
+                                </div>
+                            </div>
+                        </section>
+
                         <!-- Notifications -->
                         <section ref="notificationsSection" :class="sectionClass('notifications')">
                             <h2 :class="sectionTitle">Notifications</h2>
@@ -491,8 +550,8 @@ const groupLabel =
                                     <div class="flex min-w-0 flex-1 flex-col">
                                         <span>Sticky header</span>
                                         <span :class="rowHint">
-                                            Keep the title, the Review and Edit mode buttons and the
-                                            tabs at the top while the conversation scrolls
+                                            Keep the title, the Review button and the tabs at the
+                                            top while the conversation scrolls
                                         </span>
                                     </div>
                                 </label>

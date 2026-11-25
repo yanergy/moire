@@ -212,6 +212,26 @@ class GitService {
         }
     }
 
+    // Whether `ancestor` is in the history of `descendant` (`git merge-base
+    // --is-ancestor`, exit 0 yes, 1 no). Null when git cannot tell, e.g. a ref that
+    // does not exist here.
+    async isAncestor(ancestor: string, descendant: string): Promise<boolean | null> {
+        try {
+            await execFileAsync('git', [
+                '-C',
+                this.repoPath,
+                'merge-base',
+                '--is-ancestor',
+                '--end-of-options',
+                ancestor,
+                descendant,
+            ]);
+            return true;
+        } catch (error) {
+            return (error as { code?: unknown }).code === 1 ? false : null;
+        }
+    }
+
     async diskBytes(filePath: string): Promise<Buffer | null> {
         try {
             return await fs.readFile(path.join(this.repoPath, filePath));

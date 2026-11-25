@@ -26,6 +26,9 @@ function stubApi(state: DashboardState) {
             .fn<(path: string, settings: unknown) => Promise<void>>()
             .mockResolvedValue(undefined),
         setStickyPrHeader: vi.fn<(enabled: boolean) => Promise<void>>().mockResolvedValue(),
+        setCompareModePreference: vi.fn<(mode: string) => Promise<void>>().mockResolvedValue(),
+        setViewModePreference: vi.fn<(mode: string) => Promise<void>>().mockResolvedValue(),
+        getChangedFiles: vi.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
     };
     window.api = api as unknown as Window['api'];
     return api;
@@ -182,6 +185,7 @@ describe('SettingsView', () => {
 
             expect(navItems(wrapper).map((item) => item.text())).toEqual([
                 'Branches',
+                'Diff',
                 'Notifications',
                 'Dashboard',
                 'PR view',
@@ -241,6 +245,31 @@ describe('SettingsView', () => {
             await checkbox(wrapper, 'Include draft PRs').trigger('click');
             await vi.advanceTimersByTimeAsync(400);
             expect(status(wrapper)).toBe("Couldn't save the last change");
+        });
+    });
+
+    describe('diff section', () => {
+        it('switches and saves the compare mode and the layout', async () => {
+            const api = stubApi(dashboardState());
+            openRepo();
+            const wrapper = await mountView();
+
+            const pick = async (slot: string, label: string) => {
+                const button = wrapper
+                    .get(`[data-slot="${slot}"]`)
+                    .findAll('button')
+                    .find((b) => b.text() === label)!;
+                await button.trigger('click');
+                await flushPromises();
+            };
+
+            await pick('compare-mode-setting', 'Direct');
+            expect(useComparisonStore().compareMode).toBe('direct');
+            expect(api.setCompareModePreference).toHaveBeenCalledWith('direct');
+
+            await pick('view-mode-setting', 'Unified');
+            expect(useUiStore().viewMode).toBe('unified');
+            expect(api.setViewModePreference).toHaveBeenCalledWith('unified');
         });
     });
 });

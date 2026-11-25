@@ -5,11 +5,16 @@ import type { ChangedFile, FileStatus } from '@/shared/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
+import { MARKDOWN_VIEW_OPTIONS, type MarkdownView } from '@/lib/markdown';
 
 const props = defineProps<{
     file: ChangedFile;
     viewed: boolean;
     changeCount: number;
+    // The source/rendered choice for a Markdown file; absent for any other file,
+    // which then shows no toggle.
+    markdownView?: MarkdownView;
 }>();
 
 const emit = defineEmits<{
@@ -17,6 +22,7 @@ const emit = defineEmits<{
     next: [];
     toggleViewed: [];
     open: [];
+    'update:markdownView': [view: MarkdownView];
 }>();
 
 const STATUS_BADGE: Record<FileStatus, string> = {
@@ -93,6 +99,14 @@ const name = computed(() => {
             </span>
 
             <div class="flex-1" />
+
+            <segmented-toggle
+                v-if="markdownView"
+                class="text-[11px]"
+                :options="MARKDOWN_VIEW_OPTIONS"
+                :model-value="markdownView"
+                @update:model-value="emit('update:markdownView', $event)"
+            />
 
             <span class="text-[11px] whitespace-nowrap text-moire-faint">
                 {{ changeCount }} changes

@@ -96,15 +96,16 @@ the popup never appears.
    `master`; `development`, `develop` or `dev`), and you can pick different ones under **Settings**.
    Click the star on any branch row to add it to a **Favorites** group listed below the
    recommendations in both pickers.
-   For two common comparisons, **Git > Comparison Presets** sets both sides at once: the
-   development branch against the checked-out branch, or the checked-out branch's `origin` copy
-   against the working tree (everything not pushed yet).
-3. **Choose how to compare.** Toggle between:
+   For two common comparisons, **Git > Comparison Presets** (or a right click on either branch
+   picker or the swap button between them) sets both sides at once: the development branch against the checked-out branch, or the
+   checked-out branch's `origin` copy against the working tree (everything not pushed yet).
+3. **Choose how to compare.** On the Settings page, under **Diff**, pick the compare mode:
     - **merge-base**: compares head to the point where it branched off base, showing only the changes
       head introduces. This matches what a GitHub pull request shows.
     - **direct**: compares the base and head tips directly, so commits added to base after head
       branched off also show up.
-4. **Choose the layout.** Toggle between **split** (side by side) and **unified** (single column).
+4. **Choose the layout.** Also under **Diff** on the Settings page, pick **split** (side by side) or
+   **unified** (single column). Both choices are remembered across launches.
    Under **View > Diff Layout** you can switch the whole review area between the single-file view
    and an **All Files** list that stacks every changed file's diff in one scroll, GitHub style.
 5. **Browse the changes.** The sidebar lists every changed file as a tree. Click a file to open its
@@ -118,9 +119,9 @@ the popup never appears.
    the pull request for the selected branches, with its description, status, labels, conversation,
    and CI checks. The tab shows the PR number and a status dot; while there is no pull request it
    stays in place but is disabled, and its tooltip says why (including how to fix a failed lookup). Inline
-   review comments and check annotations show on their lines in the diff. An optional edit mode
-   lets you reply to and resolve threads, post and edit your own comments, edit the description,
-   and tick task-list boxes. The **Diff** tab takes you back to the diff.
+   review comments and check annotations show on their lines in the diff. You can post comments,
+   edit the description and your own comments (each with its own pencil button), and tick task-list
+   boxes after turning on that block's checkbox mode. The **Diff** tab takes you back to the diff.
 
    To review the pull request yourself, click **Review** at the top right of the PR view. The diff
    opens, and hovering a line of the PR's diff shows a **+** between the line numbers and the code;
@@ -159,15 +160,18 @@ last branch range are remembered per repository.
 ### Comparing branches
 
 - Two-branch diff for any local Git repository, with `merge-base` (pull-request style) and `direct`
-  comparison modes.
+  comparison modes, chosen on the Settings page.
 - Searchable branch pickers that group branches by prefix and recommend a likely base and head.
 - Favorite branches. Star a branch in either picker to pin it in a "Favorites" group below the
   recommendations, in both the base and the head picker. A starred branch that is already
   recommended keeps its place there, so no branch is listed twice. Favorites are remembered per
   repository.
-- Comparison presets under **Git > Comparison Presets**: the development branch to the checked-out
-  branch, and the working tree to the checked-out branch's `origin` copy. A preset whose ref does
-  not exist is disabled.
+- Comparison presets under **Git > Comparison Presets**, and in the context menu of both toolbar
+  branch pickers (right click): the development branch to the checked-out branch, and the working
+  tree to the checked-out branch's `origin` copy. A preset whose ref does not exist is disabled.
+- **Copy Branch Name** in the same right click menu copies the picker's branch. For a remote branch
+  it copies the name without the remote (`feature/x`), with a second item for the full ref
+  (`origin/feature/x`).
 - A per repository main and development branch, detected from the usual names and changeable on
   the Settings page (the development branch can be set to None). The base recommendations, the
   default base and the comparison presets follow them.
@@ -196,26 +200,52 @@ last branch range are remembered per repository.
   that opens the working-tree copy, and **View > Open Files In** chooses the OS default app or a
   detected editor (auto-detected per machine and persisted across launches).
 - Rename detection, binary-file notices, and inline image previews.
+- A rendered view for Markdown files (`.md`, `.markdown`): a **Source / Rendered** toggle in the
+  file header shows the base and head versions rendered side by side, in both diff layouts.
+  Relative images in the rendered view show their alt text for now.
 - A large-file gate so oversized files never freeze the UI.
 - A status bar reporting line-ending style and how long ago the diff was synced.
 
 ### Pull requests
 
-- A pull-request viewer for the compared branches: title, status, merge state, labels, description
-  and conversation as Markdown, and a Checks tab with the head commit's CI.
+- A pull-request viewer for the compared branches, on a full-width page of its own (no file tree): title, status, merge state, labels, description
+  and conversation as Markdown, a Checks tab with the head commit's CI, and a Reviewers tab listing
+  the requested reviewers (users and teams) and everyone who reviewed, each with their state
+  (awaiting review, approved, requested changes, commented) under a summary such as
+  "1/2 approved · 1 pending". A re-requested reviewer shows as awaiting review, with their earlier
+  verdict after it ("previously requested changes"). A reviewer's row unfolds to one short line per
+  review or line comment they left, each with a button that jumps to it in the conversation.
 - Inline review threads and CI check annotations show on their lines in the diff. The file tree
   flags each file that carries review threads or annotations.
 - In the PR view's conversation, each review lists its line comments under it: the file (a link
   that opens it in the diff), the commented line or lines (highlighted, with a line of context above
-  and below), and the thread's comments. The other way, **Show in PR** on a review comment in the
-  diff jumps to it in the conversation.
+  and below), and the thread's comments. Under each thread, a **Reply** box posts into it and
+  **Resolve conversation** resolves it (folding it) or unresolves it, without reloading the PR. A
+  resolved thread starts folded, with a Resolved badge (and an Outdated one when its code moved on).
+  Line comments get the same pencil (Edit) and Delete menu as conversation comments. Both follow
+  GitHub's own permissions, so a maintainer can also edit or delete other people's comments. The
+  other way, **Show in PR** on a review comment in the diff jumps to it in the conversation.
+- Code blocks in the description, comments and review comments get a **Copy** button in their top
+  right corner (shown on hover), which copies the block's text and briefly shows **Copied**.
+- Copy buttons next to the base and head branch names in the PR view's header.
+- A **Stack** tab for stacked PRs (a PR whose base is another PR's head branch), and a badge before
+  the title with the PR's place in the stack (such as 1/3) that opens it. On the Dashboard, a card's
+  stacked PRs are grouped under a foldable header (named after the stack's first PR, with its
+  trunk and PR count), numbered in stack order. The tab shows the chain
+  from the trunk up through every dependent PR, with each PR's draft and review state and the
+  current one marked. Clicking a PR compares its own base and head, so its diff is against its
+  parent. A PR whose parent moved on is flagged as needing a rebase, and one whose base PR has
+  merged as needing a retarget.
 - **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the
   PR view. Each is enabled while its end is more than a screen away.
-- The PR view's whole header (title, Review and Edit mode buttons, author, labels, tabs and the
+- The PR view's whole header (title, Review button, author, labels, tabs and the
   tab's status box) stays at the top while the conversation scrolls. Turn **Sticky header** off on the Settings page to let
   it scroll away.
-- An edit mode (off by default) adds posting, editing, and deleting your own comments, editing the
-  description, ticking task-list checkboxes, and replying to and resolving threads in place.
+- Posting comments is always available at the bottom of the conversation. The description and each
+  of your own comments have their own pencil button that opens just that block for editing, and your
+  comments a "..." menu with Delete. A block with a task list gets a **checkbox mode** toggle next to
+  its pencil: while on, its checkboxes can be ticked (saved after a short pause), and while off they
+  are read only, so a stray click changes nothing.
 - Code reviews from within the app: start a review, comment on lines or ranges in the diff
   (suggested changes included), keep track of the pending comments, and submit the review as
   Comment, Approve or Request changes, or discard it. Line comments are offered only when the diff
@@ -259,8 +289,8 @@ last branch range are remembered per repository.
 - A selectable diff color style (GitHub or VS Code) under **View > Code Style**, persisted across
   launches.
 - A Settings page (the toolbar's **Settings** button, or **Moiré > Settings…**, `Cmd/Ctrl+,`). The
-  main and development branch, the notifications and the dashboard are kept per repository; the PR
-  view's settings apply to every repository.
+  main and development branch, the notifications and the dashboard are kept per repository; the
+  diff's compare mode and layout and the PR view's settings apply to every repository.
 - Page tabs in the middle of the toolbar (**Diff**, **PR**, **Dashboard**, **Notifications** and
   **Settings**) that go to a page and show which one you are on.
 - Back and forward history between the diff, the PR view, the dashboard and its cards, the
@@ -321,7 +351,8 @@ Track bugs and limitations here.
   side's lines can be commented on, since the removed lines are not real editor lines there.
 - **A task-list tick can be lost if you quit within the debounce window.** Ticking a checkbox
   writes back after a short quiet period (about two seconds), batching a burst into one save.
-  Pending ticks are flushed on the usual exits (leaving edit mode, refreshing, switching tab, the
+  Pending ticks are flushed on the usual exits (turning a block's checkbox mode off, refreshing,
+  switching tab, the
   window losing focus, and switching the branch or PR, which flushes to the old PR before the new
   one loads). They are not flushed when the app quits within that window, so a tick made in the
   last couple of seconds before quitting can still be dropped. Handling that needs the main

@@ -89,6 +89,25 @@ describe('FileTreeSidebar', () => {
         });
     });
 
+    it('clears the search from the clear button, shown only while searching', async () => {
+        const wrapper = mountTree();
+        expect(wrapper.find('[data-slot="clear-search"]').exists()).toBe(false);
+
+        await wrapper.get('input[placeholder="Search files…"]').setValue('parsers');
+        await wrapper.get('[data-slot="clear-search"]').trigger('click');
+
+        expect(useComparisonStore().treeFilter).toBe('');
+        expect(wrapper.find('[data-slot="clear-search"]').exists()).toBe(false);
+    });
+
+    it('clears the search with Escape', async () => {
+        const wrapper = mountTree();
+        const input = wrapper.get('input[placeholder="Search files…"]');
+        await input.setValue('parsers');
+        await input.trigger('keydown', { key: 'Escape' });
+        expect(useComparisonStore().treeFilter).toBe('');
+    });
+
     it('renders the header with count and viewed tally', () => {
         const wrapper = mountTree();
         expect(wrapper.text()).toContain('Changed files');
@@ -372,6 +391,8 @@ describe('FileTreeSidebar', () => {
                         createdAt: '',
                         isPending: false,
                         viewerDidAuthor: false,
+                        canEdit: false,
+                        canDelete: false,
                     },
                 ],
             },
@@ -392,6 +413,8 @@ describe('FileTreeSidebar', () => {
                         createdAt: '',
                         isPending: false,
                         viewerDidAuthor: false,
+                        canEdit: false,
+                        canDelete: false,
                     },
                 ],
             },

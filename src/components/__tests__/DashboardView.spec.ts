@@ -103,6 +103,131 @@ describe('DashboardView', () => {
         expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 
+    it("groups a stack's PRs under a foldable header, in stack order", async () => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                snapshot: dashboardSnapshot({
+                    toReview: [
+                        dashboardPr({ id: 'T', number: 3, headRefName: 'c', baseRefName: 'b' }),
+                        dashboardPr({ id: 'S', number: 7, headRefName: 's', baseRefName: 'main' }),
+                        dashboardPr({
+                            id: 'B',
+                            number: 1,
+                            title: 'Add the base',
+                            headRefName: 'a',
+                            baseRefName: 'main',
+                        }),
+                        dashboardPr({ id: 'M', number: 2, headRefName: 'b', baseRefName: 'a' }),
+                    ],
+                }),
+            })
+        );
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        const group = wrapper.get('[data-slot="stack-group"]');
+        expect(group.get('[data-slot="stack-group-header"]').text()).toContain('Stack on main');
+        expect(group.get('[data-slot="stack-group-title"]').text()).toBe('Add the base');
+        expect(group.text()).toContain('3 PRs');
+        // In stack order inside the group; the unstacked PR stays outside it.
+        expect(group.findAll('[data-slot="stack-group-position"]').map((b) => b.text())).toEqual([
+            '1',
+            '2',
+            '3',
+        ]);
+        expect(group.findAll('[data-slot="stack-group-pr"]').map((r) => r.text())).toEqual([
+            expect.stringContaining('#1'),
+            expect.stringContaining('#2'),
+            expect.stringContaining('#3'),
+        ]);
+        expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(4);
+
+        await group.get('[data-slot="stack-group-header"]').trigger('click');
+        expect(group.find('[data-slot="stack-group-pr"]').exists()).toBe(false);
+        expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(1);
+    });
+
+    it('shows the whole stack, dimming the PRs the card leaves out', async () => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                snapshot: dashboardSnapshot({
+                    // Only the top PR asks for the viewer's review; its base PR is
+                    // in the repository's open list only.
+                    toReview: [
+                        dashboardPr({ id: 'T', number: 2, headRefName: 'b', baseRefName: 'a' }),
+                    ],
+                    open: [
+                        dashboardPr({ id: 'B', number: 1, headRefName: 'a', baseRefName: 'main' }),
+                    ],
+                }),
+            })
+        );
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        const rows = wrapper.findAll('[data-slot="stack-group-pr"]');
+        expect(rows.map((r) => r.attributes('data-filtered-out'))).toEqual(['true', undefined]);
+        expect(rows[0]!.find('.opacity-45.grayscale').exists()).toBe(true);
+        expect(wrapper.get('[data-slot="stack-group-header"]').text()).toContain('2 PRs');
+
+        // Progress over the whole stack: neither PR is approved yet.
+        expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('0/2 ready to merge');
+        expect(
+            wrapper
+                .findAll('[data-slot="stack-group-progress"] circle')
+                .map((c) => c.attributes('data-part'))
+        ).toEqual(['waiting']);
+    });
+
+    it.each([
+        ['me', false],
+        [['ann'], false],
+        ['all', true],
+        [['ann', 'bob'], true],
+    ] as const)('shows avatars on the rows for authors %j: %s', async (authors, shown) => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                authors: authors as DashboardState['authors'],
+                snapshot: dashboardSnapshot({ toReview: [dashboardPr({ id: 'R', number: 8 })] }),
+            })
+        );
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(shown);
+    });
+
+    it('splits the stack progress ring by where its PRs stand', async () => {
+        const ready = { reviewDecision: 'APPROVED', ci: 'passing' } as const;
+        const { wrapper } = await mountView(
+            dashboardState({
+                snapshot: dashboardSnapshot({
+                    toReview: [
+                        dashboardPr({
+                            id: 'A',
+                            number: 1,
+                            headRefName: 'a',
+                            baseRefName: 'main',
+                            ...ready,
+                        }),
+                        dashboardPr({
+                            id: 'B',
+                            number: 2,
+                            headRefName: 'b',
+                            baseRefName: 'a',
+                            ...ready,
+                        }),
+                        dashboardPr({ id: 'C', number: 3, headRefName: 'c', baseRefName: 'b' }),
+                    ],
+                }),
+            })
+        );
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('2/3 ready to merge');
+        const arcs = wrapper.findAll('[data-slot="stack-group-progress"] circle');
+        expect(arcs.map((c) => c.attributes('data-part'))).toEqual(['ready', 'waiting']);
+        expect(Number(arcs[0]!.attributes('stroke-dasharray')!.split(' ')[0])).toBeCloseTo(200 / 3);
+        expect(Number(arcs[1]!.attributes('stroke-dashoffset'))).toBeCloseTo(-200 / 3);
+    });
+
     it('says so when a card has no PRs', async () => {
         const { wrapper } = await mountView(dashboardState());
 

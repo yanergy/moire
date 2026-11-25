@@ -62,6 +62,15 @@ const state = vi.hoisted(() => ({
     detectEditors:
         vi.fn<() => Promise<{ id: string; label: string; kind: string; target: string }[]>>(),
     openWithEditor: vi.fn<(editor: unknown, p: string) => Promise<string>>(),
+    getPrStack: vi.fn<(repoPath: string, head: string) => Promise<unknown>>(),
+    branches: [] as { name: string; kind: string }[],
+    isAncestor: vi.fn<(a: string, b: string) => Promise<boolean | null>>(),
+    getDiffDisplay: vi.fn<() => Promise<unknown>>(),
+    setCompareMode: vi.fn<(mode: string) => Promise<void>>(),
+    setViewMode: vi.fn<(mode: string) => Promise<void>>(),
+    menuTemplate: [] as { label?: string; enabled?: boolean; click?: () => void }[],
+    menuPopup: vi.fn<(options: unknown) => void>(),
+    writeText: vi.fn<(text: string) => void>(),
 }));
 
 vi.mock('electron', () => ({
@@ -71,6 +80,14 @@ vi.mock('electron', () => ({
     },
     dialog: { showOpenDialog: state.showOpenDialog, showErrorBox: state.showErrorBox },
     shell: { openExternal: state.openExternal, openPath: state.openPath },
+    BrowserWindow: { fromWebContents: () => ({ id: 1 }) },
+    clipboard: { writeText: state.writeText },
+    Menu: {
+        buildFromTemplate: (template: typeof state.menuTemplate) => {
+            state.menuTemplate = template;
+            return { popup: state.menuPopup };
+        },
+    },
 }));
 
 vi.mock('../electron/editors', () => ({
@@ -84,19 +101,24 @@ vi.mock('simple-git', () => ({
 }));
 
 vi.mock('../electron/git/GitService', () => ({
+    WORKING_TREE: 'WORKING TREE',
     GitService: class {
         repoPath: string;
         constructor(repoPath: string) {
             this.repoPath = repoPath;
         }
         branches() {
-            return Promise.resolve([]);
+            return Promise.resolve(state.branches);
+        }
+        isAncestor(a: string, b: string) {
+            return state.isAncestor(a, b);
         }
     },
 }));
 
 vi.mock('../electron/github/gh', () => ({
     getPullRequest: state.getPullRequest,
+    getPrStack: state.getPrStack,
     addReviewComment: state.addReviewComment,
     submitReview: state.submitReview,
 }));
@@ -115,6 +137,9 @@ vi.mock('../electron/settings', () => ({
     getCodeStyle: state.getCodeStyle,
     getEditorPreference: state.getEditorPreference,
     getDiffLayout: state.getDiffLayout,
+    getDiffDisplay: state.getDiffDisplay,
+    setCompareMode: state.setCompareMode,
+    setViewMode: state.setViewMode,
 }));
 vi.mock('../electron/theme', () => ({ currentThemeState: state.currentThemeState }));
 vi.mock('../electron/logger', () => ({ logError: state.logError }));
@@ -518,5 +543,123 @@ describe('registerIpcHandlers', () => {
         await invoke('repo:open', '/repos/moire');
         await expect(invoke('git:stage', 'a.ts')).rejects.toThrow('Expected a list of paths');
         await expect(invoke('git:unstage', [1])).rejects.toThrow('Expected a list of paths');
+    });
+
+    describe('gh:pr-stack', () => {
+        beforeEach(() => {
+            state.getRepoBranches.mockResolvedValue({ main: 'master', development: 'development' });
+        });
+
+        it("passes the repo's main and development branch as trunks", async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.getPrStack.mockResolvedValue(null);
+            await invoke('gh:pr-stack', 'b');
+            expect(state.getPrStack).toHaveBeenCalledWith('/repos/moire', 'b', undefined, [
+                'master',
+                'development',
+            ]);
+        });
+
+        const entry = (number: number, head: string, base: string, state = 'OPEN') => ({
+            number,
+            headRefName: head,
+            baseRefName: base,
+            state,
+        });
+
+        it('marks a PR whose parent moved on as needing a rebase', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.branches = [
+                { name: 'origin/a', kind: 'remote' },
+                { name: 'origin/b', kind: 'remote' },
+                { name: 'c', kind: 'local' },
+            ];
+            state.getPrStack.mockResolvedValue({
+                trunk: 'main',
+                entries: [entry(1, 'a', 'main'), entry(2, 'b', 'a'), entry(3, 'c', 'b')],
+            });
+            state.isAncestor.mockImplementation((parent) => Promise.resolve(parent === 'origin/a'));
+
+            const stack = (await invoke('gh:pr-stack', 'b')) as {
+                entries: { needsRebase?: boolean }[];
+            };
+
+            expect(state.isAncestor).toHaveBeenCalledWith('origin/a', 'origin/b');
+            expect(state.isAncestor).toHaveBeenCalledWith('origin/b', 'c');
+            expect(stack.entries.map((e) => e.needsRebase)).toEqual([undefined, false, true]);
+        });
+
+        it('passes on no stack', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.getPrStack.mockResolvedValue(null);
+            expect(await invoke('gh:pr-stack', 'b')).toBeNull();
+        });
+    });
+
+    describe('diff display', () => {
+        it('reads and saves the compare mode and the layout', async () => {
+            state.getDiffDisplay.mockResolvedValue({ compareMode: 'direct', viewMode: 'split' });
+            expect(await invoke('diff-display:get')).toEqual({
+                compareMode: 'direct',
+                viewMode: 'split',
+            });
+
+            await invoke('diff-display:set-compare-mode', 'direct');
+            expect(state.setCompareMode).toHaveBeenCalledWith('direct');
+            await invoke('diff-display:set-view-mode', 'unified');
+            expect(state.setViewMode).toHaveBeenCalledWith('unified');
+        });
+
+        it('rejects unknown values', async () => {
+            await expect(invoke('diff-display:set-compare-mode', 'sideways')).rejects.toThrow(
+                'expects merge-base or direct'
+            );
+            await expect(invoke('diff-display:set-view-mode', 'stacked')).rejects.toThrow(
+                'expects split or unified'
+            );
+        });
+    });
+
+    describe('clipboard:write-text', () => {
+        it('writes text to the clipboard', async () => {
+            await invoke('clipboard:write-text', 'npm install');
+            expect(state.writeText).toHaveBeenCalledWith('npm install');
+        });
+
+        it('refuses anything but text', async () => {
+            await expect(invoke('clipboard:write-text', { x: 1 })).rejects.toThrow(
+                'Only text can be copied.'
+            );
+            expect(state.writeText).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('menu:branch-picker', () => {
+        it('pops up the comparison presets and sends a pick back to the window', async () => {
+            const send = vi.fn<(channel: string, ...args: unknown[]) => void>();
+            // This channel reads the event's sender, so call it with one.
+            await state.handlers.get('menu:branch-picker')!({ sender: { send } }, 'feature');
+
+            expect(state.menuPopup).toHaveBeenCalledWith({ window: { id: 1 } });
+            const labels = state.menuTemplate.map((item) => item.label);
+            expect(labels).toEqual([
+                'Copy Branch Name',
+                undefined,
+                'Comparison Presets',
+                'Compare Current Branch to Development',
+                'Compare Working Tree to Origin',
+            ]);
+
+            state.menuTemplate[4]!.click!();
+            expect(send).toHaveBeenCalledWith('menu:compare-preset', '', 'WORKING TREE');
+        });
+
+        it("copies the picker's ref to the clipboard", async () => {
+            const send = vi.fn<(channel: string, ...args: unknown[]) => void>();
+            await state.handlers.get('menu:branch-picker')!({ sender: { send } }, 'feature');
+
+            state.menuTemplate[0]!.click!();
+            expect(state.writeText).toHaveBeenCalledWith('feature');
+        });
     });
 });

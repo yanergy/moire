@@ -13,6 +13,7 @@ import {
     ArrowRight,
     Check,
     ChevronDown,
+    ChevronUp,
     ChevronRight,
     ChevronsDownUp,
     ChevronsUpDown,
@@ -24,8 +25,10 @@ import {
     CircleX,
     ExternalLink,
     GitMerge,
+    Layers,
     GitPullRequestClosed,
     GitPullRequestDraft,
+    History,
     LoaderCircle,
     MoreHorizontal,
     Pencil,
@@ -34,9 +37,10 @@ import {
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import { renderMarkdown, toggleTask } from '@/lib/markdown';
+import { hasTaskList, renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
 import { parseHunkTail, type HunkLine } from '@/lib/diff-hunk';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
@@ -49,16 +53,23 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
+import PrStackList from '@/components/pr/PrStackList.vue';
+import CopyButton from '@/components/controls/CopyButton.vue';
+import CheckboxModeToggle from '@/components/pr/CheckboxModeToggle.vue';
+import PrReviewers from '@/components/pr/PrReviewers.vue';
+import { reviewProgress } from '@/lib/review-progress';
+import { reviewActivityByLogin, type ReviewActivityTarget } from '@/lib/review-activity';
+import ReviewThreadActions from '@/components/pr/ReviewThreadActions.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
 import type {
     CommentMutationResult,
     PrCheckState,
     PrComment,
+    PrReviewComment,
     PrReviewThread,
 } from '@/shared/types';
 
@@ -84,9 +95,14 @@ const scrollViewport = computed(() =>
     scrollArea.value?.$el.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
 );
 
-// Whether the PR view is in edit mode (toggled from the header). Declared here
-// because the rendered Markdown and several actions below read it.
-const editing = ref(false);
+// The blocks whose task-list checkboxes are tickable ("checkbox mode"), keyed like
+// taskDrafts: 'description' or a comment's node id. Off by default, so a stray
+// click never changes a checkbox. Declared here because the rendered Markdown and
+// the click handlers read it; toggled from each block's header.
+const checkboxMode = ref(new Set<string>());
+function isCheckboxMode(key: string): boolean {
+    return checkboxMode.value.has(key);
+}
 
 // Local, unsaved task-list checkbox edits, keyed by target ('description' or a
 // comment's node id), holding that body's edited Markdown source. A tick updates
@@ -126,8 +142,33 @@ async function refreshPr() {
 }
 
 // The PR view is tabbed, as in the design: the description and conversation under
-// "Conversation", the CI checks under "Checks". Commits are a planned third tab.
-const activeTab = ref<'conversation' | 'checks'>('conversation');
+// "Conversation", the CI checks under "Checks", who reviews under "Reviewers",
+// and, for a stacked PR, the PRs stacked with it under "Stack".
+const activeTab = ref<'conversation' | 'checks' | 'reviewers' | 'stack'>('conversation');
+
+const reviewers = computed(() => pr.value?.reviewers ?? []);
+
+// The Reviewers tab label shows approvals over reviewers, like the Checks tab.
+const reviewersSummary = computed(() => {
+    const { approved, total } = reviewProgress(reviewers.value);
+    return `${approved}/${total}`;
+});
+
+const stack = computed(() => comparison.prStack);
+
+// This PR's place in its stack (1 is on the trunk), for the badge before the title.
+const stackPosition = computed(() => {
+    const entries = stack.value?.entries ?? [];
+    const index = entries.findIndex((e) => e.isCurrent);
+    return index === -1 ? null : { index: index + 1, total: entries.length };
+});
+
+// The Stack tab disappears when the PR is not (or no longer) stacked.
+watch(stack, (current) => {
+    if (!current && activeTab.value === 'stack') {
+        activeTab.value = 'conversation';
+    }
+});
 
 const checks = computed(() => pr.value?.checks ?? []);
 
@@ -198,12 +239,12 @@ const checksStatus = computed<StatusBox | null>(() => {
 
 // The description is Markdown; renderMarkdown returns HTML that is safe to insert
 // with v-html (raw tags escaped, unsafe link schemes rejected). See lib/markdown.
-// In edit mode its task-list checkboxes render interactive (onBodyClick flips them).
+// In checkbox mode its task-list checkboxes render interactive (a click flips them).
 // While a task-list edit is pending (see the task-list section), render from the
 // local draft so ticks show at once, before the debounced write reaches GitHub.
 const renderedBody = computed(() =>
     renderMarkdown(taskDrafts.value.get('description') ?? pr.value?.body, {
-        interactive: editing.value,
+        interactive: isCheckboxMode('description'),
     })
 );
 const hasBody = computed(() => !!pr.value?.body.trim());
@@ -256,17 +297,21 @@ function hasCard(comment: PrComment): boolean {
     return Boolean(comment.body.trim()) || threadsFor(comment).length > 0;
 }
 
-// Line comments folded down to their file name, by thread id.
-const collapsedThreads = ref<Set<string>>(new Set());
-function isThreadCollapsed(threadId: string): boolean {
-    return collapsedThreads.value.has(threadId);
+// Line comments folded down to their file name. A resolved thread starts folded and
+// an open one expanded, as on GitHub; a click (or resolving from the footer) records
+// an explicit choice by thread id, which then wins over that default.
+const threadFolds = ref<Map<string, boolean>>(new Map());
+function isThreadCollapsed(thread: PrReviewThread): boolean {
+    return threadFolds.value.get(thread.id) ?? thread.isResolved;
 }
-function toggleThreadCollapsed(threadId: string) {
-    const next = new Set(collapsedThreads.value);
-    if (!next.delete(threadId)) {
-        next.add(threadId);
-    }
-    collapsedThreads.value = next;
+function toggleThreadCollapsed(thread: PrReviewThread) {
+    setThreadCollapsed(thread.id, !isThreadCollapsed(thread));
+}
+// Resolving a thread from its footer folds it, as on GitHub; unresolving opens it.
+function setThreadCollapsed(threadId: string, collapsed: boolean) {
+    const next = new Map(threadFolds.value);
+    next.set(threadId, collapsed);
+    threadFolds.value = next;
 }
 
 // The code a thread's comment is on: the commented line (or the lines of a range
@@ -360,9 +405,7 @@ async function focusRequestedThread() {
     if (isCollapsed(index)) {
         toggleCollapsed(index);
     }
-    if (isThreadCollapsed(threadId)) {
-        toggleThreadCollapsed(threadId);
-    }
+    setThreadCollapsed(threadId, false);
 
     await nextTick();
     document
@@ -378,6 +421,31 @@ async function focusRequestedThread() {
 onMounted(() => void focusRequestedThread());
 watch([() => ui.prFocusThread, comments], () => void focusRequestedThread());
 onBeforeUnmount(() => clearTimeout(focusTimer));
+
+// Each reviewer's reviews and line comments, for their row in the Reviewers tab.
+const reviewerActivity = computed(() =>
+    reviewActivityByLogin(comments.value, comparison.reviewThreads)
+);
+
+// A jump from the Reviewers tab: back to the conversation, then to the thread (as
+// "Show in PR" does) or to the review entry, unfolded and outlined for a moment.
+const focusedEntry = ref<number | null>(null);
+async function jumpToActivity(target: ReviewActivityTarget) {
+    activeTab.value = 'conversation';
+    if ('thread' in target) {
+        ui.prFocusThread = target.thread;
+        return;
+    }
+
+    expandComment(target.entry);
+    await nextTick();
+    document
+        .querySelector(`[data-entry-index="${target.entry}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    focusedEntry.value = target.entry;
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => (focusedEntry.value = null), FOCUS_MS);
+}
 
 // The file name above a thread's code opens that file in the diff, as picking it
 // in the file tree does (the stacked layout scrolls to it).
@@ -467,18 +535,32 @@ function toggleAll() {
     descriptionCollapsed.value = hasBody.value;
 }
 
-// --- Edit mode ---
+// --- Editing ---
 //
-// The conversation is read-only until the user turns on edit mode from the header
-// (`editing`, declared up top since the rendered Markdown reads it). Only then does
-// the composer at the bottom appear and each of the user's own comments gain an
-// Edit action, and task-list checkboxes become tickable. Posting, editing, and
-// deleting go through the store, which writes via gh and re-fetches so it shows.
+// The composer at the bottom is always there. The description and each of the
+// user's own comments have their own pencil button that opens just that block for
+// editing, and a block with a task list has a checkbox mode toggle (see
+// checkboxMode above). Posting, editing, and deleting go through the store, which
+// writes via gh and re-fetches so it shows.
 
-// New-comment composer.
+// New-comment composer, pinned to the bottom of the conversation. Its Comment
+// button is always shown, disabled until something is typed. It can be collapsed
+// to a one-line bar to free the view; expanding it focuses the field.
 const draft = ref('');
 const posting = ref(false);
 const postError = ref('');
+const composerCollapsed = ref(false);
+const composerInput = ref<InstanceType<typeof Textarea> | null>(null);
+function clearComposer() {
+    draft.value = '';
+    postError.value = '';
+}
+
+async function expandComposer() {
+    composerCollapsed.value = false;
+    await nextTick();
+    (composerInput.value?.$el as HTMLTextAreaElement | undefined)?.focus();
+}
 
 // The comment currently being edited (its node id), plus its working copy.
 const editingId = ref<string | null>(null);
@@ -503,25 +585,24 @@ const descriptionDraft = ref('');
 const savingDescription = ref(false);
 const descriptionError = ref('');
 
-// Leaving edit mode drops any in-progress draft, open editor, delete prompt, menu,
-// and error so the view returns cleanly to read-only. Any pending task-list edits
-// are flushed first (saved now, not dropped) so turning the mode off never loses a
-// tick.
-watch(editing, (on) => {
-    if (!on) {
-        void flushTasks();
-        editingId.value = null;
-        draft.value = '';
-        editDraft.value = '';
-        postError.value = '';
-        editError.value = '';
-        openMenuId.value = null;
-        confirmingDeleteId.value = null;
-        deleteError.value = '';
-        editingDescription.value = false;
-        descriptionError.value = '';
+// Turn a block's checkbox mode on or off. Turning it off saves that block's pending
+// ticks now rather than after the debounce, so the box reads as settled.
+function toggleCheckboxMode(key: string) {
+    const next = new Set(checkboxMode.value);
+    if (next.delete(key)) {
+        void flushTask(key);
+    } else {
+        next.add(key);
     }
-});
+
+    checkboxMode.value = next;
+}
+
+// Whether a block's Markdown has a task list, so its checkbox mode toggle shows.
+// Reads the pending draft too, so the toggle does not vanish mid-edit.
+function blockHasTasks(key: string, source: string | null | undefined): boolean {
+    return hasTaskList(taskDrafts.value.get(key) ?? source ?? '');
+}
 
 // Switching the compared range (base or head) swaps `pr` to a different PR, but
 // only a moment later: the store's PR lookup is async, so `pr` still points at the
@@ -541,7 +622,9 @@ watch(
     () => pr.value?.number,
     () => {
         cancelTaskSaves();
-        editing.value = false;
+        checkboxMode.value = new Set();
+        editingId.value = null;
+        editError.value = '';
         topMenuOpen.value = false;
         openMenuId.value = null;
         confirmingDeleteId.value = null;
@@ -607,20 +690,49 @@ async function startEdit(comment: PrComment, index: number) {
     expandComment(index);
 }
 
+// A thread's line comment edits in place too, with the same editor; it has no
+// task-list ticks or fold of its own to settle first.
+function startEditThreadComment(comment: PrReviewComment) {
+    openMenuId.value = null;
+    confirmingDeleteId.value = null;
+    editingId.value = comment.id;
+    editDraft.value = comment.body;
+    editError.value = '';
+}
+
 function cancelEdit() {
     editingId.value = null;
     editError.value = '';
 }
 
-// The comment awaiting deletion, resolved from its id, so the confirmation dialog
-// can name and preview it.
-const commentPendingDelete = computed(() =>
-    comments.value.find((c) => c.id === confirmingDeleteId.value)
+// A line comment in one of the PR's review threads, by id: those are edited and
+// deleted through the review comment mutations rather than the issue comment ones.
+function findThreadComment(id: string | null): PrReviewComment | undefined {
+    if (!id) {
+        return undefined;
+    }
+
+    for (const thread of comparison.reviewThreads) {
+        const found = thread.comments.find((c) => c.id === id);
+        if (found) {
+            return found;
+        }
+    }
+
+    return undefined;
+}
+
+// The comment awaiting deletion (a conversation comment or a thread's line
+// comment), resolved from its id, so the confirmation dialog can preview it.
+const commentPendingDelete = computed(
+    () =>
+        comments.value.find((c) => c.id === confirmingDeleteId.value) ??
+        findThreadComment(confirmingDeleteId.value)
 );
 
 // Ask before deleting: a menu click only opens the confirmation dialog; nothing is
 // removed until it is confirmed.
-function startDelete(comment: PrComment) {
+function startDelete(comment: { id: string }) {
     openMenuId.value = null;
     editingId.value = null;
     deleteError.value = '';
@@ -639,7 +751,9 @@ async function confirmDelete(commentId: string) {
 
     deletingId.value = commentId;
     deleteError.value = '';
-    const result = await comparison.deleteComment(commentId);
+    const result = findThreadComment(commentId)
+        ? await comparison.deleteReviewComment(commentId)
+        : await comparison.deleteComment(commentId);
     deletingId.value = null;
     if (result.ok) {
         // The comment is gone; drop any pending task draft that targeted it.
@@ -659,7 +773,9 @@ async function saveEdit() {
 
     savingEdit.value = true;
     editError.value = '';
-    const result = await comparison.editComment(id, editDraft.value);
+    const result = findThreadComment(id)
+        ? await comparison.editReviewComment(id, editDraft.value)
+        : await comparison.editComment(id, editDraft.value);
     savingEdit.value = false;
     if (result.ok) {
         editingId.value = null;
@@ -833,13 +949,17 @@ const mergeStatus = computed<StatusBox | null>(() => {
 
 // The status box leading the active tab: the merge state on the Conversation tab,
 // the CI checks' state on the Checks tab (only when there are checks to sum up).
-const tabStatus = computed<StatusBox | null>(() =>
-    activeTab.value === 'conversation'
-        ? mergeStatus.value
-        : checks.value.length
-          ? checksStatus.value
-          : null
-);
+// The Reviewers tab carries its own summary line instead.
+const tabStatus = computed<StatusBox | null>(() => {
+    if (activeTab.value === 'conversation') {
+        return mergeStatus.value;
+    }
+    if (activeTab.value === 'checks' && checks.value.length) {
+        return checksStatus.value;
+    }
+
+    return null;
+});
 
 // Open a GitHub URL (the PR, or a check's run) in the user's browser through the
 // preload bridge. The main process only opens http(s).
@@ -870,7 +990,7 @@ function onBodyClick(event: MouseEvent) {
 
 // --- Task-list checkboxes ---
 //
-// In edit mode a task checkbox is clickable. A click flips the matching marker (by
+// In a block's checkbox mode its task checkboxes are clickable. A click flips the matching marker (by
 // its data-task-index) in the body's Markdown source, held as a local draft in
 // `taskDrafts`, and the rendered body reads from that draft, so the box flips at
 // once and more can be ticked without waiting. The write to GitHub is debounced:
@@ -878,7 +998,7 @@ function onBodyClick(event: MouseEvent) {
 // its accumulated draft is written in one call, then the re-fetch confirms it and
 // the draft is dropped. On failure the draft is dropped (reverting to the server
 // state) and an error banner shows. Pending drafts are flushed on the exits that
-// would otherwise lose them (leaving edit mode, refreshing, switching tab, the
+// would otherwise lose them (leaving checkbox mode, refreshing, switching tab, the
 // window losing focus, unmount, and switching the compared range before the PR
 // swaps; see the watchers).
 const TASK_SAVE_DEBOUNCE_MS = 2000;
@@ -1134,12 +1254,12 @@ function cancelTaskSaves() {
     taskSaved.value = new Set();
 }
 
-// A click in the description body: a task checkbox flips (edit mode only), else a
+// A click in the description body: a task checkbox flips (checkbox mode only), else a
 // link opens externally. The native toggle is prevented; the flip comes from the
 // re-render off the updated draft, so the box always mirrors the source.
 function onDescriptionBodyClick(event: MouseEvent) {
     const box = (event.target as HTMLElement).closest<HTMLInputElement>('input.pr-task-checkbox');
-    if (editing.value && box) {
+    if (isCheckboxMode('description') && box) {
         event.preventDefault();
         const index = Number(box.dataset.taskIndex);
         if (!Number.isNaN(index)) {
@@ -1152,11 +1272,11 @@ function onDescriptionBodyClick(event: MouseEvent) {
     onBodyClick(event);
 }
 
-// The same, for a comment body: only the viewer's own comments (canEdit) toggle,
-// since GitHub allows editing only those.
+// The same, for a comment body: only comments the viewer may edit (canEdit,
+// GitHub's viewerCanUpdate) toggle.
 function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
     const box = (event.target as HTMLElement).closest<HTMLInputElement>('input.pr-task-checkbox');
-    if (editing.value && comment.canEdit && box) {
+    if (isCheckboxMode(comment.id) && comment.canEdit && box) {
         event.preventDefault();
         const index = Number(box.dataset.taskIndex);
         if (!Number.isNaN(index)) {
@@ -1173,7 +1293,7 @@ function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
 // so ticks show before the debounced write lands (mirrors renderedBody).
 function renderComment(comment: PrComment): string {
     return renderMarkdown(taskDrafts.value.get(comment.id) ?? comment.body, {
-        interactive: editing.value && comment.canEdit,
+        interactive: isCheckboxMode(comment.id) && comment.canEdit,
     });
 }
 </script>
@@ -1181,7 +1301,9 @@ function renderComment(comment: PrComment): string {
 <template>
     <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
         <ScrollArea v-if="pr" ref="scrollArea" class="pr-scroll-area min-h-0 flex-1">
-            <div class="w-full max-w-[1040px]">
+            <!-- Extra room at the bottom, so the end of the page (the comment box)
+                 can scroll up from the window's bottom edge. -->
+            <div class="w-full max-w-[1040px] pb-40">
                 <!-- The header and the tabs, pinned at the top while the conversation
                      scrolls when the Sticky PR header setting is on (the default). -->
                 <div
@@ -1194,42 +1316,32 @@ function renderComment(comment: PrComment): string {
                             <div
                                 class="min-w-0 flex-1 text-[18px] leading-[1.35] font-bold text-moire-fg"
                             >
+                                <!-- A stacked PR's place in its stack, as a badge before
+                                     the title; a click opens the Stack tab. -->
+                                <Tooltip v-if="stackPosition">
+                                    <TooltipTrigger as-child>
+                                        <button
+                                            type="button"
+                                            data-slot="stack-badge"
+                                            class="mr-2 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-moire-ring px-2.5 align-middle text-[13px] font-normal text-moire-file-fg transition-colors hover:border-moire-fg hover:text-moire-fg"
+                                            :aria-label="`PR ${stackPosition.index} of ${stackPosition.total} in its stack`"
+                                            @click="activeTab = 'stack'"
+                                        >
+                                            <Layers :size="14" />
+                                            {{ stackPosition.index }}/{{ stackPosition.total }}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        PR {{ stackPosition.index }} of {{ stackPosition.total }} in
+                                        its stack
+                                    </TooltipContent>
+                                </Tooltip>
                                 {{ pr.title }}
                                 <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
                             </div>
                             <div class="flex shrink-0 items-center gap-1.5">
                                 <!-- Starts a review of this PR, or finishes the pending one. -->
                                 <review-button />
-                                <!-- The conversation is read-only until this is on; then the
-                                 composer and per-comment Edit actions appear. -->
-                                <Toggle
-                                    variant="outline"
-                                    size="sm"
-                                    :model-value="editing"
-                                    class="h-7 gap-1.5 border border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=on]:bg-moire-hover data-[state=on]:text-moire-fg"
-                                    aria-label="Toggle edit mode"
-                                    title="Edit mode: post and edit comments"
-                                    @update:model-value="editing = $event"
-                                >
-                                    <!-- Checkbox look borrowed from the diff viewer's "Mark
-                                     viewed" button: a bordered square that fills with a
-                                     check when on, so the state is unmistakable. Kept
-                                     neutral (filled with the foreground, not an accent),
-                                     matching this toggle's neutral pressed state. Not the
-                                     real Checkbox primitive: it renders a button, and a
-                                     button inside this Toggle would be invalid. -->
-                                    <span
-                                        class="flex size-[15px] shrink-0 items-center justify-center rounded-sm border"
-                                        :class="
-                                            editing
-                                                ? 'border-moire-fg bg-moire-fg text-moire-check-fg'
-                                                : 'border-current'
-                                        "
-                                    >
-                                        <Check v-if="editing" class="size-[11px]" />
-                                    </span>
-                                    Edit mode
-                                </Toggle>
                                 <!-- Secondary actions (refresh, open on GitHub) tuck into an
                                  overflow menu so the header stays uncluttered. While a
                                  refresh runs, the trigger shows the spinner in place of
@@ -1313,16 +1425,28 @@ function renderComment(comment: PrComment): string {
                                     wants to merge {{ pr.commitCount }}
                                     {{ pr.commitCount === 1 ? 'commit' : 'commits' }} into
                                 </span>
-                                <span
-                                    class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
-                                >
-                                    {{ pr.baseRefName }}
+                                <span class="inline-flex items-center gap-0.5">
+                                    <span
+                                        class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
+                                    >
+                                        {{ pr.baseRefName }}
+                                    </span>
+                                    <copy-button
+                                        :text="pr.baseRefName"
+                                        label="Copy base branch name"
+                                    />
                                 </span>
                                 <ArrowRight :size="12" class="text-moire-faint" />
-                                <span
-                                    class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
-                                >
-                                    {{ pr.headRefName }}
+                                <span class="inline-flex items-center gap-0.5">
+                                    <span
+                                        class="rounded bg-moire-hover px-1.5 py-px font-mono text-moire-fg"
+                                    >
+                                        {{ pr.headRefName }}
+                                    </span>
+                                    <copy-button
+                                        :text="pr.headRefName"
+                                        label="Copy head branch name"
+                                    />
                                 </span>
                             </div>
 
@@ -1392,6 +1516,43 @@ function renderComment(comment: PrComment): string {
                                 Checks
                                 <span v-if="checks.length" class="text-moire-faint">
                                     {{ checksSummary }}
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                data-slot="reviewers-tab"
+                                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                                :class="
+                                    activeTab === 'reviewers'
+                                        ? 'bg-moire-hover text-moire-fg'
+                                        : 'text-moire-muted hover:text-moire-fg'
+                                "
+                                @click="activeTab = 'reviewers'"
+                            >
+                                Reviewers
+                                <span v-if="reviewers.length" class="text-moire-faint">
+                                    {{ reviewersSummary }}
+                                </span>
+                            </button>
+                            <button
+                                v-if="stack"
+                                type="button"
+                                data-slot="stack-tab"
+                                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                                :class="
+                                    activeTab === 'stack'
+                                        ? 'bg-moire-hover text-moire-fg'
+                                        : 'text-moire-muted hover:text-moire-fg'
+                                "
+                                @click="activeTab = 'stack'"
+                            >
+                                Stack
+                                <span class="text-moire-faint">
+                                    {{
+                                        stackPosition
+                                            ? `${stackPosition.index}/${stackPosition.total}`
+                                            : stack.entries.length
+                                    }}
                                 </span>
                             </button>
                         </div>
@@ -1509,10 +1670,18 @@ function renderComment(comment: PrComment): string {
                                             </span>
                                         </div>
                                         <div class="flex shrink-0 items-center gap-0.5">
-                                            <!-- Edit the description, in edit mode. Shown even
-                                                 with no body yet, so one can be added. Swaps
-                                                 the body for an editor. -->
-                                            <Tooltip v-if="editing && !editingDescription">
+                                            <checkbox-mode-toggle
+                                                v-if="
+                                                    !editingDescription &&
+                                                    blockHasTasks('description', pr.body)
+                                                "
+                                                :pressed="isCheckboxMode('description')"
+                                                @toggle="toggleCheckboxMode('description')"
+                                            />
+                                            <!-- Edit the description. Shown even with no body
+                                                 yet, so one can be added. Swaps the body for
+                                                 an editor. -->
+                                            <Tooltip v-if="!editingDescription">
                                                 <TooltipTrigger as-child>
                                                     <button
                                                         type="button"
@@ -1632,7 +1801,12 @@ function renderComment(comment: PrComment): string {
                         <!-- Conversation entries. One with a body renders as a card
                              matching the description (header bar, then body); a bare
                              review verdict stays a compact one-line row, as on GitHub. -->
-                        <div v-for="(comment, i) in comments" :key="i" class="flex gap-3">
+                        <div
+                            v-for="(comment, i) in comments"
+                            :key="i"
+                            :data-entry-index="i"
+                            class="flex gap-3"
+                        >
                             <div class="flex w-6 shrink-0 flex-col items-center">
                                 <!-- Center the avatar in the header band so it lines up
                                      with the header's middle, with an equal margin above
@@ -1653,7 +1827,8 @@ function renderComment(comment: PrComment): string {
                             <div class="min-w-0 flex-1 pb-5">
                                 <div
                                     v-if="hasCard(comment)"
-                                    class="rounded-lg border border-moire-border bg-moire-app"
+                                    class="rounded-lg border border-moire-border bg-moire-app ring-offset-2 ring-offset-moire-app transition-shadow duration-500"
+                                    :class="focusedEntry === i ? 'ring-2 ring-moire-accent' : ''"
                                 >
                                     <div
                                         class="flex items-center justify-between gap-1.5 px-3.5 py-2.5 text-[13px] text-moire-faint"
@@ -1698,14 +1873,43 @@ function renderComment(comment: PrComment): string {
                                             </span>
                                         </div>
                                         <div class="flex shrink-0 items-center gap-0.5">
-                                            <!-- Edit and delete for your own comments, tucked
-                                                 behind a "..." menu, and only in edit mode.
-                                                 Hidden while this comment is already being
-                                                 edited or is awaiting a delete confirmation. -->
+                                            <!-- Comments the viewer may edit (their own, or
+                                                 any as a maintainer, as GitHub allows):
+                                                 checkbox mode (when the comment has a task
+                                                 list) and a pencil that opens it for editing.
+                                                 Delete sits behind a "..." menu where it is
+                                                 allowed. Hidden while this comment is being
+                                                 edited or awaits a delete confirmation. -->
+                                            <template
+                                                v-if="
+                                                    comment.canEdit &&
+                                                    editingId !== comment.id &&
+                                                    confirmingDeleteId !== comment.id
+                                                "
+                                            >
+                                                <checkbox-mode-toggle
+                                                    v-if="blockHasTasks(comment.id, comment.body)"
+                                                    :pressed="isCheckboxMode(comment.id)"
+                                                    @toggle="toggleCheckboxMode(comment.id)"
+                                                />
+                                                <Tooltip>
+                                                    <TooltipTrigger as-child>
+                                                        <button
+                                                            type="button"
+                                                            data-slot="edit-comment"
+                                                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                            aria-label="Edit comment"
+                                                            @click="startEdit(comment, i)"
+                                                        >
+                                                            <Pencil :size="13" />
+                                                        </button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Edit comment</TooltipContent>
+                                                </Tooltip>
+                                            </template>
                                             <Popover
                                                 v-if="
-                                                    editing &&
-                                                    comment.canEdit &&
+                                                    comment.canDelete &&
                                                     editingId !== comment.id &&
                                                     confirmingDeleteId !== comment.id
                                                 "
@@ -1750,18 +1954,6 @@ function renderComment(comment: PrComment): string {
                                                     <Command class="bg-transparent">
                                                         <CommandList>
                                                             <CommandGroup>
-                                                                <CommandItem
-                                                                    value="edit"
-                                                                    aria-label="Edit comment"
-                                                                    class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
-                                                                    @select="startEdit(comment, i)"
-                                                                >
-                                                                    <Pencil
-                                                                        :size="14"
-                                                                        class="shrink-0 text-moire-faint"
-                                                                    />
-                                                                    <span class="flex-1">Edit</span>
-                                                                </CommandItem>
                                                                 <CommandItem
                                                                     value="delete"
                                                                     aria-label="Delete comment"
@@ -1889,7 +2081,7 @@ function renderComment(comment: PrComment): string {
                                                 class="flex items-center gap-2 bg-moire-chrome px-4 py-2.5 text-[12px]"
                                                 :class="{
                                                     'border-b border-moire-border':
-                                                        !isThreadCollapsed(thread.id),
+                                                        !isThreadCollapsed(thread),
                                                 }"
                                             >
                                                 <!-- Fold this line comment down to its file
@@ -1898,16 +2090,16 @@ function renderComment(comment: PrComment): string {
                                                     type="button"
                                                     data-slot="thread-toggle"
                                                     class="-ml-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                    :aria-expanded="!isThreadCollapsed(thread.id)"
+                                                    :aria-expanded="!isThreadCollapsed(thread)"
                                                     :aria-label="
-                                                        isThreadCollapsed(thread.id)
+                                                        isThreadCollapsed(thread)
                                                             ? 'Expand line comment'
                                                             : 'Collapse line comment'
                                                     "
-                                                    @click="toggleThreadCollapsed(thread.id)"
+                                                    @click="toggleThreadCollapsed(thread)"
                                                 >
                                                     <ChevronRight
-                                                        v-if="isThreadCollapsed(thread.id)"
+                                                        v-if="isThreadCollapsed(thread)"
                                                         :size="14"
                                                     />
                                                     <ChevronDown v-else :size="14" />
@@ -1921,22 +2113,48 @@ function renderComment(comment: PrComment): string {
                                                 >
                                                     {{ thread.path }}
                                                 </button>
-                                                <span
-                                                    v-if="thread.isOutdated"
-                                                    class="text-[10px] font-medium tracking-wide text-moire-faint uppercase"
+                                                <!-- Tinted badges, so the thread's state reads at a
+                                                     glance even when it is folded: amber for code
+                                                     that moved on, green for a settled thread. Once
+                                                     resolved, being outdated matters less, so it
+                                                     shrinks to its icon (named by a tooltip). -->
+                                                <Tooltip
+                                                    v-if="thread.isOutdated && thread.isResolved"
                                                 >
+                                                    <TooltipTrigger as-child>
+                                                        <Badge
+                                                            variant="outline"
+                                                            data-slot="thread-outdated"
+                                                            aria-label="Outdated"
+                                                            class="size-[22px] border-moire-changes-edge bg-moire-changes px-0 text-moire-changes-fg"
+                                                        >
+                                                            <History />
+                                                        </Badge>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Outdated</TooltipContent>
+                                                </Tooltip>
+                                                <Badge
+                                                    v-else-if="thread.isOutdated"
+                                                    variant="outline"
+                                                    data-slot="thread-outdated"
+                                                    class="h-[22px] border-moire-changes-edge bg-moire-changes text-[11px] text-moire-changes-fg"
+                                                >
+                                                    <History />
                                                     Outdated
-                                                </span>
-                                                <span
+                                                </Badge>
+                                                <Badge
                                                     v-if="thread.isResolved"
-                                                    class="text-[10px] font-medium tracking-wide text-moire-status-a uppercase"
+                                                    variant="outline"
+                                                    data-slot="thread-resolved"
+                                                    class="h-[22px] border-moire-viewed-edge bg-moire-viewed text-[11px] text-moire-viewed-fg"
                                                 >
+                                                    <CircleCheck />
                                                     Resolved
-                                                </span>
+                                                </Badge>
                                             </div>
                                             <div
                                                 v-if="
-                                                    !isThreadCollapsed(thread.id) &&
+                                                    !isThreadCollapsed(thread) &&
                                                     threadLines(thread).length
                                                 "
                                                 class="border-b border-moire-border py-1 font-mono text-[12px] leading-6"
@@ -1971,7 +2189,7 @@ function renderComment(comment: PrComment): string {
                                                 </div>
                                             </div>
                                             <div
-                                                v-if="!isThreadCollapsed(thread.id)"
+                                                v-if="!isThreadCollapsed(thread)"
                                                 class="flex flex-col px-4 py-4"
                                             >
                                                 <!-- A line down from each avatar to the next
@@ -2016,10 +2234,186 @@ function renderComment(comment: PrComment): string {
                                                             <span>{{
                                                                 relative(threadComment.createdAt)
                                                             }}</span>
+                                                            <!-- Like a conversation comment: a pencil
+                                                                 where GitHub allows editing (the viewer's
+                                                                 own line comments, or any as a
+                                                                 maintainer), and Delete behind a "..."
+                                                                 menu where it allows deleting. -->
+                                                            <div
+                                                                v-if="
+                                                                    editingId !==
+                                                                        threadComment.id &&
+                                                                    confirmingDeleteId !==
+                                                                        threadComment.id
+                                                                "
+                                                                class="ml-auto flex items-center gap-0.5"
+                                                            >
+                                                                <Tooltip
+                                                                    v-if="threadComment.canEdit"
+                                                                >
+                                                                    <TooltipTrigger as-child>
+                                                                        <button
+                                                                            type="button"
+                                                                            data-slot="edit-thread-comment"
+                                                                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                                            aria-label="Edit comment"
+                                                                            @click="
+                                                                                startEditThreadComment(
+                                                                                    threadComment
+                                                                                )
+                                                                            "
+                                                                        >
+                                                                            <Pencil :size="13" />
+                                                                        </button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent
+                                                                        >Edit
+                                                                        comment</TooltipContent
+                                                                    >
+                                                                </Tooltip>
+                                                                <Popover
+                                                                    v-if="
+                                                                        threadComment.canDelete &&
+                                                                        editingId !==
+                                                                            threadComment.id &&
+                                                                        confirmingDeleteId !==
+                                                                            threadComment.id
+                                                                    "
+                                                                    :open="
+                                                                        openMenuId ===
+                                                                        threadComment.id
+                                                                    "
+                                                                    @update:open="
+                                                                        openMenuId = $event
+                                                                            ? threadComment.id
+                                                                            : null
+                                                                    "
+                                                                >
+                                                                    <PopoverAnchor as-child>
+                                                                        <span class="inline-flex">
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger
+                                                                                    as-child
+                                                                                >
+                                                                                    <PopoverTrigger
+                                                                                        as-child
+                                                                                    >
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            data-slot="thread-comment-menu"
+                                                                                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                                                            aria-label="Comment actions"
+                                                                                        >
+                                                                                            <MoreHorizontal
+                                                                                                :size="
+                                                                                                    14
+                                                                                                "
+                                                                                            />
+                                                                                        </button>
+                                                                                    </PopoverTrigger>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent
+                                                                                    >Comment
+                                                                                    actions</TooltipContent
+                                                                                >
+                                                                            </Tooltip>
+                                                                        </span>
+                                                                    </PopoverAnchor>
+                                                                    <PopoverContent
+                                                                        align="end"
+                                                                        :side-offset="6"
+                                                                        class="w-44 overflow-hidden border-moire-border bg-moire-pop p-0"
+                                                                        :style="{
+                                                                            boxShadow:
+                                                                                'var(--moire-pop-shadow)',
+                                                                        }"
+                                                                    >
+                                                                        <Command
+                                                                            class="bg-transparent"
+                                                                        >
+                                                                            <CommandList>
+                                                                                <CommandGroup>
+                                                                                    <CommandItem
+                                                                                        v-if="
+                                                                                            threadComment.canDelete
+                                                                                        "
+                                                                                        value="delete"
+                                                                                        aria-label="Delete comment"
+                                                                                        class="gap-2 text-xs text-moire-status-d data-[highlighted]:bg-moire-danger data-[highlighted]:text-moire-status-d"
+                                                                                        @select="
+                                                                                            startDelete(
+                                                                                                threadComment
+                                                                                            )
+                                                                                        "
+                                                                                    >
+                                                                                        <Trash2
+                                                                                            :size="
+                                                                                                14
+                                                                                            "
+                                                                                            class="shrink-0"
+                                                                                        />
+                                                                                        <span
+                                                                                            class="flex-1"
+                                                                                        >
+                                                                                            Delete
+                                                                                        </span>
+                                                                                    </CommandItem>
+                                                                                </CommandGroup>
+                                                                            </CommandList>
+                                                                        </Command>
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                            </div>
                                                         </div>
                                                         <!-- v-html is safe: renderMarkdown
                                                              sanitizes via DOMPurify. -->
+                                                        <!-- The same inline editor as a
+                                                             conversation comment's. -->
                                                         <div
+                                                            v-if="editingId === threadComment.id"
+                                                            class="flex flex-col gap-2"
+                                                        >
+                                                            <Textarea
+                                                                v-model="editDraft"
+                                                                aria-label="Edit comment body"
+                                                                class="min-h-24 border-moire-border bg-transparent text-[14px] leading-[1.6] text-moire-file-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                                                            />
+                                                            <span
+                                                                v-if="editError"
+                                                                class="text-[12px] text-moire-status-d"
+                                                            >
+                                                                {{ editError }}
+                                                            </span>
+                                                            <div class="flex justify-end gap-2">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    class="h-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                                                    :disabled="savingEdit"
+                                                                    @click="cancelEdit"
+                                                                >
+                                                                    Cancel
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
+                                                                    :disabled="
+                                                                        !editDraft.trim() ||
+                                                                        savingEdit
+                                                                    "
+                                                                    @click="saveEdit"
+                                                                >
+                                                                    <LoaderCircle
+                                                                        v-if="savingEdit"
+                                                                        :size="14"
+                                                                        class="animate-spin"
+                                                                    />
+                                                                    Save
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            v-else
                                                             class="pr-markdown text-[14px] leading-[1.6] text-moire-file-fg"
                                                             v-html="
                                                                 renderMarkdown(threadComment.body)
@@ -2028,6 +2422,13 @@ function renderComment(comment: PrComment): string {
                                                     </div>
                                                 </div>
                                             </div>
+                                            <review-thread-actions
+                                                v-if="!isThreadCollapsed(thread)"
+                                                :thread="thread"
+                                                @resolved-change="
+                                                    setThreadCollapsed(thread.id, $event)
+                                                "
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -2036,7 +2437,8 @@ function renderComment(comment: PrComment): string {
                                      and no chevron. -->
                                 <div
                                     v-else
-                                    class="flex flex-wrap items-center gap-1.5 text-[13px] text-moire-faint"
+                                    class="flex flex-wrap items-center gap-1.5 rounded text-[13px] text-moire-faint ring-offset-4 ring-offset-moire-app transition-shadow duration-500"
+                                    :class="focusedEntry === i ? 'ring-2 ring-moire-accent' : ''"
                                 >
                                     <span class="text-[14px] font-medium text-moire-fg">
                                         {{ comment.author }}
@@ -2047,13 +2449,35 @@ function renderComment(comment: PrComment): string {
                             </div>
                         </div>
 
-                        <!-- New-comment composer, shown only in edit mode. Indented to the
-                             cards' left edge. Posts through the store, which re-fetches so
-                             the comment appears. gap, not margin (the unlayered reset). -->
-                        <div v-if="editing" class="pl-9">
-                            <div class="rounded-lg border border-moire-border bg-moire-app p-3.5">
+                        <!-- New-comment composer, pinned to the bottom of the view while
+                             the conversation scrolls (on an opaque band so entries pass
+                             under it). Indented to the cards' left edge. Collapsible to a
+                             one-line bar (see composerCollapsed). Posts through the store,
+                             which re-fetches so the comment appears. gap, not margin (the
+                             unlayered reset). -->
+                        <div
+                            data-slot="comment-composer"
+                            :data-collapsed="composerCollapsed || undefined"
+                            class="sticky bottom-0 z-10 bg-moire-app pt-4 pb-8 pl-9"
+                        >
+                            <button
+                                v-if="composerCollapsed"
+                                type="button"
+                                data-slot="composer-expand"
+                                class="flex h-10 w-full cursor-pointer items-center justify-between rounded-lg border border-moire-border bg-moire-app px-3.5 text-left text-[14px] text-moire-faint transition-colors hover:border-moire-ring"
+                                aria-label="Expand comment box"
+                                @click="expandComposer"
+                            >
+                                <span class="truncate">{{ draft.trim() || 'Add a comment…' }}</span>
+                                <ChevronUp :size="16" class="shrink-0" />
+                            </button>
+                            <div
+                                v-else
+                                class="rounded-lg border border-moire-border bg-moire-app p-3.5"
+                            >
                                 <div class="flex flex-col gap-2.5">
                                     <Textarea
+                                        ref="composerInput"
                                         v-model="draft"
                                         placeholder="Add a comment…"
                                         aria-label="Add a comment"
@@ -2062,20 +2486,48 @@ function renderComment(comment: PrComment): string {
                                     <span v-if="postError" class="text-[12px] text-moire-status-d">
                                         {{ postError }}
                                     </span>
-                                    <div class="flex justify-end">
-                                        <Button
-                                            size="sm"
-                                            class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
-                                            :disabled="!draft.trim() || posting"
-                                            @click="submitComment"
-                                        >
-                                            <LoaderCircle
-                                                v-if="posting"
-                                                :size="14"
-                                                class="animate-spin"
-                                            />
-                                            Comment
-                                        </Button>
+                                    <div class="flex items-center justify-between">
+                                        <Tooltip>
+                                            <TooltipTrigger as-child>
+                                                <button
+                                                    type="button"
+                                                    data-slot="composer-collapse"
+                                                    class="inline-flex size-7 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                    aria-label="Collapse comment box"
+                                                    @click="composerCollapsed = true"
+                                                >
+                                                    <ChevronDown :size="16" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Collapse comment box</TooltipContent>
+                                        </Tooltip>
+                                        <div class="flex items-center gap-2">
+                                            <!-- Clears the draft (and any error), leaving the
+                                                 box open. -->
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                data-slot="composer-cancel"
+                                                class="h-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                                :disabled="(!draft && !postError) || posting"
+                                                @click="clearComposer"
+                                            >
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
+                                                :disabled="!draft.trim() || posting"
+                                                @click="submitComment"
+                                            >
+                                                <LoaderCircle
+                                                    v-if="posting"
+                                                    :size="14"
+                                                    class="animate-spin"
+                                                />
+                                                Comment
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2084,6 +2536,13 @@ function renderComment(comment: PrComment): string {
 
                     <!-- Checks: a summary of the CI run, then one row per check
                          (status glyph, name, faint detail), or an empty state. -->
+                    <pr-reviewers
+                        v-else-if="activeTab === 'reviewers'"
+                        :reviewers="reviewers"
+                        :activity="reviewerActivity"
+                        @jump="jumpToActivity"
+                    />
+                    <pr-stack-list v-else-if="activeTab === 'stack' && stack" :stack="stack" />
                     <div v-else-if="activeTab === 'checks'">
                         <div v-if="checks.length">
                             <div

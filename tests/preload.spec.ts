@@ -68,6 +68,9 @@ describe('preload bridge', () => {
             'getStagedPaths',
             'stagePaths',
             'unstagePaths',
+            'getPrStack',
+            'copyText',
+            'showBranchPickerMenu',
             'openFile',
             'getTheme',
             'onThemeChanged',
@@ -76,6 +79,9 @@ describe('preload bridge', () => {
             'getCodeStyle',
             'onCodeStyleChanged',
             'getDiffLayout',
+            'getDiffDisplay',
+            'setCompareModePreference',
+            'setViewModePreference',
             'onDiffLayoutChanged',
             'onMenuRefresh',
             'onMenuOpenRepo',
@@ -151,6 +157,11 @@ describe('preload bridge', () => {
 
         await api().stagePaths!(['a.ts']);
         expect(bridge.invoke).toHaveBeenCalledWith('git:stage', ['a.ts']);
+        await api().copyText!('npm install');
+        expect(bridge.invoke).toHaveBeenCalledWith('clipboard:write-text', 'npm install');
+
+        await api().showBranchPickerMenu!('origin/main');
+        expect(bridge.invoke).toHaveBeenCalledWith('menu:branch-picker', 'origin/main');
 
         await api().openFile!('src/a.ts');
         expect(bridge.invoke).toHaveBeenCalledWith('shell:open-path', 'src/a.ts');
