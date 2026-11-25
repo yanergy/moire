@@ -29,10 +29,10 @@ const age = computed(() => {
 </script>
 
 <template>
-    <div class="group flex items-center gap-3.5 pr-4 hover:bg-moire-hover">
+    <div class="group flex items-center gap-3 pr-3.5 hover:bg-moire-hover">
         <button
             type="button"
-            class="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 pl-4 text-left"
+            class="flex min-w-0 flex-1 items-center gap-3 py-4 pl-3.5 text-left"
             @click="$emit('open', pr)"
         >
             <span class="size-2.5 shrink-0 rounded-full" :class="prDotClass(pr)" />
