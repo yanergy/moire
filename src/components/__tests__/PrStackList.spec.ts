@@ -47,28 +47,39 @@ const stack: PrStack = {
 describe('PrStackList', () => {
     beforeEach(() => setActivePinia(createPinia()));
 
-    it('lists the stack top first, marks the current PR, and ends with the trunk', () => {
+    it('lists the stack as a numbered sequence from the trunk up, the current PR highlighted', () => {
         const wrapper = mount(PrStackList, { props: { stack } });
         const rows = wrapper.findAll('[data-slot="stack-entry"]');
 
-        expect(rows.map((r) => r.text().match(/#\d+/)![0])).toEqual(['#3', '#2', '#1']);
+        expect(rows.map((r) => r.get('[data-slot="stack-position"]').text())).toEqual([
+            '1',
+            '2',
+            '3',
+        ]);
+        expect(rows.map((r) => r.text().match(/#\d+/)![0])).toEqual(['#1', '#2', '#3']);
+        // Not indented by depth: every row has the same inset.
+        expect(rows.every((r) => !r.attributes('style'))).toBe(true);
         expect(rows[1]!.attributes('data-current')).toBe('true');
+        expect(rows[1]!.classes()).toContain('border-moire-accent');
         expect(rows[1]!.text()).toContain('This PR');
-        expect(rows[2]!.text()).toContain('Approved');
-        expect(rows[0]!.text()).toContain('Draft');
-        expect(rows[0]!.find('[data-slot="stack-rebase"]').text()).toContain('rebase onto b');
-        expect(wrapper.text().trim().endsWith('main')).toBe(true);
+        expect(rows[0]!.text()).toContain('Approved');
+        expect(rows[2]!.text()).toContain('Draft');
+        expect(rows[2]!.find('[data-slot="stack-rebase"]').text()).toContain('rebase onto b');
+        expect(wrapper.text()).toContain('Stacked on main');
     });
 
-    it("opens another PR's own range, against its parent", async () => {
+    it("opens another PR's own range from a click anywhere on its row", async () => {
         const store = useComparisonStore();
         const select = vi.spyOn(store, 'selectPullRequestRange').mockReturnValue(true);
         const wrapper = mount(PrStackList, { props: { stack } });
+        const rows = wrapper.findAll('[data-slot="stack-entry"]');
 
-        await wrapper.findAll('[data-slot="stack-entry"] button')[0]!.trigger('click');
+        await rows[2]!.trigger('click');
         expect(select).toHaveBeenCalledWith('b', 'c');
 
-        await wrapper.findAll('[data-slot="stack-entry"] button')[1]!.trigger('click');
+        // The current PR is not a link.
+        expect(rows[1]!.element.tagName).toBe('DIV');
+        await rows[1]!.trigger('click');
         expect(select).toHaveBeenCalledTimes(1);
     });
 
@@ -77,7 +88,7 @@ describe('PrStackList', () => {
         vi.spyOn(store, 'selectPullRequestRange').mockReturnValue(false);
         const wrapper = mount(PrStackList, { props: { stack } });
 
-        await wrapper.findAll('[data-slot="stack-entry"] button')[0]!.trigger('click');
+        await wrapper.findAll('[data-slot="stack-entry"]')[2]!.trigger('click');
         expect(wrapper.get('[data-slot="stack-error"]').text()).toContain('Fetch b and c');
     });
 
