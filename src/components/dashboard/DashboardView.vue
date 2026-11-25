@@ -320,7 +320,6 @@ const refreshTooltip = computed(() => {
                                 :pr="item.pr"
                                 :now="now"
                                 :show-avatar="showAvatars"
-                                :opening="dashboard.openingPrId === item.pr.id"
                                 @open="dashboard.openPr"
                                 @open-in-browser="openInBrowser"
                             />
@@ -468,7 +467,6 @@ const refreshTooltip = computed(() => {
                                                 :now="now"
                                                 :show-avatar="showAvatars"
                                                 in-stack
-                                                :opening="dashboard.openingPrId === pr.id"
                                                 @open="dashboard.openPr"
                                                 @open-in-browser="openInBrowser"
                                             />

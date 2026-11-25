@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
+import { LoaderCircle } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
@@ -16,6 +17,11 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 const comparison = useComparisonStore();
 const ui = useUiStore();
+
+// While a new range's PR is being looked up (opening a PR from the dashboard, or
+// switching branches on the PR view), the PR page shows a spinner instead of the
+// previous PR, so it is clear the new one is on its way.
+const showPrLoading = computed(() => ui.mainView === 'pr' && comparison.prLoading);
 
 // The PR view is only reachable while a PR is detected for the range; any other
 // time the diff fills the pane.
@@ -34,9 +40,10 @@ watch(
 );
 
 // If the PR disappears while it is being viewed (a range change to a branch with
-// no PR), fall back to the diff so the toggle and the pane stay in step.
+// no PR), or a lookup started from the PR page finds none, fall back to the diff
+// so the toggle and the pane stay in step.
 watch(
-    () => comparison.hasPullRequest,
+    () => comparison.hasPullRequest || comparison.prLoading,
     (has) => {
         if (!has && ui.mainView === 'pr') {
             ui.setMainView('diff');
@@ -60,7 +67,15 @@ watch(
                  width; the file tree only belongs to the diff. (A thread's file link
                  in the PR view selects the file through the store, so it needs no
                  tree mounted.) -->
-            <pr-view v-if="showPrView" />
+            <div
+                v-if="showPrLoading"
+                data-slot="pr-loading"
+                class="flex min-h-0 flex-1 items-center justify-center gap-2 text-moire-muted"
+            >
+                <LoaderCircle :size="16" class="animate-spin" aria-hidden="true" />
+                Loading pull request…
+            </div>
+            <pr-view v-else-if="showPrView" />
             <dashboard-view v-else-if="showDashboard" />
             <notifications-view v-else-if="showNotifications" />
             <!-- Opens without a repository too, to say it needs one. -->

@@ -126,7 +126,7 @@ onMounted(async () => {
     // The GitHub notifier in main pushes the dashboard state after every poll.
     stopDashboard = api.onDashboardChanged((state) => dashboard.applyState(state));
     stopShowDashboard = api.onShowDashboard(() => ui.openDashboard());
-    stopOpenPr = api.onOpenPr((pr) => void dashboard.openPr(pr));
+    stopOpenPr = api.onOpenPr((pr) => dashboard.openPr(pr));
 });
 
 onUnmounted(() => {

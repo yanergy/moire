@@ -316,7 +316,7 @@ describe('DashboardView', () => {
         const { wrapper } = await mountView(
             dashboardState({ snapshot: dashboardSnapshot({ toReview: [pr] }) })
         );
-        const openPr = vi.spyOn(useDashboardStore(), 'openPr').mockResolvedValue(undefined);
+        const openPr = vi.spyOn(useDashboardStore(), 'openPr').mockImplementation(() => {});
 
         await wrapper.getComponent(DashboardCard).trigger('click');
         wrapper.getComponent(DashboardPrRow).vm.$emit('open', pr);
