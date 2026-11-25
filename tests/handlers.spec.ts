@@ -65,6 +65,9 @@ const state = vi.hoisted(() => ({
     getDiffDisplay: vi.fn<() => Promise<unknown>>(),
     setCompareMode: vi.fn<(mode: string) => Promise<void>>(),
     setViewMode: vi.fn<(mode: string) => Promise<void>>(),
+    menuTemplate: [] as { label?: string; enabled?: boolean; click?: () => void }[],
+    menuPopup: vi.fn<(options: unknown) => void>(),
+    writeText: vi.fn<(text: string) => void>(),
 }));
 
 vi.mock('electron', () => ({
@@ -74,6 +77,14 @@ vi.mock('electron', () => ({
     },
     dialog: { showOpenDialog: state.showOpenDialog, showErrorBox: state.showErrorBox },
     shell: { openExternal: state.openExternal, openPath: state.openPath },
+    BrowserWindow: { fromWebContents: () => ({ id: 1 }) },
+    clipboard: { writeText: state.writeText },
+    Menu: {
+        buildFromTemplate: (template: typeof state.menuTemplate) => {
+            state.menuTemplate = template;
+            return { popup: state.menuPopup };
+        },
+    },
 }));
 
 vi.mock('../electron/editors', () => ({
@@ -87,6 +98,7 @@ vi.mock('simple-git', () => ({
 }));
 
 vi.mock('../electron/git/GitService', () => ({
+    WORKING_TREE: 'WORKING TREE',
     GitService: class {
         repoPath: string;
         constructor(repoPath: string) {
@@ -541,6 +553,49 @@ describe('registerIpcHandlers', () => {
             await expect(invoke('diff-display:set-view-mode', 'stacked')).rejects.toThrow(
                 'expects split or unified'
             );
+        });
+    });
+
+    describe('clipboard:write-text', () => {
+        it('writes text to the clipboard', async () => {
+            await invoke('clipboard:write-text', 'npm install');
+            expect(state.writeText).toHaveBeenCalledWith('npm install');
+        });
+
+        it('refuses anything but text', async () => {
+            await expect(invoke('clipboard:write-text', { x: 1 })).rejects.toThrow(
+                'Only text can be copied.'
+            );
+            expect(state.writeText).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('menu:branch-picker', () => {
+        it('pops up the comparison presets and sends a pick back to the window', async () => {
+            const send = vi.fn<(channel: string, ...args: unknown[]) => void>();
+            // This channel reads the event's sender, so call it with one.
+            await state.handlers.get('menu:branch-picker')!({ sender: { send } }, 'feature');
+
+            expect(state.menuPopup).toHaveBeenCalledWith({ window: { id: 1 } });
+            const labels = state.menuTemplate.map((item) => item.label);
+            expect(labels).toEqual([
+                'Copy Branch Name',
+                undefined,
+                'Comparison Presets',
+                'Compare Current Branch to Development',
+                'Compare Working Tree to Origin',
+            ]);
+
+            state.menuTemplate[4]!.click!();
+            expect(send).toHaveBeenCalledWith('menu:compare-preset', '', 'WORKING TREE');
+        });
+
+        it("copies the picker's ref to the clipboard", async () => {
+            const send = vi.fn<(channel: string, ...args: unknown[]) => void>();
+            await state.handlers.get('menu:branch-picker')!({ sender: { send } }, 'feature');
+
+            state.menuTemplate[0]!.click!();
+            expect(state.writeText).toHaveBeenCalledWith('feature');
         });
     });
 });

@@ -142,4 +142,25 @@ describe('ui store', () => {
             expect(store.mainView).toBe('dashboard');
         });
     });
+
+    describe('rendered Markdown', () => {
+        it('toggles a file between source and rendered', () => {
+            const ui = useUiStore();
+            expect(ui.isMarkdownRendered('README.md')).toBe(false);
+
+            ui.toggleMarkdownRendered('README.md');
+            expect(ui.isMarkdownRendered('README.md')).toBe(true);
+            expect(ui.isMarkdownRendered('docs/a.md')).toBe(false);
+
+            ui.toggleMarkdownRendered('README.md');
+            expect(ui.isMarkdownRendered('README.md')).toBe(false);
+        });
+
+        it('forgets the choices when another repository opens', () => {
+            const ui = useUiStore();
+            ui.toggleMarkdownRendered('README.md');
+            ui.resetNavigation();
+            expect(ui.isMarkdownRendered('README.md')).toBe(false);
+        });
+    });
 });

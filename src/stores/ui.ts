@@ -51,6 +51,10 @@ export const useUiStore = defineStore('ui', () => {
     // A review thread to show in the PR view's conversation when it opens (from the
     // diff popover's "Show in PR"), or null. The PR view clears it once shown.
     const prFocusThread = ref<string | null>(null);
+    // The Markdown files shown rendered instead of as a source diff, by path. Per
+    // file so switching files keeps each one's choice, and shared by the single file
+    // pane and the stacked list. The source diff stays the default.
+    const renderedMarkdown = ref<Set<string>>(new Set());
 
     // Back/forward history of the visible page, as in a browser (the mouse back
     // and forward buttons step through it). Every page change records the page
@@ -104,8 +108,22 @@ export const useUiStore = defineStore('ui', () => {
     // Another repository opened: its pages have nothing to do with the old ones.
     function resetNavigation() {
         dashboardCard.value = null;
+        renderedMarkdown.value = new Set();
         backStack.value = [];
         forwardStack.value = [];
+    }
+
+    function isMarkdownRendered(path: string): boolean {
+        return renderedMarkdown.value.has(path);
+    }
+
+    function toggleMarkdownRendered(path: string) {
+        const next = new Set(renderedMarkdown.value);
+        if (!next.delete(path)) {
+            next.add(path);
+        }
+
+        renderedMarkdown.value = next;
     }
 
     function applyThemeState(state: ThemeState) {
@@ -180,6 +198,9 @@ export const useUiStore = defineStore('ui', () => {
     );
 
     return {
+        renderedMarkdown,
+        isMarkdownRendered,
+        toggleMarkdownRendered,
         preference,
         isDark,
         codeStyle,

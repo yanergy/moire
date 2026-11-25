@@ -227,6 +227,12 @@ function pick(name: string) {
 
     open.value = false;
 }
+
+// Right click opens the native context menu (built in main) instead of the picker:
+// copy this picker's ref, or pick a comparison preset shared with the Git menu.
+function showContextMenu() {
+    void window.api?.showBranchPickerMenu?.(current.value);
+}
 </script>
 
 <template>
@@ -239,6 +245,7 @@ function pick(name: string) {
                     open ? 'border-moire-ring hover:bg-transparent dark:hover:bg-transparent' : ''
                 "
                 :style="open ? { boxShadow: 'var(--moire-ring-glow)' } : undefined"
+                @contextmenu.prevent="showContextMenu"
             >
                 <span class="text-[10px] tracking-wider text-moire-faint uppercase">{{
                     side

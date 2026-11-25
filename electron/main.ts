@@ -12,13 +12,13 @@ import {
     registerIpcHandlers,
     isGitAvailable,
     getCurrentRepoPath,
-    getCurrentBranches,
+    getCurrentComparisonPresets,
 } from './ipc/handlers';
 import { getAccounts, switchAccount } from './github/gh';
 import { fetchSnapshot, getRepoIdentity } from './github/notifications';
 import { Notifier, type DashboardState, type NotificationContent } from './notifier';
 import { stopWatchingRepo } from './watcher/RepoWatcher';
-import { installAppMenu, comparisonPresets } from './menu';
+import { installAppMenu } from './menu';
 import { initTheme, setThemePreference, registerThemeBroadcast, currentThemeState } from './theme';
 import { restoreWindowState, trackWindowState } from './window-state';
 import { initLogging, logError, logInfo } from './logger';
@@ -37,7 +37,6 @@ import {
     setNotificationPrefs,
     getNotifierState,
     setNotifierState,
-    getRepoBranches,
 } from './settings';
 import { detectEditors } from './editors';
 import { UpdateWatcher, checkForUpdate, showUpdatePrompt } from './updates';
@@ -166,14 +165,6 @@ async function broadcastDashboard(): Promise<void> {
     }
 }
 
-// The Git menu's comparison presets for the open repository, using the
-// development branch picked on its Settings page.
-async function currentComparisonPresets() {
-    const repoPath = getCurrentRepoPath();
-    const settings = repoPath ? await getRepoBranches(repoPath) : {};
-    return comparisonPresets(await getCurrentBranches(), settings);
-}
-
 async function createWindow(): Promise<BrowserWindow> {
     // Reopen at the last session's size/position (off-screen positions dropped).
     const { bounds, maximized } = await restoreWindowState();
@@ -297,7 +288,7 @@ app.whenReady().then(async () => {
             },
             // Recomputed on every rebuild (repo open, ref change), so the presets
             // follow the current branch and a missing ref disables its preset.
-            comparisonPresets: await currentComparisonPresets(),
+            comparisonPresets: await getCurrentComparisonPresets(),
             onSelectPreset: (base, head) => sendToFocused('menu:compare-preset', base, head),
             accounts,
             onOpenSettings: () => {

@@ -4,6 +4,7 @@ import { setupMonacoEnv } from '@/lib/monaco-env';
 import { defineMonacoThemes } from '@/lib/monaco-themes';
 import { windowTitle } from '@/lib/window-title';
 import { setFlourishesEnabled } from '@/lib/celebrate';
+import { onCopyCodeClick } from '@/lib/copy-code';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
@@ -54,6 +55,7 @@ function onMouseUp(event: MouseEvent) {
 
 onMounted(async () => {
     window.addEventListener('mouseup', onMouseUp, true);
+    window.addEventListener('click', onCopyCodeClick);
     const api = window.api;
     // The compare mode and split/unified view chosen on the Settings page. Read
     // before reopening the repo, so its first change set uses the stored mode. A
@@ -129,6 +131,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
     window.removeEventListener('mouseup', onMouseUp, true);
+    window.removeEventListener('click', onCopyCodeClick);
     stopThemeSync?.();
     stopMenuRefresh?.();
     stopMenuOpenRepo?.();
