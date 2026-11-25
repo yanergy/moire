@@ -3,7 +3,7 @@
 // entry in MoireApi (src/shared/types.ts). Keep the three in sync.
 
 import path from 'node:path';
-import { clipboard, ipcMain, dialog, shell } from 'electron';
+import { BrowserWindow, Menu, clipboard, ipcMain, dialog, shell } from 'electron';
 import { simpleGit, CheckRepoActions } from 'simple-git';
 import { GitService, type CompareMode } from '../git/GitService';
 import {
@@ -45,6 +45,7 @@ import {
     setStickyPrHeader,
 } from '../settings';
 import { detectEditors, openWithEditor } from '../editors';
+import { branchPickerMenuTemplate, comparisonPresets } from '../menu';
 import { currentThemeState } from '../theme';
 import { logError } from '../logger';
 import type { DashboardState, MergedPeriod, NotificationSettingsChange } from '../notifier';
@@ -125,6 +126,14 @@ async function getCurrentBranches(): Promise<BranchInfo[]> {
         logError('menu:branches', error);
         return [];
     }
+}
+
+// The comparison presets for the open repository, with the development branch
+// picked on its Settings page. Shared by the Git menu (through main.ts) and the
+// branch pickers' context menu.
+export async function getCurrentComparisonPresets() {
+    const settings = currentRepo ? await getRepoBranches(currentRepo.repoPath) : {};
+    return comparisonPresets(await getCurrentBranches(), settings);
 }
 
 async function isGitRepo(repoPath: string): Promise<boolean> {
@@ -495,6 +504,31 @@ function registerIpcHandlers({
         }
 
         clipboard.writeText(text);
+    });
+
+    // A toolbar branch picker was right clicked: pop up its native context menu at
+    // the cursor, in the window that asked. A picked preset goes back to that window
+    // over the Git menu's channel, so the renderer handles both the same way, and a
+    // copy goes straight to the system clipboard. Uses ipcMain directly because it
+    // needs the sender, which `handle` drops.
+    ipcMain.handle('menu:branch-picker', async (event, ref: unknown) => {
+        try {
+            const pickerRef = typeof ref === 'string' ? ref : '';
+            const branches = await getCurrentBranches();
+            const template = branchPickerMenuTemplate({
+                ref: pickerRef,
+                isRemote: branches.some((b) => b.kind === 'remote' && b.name === pickerRef),
+                presets: await getCurrentComparisonPresets(),
+                onCopy: (text) => clipboard.writeText(text),
+                onSelectPreset: (base, head) =>
+                    event.sender.send('menu:compare-preset', base, head),
+            });
+            const window = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+            Menu.buildFromTemplate(template).popup({ window });
+        } catch (error) {
+            logError('ipc menu:branch-picker', error);
+            throw error;
+        }
     });
 
     handle('shell:open-external', async (url: string) => {

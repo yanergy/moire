@@ -8,6 +8,7 @@ import {
     MessageSquare,
     Minus,
     TriangleAlert,
+    X,
 } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { RecycleScroller } from 'vue-virtual-scroller';
@@ -311,12 +312,30 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                 </span>
             </div>
 
-            <div class="px-3 pb-2.5">
+            <!-- The search box, with a clear button inside its right edge while it has
+                 text (padded so the text never runs under the button). -->
+            <div class="relative px-3 pb-2.5">
                 <Input
                     v-model="comparison.treeFilter"
                     placeholder="Search files…"
-                    class="h-8 border-moire-border bg-transparent font-mono text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                    class="h-8 border-moire-border bg-transparent pr-8 font-mono text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                    @keydown.escape="comparison.setTreeFilter('')"
                 />
+                <Tooltip v-if="comparison.treeFilter">
+                    <TooltipTrigger as-child>
+                        <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            data-slot="clear-search"
+                            aria-label="Clear search"
+                            class="absolute top-1 right-4 size-6 text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
+                            @click="comparison.setTreeFilter('')"
+                        >
+                            <X :size="14" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Clear search</TooltipContent>
+                </Tooltip>
             </div>
 
             <!-- Everything filtered out: a hint plus a reset, rather than a blank tree. -->

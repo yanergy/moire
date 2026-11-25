@@ -135,7 +135,7 @@ describe('MoirePage', () => {
         expect(wrapper.findComponent(DiffPane).exists()).toBe(true);
     });
 
-    it('shows the PR view instead of the diff when the PR view is active and a PR exists', () => {
+    it('shows the PR view as its own full-width page, without the file tree', () => {
         const comparison = useComparisonStore();
         comparison.prStatus = 'ok';
         comparison.pullRequest = PR;
@@ -145,6 +145,7 @@ describe('MoirePage', () => {
 
         expect(wrapper.findComponent(PrView).exists()).toBe(true);
         expect(wrapper.findComponent(DiffPane).exists()).toBe(false);
+        expect(wrapper.findComponent(FileTreeSidebar).exists()).toBe(false);
     });
 
     it('falls back to the diff and resets the toggle when the PR disappears', async () => {
