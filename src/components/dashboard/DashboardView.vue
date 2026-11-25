@@ -309,7 +309,7 @@ const updated = computed(() =>
                                             {{ item.title || `Stack on ${item.trunk}` }}
                                         </div>
                                         <div
-                                            class="flex min-w-0 items-center gap-1.5 pt-1 text-[12px] text-moire-muted"
+                                            class="flex min-w-0 items-center gap-1.5 text-[12px] text-moire-muted"
                                         >
                                             <span class="shrink-0">
                                                 Stack on
