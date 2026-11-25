@@ -1,5 +1,6 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import { useComparisonStore } from '@/stores/comparison';
@@ -271,6 +272,21 @@ describe('ToolbarHeader', () => {
             expect(ui.mainView).toBe('diff');
             ui.goBack();
             expect(ui.mainView).toBe('diff');
+        });
+
+        it("goes back to the dashboard overview from a card's page", async () => {
+            useComparisonStore().repoPath = '/repos/moire';
+            const ui = useUiStore();
+            const wrapper = mountToolbar();
+
+            await pageButton(wrapper, 'Dashboard').trigger('click');
+            ui.setDashboardCard('review');
+            await nextTick();
+            await pageButton(wrapper, 'Dashboard').trigger('click');
+
+            expect(ui.mainView).toBe('dashboard');
+            expect(ui.dashboardCard).toBeNull();
+            expect(selectedPages(wrapper)).toEqual(['Dashboard']);
         });
 
         it('selects Diff while the PR page is set but no PR is detected', () => {
