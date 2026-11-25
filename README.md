@@ -112,8 +112,8 @@ the popup never appears.
    diff, or search and filter the tree (by name, or by filetype, mutation type, or marker) to focus
    on what matters. Mark a file or a whole folder as viewed to track what you have read, and step
    through changes with the previous and next buttons in the diff header, which cross into the
-   adjacent file at each end. Click the filename in the diff header to open the file in an editor
-   (choose which under **View > Open Files In**). Renames, binary files, and images get their own
+   adjacent file at each end. Click the filename in the diff header (or Cmd+click a file in the tree) to open the file in an
+   editor (choose which under **View > Open Files In**). Renames, binary files, and images get their own
    previews, and very large files sit behind a click so they never lock up the window.
 6. **Review the pull request.** The **PR** tab next to **Diff** in the toolbar opens a PR view of
    the pull request for the selected branches, with its description, status, labels, conversation,
@@ -197,7 +197,8 @@ last branch range are remembered per repository.
 - Next and previous change navigation that steps through the open file, then crosses into the
   adjacent file (in sidebar order) once a boundary is reached, wrapping around the whole change set.
 - Open a changed file from the diff header. The filename is a link (with an external-link icon)
-  that opens the working-tree copy, and **View > Open Files In** chooses the OS default app or a
+  that opens the working-tree copy. Cmd+click (Ctrl+click on Windows and Linux) a file in the tree
+  does the same. **View > Open Files In** chooses the OS default app or a
   detected editor (auto-detected per machine and persisted across launches).
 - Rename detection, binary-file notices, and inline image previews.
 - A rendered view for Markdown files (`.md`, `.markdown`): a **Source / Rendered** toggle in the
