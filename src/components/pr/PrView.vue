@@ -1548,7 +1548,11 @@ function renderComment(comment: PrComment): string {
                             >
                                 Stack
                                 <span class="text-moire-faint">
-                                    {{ stack.entries.length }}
+                                    {{
+                                        stackPosition
+                                            ? `${stackPosition.index}/${stackPosition.total}`
+                                            : stack.entries.length
+                                    }}
                                 </span>
                             </button>
                         </div>

@@ -165,6 +165,8 @@ describe('PrView', () => {
         await wrapper.get('[data-slot="stack-badge"]').trigger('click');
         expect(wrapper.findAll('[data-slot="stack-entry"]')).toHaveLength(2);
 
+        // The tab label shows the same place, like the badge.
+        expect(wrapper.get('[data-slot="stack-tab"]').text()).toBe('Stack 2/2');
         await wrapper.get('[data-slot="stack-tab"]').trigger('click');
         expect(wrapper.findAll('[data-slot="stack-entry"]')).toHaveLength(2);
     });
