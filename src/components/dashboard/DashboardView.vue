@@ -312,24 +312,52 @@ const updated = computed(() =>
                                         </template>
                                     </span>
                                 </button>
-                                <div
+                                <!-- The stack's PRs as in the PR view's Stack tab, without
+                                     the cards: a numbered circle per PR, centered on its
+                                     row and joined to the next by a line. -->
+                                <ol
                                     v-if="!foldedStacks.has(item.stackId)"
-                                    class="border-t border-moire-border pl-6"
+                                    class="border-t border-moire-border"
                                 >
-                                    <div
-                                        class="divide-y divide-moire-border border-l border-moire-border"
+                                    <li
+                                        v-for="(pr, index) in item.prs"
+                                        :key="pr.id"
+                                        data-slot="stack-group-pr"
+                                        class="flex"
                                     >
-                                        <dashboard-pr-row
-                                            v-for="pr in item.prs"
-                                            :key="pr.id"
-                                            :pr="pr"
-                                            :now="now"
-                                            :stack="dashboard.prStackPositions.get(pr.number)"
-                                            @open="dashboard.openPr"
-                                            @open-in-browser="openInBrowser"
-                                        />
-                                    </div>
-                                </div>
+                                        <div
+                                            class="relative flex w-10 shrink-0 items-center justify-center"
+                                        >
+                                            <span
+                                                v-if="index > 0"
+                                                class="absolute top-0 bottom-[calc(50%+18px)] left-1/2 w-px -translate-x-1/2 bg-moire-border"
+                                            />
+                                            <span
+                                                v-if="index < item.prs.length - 1"
+                                                class="absolute top-[calc(50%+18px)] bottom-0 left-1/2 w-px -translate-x-1/2 bg-moire-border"
+                                            />
+                                            <span
+                                                data-slot="stack-group-position"
+                                                class="relative flex size-6 items-center justify-center rounded-full border border-moire-border bg-moire-app font-mono text-[11px] text-moire-muted"
+                                            >
+                                                {{
+                                                    dashboard.prStackPositions.get(pr.number)?.index
+                                                }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            class="min-w-0 flex-1"
+                                            :class="{ 'border-t border-moire-border': index > 0 }"
+                                        >
+                                            <dashboard-pr-row
+                                                :pr="pr"
+                                                :now="now"
+                                                @open="dashboard.openPr"
+                                                @open-in-browser="openInBrowser"
+                                            />
+                                        </div>
+                                    </li>
+                                </ol>
                             </div>
                         </template>
                     </div>

@@ -122,15 +122,20 @@ describe('DashboardView', () => {
         expect(group.get('[data-slot="stack-group-header"]').text()).toContain('Stack on main');
         expect(group.text()).toContain('3 PRs');
         // In stack order inside the group; the unstacked PR stays outside it.
-        expect(group.findAll('[data-slot="stack-badge"]').map((b) => b.text())).toEqual([
-            '1/3',
-            '2/3',
-            '3/3',
+        expect(group.findAll('[data-slot="stack-group-position"]').map((b) => b.text())).toEqual([
+            '1',
+            '2',
+            '3',
+        ]);
+        expect(group.findAll('[data-slot="stack-group-pr"]').map((r) => r.text())).toEqual([
+            expect.stringContaining('#1'),
+            expect.stringContaining('#2'),
+            expect.stringContaining('#3'),
         ]);
         expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(4);
 
         await group.get('[data-slot="stack-group-header"]').trigger('click');
-        expect(group.find('[data-slot="stack-badge"]').exists()).toBe(false);
+        expect(group.find('[data-slot="stack-group-pr"]').exists()).toBe(false);
         expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(1);
     });
 

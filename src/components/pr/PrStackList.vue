@@ -69,12 +69,12 @@ function open(entry: PrStackEntry) {
                 <div class="relative flex w-6 shrink-0 items-center justify-center">
                     <span
                         v-if="index > 0"
-                        class="absolute top-0 bottom-1/2 left-1/2 w-px -translate-x-1/2 bg-moire-border"
+                        class="absolute top-0 bottom-[calc(50%+18px)] left-1/2 w-px -translate-x-1/2 bg-moire-border"
                     />
                     <span
                         v-if="index < rows.length - 1"
                         data-slot="stack-connector"
-                        class="absolute top-1/2 -bottom-3 left-1/2 w-px -translate-x-1/2 bg-moire-border"
+                        class="absolute top-[calc(50%+18px)] -bottom-3 left-1/2 w-px -translate-x-1/2 bg-moire-border"
                     />
                     <span
                         data-slot="stack-position"
