@@ -62,29 +62,33 @@ function open(entry: PrStackEntry) {
         >
             {{ error }}
         </p>
-        <!-- A timeline like the conversation's: a numbered dot per PR, joined to
-             the next by a line, beside a bordered card. -->
-        <ol>
+        <!-- A timeline like the conversation's: a numbered dot per PR, centered on
+             its card, with a line joining it to the next dot through the gap. -->
+        <ol class="flex flex-col gap-3">
             <li v-for="(entry, index) in rows" :key="entry.number" class="flex gap-3">
-                <div class="flex w-6 shrink-0 flex-col items-center">
+                <div class="relative flex w-6 shrink-0 items-center justify-center">
+                    <span
+                        v-if="index > 0"
+                        class="absolute top-0 bottom-1/2 left-1/2 w-px -translate-x-1/2 bg-moire-border"
+                    />
+                    <span
+                        v-if="index < rows.length - 1"
+                        data-slot="stack-connector"
+                        class="absolute top-1/2 -bottom-3 left-1/2 w-px -translate-x-1/2 bg-moire-border"
+                    />
                     <span
                         data-slot="stack-position"
-                        class="flex size-6 shrink-0 items-center justify-center rounded-full border font-mono text-[11px]"
+                        class="relative flex size-6 items-center justify-center rounded-full border bg-moire-app font-mono text-[11px]"
                         :class="
                             entry.isCurrent
-                                ? 'border-moire-accent bg-moire-accent text-white'
-                                : 'border-moire-border bg-moire-app text-moire-muted'
+                                ? 'border-moire-accent text-moire-accent'
+                                : 'border-moire-border text-moire-muted'
                         "
                     >
                         {{ index + 1 }}
                     </span>
-                    <span
-                        v-if="index < rows.length - 1"
-                        data-slot="stack-connector"
-                        class="w-px flex-1 bg-moire-border"
-                    />
                 </div>
-                <div class="min-w-0 flex-1" :class="{ 'pb-3': index < rows.length - 1 }">
+                <div class="min-w-0 flex-1">
                     <component
                         :is="canOpen(entry) ? 'button' : 'div'"
                         :type="canOpen(entry) ? 'button' : undefined"
@@ -93,7 +97,7 @@ function open(entry: PrStackEntry) {
                         :aria-current="entry.isCurrent ? 'true' : undefined"
                         class="flex w-full items-start gap-2.5 rounded-lg border bg-moire-app px-3.5 py-2.5 text-left transition-colors"
                         :class="[
-                            entry.isCurrent ? 'border-moire-accent' : 'border-moire-border',
+                            entry.isCurrent ? 'border-moire-ring' : 'border-moire-border',
                             canOpen(entry) ? 'cursor-pointer hover:bg-moire-hover' : '',
                         ]"
                         @click="open(entry)"

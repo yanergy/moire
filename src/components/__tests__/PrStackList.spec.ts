@@ -60,7 +60,7 @@ describe('PrStackList', () => {
         // Not indented by depth: every row has the same inset.
         expect(rows.every((r) => !r.attributes('style'))).toBe(true);
         expect(rows[1]!.attributes('data-current')).toBe('true');
-        expect(rows[1]!.classes()).toContain('border-moire-accent');
+        expect(rows[1]!.classes()).toContain('border-moire-ring');
         expect(rows[1]!.text()).toContain('This PR');
         // A line joins each PR to the next, none after the last.
         expect(wrapper.findAll('[data-slot="stack-connector"]')).toHaveLength(2);
