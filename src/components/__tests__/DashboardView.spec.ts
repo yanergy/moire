@@ -330,20 +330,42 @@ describe('DashboardView', () => {
     });
 
     it.each([
-        ['me', false],
-        [['ann'], false],
-        ['all', true],
+        [['me'], false],
+        [['me', 'ann'], true],
+        [['ann'], true],
         [['ann', 'bob'], true],
-    ] as const)('shows avatars on the rows for authors %j: %s', async (authors, shown) => {
+    ] as const)('shows avatars for the listed authors %j: %s', async (authors, shown) => {
+        const prs = authors.map((author, i) =>
+            dashboardPr({ id: `O${i}`, number: 10 + i, author })
+        );
         const { wrapper } = await mountView(
             dashboardState({
-                authors: authors as DashboardState['authors'],
-                snapshot: dashboardSnapshot({ toReview: [dashboardPr({ id: 'R', number: 8 })] }),
+                authors: 'all',
+                snapshot: dashboardSnapshot({ login: 'me', open: prs }),
+            })
+        );
+
+        const open = wrapper
+            .findAllComponents(DashboardCard)
+            .find((card) => card.props('category').key === 'open');
+        await open!.trigger('click');
+        const rows = wrapper.findAllComponents(DashboardPrRow);
+        expect(rows).toHaveLength(authors.length);
+        expect(rows.every((row) => row.props('showAvatar') === shown)).toBe(true);
+    });
+
+    it('shows the avatar on a review request, even when it is the only row', async () => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                snapshot: dashboardSnapshot({
+                    login: 'me',
+                    toReview: [dashboardPr({ id: 'R', number: 8, author: 'ann' })],
+                }),
             })
         );
 
         await wrapper.getComponent(DashboardCard).trigger('click');
-        expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(shown);
+        expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(true);
     });
 
     it('splits the stack progress ring by where its PRs stand', async () => {

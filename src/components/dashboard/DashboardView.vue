@@ -152,11 +152,15 @@ function stackProgressOf(item: { members: { pr: DashboardPr }[] }) {
     };
 }
 
-// The rows show their author's avatar only when the author filter can list
-// several people (everyone, or two or more chosen); with one author it repeats.
+// The rows show their author's avatar once anyone other than you is on screen
+// (dimmed stack members included), then on every row, yours too. A list of only
+// your own PRs leaves them out, as they would all be the same.
 const showAvatars = computed(() => {
-    const authors = dashboard.authors;
-    return authors === 'all' || (Array.isArray(authors) && authors.length > 1);
+    const me = dashboard.snapshot?.login;
+    return selectedItems.value.some((item) => {
+        const prs = item.kind === 'pr' ? [item.pr] : item.members.map((member) => member.pr);
+        return prs.some((pr) => pr.author !== me);
+    });
 });
 
 // Stack groups start open; a click on a group's header folds it.
