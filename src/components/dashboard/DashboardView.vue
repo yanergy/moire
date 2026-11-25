@@ -317,7 +317,7 @@ function openDashboardSettings() {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg aria-pressed:bg-moire-hover aria-pressed:text-moire-fg"
+                                class="h-8 shrink-0 gap-2 border-moire-border px-3.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg aria-pressed:bg-moire-hover aria-pressed:text-moire-fg"
                                 :aria-pressed="searchOpen"
                                 data-slot="dashboard-search-toggle"
                                 @click="toggleSearch"
@@ -338,7 +338,7 @@ function openDashboardSettings() {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                class="h-8 shrink-0 gap-2 border-moire-border px-3.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
                                 aria-label="Users"
                             >
                                 <Users :size="16" />
@@ -392,7 +392,7 @@ function openDashboardSettings() {
                                             <Button
                                                 variant="outline"
                                                 size="icon-sm"
-                                                class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                class="size-8 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
                                                 aria-label="More actions"
                                                 data-slot="dashboard-more"
                                             >
