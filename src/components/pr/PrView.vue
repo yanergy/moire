@@ -1287,7 +1287,16 @@ function renderComment(comment: PrComment): string {
 
 <template>
     <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
-        <ScrollArea v-if="pr" ref="scrollArea" class="pr-scroll-area min-h-0 flex-1">
+        <!-- A new range's PR is being looked up: a spinner, not the previous PR. -->
+        <div
+            v-if="comparison.prLoading"
+            data-slot="pr-loading"
+            class="flex min-h-0 flex-1 items-center justify-center gap-2 text-moire-muted"
+        >
+            <LoaderCircle :size="16" class="animate-spin" aria-hidden="true" />
+            Loading pull request…
+        </div>
+        <ScrollArea v-else-if="pr" ref="scrollArea" class="pr-scroll-area min-h-0 flex-1">
             <!-- Extra room at the bottom, so the end of the page (the comment box)
                  can scroll up from the window's bottom edge. -->
             <div class="w-full max-w-[1040px] pb-40">
@@ -2583,7 +2592,11 @@ function renderComment(comment: PrComment): string {
             </div>
         </ScrollArea>
         <!-- Beside the 1040px content column above. -->
-        <scroll-jump-buttons v-if="pr" :target="scrollViewport" :column="1040" />
+        <scroll-jump-buttons
+            v-if="pr && !comparison.prLoading"
+            :target="scrollViewport"
+            :column="1040"
+        />
 
         <!-- Delete confirmation. A modal, deliberately outside the comment card, so
              the destructive action reads clearly and is not mistaken for part of the
