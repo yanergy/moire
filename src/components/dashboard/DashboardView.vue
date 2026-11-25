@@ -326,7 +326,7 @@ const updated = computed(() =>
                                         class="flex"
                                     >
                                         <div
-                                            class="relative flex w-10 shrink-0 items-center justify-center"
+                                            class="relative flex w-12 shrink-0 items-center justify-center"
                                         >
                                             <span
                                                 v-if="index > 0"
