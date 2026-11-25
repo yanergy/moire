@@ -144,8 +144,8 @@ the popup never appears.
    checks GitHub every two minutes and sends a notification when something changes. Click a PR to
    open it in the PR view.
 8. **Adjust the settings.** The **Settings** button in the toolbar (or **Moiré > Settings…**,
-   `Cmd/Ctrl+,`) opens the Settings page, also reached from the **Dashboard settings** and
-   **Notification settings** buttons on those pages.
+   `Cmd/Ctrl+,`) opens the Settings page, also reached from **Dashboard settings** in the
+   dashboard's **...** menu and the **Notification settings** button.
    It holds the repository's main and development branch, which events notify you (and whether
    draft PRs and the dock badge do), and what the dashboard shows (drafts, the cards, and the
    Merged card's period). Every setting is kept per repository, so the page needs one open.
@@ -271,10 +271,10 @@ last branch range are remembered per repository.
 - A card with unread notifications about its PRs shows an "N new" pill.
 - A **Users** menu picks whose PRs the cards count (you by default, any mix of authors, or all of
   them). Whether drafts count (for the dashboard only; notifications have their own toggle), which
-  cards show and the Merged card's period are on the Settings page, opened with the **Dashboard
-  settings** button.
+  cards show and the Merged card's period are on the Settings page, opened with **Dashboard
+  settings** in the header's **...** menu, next to **Refresh**.
 
-- The refresh buttons on the dashboard and in the PR view rest for a few seconds after the data
+- Refresh on the dashboard and in the PR view (both in the header's **...** menu) rests for a few seconds after the data
   was last fetched (also by a background refresh), dimmed with a "Refreshed just now" hint, so
   repeated clicks do not stack up GitHub requests.
 

@@ -7,6 +7,7 @@ import {
     ChevronRight,
     Layers,
     LoaderCircle,
+    MoreHorizontal,
     RefreshCw,
     Search,
     Settings,
@@ -22,6 +23,8 @@ import { groupByStack } from '@/lib/pr-stacks';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
 import { Button } from '@/components/ui/button';
+import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -247,13 +250,30 @@ const { coolingDown } = useRefreshCooldown(() => {
     const fetched = Date.parse(dashboard.snapshot?.fetchedAt ?? '');
     return Number.isNaN(fetched) ? null : fetched;
 });
-const refreshTooltip = computed(() => {
+const refreshLabel = computed(() => {
     if (dashboard.loading) {
         return 'Refreshing…';
     }
 
     return coolingDown.value ? 'Refreshed just now' : 'Refresh';
 });
+
+// The header's overflow ("...") menu, holding Refresh and Dashboard settings, as
+// in the PR view. While a refresh runs, its trigger spins in place of the glyph.
+const moreOpen = ref(false);
+
+function refreshFromMenu() {
+    moreOpen.value = false;
+    if (dashboard.loading || coolingDown.value) {
+        return;
+    }
+    void dashboard.refresh();
+}
+
+function openDashboardSettings() {
+    moreOpen.value = false;
+    ui.openSettings('dashboard');
+}
 </script>
 
 <template>
@@ -359,34 +379,76 @@ const refreshTooltip = computed(() => {
                             </DropdownMenuCheckboxItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Tooltip>
-                        <TooltipTrigger as-child>
-                            <Button
-                                variant="outline"
-                                size="icon-sm"
-                                class="size-7 shrink-0 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                                aria-label="Refresh"
-                                data-slot="dashboard-refresh"
-                                :disabled="dashboard.loading || coolingDown"
-                                @click="dashboard.refresh()"
-                            >
-                                <RefreshCw
-                                    :size="16"
-                                    :class="{ 'animate-spin': dashboard.loading }"
-                                />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{{ refreshTooltip }}</TooltipContent>
-                    </Tooltip>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                        @click="ui.openSettings('dashboard')"
-                    >
-                        <Settings :size="16" />
-                        Dashboard settings
-                    </Button>
+                    <!-- Refresh and Dashboard settings tuck into an overflow menu, as in
+                         the PR view. While a refresh runs, the trigger shows the spinner
+                         in place of the "..." glyph. -->
+                    <Popover :open="moreOpen" @update:open="moreOpen = $event">
+                        <!-- The popover's own anchor, outside the tooltip (see PrView). -->
+                        <PopoverAnchor as-child>
+                            <span class="inline-flex shrink-0">
+                                <Tooltip>
+                                    <TooltipTrigger as-child>
+                                        <PopoverTrigger as-child>
+                                            <Button
+                                                variant="outline"
+                                                size="icon-sm"
+                                                class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                aria-label="More actions"
+                                                data-slot="dashboard-more"
+                                            >
+                                                <RefreshCw
+                                                    v-if="dashboard.loading"
+                                                    :size="16"
+                                                    class="animate-spin"
+                                                />
+                                                <MoreHorizontal v-else :size="16" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                    </TooltipTrigger>
+                                    <TooltipContent>More actions</TooltipContent>
+                                </Tooltip>
+                            </span>
+                        </PopoverAnchor>
+                        <PopoverContent
+                            align="end"
+                            :side-offset="6"
+                            class="w-48 overflow-hidden border-moire-border bg-moire-pop p-0"
+                            :style="menuSurfaceStyle"
+                        >
+                            <Command class="bg-transparent">
+                                <CommandList>
+                                    <CommandGroup>
+                                        <CommandItem
+                                            value="refresh"
+                                            aria-label="Refresh"
+                                            data-slot="dashboard-refresh"
+                                            :disabled="dashboard.loading || coolingDown"
+                                            class="gap-2 text-xs text-moire-file-fg data-[disabled]:opacity-50 data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                            @select="refreshFromMenu"
+                                        >
+                                            <RefreshCw
+                                                :size="14"
+                                                class="shrink-0 text-moire-faint"
+                                            />
+                                            <span class="flex-1">{{ refreshLabel }}</span>
+                                        </CommandItem>
+                                        <CommandItem
+                                            value="settings"
+                                            data-slot="dashboard-settings"
+                                            class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                            @select="openDashboardSettings"
+                                        >
+                                            <Settings
+                                                :size="14"
+                                                class="shrink-0 text-moire-faint"
+                                            />
+                                            <span class="flex-1">Dashboard settings</span>
+                                        </CommandItem>
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
                 </div>
 
                 <!-- Search by title, number, branch or author, with a clear button

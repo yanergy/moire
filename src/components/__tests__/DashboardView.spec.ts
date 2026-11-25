@@ -420,22 +420,43 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('Every card is hidden.');
     });
 
-    it('refreshes through the store', async () => {
+    // Opens the header's "..." menu and returns its item with the given data-slot
+    // (teleported to the body).
+    async function moreItem(wrapper: VueWrapper, slot: string) {
+        await wrapper.get('[data-slot="dashboard-more"]').trigger('click');
+        await flushPromises();
+        return document.querySelector(`[data-slot="${slot}"]`) as HTMLElement;
+    }
+
+    it('refreshes through the store from the "..." menu', async () => {
         const { api, wrapper } = await mountView(dashboardState());
 
-        await wrapper.get('[aria-label="Refresh"]').trigger('click');
+        (await moreItem(wrapper, 'dashboard-refresh')).click();
+        await flushPromises();
         expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
     });
 
-    it('rests the refresh button right after a fetch', async () => {
+    it('rests the refresh item right after a fetch', async () => {
         const fresh = dashboardState();
         fresh.snapshot!.fetchedAt = new Date().toISOString();
         const { api, wrapper } = await mountView(fresh);
 
-        const button = wrapper.get('[data-slot="dashboard-refresh"]');
-        expect(button.attributes('disabled')).toBeDefined();
-        await button.trigger('click');
+        const item = await moreItem(wrapper, 'dashboard-refresh');
+        expect(item.hasAttribute('data-disabled')).toBe(true);
+        expect(item.textContent).toContain('Refreshed just now');
+        item.click();
+        await flushPromises();
         expect(api.refreshDashboard).not.toHaveBeenCalled();
+    });
+
+    it('spins the "..." trigger while the dashboard loads', async () => {
+        const { wrapper } = await mountView(dashboardState());
+        const trigger = wrapper.get('[data-slot="dashboard-more"]');
+        expect(trigger.find('.lucide-ellipsis, .lucide-more-horizontal').exists()).toBe(true);
+
+        useDashboardStore().loading = true;
+        await nextTick();
+        expect(trigger.find('.animate-spin').exists()).toBe(true);
     });
 
     it('keeps the Users filter on the page and sends the rest to the Settings page', async () => {
@@ -456,8 +477,8 @@ describe('DashboardView', () => {
         await flushPromises();
         expect(api.setDashboardAuthors).toHaveBeenCalledWith('all');
 
-        const settings = wrapper.findAll('button').find((b) => b.text() === 'Dashboard settings');
-        await settings!.trigger('click');
+        (await moreItem(wrapper, 'dashboard-settings')).click();
+        await flushPromises();
         expect(useUiStore().mainView).toBe('settings');
         expect(useUiStore().settingsSection).toBe('dashboard');
         wrapper.unmount();
