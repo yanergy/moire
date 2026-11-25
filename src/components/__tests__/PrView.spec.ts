@@ -124,6 +124,7 @@ describe('PrView', () => {
     it('shows a Stack tab only for a stacked PR', async () => {
         const wrapper = mountWith(PR);
         expect(wrapper.find('[data-slot="stack-tab"]').exists()).toBe(false);
+        expect(wrapper.find('[data-slot="stack-badge"]').exists()).toBe(false);
 
         useComparisonStore().prStack = {
             trunk: 'main',
@@ -157,6 +158,13 @@ describe('PrView', () => {
             ],
         };
         await flushPromises();
+
+        // The title gets a badge with the PR's place in the stack, opening the tab.
+        expect(wrapper.find('[data-slot="stack-badge"]').exists()).toBe(true);
+        expect(wrapper.get('[data-slot="stack-badge"]').text()).toBe('2/2');
+        await wrapper.get('[data-slot="stack-badge"]').trigger('click');
+        expect(wrapper.findAll('[data-slot="stack-entry"]')).toHaveLength(2);
+
         await wrapper.get('[data-slot="stack-tab"]').trigger('click');
         expect(wrapper.findAll('[data-slot="stack-entry"]')).toHaveLength(2);
     });

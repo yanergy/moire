@@ -25,6 +25,7 @@ import {
     CircleX,
     ExternalLink,
     GitMerge,
+    Layers,
     GitPullRequestClosed,
     GitPullRequestDraft,
     History,
@@ -154,6 +155,13 @@ const reviewersSummary = computed(() => {
 });
 
 const stack = computed(() => comparison.prStack);
+
+// This PR's place in its stack (1 is on the trunk), for the badge before the title.
+const stackPosition = computed(() => {
+    const entries = stack.value?.entries ?? [];
+    const index = entries.findIndex((e) => e.isCurrent);
+    return index === -1 ? null : { index: index + 1, total: entries.length };
+});
 
 // The Stack tab disappears when the PR is not (or no longer) stacked.
 watch(stack, (current) => {
@@ -1308,6 +1316,26 @@ function renderComment(comment: PrComment): string {
                             <div
                                 class="min-w-0 flex-1 text-[18px] leading-[1.35] font-bold text-moire-fg"
                             >
+                                <!-- A stacked PR's place in its stack, as a badge before
+                                     the title; a click opens the Stack tab. -->
+                                <Tooltip v-if="stackPosition">
+                                    <TooltipTrigger as-child>
+                                        <button
+                                            type="button"
+                                            data-slot="stack-badge"
+                                            class="mr-2 inline-flex cursor-pointer items-center gap-1 rounded-full border border-moire-border px-2 py-0.5 align-[3px] text-[12px] font-medium text-moire-muted transition-colors hover:border-moire-ring hover:text-moire-fg"
+                                            :aria-label="`PR ${stackPosition.index} of ${stackPosition.total} in its stack`"
+                                            @click="activeTab = 'stack'"
+                                        >
+                                            <Layers :size="13" />
+                                            {{ stackPosition.index }}/{{ stackPosition.total }}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        PR {{ stackPosition.index }} of {{ stackPosition.total }} in
+                                        its stack
+                                    </TooltipContent>
+                                </Tooltip>
                                 {{ pr.title }}
                                 <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
                             </div>
