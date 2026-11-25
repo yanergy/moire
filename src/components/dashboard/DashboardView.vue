@@ -365,7 +365,7 @@ const updated = computed(() =>
                                             class="min-w-0 flex-1"
                                             :class="{
                                                 'border-t border-moire-border': index > 0,
-                                                'opacity-45': !inList,
+                                                'opacity-45 grayscale': !inList,
                                             }"
                                         >
                                             <dashboard-pr-row

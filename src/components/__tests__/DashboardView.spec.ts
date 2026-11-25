@@ -165,7 +165,7 @@ describe('DashboardView', () => {
         await wrapper.getComponent(DashboardCard).trigger('click');
         const rows = wrapper.findAll('[data-slot="stack-group-pr"]');
         expect(rows.map((r) => r.attributes('data-filtered-out'))).toEqual(['true', undefined]);
-        expect(rows[0]!.find('.opacity-45').exists()).toBe(true);
+        expect(rows[0]!.find('.opacity-45.grayscale').exists()).toBe(true);
         expect(wrapper.get('[data-slot="stack-group-header"]').text()).toContain('2 PRs');
     });
 
