@@ -66,6 +66,7 @@ describe('preload bridge', () => {
             'resolveCommit',
             'openExternal',
             'copyText',
+            'showBranchPickerMenu',
             'openFile',
             'getTheme',
             'onThemeChanged',
@@ -149,6 +150,9 @@ describe('preload bridge', () => {
 
         await api().copyText!('npm install');
         expect(bridge.invoke).toHaveBeenCalledWith('clipboard:write-text', 'npm install');
+
+        await api().showBranchPickerMenu!('origin/main');
+        expect(bridge.invoke).toHaveBeenCalledWith('menu:branch-picker', 'origin/main');
 
         await api().openFile!('src/a.ts');
         expect(bridge.invoke).toHaveBeenCalledWith('shell:open-path', 'src/a.ts');

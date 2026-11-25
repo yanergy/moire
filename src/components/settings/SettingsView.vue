@@ -491,8 +491,8 @@ const groupLabel =
                                     <div class="flex min-w-0 flex-1 flex-col">
                                         <span>Sticky header</span>
                                         <span :class="rowHint">
-                                            Keep the title, the Review and Edit mode buttons and the
-                                            tabs at the top while the conversation scrolls
+                                            Keep the title, the Review button and the tabs at the
+                                            top while the conversation scrolls
                                         </span>
                                     </div>
                                 </label>

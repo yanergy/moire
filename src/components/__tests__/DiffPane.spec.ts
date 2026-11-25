@@ -7,6 +7,8 @@ import BinaryFileNotice from '@/components/diff/BinaryFileNotice.vue';
 import ImagePreview from '@/components/diff/ImagePreview.vue';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
 import SelectionBanner from '@/components/diff/SelectionBanner.vue';
+import MarkdownPreview from '@/components/diff/MarkdownPreview.vue';
+import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { ChangedFile, FilePair } from '@/shared/types';
@@ -220,5 +222,74 @@ describe('DiffPane selection banner', () => {
         store.selectFile('a.ts');
         const wrapper = mount(DiffPane);
         expect(wrapper.findComponent(SelectionBanner).exists()).toBe(true);
+    });
+});
+
+const mdFile: ChangedFile = {
+    path: 'README.md',
+    status: 'M',
+    additions: 1,
+    deletions: 1,
+    binary: false,
+};
+const mdPair: FilePair = {
+    path: 'README.md',
+    oldContent: '# Old',
+    newContent: '# New',
+    language: 'markdown',
+    binary: false,
+    tooLarge: false,
+    sizeBytes: 5,
+};
+
+function seed(file: ChangedFile, pair: FilePair) {
+    const store = useComparisonStore();
+    store.files = [file];
+    store.selectedPath = file.path;
+    store.selectedPair = { ...pair };
+    return store;
+}
+
+describe('DiffPane rendered Markdown', () => {
+    beforeEach(() => setActivePinia(createPinia()));
+
+    it('shows the source diff by default, with a toggle', () => {
+        seed(mdFile, mdPair);
+        const wrapper = mount(DiffPane);
+
+        expect(wrapper.findComponent(DiffViewer).exists()).toBe(true);
+        expect(wrapper.findComponent(MarkdownPreview).exists()).toBe(false);
+        expect(wrapper.findComponent(SegmentedToggle).exists()).toBe(true);
+    });
+
+    it('switches to the rendered view and remembers it per file', async () => {
+        seed(mdFile, mdPair);
+        const wrapper = mount(DiffPane);
+
+        wrapper.findComponent(SelectionBanner).vm.$emit('update:markdownView', 'rendered');
+        await wrapper.vm.$nextTick();
+
+        expect(useUiStore().isMarkdownRendered('README.md')).toBe(true);
+        expect(wrapper.findComponent(MarkdownPreview).exists()).toBe(true);
+        expect(wrapper.findComponent(DiffViewer).exists()).toBe(false);
+    });
+
+    it('offers no toggle for a file that is not Markdown', () => {
+        seed(
+            { ...mdFile, path: 'src/a.ts' },
+            { ...mdPair, path: 'src/a.ts', language: 'typescript' }
+        );
+        const wrapper = mount(DiffPane);
+
+        expect(wrapper.findComponent(SegmentedToggle).exists()).toBe(false);
+    });
+
+    it('keeps the large file gate in front of the rendered view', () => {
+        seed(mdFile, { ...mdPair, tooLarge: true });
+        useUiStore().toggleMarkdownRendered('README.md');
+        const wrapper = mount(DiffPane);
+
+        expect(wrapper.findComponent(LargeFileGate).exists()).toBe(true);
+        expect(wrapper.findComponent(MarkdownPreview).exists()).toBe(false);
     });
 });
