@@ -56,18 +56,20 @@ watch(
             <toolbar-header />
             <missing-branch-notice />
             <!-- The dashboard, the notifications and the settings are repository
-                 wide, so they take the full width; the file tree only belongs to the diff and PR
-                 views. -->
-            <dashboard-view v-if="showDashboard" />
+                 wide, and the PR view is a page of its own, so they take the full
+                 width; the file tree only belongs to the diff. (A thread's file link
+                 in the PR view selects the file through the store, so it needs no
+                 tree mounted.) -->
+            <pr-view v-if="showPrView" />
+            <dashboard-view v-else-if="showDashboard" />
             <notifications-view v-else-if="showNotifications" />
             <!-- Opens without a repository too, to say it needs one. -->
             <settings-view v-else-if="ui.mainView === 'settings'" />
             <div v-else class="flex min-h-0 flex-1">
                 <file-tree-sidebar />
-                <pr-view v-if="showPrView" />
                 <!-- The diff area follows the View → Diff Layout setting: the single-file
                      pane, or the GitHub-style stacked all-files list. -->
-                <div v-else class="flex min-h-0 min-w-0 flex-1 flex-col">
+                <div class="flex min-h-0 min-w-0 flex-1 flex-col">
                     <review-lines-notice />
                     <diff-pane v-if="ui.diffLayout === 'single'" />
                     <stacked-diff-pane v-else />

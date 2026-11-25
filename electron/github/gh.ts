@@ -10,6 +10,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import type { PrReviewer, PrReviewerState, PrStack, PrStackEntry } from '../../src/shared/types';
 
 const execFileAsync = promisify(execFile);
 
@@ -46,10 +47,12 @@ export interface PrComment {
     kind: 'comment' | 'review';
     state?: string;
     // The GraphQL node id, used to edit the comment (empty for reviews, which this
-    // path does not edit). `canEdit` is gh's viewerDidAuthor: the signed-in account
-    // wrote it, so it may edit it.
+    // path does not edit). `canEdit` and `canDelete` are GitHub's viewerCanUpdate and
+    // viewerCanDelete, so a maintainer may also edit or delete someone else's comment.
+    // They fall back to viewerDidAuthor when that lookup fails.
     id: string;
     canEdit: boolean;
+    canDelete: boolean;
     // A review's own node id, which its line comments' threads point back to, so
     // the PR view can show them under the review.
     reviewId?: string;
@@ -108,6 +111,8 @@ export interface PullRequest {
     reviewDecision: string;
     // The CI checks on the head commit, for the Checks tab. Empty when none ran.
     checks: PrCheck[];
+    // The reviewers and where each stands, for the Reviewers tab.
+    reviewers?: PrReviewer[];
 }
 
 export interface PullRequestResult {
@@ -141,10 +146,11 @@ interface GhReview {
     submittedAt: string | null;
 }
 
-// A pending review request: a user (login) or a team (slug).
+// A pending review request: a user (login) or a team (slug and name).
 interface GhReviewRequest {
     login?: string;
     slug?: string;
+    name?: string;
 }
 
 interface GhLabel {
@@ -157,6 +163,8 @@ interface GhLabel {
 // Markdown body, and when it was posted. `isPending` marks a comment still in the
 // viewer's unsubmitted review (only its author can see those); `viewerDidAuthor`
 // says whether the viewer wrote it, so a pending one can be edited or deleted.
+// `canEdit`/`canDelete` are GitHub's viewerCanUpdate/viewerCanDelete, for the PR
+// conversation's Edit and Delete actions on a posted comment.
 export interface PrReviewComment {
     id: string;
     author: string;
@@ -164,6 +172,8 @@ export interface PrReviewComment {
     createdAt: string;
     isPending: boolean;
     viewerDidAuthor: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
 }
 
 // An inline (line-anchored) code review thread on the PR, shown as a marker in the
@@ -290,6 +300,7 @@ function buildComments(pr: GhPr): PrComment[] {
             kind: 'comment',
             id: c.id ?? '',
             canEdit: !!c.viewerDidAuthor,
+            canDelete: !!c.viewerDidAuthor,
         });
     }
 
@@ -309,6 +320,7 @@ function buildComments(pr: GhPr): PrComment[] {
             // they carry no id and are never marked editable.
             id: '',
             canEdit: false,
+            canDelete: false,
             reviewId: r.id ?? '',
         });
     }
@@ -340,6 +352,8 @@ export function settleReRequestedChanges(
     return fromGitHub ? 'REVIEW_REQUIRED' : '';
 }
 
+const OPINIONATED_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED']);
+
 // The effective review decision. gh fills `reviewDecision` only when the repo
 // requires reviews (branch protection); otherwise it is empty even after a
 // "changes requested" review. So when it is empty, derive the decision from the
@@ -354,8 +368,10 @@ function reviewDecisionOf(pr: GhPr): string {
     const latest = new Map<string, string>();
     for (const r of reviews) {
         const login = r.author?.login ?? '';
-        // A pending review is not submitted yet, so it does not change a stance.
-        if (login && r.state && r.state !== 'PENDING') {
+        // Only an approval, a change request, or a dismissal sets a stance. A pending
+        // review is not submitted yet, and a COMMENTED review (every reply in a thread
+        // is one) leaves an earlier change request standing, as on GitHub.
+        if (login && r.state && OPINIONATED_STATES.has(r.state)) {
             latest.set(login, r.state);
         }
     }
@@ -494,7 +510,58 @@ function toPullRequest(pr: GhPr): PullRequest {
         mergeStateStatus: pr.mergeStateStatus ?? '',
         reviewDecision: reviewDecisionOf(pr),
         checks: buildChecks(pr),
+        reviewers: buildReviewers(pr),
     };
+}
+
+// The PR's reviewers for the Reviewers tab: everyone who reviewed (the author's
+// own replies aside) in the order they first did, then the pending requests not
+// already listed. A pending request wins over an earlier review, since a
+// re-requested reviewer owes a new one. A user's verdict is their latest approval
+// or change request, as for the review decision (see reviewDecisionOf): a later
+// comment does not undo it, and a dismissal drops it back to COMMENTED.
+export function buildReviewers(pr: GhPr): PrReviewer[] {
+    const author = pr.author?.login ?? '';
+    const reviews = (pr.reviews ?? []).toSorted((a, b) =>
+        (a.submittedAt ?? '').localeCompare(b.submittedAt ?? '')
+    );
+    const states = new Map<string, PrReviewerState>();
+    for (const review of reviews) {
+        const login = review.author?.login ?? '';
+        if (!login || login === author || review.state === 'PENDING') {
+            continue;
+        }
+
+        if (review.state === 'APPROVED' || review.state === 'CHANGES_REQUESTED') {
+            states.set(login, review.state);
+        } else if (review.state === 'DISMISSED' || !states.has(login)) {
+            states.set(login, 'COMMENTED');
+        }
+    }
+
+    const reviewers: PrReviewer[] = [...states].map(([login, state]) => ({
+        login,
+        kind: 'user',
+        state,
+        previousState: null,
+    }));
+    for (const request of pr.reviewRequests ?? []) {
+        const kind = request.login ? 'user' : 'team';
+        const login = request.login || request.slug || request.name || '';
+        if (!login) {
+            continue;
+        }
+
+        const existing = reviewers.find((r) => r.kind === kind && r.login === login);
+        if (existing) {
+            existing.previousState = existing.state === 'PENDING' ? null : existing.state;
+            existing.state = 'PENDING';
+        } else {
+            reviewers.push({ login, kind, state: 'PENDING', previousState: null });
+        }
+    }
+
+    return reviewers;
 }
 
 // Map a gh failure onto a status the renderer can act on. A spawn ENOENT means gh
@@ -572,7 +639,203 @@ export async function getPullRequest(
         return { status: 'no-pr', pr: null };
     }
 
-    return { status: 'ok', pr: toPullRequest(raw) };
+    const pr = toPullRequest(raw);
+    await applyCommentPermissions(repoPath, pr, run);
+    return { status: 'ok', pr };
+}
+
+// `gh pr list --json comments` only says whether the viewer wrote a comment, not
+// whether they may edit or delete it (a maintainer may, on anyone's). Those come
+// from GraphQL by the PR's node id. Best effort: on any failure, or for a comment
+// past the first 100, the viewerDidAuthor fallback stays.
+const COMMENT_PERMISSIONS_QUERY =
+    'query($id:ID!){node(id:$id){... on PullRequest{comments(first:100){nodes{' +
+    'id viewerCanUpdate viewerCanDelete}}}}}';
+
+interface GhCommentPermission {
+    id?: string | null;
+    viewerCanUpdate?: boolean | null;
+    viewerCanDelete?: boolean | null;
+}
+
+async function applyCommentPermissions(
+    repoPath: string,
+    pr: PullRequest,
+    run: GhRunner
+): Promise<void> {
+    if (!pr.id || !pr.comments.some((c) => c.kind === 'comment')) {
+        return;
+    }
+
+    let nodes: GhCommentPermission[];
+    try {
+        const { stdout } = await run(
+            ['api', 'graphql', '-f', `query=${COMMENT_PERMISSIONS_QUERY}`, '-f', `id=${pr.id}`],
+            repoPath
+        );
+        const parsed = JSON.parse(stdout) as {
+            data?: { node?: { comments?: { nodes?: GhCommentPermission[] | null } | null } };
+        };
+        nodes = parsed.data?.node?.comments?.nodes ?? [];
+    } catch {
+        return;
+    }
+
+    const byId = new Map(nodes.filter((n) => n.id).map((n) => [n.id!, n]));
+    for (const comment of pr.comments) {
+        const permission = byId.get(comment.id);
+        if (comment.kind !== 'comment' || !permission) {
+            continue;
+        }
+
+        comment.canEdit = !!permission.viewerCanUpdate;
+        comment.canDelete = !!permission.viewerCanDelete;
+    }
+}
+
+// --- Stacked PRs ---
+//
+// A stack is a chain of PRs where each one's base branch is the head branch of the
+// PR below it, down to a trunk branch that is no PR's head. It is found from the
+// repository's open PRs alone, so it works however the stack was built (plain
+// branches, Graphite, ghstack): only the base/head pairing is trusted. Merged PRs
+// are fetched too, to spot a PR whose base PR has merged and that should now be
+// retargeted.
+
+interface GhStackPr {
+    number: number;
+    title: string;
+    url: string;
+    headRefName: string;
+    baseRefName: string;
+    isDraft?: boolean;
+    reviewDecision?: string | null;
+}
+
+const STACK_FIELDS = 'number,title,url,headRefName,baseRefName,isDraft,reviewDecision';
+
+// Build the stack around the PR whose head is `head` from the open and recently
+// merged PRs. Walks base branches down while they are open PRs' heads (a merged
+// PR's head ends the walk, as the base the bottom PR must be retargeted from),
+// then head branches up through every dependent PR, depth first. Null when the PR
+// is not in a stack (no PR below or above it). Pure, for testing.
+// Branch names that are trunks rather than a stacked PR's branch. A merged PR from
+// one of these (a "development into master" release PR, say) is not a base PR the
+// stack sits on, so it never joins the stack.
+const LONG_LIVED_BRANCHES = [
+    'main',
+    'master',
+    'develop',
+    'development',
+    'dev',
+    'staging',
+    'production',
+    'release',
+];
+
+// `longLived` adds the repo's own trunk names (its main and development branch from
+// the Settings page) to LONG_LIVED_BRANCHES.
+export function buildStack(
+    head: string,
+    open: GhStackPr[],
+    merged: GhStackPr[],
+    longLived: string[] = []
+): PrStack | null {
+    const current = open.find((pr) => pr.headRefName === head);
+    if (!current) {
+        return null;
+    }
+
+    const openByHead = new Map(open.map((pr) => [pr.headRefName, pr]));
+    const trunks = new Set([...LONG_LIVED_BRANCHES, ...longLived]);
+    const mergedByHead = new Map(
+        merged.filter((pr) => !trunks.has(pr.headRefName)).map((pr) => [pr.headRefName, pr])
+    );
+    const entry = (pr: GhStackPr, state: PrStackEntry['state']): PrStackEntry => ({
+        number: pr.number,
+        title: pr.title,
+        url: pr.url,
+        headRefName: pr.headRefName,
+        baseRefName: pr.baseRefName,
+        state,
+        isDraft: pr.isDraft ?? false,
+        reviewDecision: pr.reviewDecision ?? '',
+        depth: 0,
+        isCurrent: pr === current,
+        needsRetarget: state === 'OPEN' && mergedByHead.has(pr.baseRefName),
+    });
+
+    const below: PrStackEntry[] = [];
+    const seen = new Set<string>([current.headRefName]);
+    let cursor = current;
+    for (;;) {
+        const parent = openByHead.get(cursor.baseRefName);
+        if (parent && !seen.has(parent.headRefName)) {
+            seen.add(parent.headRefName);
+            below.unshift(entry(parent, 'OPEN'));
+            cursor = parent;
+            continue;
+        }
+
+        const mergedParent = mergedByHead.get(cursor.baseRefName);
+        if (mergedParent) {
+            below.unshift(entry(mergedParent, 'MERGED'));
+        }
+        break;
+    }
+
+    const above: PrStackEntry[] = [];
+    const climb = (pr: GhStackPr) => {
+        for (const child of open.filter((c) => c.baseRefName === pr.headRefName)) {
+            if (seen.has(child.headRefName)) {
+                continue;
+            }
+
+            seen.add(child.headRefName);
+            above.push(entry(child, 'OPEN'));
+            climb(child);
+        }
+    };
+    climb(current);
+
+    if (!below.length && !above.length) {
+        return null;
+    }
+
+    const entries = [...below, entry(current, 'OPEN'), ...above];
+    const depthByHead = new Map<string, number>();
+    for (const e of entries) {
+        e.depth = (depthByHead.get(e.baseRefName) ?? -1) + 1;
+        depthByHead.set(e.headRefName, e.depth);
+    }
+
+    return { trunk: entries[0]!.baseRefName, entries };
+}
+
+// The stack the PR with this head branch belongs to. Any gh failure reads as no
+// stack: the Stack tab is supplementary and simply does not show.
+export async function getPrStack(
+    repoPath: string,
+    head: string,
+    run: GhRunner = defaultRunner,
+    longLived: string[] = []
+): Promise<PrStack | null> {
+    if (!repoPath || !head || head === WORKING_TREE) {
+        return null;
+    }
+
+    const list = async (state: string, limit: number): Promise<GhStackPr[]> => {
+        const args = ['pr', 'list', '--state', state, '--limit', String(limit)];
+        const { stdout } = await run([...args, '--json', STACK_FIELDS], repoPath);
+        return JSON.parse(stdout) as GhStackPr[];
+    };
+
+    try {
+        const [open, merged] = await Promise.all([list('open', 200), list('merged', 50)]);
+        return buildStack(head, open, merged, longLived);
+    } catch {
+        return null;
+    }
 }
 
 // --- Inline review threads (GraphQL) ---
@@ -605,12 +868,15 @@ interface GhReviewComment {
     createdAt: string | null;
     state?: string | null;
     viewerDidAuthor?: boolean | null;
+    viewerCanUpdate?: boolean | null;
+    viewerCanDelete?: boolean | null;
 }
 
 const REVIEW_THREADS_QUERY =
     'query($id:ID!){node(id:$id){... on PullRequest{reviewThreads(first:100){nodes{' +
     'id path line originalLine startLine originalStartLine diffSide isResolved isOutdated ' +
     'comments(first:100){nodes{id author{login} body createdAt state viewerDidAuthor ' +
+    'viewerCanUpdate viewerCanDelete ' +
     'diffHunk pullRequestReview{id}}}}}}}}';
 
 function toReviewThread(node: GhReviewThread): PrReviewThread {
@@ -622,6 +888,8 @@ function toReviewThread(node: GhReviewThread): PrReviewThread {
         createdAt: c.createdAt ?? '',
         isPending: c.state === 'PENDING',
         viewerDidAuthor: c.viewerDidAuthor ?? false,
+        canEdit: c.viewerCanUpdate ?? false,
+        canDelete: c.viewerCanDelete ?? false,
     }));
     return {
         id: node.id ?? '',

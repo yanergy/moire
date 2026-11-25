@@ -326,15 +326,72 @@ describe('comparison store', () => {
         expect(store.allCollapsed).toBe(true);
     });
 
-    it('filters the tree and force-opens matching folders even when collapsed', () => {
+    it('filters the tree and opens folders the user never collapsed', () => {
         const store = seededStore();
-        store.collapseAll();
         store.setTreeFilter('parsers');
 
         const shown = files(store.treeNodes);
         expect(shown.length).toBeGreaterThan(0);
         expect(shown.every((n) => n.path.includes('parsers'))).toBe(true);
         expect(store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts')).toBe(true);
+    });
+
+    it('keeps a folder collapsed before searching collapsed during the search', () => {
+        const store = seededStore();
+        store.toggleDir('electron');
+        store.setTreeFilter('parsers');
+
+        // The search folds `electron` and `git` into one row, which stays closed.
+        const row = dirs(store.treeNodes).find((n) => n.path === 'electron/git');
+        expect(row?.open).toBe(false);
+        expect(store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts')).toBe(false);
+    });
+
+    it('collapses and expands folders while searching', () => {
+        const store = seededStore();
+        store.setTreeFilter('parsers');
+
+        store.toggleDir('electron/git');
+        expect(dirs(store.treeNodes).find((n) => n.path === 'electron/git')?.open).toBe(false);
+
+        store.toggleDir('electron/git');
+        expect(dirs(store.treeNodes).find((n) => n.path === 'electron/git')?.open).toBe(true);
+        expect(store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts')).toBe(true);
+    });
+
+    it('reopens a folded row collapsed through its top folder in one click', () => {
+        const store = seededStore();
+        store.toggleDir('electron');
+        store.setTreeFilter('parsers');
+
+        store.toggleDir('electron/git');
+        expect(dirs(store.treeNodes).find((n) => n.path === 'electron/git')?.open).toBe(true);
+    });
+
+    it('keeps the collapse state set during a search after clearing it', () => {
+        const store = seededStore();
+        store.setTreeFilter('parsers');
+        store.toggleDir('electron/git');
+        store.setTreeFilter('');
+
+        expect(store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts')).toBe(false);
+    });
+
+    it('collapses and expands all shown folders while searching', () => {
+        const store = seededStore();
+        store.toggleDir('src');
+        store.setTreeFilter('parsers');
+
+        store.collapseAll();
+        expect(store.allCollapsed).toBe(true);
+        expect(files(store.treeNodes)).toHaveLength(0);
+
+        store.expandAll();
+        expect(files(store.treeNodes).length).toBeGreaterThan(0);
+
+        // A folder the search hid keeps the state the user gave it.
+        store.setTreeFilter('');
+        expect(dirs(store.treeNodes).find((n) => n.path === 'src')?.open).toBe(false);
     });
 
     describe('repository opening', () => {
@@ -1212,6 +1269,22 @@ describe('comparison store', () => {
             expect(store.hasPullRequest).toBe(true);
         });
 
+        it("loads the PR's stack by its head branch, and clears it without a PR", async () => {
+            const { store } = prStore({ status: 'ok', pr: PR });
+            const stack = { trunk: 'main', entries: [] };
+            const getPrStack = vi.fn<(head: string) => Promise<unknown>>().mockResolvedValue(stack);
+            Object.assign(window.api!, { getPrStack });
+
+            await store.loadPullRequest();
+            await flushPromises();
+            expect(getPrStack).toHaveBeenCalledWith(PR.headRefName);
+            expect(store.prStack).toEqual(stack);
+
+            store.head = 'WORKING TREE';
+            await store.loadPullRequest();
+            expect(store.prStack).toBeNull();
+        });
+
         it('loads the PR review threads by node id and narrows them per file', async () => {
             const threads = [
                 {
@@ -1231,6 +1304,8 @@ describe('comparison store', () => {
                             createdAt: '',
                             isPending: false,
                             viewerDidAuthor: false,
+                            canEdit: false,
+                            canDelete: false,
                         },
                     ],
                 },
@@ -1251,6 +1326,8 @@ describe('comparison store', () => {
                             createdAt: '',
                             isPending: false,
                             viewerDidAuthor: false,
+                            canEdit: false,
+                            canDelete: false,
                         },
                     ],
                 },
@@ -1313,6 +1390,8 @@ describe('comparison store', () => {
                                 createdAt: '',
                                 isPending: false,
                                 viewerDidAuthor: false,
+                                canEdit: false,
+                                canDelete: false,
                             },
                         ],
                     },
@@ -1611,6 +1690,8 @@ describe('comparison store', () => {
                         createdAt: '',
                         isPending: true,
                         viewerDidAuthor: true,
+                        canEdit: true,
+                        canDelete: true,
                     },
                     {
                         id: 'RC_2',
@@ -1619,6 +1700,8 @@ describe('comparison store', () => {
                         createdAt: '',
                         isPending: true,
                         viewerDidAuthor: true,
+                        canEdit: true,
+                        canDelete: true,
                     },
                 ],
             };
@@ -1867,6 +1950,8 @@ describe('comparison store', () => {
                             createdAt: '',
                             isPending: false,
                             viewerDidAuthor: false,
+                            canEdit: false,
+                            canDelete: false,
                         },
                     ],
                 },
@@ -2084,6 +2169,65 @@ describe('comparison store', () => {
                 'src/b.ts',
                 expect.anything()
             );
+        });
+    });
+
+    describe('git add mode', () => {
+        afterEach(() => {
+            delete window.api;
+        });
+
+        function stageStore(staged: string[]) {
+            const api = {
+                getStagedPaths: vi.fn<() => Promise<string[]>>().mockResolvedValue(staged),
+                stagePaths: vi.fn<(paths: string[]) => Promise<void>>().mockResolvedValue(),
+                unstagePaths: vi.fn<(paths: string[]) => Promise<void>>().mockResolvedValue(),
+            };
+            window.api = api as unknown as Window['api'];
+            const store = seededStore();
+            store.repoPath = '/repo';
+            store.head = 'WORKING TREE';
+            return { store, api };
+        }
+
+        it('is only available against the working tree', () => {
+            const { store } = stageStore([]);
+            store.setTreeMode('stage');
+            expect(store.treeStageMode).toBe(true);
+
+            store.head = 'feature';
+            expect(store.canStage).toBe(false);
+            expect(store.treeStageMode).toBe(false);
+        });
+
+        it('stages a whole folder, then unstages it once all of it is staged', async () => {
+            const { store, api } = stageStore([]);
+            const under = store.files
+                .filter((f) => f.path.startsWith('electron/'))
+                .map((f) => f.path);
+
+            store.toggleDirStaged('electron');
+            await flushPromises();
+            expect(api.stagePaths).toHaveBeenCalledWith(under);
+
+            api.getStagedPaths.mockResolvedValue(under);
+            await store.loadStagedPaths();
+            expect(store.dirStagedCount('electron')).toEqual({
+                staged: under.length,
+                total: under.length,
+            });
+
+            store.toggleDirStaged('electron');
+            await flushPromises();
+            expect(api.unstagePaths).toHaveBeenCalledWith(under);
+        });
+
+        it('reports a failed stage', async () => {
+            const { store, api } = stageStore([]);
+            api.stagePaths.mockRejectedValue(new Error('index.lock'));
+            store.toggleStaged('shared/types.ts');
+            await flushPromises();
+            expect(store.stageError).toBe('Could not stage the files.');
         });
     });
 });

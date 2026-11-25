@@ -150,6 +150,22 @@ describe('settings: theme and window state', () => {
     });
 });
 
+describe('settings: diff display', () => {
+    it('defaults to merge-base and split, and persists each change', async () => {
+        const { getDiffDisplay, setCompareMode, setViewMode } = await loadSettings();
+        expect(await getDiffDisplay()).toEqual({ compareMode: 'merge-base', viewMode: 'split' });
+
+        await setCompareMode('direct');
+        await setViewMode('unified');
+        expect(await getDiffDisplay()).toEqual({ compareMode: 'direct', viewMode: 'unified' });
+    });
+
+    it('falls back to the defaults for an unknown stored value', async () => {
+        const { getDiffDisplay } = await loadSettings({ compareMode: 'x', viewMode: 3 });
+        expect(await getDiffDisplay()).toEqual({ compareMode: 'merge-base', viewMode: 'split' });
+    });
+});
+
 describe('settings: repository branches', () => {
     it('is empty until set, keeps each repo its own, and is dropped with the recent entry', async () => {
         const { getRepoBranches, setRepoBranches, addRecentRepo, removeRecentRepo } =

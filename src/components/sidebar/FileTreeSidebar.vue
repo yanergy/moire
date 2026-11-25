@@ -8,6 +8,7 @@ import {
     MessageSquare,
     Minus,
     TriangleAlert,
+    X,
 } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { RecycleScroller } from 'vue-virtual-scroller';
@@ -19,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
 import FileFilterMenu from '@/components/sidebar/FileFilterMenu.vue';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { celebrate } from '@/lib/celebrate';
@@ -237,11 +239,70 @@ function checkboxClass(node: FileNode): string {
 // A folder's checkbox is checked when every file under it is viewed, empty when
 // none are, and indeterminate in between.
 function dirCheckState(node: DirNode): boolean | 'indeterminate' {
+    if (comparison.treeStageMode) {
+        const { staged, total } = comparison.dirStagedCount(node.path);
+        if (total > 0 && staged === total) {
+            return true;
+        }
+
+        return staged > 0 ? 'indeterminate' : false;
+    }
+
     if (node.allSeen) {
         return true;
     }
 
     return node.seen > 0 ? 'indeterminate' : false;
+}
+
+// The folder's done count: staged files in git add mode, viewed ones otherwise.
+function dirCount(node: DirNode): number {
+    return comparison.treeStageMode ? comparison.dirStagedCount(node.path).staged : node.seen;
+}
+
+// The tree's per-file control: "Check off" marks files viewed, "Git add" stages
+// them. Offered only while the head is the working tree (see canStage).
+const TREE_MODE_OPTIONS: { value: 'viewed' | 'stage'; label: string }[] = [
+    { value: 'viewed', label: 'Check off' },
+    { value: 'stage', label: 'Git add' },
+];
+
+function fileChecked(node: FileNode): boolean {
+    return comparison.treeStageMode ? comparison.isStaged(node.path) : node.viewed;
+}
+
+function fileCheckLabel(node: FileNode): string {
+    if (comparison.treeStageMode) {
+        return comparison.isStaged(node.path) ? 'Unstage file' : 'Stage file';
+    }
+
+    return node.viewed ? 'Marked viewed' : 'Mark as viewed';
+}
+
+function toggleFileCheck(node: FileNode) {
+    if (comparison.treeStageMode) {
+        comparison.toggleStaged(node.path);
+        return;
+    }
+
+    comparison.toggleViewed(node.path);
+}
+
+function toggleDirCheck(node: DirNode) {
+    if (comparison.treeStageMode) {
+        comparison.toggleDirStaged(node.path);
+        return;
+    }
+
+    comparison.toggleDirViewed(node.path);
+}
+
+function dirCheckLabel(node: DirNode): string {
+    if (comparison.treeStageMode) {
+        return dirCheckState(node) === true ? 'Unstage folder' : 'Stage folder';
+    }
+
+    return node.allSeen ? 'Mark folder as not viewed' : 'Mark folder as viewed';
 }
 
 // Keyboard activation for the tree rows. The rows wrap an interactive Checkbox,
@@ -307,16 +368,59 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                     class="flex shrink-0 items-center gap-1.5 text-[11px] whitespace-nowrap text-moire-muted"
                 >
                     <span class="size-2 rounded-sm bg-moire-viewed-edge" />
-                    {{ comparison.viewedCount }} viewed
+                    <template v-if="comparison.treeStageMode">
+                        {{ comparison.stagedCount }} staged
+                    </template>
+                    <template v-else>{{ comparison.viewedCount }} viewed</template>
                 </span>
             </div>
 
-            <div class="px-3 pb-2.5">
+            <!-- The search box, with a clear button inside its right edge while it has
+                 text (padded so the text never runs under the button). -->
+            <div class="relative px-3 pb-2.5">
                 <Input
                     v-model="comparison.treeFilter"
                     placeholder="Search files…"
-                    class="h-8 border-moire-border bg-transparent font-mono text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                    class="h-8 border-moire-border bg-transparent pr-8 font-mono text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                    @keydown.escape="comparison.setTreeFilter('')"
                 />
+                <Tooltip v-if="comparison.treeFilter">
+                    <TooltipTrigger as-child>
+                        <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            data-slot="clear-search"
+                            aria-label="Clear search"
+                            class="absolute top-1 right-4 size-6 text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
+                            @click="comparison.setTreeFilter('')"
+                        >
+                            <X :size="14" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Clear search</TooltipContent>
+                </Tooltip>
+            </div>
+
+            <!-- Check files off as viewed, or stage them with git add. Only against the
+                 working tree: two committed refs have nothing to stage. -->
+            <div
+                v-if="comparison.canStage"
+                data-slot="tree-mode"
+                class="flex flex-col gap-1.5 px-3 pb-2.5 text-[11px]"
+            >
+                <segmented-toggle
+                    block
+                    bordered
+                    :options="TREE_MODE_OPTIONS"
+                    :model-value="comparison.treeMode"
+                    @update:model-value="comparison.setTreeMode"
+                />
+                <span
+                    v-if="comparison.treeStageMode && comparison.stageError"
+                    class="min-w-0 truncate text-moire-status-d"
+                >
+                    {{ comparison.stageError }}
+                </span>
             </div>
 
             <!-- Everything filtered out: a hint plus a reset, rather than a blank tree. -->
@@ -375,23 +479,23 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                             </span>
                             <span
                                 class="font-mono text-[10px]"
-                                :class="node.allSeen ? 'text-moire-viewed-fg' : 'text-moire-faint'"
+                                :class="
+                                    dirCheckState(node) === true
+                                        ? 'text-moire-viewed-fg'
+                                        : 'text-moire-faint'
+                                "
                             >
-                                {{ node.seen }}/{{ node.total }}
+                                {{ dirCount(node) }}/{{ node.total }}
                             </span>
                             <span @click.stop>
                                 <Checkbox
                                     :model-value="dirCheckState(node)"
-                                    :aria-label="
-                                        node.allSeen
-                                            ? 'Mark folder as not viewed'
-                                            : 'Mark folder as viewed'
-                                    "
+                                    :aria-label="dirCheckLabel(node)"
                                     class="size-[15px] rounded-sm shadow-none"
                                     :class="RESTING_CHECKBOX_CLASS"
-                                    @update:model-value="comparison.toggleDirViewed(node.path)"
+                                    @update:model-value="toggleDirCheck(node)"
                                 >
-                                    <Minus v-if="!node.allSeen" :size="11" />
+                                    <Minus v-if="dirCheckState(node) !== true" :size="11" />
                                     <Check v-else :size="11" />
                                 </Checkbox>
                             </span>
@@ -457,11 +561,11 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                             </span>
                             <span @click.stop>
                                 <Checkbox
-                                    :model-value="node.viewed"
-                                    :aria-label="node.viewed ? 'Marked viewed' : 'Mark as viewed'"
+                                    :model-value="fileChecked(node)"
+                                    :aria-label="fileCheckLabel(node)"
                                     class="size-[15px] rounded-sm shadow-none"
                                     :class="checkboxClass(node)"
-                                    @update:model-value="comparison.toggleViewed(node.path)"
+                                    @update:model-value="toggleFileCheck(node)"
                                 >
                                     <Check :size="11" />
                                 </Checkbox>

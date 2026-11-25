@@ -4,6 +4,8 @@ import { useRefreshCooldown } from '@/composables/useRefreshCooldown';
 import {
     ArrowLeft,
     ChevronDown,
+    ChevronRight,
+    Layers,
     LoaderCircle,
     RefreshCw,
     Settings,
@@ -13,7 +15,8 @@ import {
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
-import { dashboardNotice } from '@/lib/dashboard';
+import { dashboardNotice, stackProgress } from '@/lib/dashboard';
+import { groupByStack } from '@/lib/pr-stacks';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
 import { Button } from '@/components/ui/button';
@@ -43,6 +46,53 @@ const ui = useUiStore();
 const selected = computed(
     () => dashboard.categories.find((category) => category.key === ui.dashboardCard) ?? null
 );
+
+// The card's PRs with each stack gathered into one foldable group, in stack order
+// (see lib/pr-stacks), so PRs that build on each other read together.
+const selectedItems = computed(() =>
+    groupByStack(selected.value?.prs ?? [], dashboard.prStackPositions, dashboard.openPrsByNumber)
+);
+
+// The stack progress ring's radius: a circumference of 100, so arc lengths are
+// percentages (as in PrReviewers' ring).
+const RING_RADIUS = 100 / (2 * Math.PI);
+
+// A stack group's progress: how many are ready, and the ring's arcs (one per part,
+// laid end to end, lengths as percentages), which the tooltip lists too.
+function stackProgressOf(item: { members: { pr: DashboardPr }[] }) {
+    const parts = stackProgress(item.members.map((m) => m.pr));
+    const total = item.members.length;
+    let offset = 0;
+    const arcs = parts.map((part) => {
+        const length = (part.count / total) * 100;
+        const arc = { ...part, length, offset };
+        offset += length;
+        return arc;
+    });
+    return {
+        ready: parts.find((part) => part.key === 'ready')?.count ?? 0,
+        arcs,
+    };
+}
+
+// The rows show their author's avatar only when the author filter can list
+// several people (everyone, or two or more chosen); with one author it repeats.
+const showAvatars = computed(() => {
+    const authors = dashboard.authors;
+    return authors === 'all' || (Array.isArray(authors) && authors.length > 1);
+});
+
+// Stack groups start open; a click on a group's header folds it.
+const foldedStacks = ref<Set<number>>(new Set());
+function toggleStack(stackId: number) {
+    const next = new Set(foldedStacks.value);
+    if (next.has(stackId)) {
+        next.delete(stackId);
+    } else {
+        next.add(stackId);
+    }
+    foldedStacks.value = next;
+}
 
 // One clock for every "3h ago", ticking so the ages stay current while open.
 const now = ref(Date.now());
@@ -261,14 +311,170 @@ const refreshTooltip = computed(() => {
                         v-if="selected.prs.length"
                         class="divide-y divide-moire-border overflow-hidden rounded-lg border border-moire-border"
                     >
-                        <dashboard-pr-row
-                            v-for="pr in selected.prs"
-                            :key="pr.id"
-                            :pr="pr"
-                            :now="now"
-                            @open="dashboard.openPr"
-                            @open-in-browser="openInBrowser"
-                        />
+                        <template
+                            v-for="item in selectedItems"
+                            :key="item.kind === 'pr' ? item.pr.id : `stack-${item.stackId}`"
+                        >
+                            <dashboard-pr-row
+                                v-if="item.kind === 'pr'"
+                                :pr="item.pr"
+                                :now="now"
+                                :show-avatar="showAvatars"
+                                @open="dashboard.openPr"
+                                @open-in-browser="openInBrowser"
+                            />
+                            <!-- A stack: a header that folds it, then its PRs in stack
+                                 order, indented behind a line. -->
+                            <div v-else data-slot="stack-group">
+                                <!-- Styled like a PR row: the stack's first PR as its
+                                     title (so stacks on the same trunk tell apart), the
+                                     trunk and PR count below. -->
+                                <button
+                                    type="button"
+                                    data-slot="stack-group-header"
+                                    class="flex w-full cursor-pointer items-center gap-3 px-3.5 py-4 text-left transition-colors hover:bg-moire-hover"
+                                    :aria-expanded="!foldedStacks.has(item.stackId)"
+                                    @click="toggleStack(item.stackId)"
+                                >
+                                    <ChevronRight
+                                        v-if="foldedStacks.has(item.stackId)"
+                                        :size="14"
+                                        class="shrink-0 text-moire-faint"
+                                    />
+                                    <ChevronDown
+                                        v-else
+                                        :size="14"
+                                        class="shrink-0 text-moire-faint"
+                                    />
+                                    <Layers :size="18" class="shrink-0 text-moire-muted" />
+                                    <div class="min-w-0 flex-1">
+                                        <div
+                                            data-slot="stack-group-title"
+                                            class="truncate text-[13px] font-medium text-moire-fg"
+                                        >
+                                            {{ item.title || `Stack on ${item.trunk}` }}
+                                        </div>
+                                        <div
+                                            class="flex min-w-0 items-center gap-1.5 text-[12px] text-moire-faint"
+                                        >
+                                            <span class="shrink-0">
+                                                Stack on
+                                                <span class="font-mono text-[11px]">{{
+                                                    item.trunk
+                                                }}</span>
+                                            </span>
+                                            <span class="text-moire-faint">·</span>
+                                            <span class="shrink-0">
+                                                {{ item.members.length }}
+                                                {{ item.members.length === 1 ? 'PR' : 'PRs' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <!-- How far the stack is: a ring like the Reviewers tab's,
+                                         one arc per state (green ready to merge, yellow
+                                         changes requested, red failing checks, grey waiting
+                                         on review), the counts in its tooltip. -->
+                                    <Tooltip>
+                                        <TooltipTrigger as-child>
+                                            <span
+                                                data-slot="stack-group-progress"
+                                                class="flex shrink-0 items-center gap-2 text-[12px] text-moire-muted"
+                                            >
+                                                {{ stackProgressOf(item).ready }}/{{
+                                                    item.members.length
+                                                }}
+                                                ready to merge
+                                                <svg
+                                                    viewBox="0 0 36 36"
+                                                    class="size-5 -rotate-90"
+                                                    aria-hidden="true"
+                                                >
+                                                    <circle
+                                                        v-for="arc in stackProgressOf(item).arcs"
+                                                        :key="arc.key"
+                                                        :data-part="arc.key"
+                                                        cx="18"
+                                                        cy="18"
+                                                        :r="RING_RADIUS"
+                                                        fill="none"
+                                                        stroke-width="5"
+                                                        pathLength="100"
+                                                        :class="arc.cls"
+                                                        :stroke-dasharray="`${arc.length} 100`"
+                                                        :stroke-dashoffset="-arc.offset"
+                                                    />
+                                                </svg>
+                                            </span>
+                                        </TooltipTrigger>
+                                        <!-- One line per state, so several read as a list. -->
+                                        <TooltipContent data-slot="stack-group-progress-summary">
+                                            <div class="flex flex-col gap-0.5">
+                                                <span
+                                                    v-for="arc in stackProgressOf(item).arcs"
+                                                    :key="arc.key"
+                                                >
+                                                    {{ arc.count }} {{ arc.label }}
+                                                </span>
+                                            </div>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </button>
+                                <!-- The stack's PRs as in the PR view's Stack tab, without
+                                     the cards: a numbered circle per PR, centered on its
+                                     row and joined to the next by a line. -->
+                                <ol
+                                    v-if="!foldedStacks.has(item.stackId)"
+                                    class="border-t border-moire-border"
+                                >
+                                    <li
+                                        v-for="({ pr, inList }, index) in item.members"
+                                        :key="pr.id"
+                                        data-slot="stack-group-pr"
+                                        :data-filtered-out="!inList || undefined"
+                                        class="flex"
+                                    >
+                                        <div
+                                            class="relative flex w-12 shrink-0 items-center justify-center"
+                                        >
+                                            <span
+                                                v-if="index > 0"
+                                                class="absolute top-0 bottom-[calc(50%+18px)] left-1/2 w-px -translate-x-1/2 bg-moire-border"
+                                            />
+                                            <span
+                                                v-if="index < item.members.length - 1"
+                                                class="absolute top-[calc(50%+18px)] bottom-0 left-1/2 w-px -translate-x-1/2 bg-moire-border"
+                                            />
+                                            <span
+                                                data-slot="stack-group-position"
+                                                class="relative flex size-6 items-center justify-center rounded-full border border-moire-border bg-moire-app font-mono text-[11px] text-moire-muted"
+                                            >
+                                                {{
+                                                    dashboard.prStackPositions.get(pr.number)?.index
+                                                }}
+                                            </span>
+                                        </div>
+                                        <!-- A PR of the stack this card's filter leaves out is
+                                             shown dimmed, so the stack reads whole. -->
+                                        <div
+                                            class="min-w-0 flex-1"
+                                            :class="{
+                                                'border-t border-moire-border': index > 0,
+                                                'opacity-45 grayscale': !inList,
+                                            }"
+                                        >
+                                            <dashboard-pr-row
+                                                :pr="pr"
+                                                :now="now"
+                                                :show-avatar="showAvatars"
+                                                in-stack
+                                                @open="dashboard.openPr"
+                                                @open-in-browser="openInBrowser"
+                                            />
+                                        </div>
+                                    </li>
+                                </ol>
+                            </div>
+                        </template>
                     </div>
                     <div v-else class="py-10 text-[13px] text-moire-muted">
                         No pull requests here.

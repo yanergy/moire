@@ -18,6 +18,8 @@ const props = defineProps<{
     // background (such as a Settings panel), where it would otherwise not read
     // as a control. The inactive options then also light up on hover.
     bordered?: boolean;
+    // Fills the width of its container, the options sharing it equally.
+    block?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -29,7 +31,11 @@ const emit = defineEmits<{
 const BASE_ITEM_CLASS =
     'h-auto min-w-0 rounded px-2.5 py-1 font-medium text-moire-muted hover:bg-transparent hover:text-moire-fg data-[state=on]:bg-moire-seg-active data-[state=on]:text-moire-fg data-[state=on]:shadow-[var(--moire-seg-shadow)]';
 const itemClass = computed(() =>
-    props.bordered ? `${BASE_ITEM_CLASS} data-[state=off]:hover:bg-moire-hover` : BASE_ITEM_CLASS
+    [
+        BASE_ITEM_CLASS,
+        props.bordered ? 'data-[state=off]:hover:bg-moire-hover' : '',
+        props.block ? 'flex-1' : '',
+    ].join(' ')
 );
 
 // A single-select toggle group emits an empty string when the active item is
@@ -49,8 +55,8 @@ function onChange(value: unknown) {
         type="single"
         :spacing="1"
         :model-value="modelValue"
-        class="gap-0.5 rounded-md bg-moire-chrome p-[3px]"
-        :class="bordered ? 'border border-moire-border' : ''"
+        class="gap-1 rounded-md bg-moire-chrome p-1"
+        :class="[bordered ? 'border border-moire-border' : '', block ? 'flex w-full' : '']"
         @update:model-value="onChange"
     >
         <template v-for="option in options" :key="option.value">
@@ -60,7 +66,7 @@ function onChange(value: unknown) {
                  active styling. -->
             <Tooltip v-if="option.tooltip">
                 <TooltipTrigger as-child>
-                    <span class="inline-flex">
+                    <span class="inline-flex" :class="block ? 'flex-1' : ''">
                         <ToggleGroupItem :value="option.value" :class="itemClass">
                             {{ option.label }}
                         </ToggleGroupItem>

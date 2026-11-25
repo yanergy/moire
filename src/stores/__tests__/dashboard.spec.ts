@@ -651,3 +651,26 @@ describe('dashboard store', () => {
         });
     });
 });
+
+describe('prStackPositions', () => {
+    beforeEach(() => setActivePinia(createPinia()));
+
+    it("places the open PRs in their stacks, across all of the snapshot's lists", () => {
+        const store = useDashboardStore();
+        store.applyState(
+            state({
+                snapshot: snapshot({
+                    mine: [pr({ id: 'A', number: 1, headRefName: 'a', baseRefName: 'main' })],
+                    open: [
+                        pr({ id: 'B', number: 2, headRefName: 'b', baseRefName: 'a' }),
+                        pr({ id: 'X', number: 9, headRefName: 'x', baseRefName: 'main' }),
+                    ],
+                }),
+            })
+        );
+
+        expect(store.prStackPositions.get(1)).toMatchObject({ index: 1, total: 2 });
+        expect(store.prStackPositions.get(2)).toMatchObject({ index: 2, total: 2 });
+        expect(store.prStackPositions.has(9)).toBe(false);
+    });
+});

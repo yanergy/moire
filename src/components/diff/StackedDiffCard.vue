@@ -10,6 +10,9 @@ import BinaryFileNotice from '@/components/diff/BinaryFileNotice.vue';
 import DiffViewer from '@/components/diff/DiffViewer.vue';
 import ImagePreview from '@/components/diff/ImagePreview.vue';
 import LargeFileGate from '@/components/diff/LargeFileGate.vue';
+import MarkdownPreview from '@/components/diff/MarkdownPreview.vue';
+import SegmentedToggle from '@/components/controls/SegmentedToggle.vue';
+import { isMarkdownFile, MARKDOWN_VIEW_OPTIONS, type MarkdownView } from '@/lib/markdown';
 
 const props = defineProps<{
     file: ChangedFile;
@@ -67,6 +70,22 @@ const showImage = computed(() => Boolean(pair.value?.image));
 const showBinary = computed(() => Boolean(pair.value?.binary) && !pair.value?.image);
 
 const viewed = computed(() => comparison.isViewed(props.file.path));
+
+// The source/rendered choice for a Markdown file, shared with the single file pane
+// through the ui store; undefined for any other file.
+const markdownView = computed<MarkdownView | undefined>(() => {
+    if (!isMarkdownFile(props.file.path)) {
+        return undefined;
+    }
+
+    return ui.isMarkdownRendered(props.file.path) ? 'rendered' : 'source';
+});
+
+function setMarkdownView(view: MarkdownView) {
+    if (view !== markdownView.value) {
+        ui.toggleMarkdownRendered(props.file.path);
+    }
+}
 
 // Auto-collapse a file to its header when marked viewed (GitHub behavior); unmarking
 // expands it again. A manual header click toggles within that.
@@ -152,6 +171,13 @@ function openInEditor() {
                 {{ file.deletions ? '−' + file.deletions : '' }}
             </span>
             <div class="flex-1" />
+            <segmented-toggle
+                v-if="markdownView"
+                class="shrink-0 font-sans text-[11px]"
+                :options="MARKDOWN_VIEW_OPTIONS"
+                :model-value="markdownView"
+                @update:model-value="setMarkdownView"
+            />
             <button
                 type="button"
                 class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors"
@@ -194,6 +220,11 @@ function openInEditor() {
                     :new-image="pair.newImage ?? null"
                 />
                 <binary-file-notice v-else-if="showBinary" class="h-44" />
+                <markdown-preview
+                    v-else-if="markdownView === 'rendered'"
+                    :old-source="pair.oldContent"
+                    :new-source="pair.newContent"
+                />
                 <diff-viewer
                     v-else
                     fit-content
