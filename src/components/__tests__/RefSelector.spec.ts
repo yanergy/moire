@@ -183,7 +183,7 @@ describe('RefSelector', () => {
 
         const input = commandInput() as HTMLInputElement;
         input.value = 'feat';
-        input.dispatchEvent(new Event('input'));
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         await flushPromises();
 
         // The query matches the full ref (feat/monaco-spike), shown as its leaf.
@@ -208,15 +208,15 @@ describe('RefSelector', () => {
     it('collapses and expands a group when its header is clicked', async () => {
         const wrapper = mountSide('base');
         await open(wrapper);
-        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('feat/monaco-spike')).toBeTruthy();
 
         groupHeader('feat')?.click();
         await flushPromises();
-        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(true);
+        expect(commandItem('feat/monaco-spike')).toBeFalsy();
 
         groupHeader('feat')?.click();
         await flushPromises();
-        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('feat/monaco-spike')).toBeTruthy();
     });
 
     it('keeps a collapsed group searchable, revealing matches on query', async () => {
@@ -225,34 +225,34 @@ describe('RefSelector', () => {
 
         groupHeader('feat')?.click();
         await flushPromises();
-        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(true);
+        expect(commandItem('feat/monaco-spike')).toBeFalsy();
 
         const input = commandInput() as HTMLInputElement;
         input.value = 'monaco';
         input.dispatchEvent(new Event('input', { bubbles: true }));
         await flushPromises();
 
-        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('feat/monaco-spike')).toBeTruthy();
     });
 
     it('collapses and expands every group with the toggle-all button', async () => {
         const wrapper = mountSide('base');
         await open(wrapper);
 
-        expect(commandItem('develop')?.classList.contains('hidden')).toBe(false);
-        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('develop')).toBeTruthy();
+        expect(commandItem('feat/monaco-spike')).toBeTruthy();
 
         toggleAllButton()?.click();
         await flushPromises();
-        expect(commandItem('develop')?.classList.contains('hidden')).toBe(true);
-        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(true);
+        expect(commandItem('develop')).toBeFalsy();
+        expect(commandItem('feat/monaco-spike')).toBeFalsy();
         // The recommendation has no collapsible header, so it stays visible.
-        expect(commandItem('origin/main')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('origin/main')).toBeTruthy();
 
         toggleAllButton()?.click();
         await flushPromises();
-        expect(commandItem('develop')?.classList.contains('hidden')).toBe(false);
-        expect(commandItem('feat/monaco-spike')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('develop')).toBeTruthy();
+        expect(commandItem('feat/monaco-spike')).toBeTruthy();
     });
 
     it('stars a branch into a Favorites group below the recommendations', async () => {
@@ -311,6 +311,46 @@ describe('RefSelector', () => {
         expect(itemTitles()).not.toContain('feature/gone');
     });
 
+    it('mounts a large branch list a page at a time, searching all of it', async () => {
+        const store = useComparisonStore();
+        const wrapper = mountSide('base');
+        store.branches = [
+            { name: 'main', kind: 'local', isCurrent: true },
+            ...Array.from({ length: 500 }, (_, i) => ({
+                name: `origin/team/branch-${i}`,
+                kind: 'remote' as const,
+            })),
+        ];
+        await open(wrapper);
+
+        const rows = () => document.querySelectorAll('[data-slot="command-item"]').length;
+        const shownBefore = rows();
+        expect(shownBefore).toBeLessThan(80);
+        expect(commandItem('origin/team/branch-499')).toBeFalsy();
+
+        const list = document.querySelector('[data-slot="command-list"]') as HTMLElement;
+        list.dispatchEvent(new Event('scroll'));
+        await flushPromises();
+        expect(rows()).toBeGreaterThan(shownBefore);
+
+        const input = commandInput() as HTMLInputElement;
+        input.value = 'branch-499';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+        expect(itemTitles()).toEqual(['origin/team/branch-499']);
+    });
+
+    it('says so when no ref matches the search', async () => {
+        const wrapper = mountSide('base');
+        await open(wrapper);
+
+        const input = commandInput() as HTMLInputElement;
+        input.value = 'no-such-ref';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+        expect(document.querySelector('[data-slot="ref-empty"]')).not.toBeNull();
+    });
+
     it('keeps the favorites visible when every group is collapsed', async () => {
         const store = useComparisonStore();
         store.favoriteBranches = ['develop'];
@@ -319,6 +359,6 @@ describe('RefSelector', () => {
 
         toggleAllButton()?.click();
         await flushPromises();
-        expect(commandItem('develop')?.classList.contains('hidden')).toBe(false);
+        expect(commandItem('develop')).toBeTruthy();
     });
 });
