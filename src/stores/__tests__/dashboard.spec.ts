@@ -369,7 +369,7 @@ describe('dashboard store', () => {
         expect(store.isAuthorSelected('bob')).toBe(false);
     });
 
-    it('drops drafts from every card, and the drafts card, when Show drafts is off', () => {
+    it('drops drafts from every other card when Show drafts is off, keeping the Drafts card', () => {
         const store = useDashboardStore();
         store.applyState(
             state({
@@ -382,8 +382,11 @@ describe('dashboard store', () => {
             })
         );
 
-        expect(store.categories.map((c) => c.key)).not.toContain('drafts');
-        expect(store.categories.every((c) => c.prs.length === 0)).toBe(true);
+        const drafts = store.categories.find((c) => c.key === 'drafts');
+        expect(drafts?.prs.map((p) => p.id)).toEqual(['C']);
+        expect(
+            store.categories.filter((c) => c.key !== 'drafts').every((c) => c.prs.length === 0)
+        ).toBe(true);
         expect(store.openCount).toBe(0);
     });
 

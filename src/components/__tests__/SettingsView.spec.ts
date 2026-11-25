@@ -145,7 +145,7 @@ describe('SettingsView', () => {
         openRepo();
         const wrapper = await mountView();
 
-        await checkbox(wrapper, 'Include draft PRs').trigger('click');
+        await checkbox(wrapper, 'Count draft PRs in the cards').trigger('click');
         expect(api.setDashboardShowDrafts).toHaveBeenCalledWith(false);
 
         await checkbox(wrapper, 'Stale').trigger('click');
@@ -229,7 +229,7 @@ describe('SettingsView', () => {
             const wrapper = await mountView();
             expect(status(wrapper)).toBe('');
 
-            await checkbox(wrapper, 'Include draft PRs').trigger('click');
+            await checkbox(wrapper, 'Count draft PRs in the cards').trigger('click');
             expect(status(wrapper)).toBe('Saving…');
 
             await vi.advanceTimersByTimeAsync(400);
@@ -242,7 +242,7 @@ describe('SettingsView', () => {
             openRepo();
             const wrapper = await mountView();
 
-            await checkbox(wrapper, 'Include draft PRs').trigger('click');
+            await checkbox(wrapper, 'Count draft PRs in the cards').trigger('click');
             await vi.advanceTimersByTimeAsync(400);
             expect(status(wrapper)).toBe("Couldn't save the last change");
         });

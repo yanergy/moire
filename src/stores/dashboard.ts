@@ -404,15 +404,17 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // The open PRs the cards count, by the author filter. The viewer's own come from
     // their own search, which covers more of them than the repository wide list
     // (capped at 100) and exists in snapshots saved before that list did.
-    const scoped = computed(() => {
+    // Drafts included whatever "Show drafts" says, for the Drafts card.
+    const authorScoped = computed(() => {
         const filter = authors.value;
         if (filter === 'me') {
-            return visible((snapshot.value?.mine ?? []).filter((pr) => pr.state === 'OPEN'));
+            return (snapshot.value?.mine ?? []).filter((pr) => pr.state === 'OPEN');
         }
         const selected = selectedAuthors(filter, me.value);
         const open = snapshot.value?.open ?? [];
-        return visible(selected ? open.filter((pr) => selected.has(pr.author)) : open);
+        return selected ? open.filter((pr) => selected.has(pr.author)) : open;
     });
+    const scoped = computed(() => visible(authorScoped.value));
 
     // The merged PRs in the period, by the author filter. Measured against the
     // fetch time, like Stale. A merged PR is never a draft.
@@ -525,16 +527,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
             prs: merged.value,
         });
 
-        // The card goes away with "Show drafts" off.
-        if (showDrafts.value) {
-            list.push({
-                key: 'drafts',
-                label: 'Drafts',
-                caption: 'Not ready for review',
-                dotClass: 'bg-moire-pr-draft',
-                prs: scoped.value.filter((pr) => pr.isDraft),
-            });
-        }
+        // The Drafts card lists the drafts whatever "Show drafts" says (that only
+        // decides whether they count in the other cards); like every card, it is
+        // hidden from the Settings page.
+        list.push({
+            key: 'drafts',
+            label: 'Drafts',
+            caption: 'Not ready for review',
+            dotClass: 'bg-moire-pr-draft',
+            prs: authorScoped.value.filter((pr) => pr.isDraft),
+        });
 
         return list;
     });
