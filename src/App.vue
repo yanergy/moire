@@ -56,12 +56,25 @@ function onMouseUp(event: MouseEvent) {
 onMounted(async () => {
     window.addEventListener('mouseup', onMouseUp, true);
     window.addEventListener('click', onCopyCodeClick);
+    const api = window.api;
+    // The compare mode and split/unified view chosen on the Settings page. Read
+    // before reopening the repo, so its first change set uses the stored mode. A
+    // failed read keeps the defaults.
+    try {
+        const display = await api?.getDiffDisplay?.();
+        if (display) {
+            comparison.compareMode = display.compareMode;
+            ui.viewMode = display.viewMode;
+        }
+    } catch {
+        // Keep the defaults.
+    }
+
     // Reopen the most recently opened repo on launch.
     comparison.restoreLastRepo();
     // Theme is owned by the main process (nativeTheme). Pull the current resolved
     // state, then stay in sync as the View → Theme selection or the OS theme
     // changes. Guard for jsdom/tests where window.api is absent.
-    const api = window.api;
     if (!api) {
         return;
     }

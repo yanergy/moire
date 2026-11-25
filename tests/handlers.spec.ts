@@ -62,6 +62,9 @@ const state = vi.hoisted(() => ({
     detectEditors:
         vi.fn<() => Promise<{ id: string; label: string; kind: string; target: string }[]>>(),
     openWithEditor: vi.fn<(editor: unknown, p: string) => Promise<string>>(),
+    getDiffDisplay: vi.fn<() => Promise<unknown>>(),
+    setCompareMode: vi.fn<(mode: string) => Promise<void>>(),
+    setViewMode: vi.fn<(mode: string) => Promise<void>>(),
     menuTemplate: [] as { label?: string; enabled?: boolean; click?: () => void }[],
     menuPopup: vi.fn<(options: unknown) => void>(),
     writeText: vi.fn<(text: string) => void>(),
@@ -127,6 +130,9 @@ vi.mock('../electron/settings', () => ({
     getCodeStyle: state.getCodeStyle,
     getEditorPreference: state.getEditorPreference,
     getDiffLayout: state.getDiffLayout,
+    getDiffDisplay: state.getDiffDisplay,
+    setCompareMode: state.setCompareMode,
+    setViewMode: state.setViewMode,
 }));
 vi.mock('../electron/theme', () => ({ currentThemeState: state.currentThemeState }));
 vi.mock('../electron/logger', () => ({ logError: state.logError }));
@@ -524,6 +530,30 @@ describe('registerIpcHandlers', () => {
         });
         expect(state.openPath).not.toHaveBeenCalled();
         expect(state.openWithEditor).not.toHaveBeenCalled();
+    });
+
+    describe('diff display', () => {
+        it('reads and saves the compare mode and the layout', async () => {
+            state.getDiffDisplay.mockResolvedValue({ compareMode: 'direct', viewMode: 'split' });
+            expect(await invoke('diff-display:get')).toEqual({
+                compareMode: 'direct',
+                viewMode: 'split',
+            });
+
+            await invoke('diff-display:set-compare-mode', 'direct');
+            expect(state.setCompareMode).toHaveBeenCalledWith('direct');
+            await invoke('diff-display:set-view-mode', 'unified');
+            expect(state.setViewMode).toHaveBeenCalledWith('unified');
+        });
+
+        it('rejects unknown values', async () => {
+            await expect(invoke('diff-display:set-compare-mode', 'sideways')).rejects.toThrow(
+                'expects merge-base or direct'
+            );
+            await expect(invoke('diff-display:set-view-mode', 'stacked')).rejects.toThrow(
+                'expects split or unified'
+            );
+        });
     });
 
     describe('clipboard:write-text', () => {

@@ -1483,9 +1483,17 @@ export const useComparisonStore = defineStore('comparison', () => {
         disappearedBranches.value = [];
     }
 
-    function setCompareMode(mode: CompareMode) {
+    // Switch the compare mode (Settings page), reload the change set, and persist
+    // the choice. Resolves to whether the save landed (the Settings page reports it).
+    async function setCompareMode(mode: CompareMode): Promise<boolean> {
         compareMode.value = mode;
         void loadChangedFiles();
+        try {
+            await window.api?.setCompareModePreference(mode);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     function swap() {
