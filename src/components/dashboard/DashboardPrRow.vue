@@ -29,10 +29,10 @@ const age = computed(() => {
 </script>
 
 <template>
-    <div class="group flex items-center gap-3 pr-3 hover:bg-moire-hover">
+    <div class="group flex items-center gap-3.5 pr-4 hover:bg-moire-hover">
         <button
             type="button"
-            class="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-3 text-left"
+            class="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 pl-4 text-left"
             @click="$emit('open', pr)"
         >
             <span class="size-2.5 shrink-0 rounded-full" :class="prDotClass(pr)" />
@@ -42,7 +42,7 @@ const age = computed(() => {
                     <span class="font-medium">{{ pr.title }}</span>
                     <span class="text-moire-faint"> #{{ pr.number }}</span>
                 </div>
-                <div class="flex min-w-0 items-center gap-1.5 pt-0.5 text-[12px] text-moire-muted">
+                <div class="flex min-w-0 items-center gap-1.5 pt-1 text-[12px] text-moire-muted">
                     <span class="shrink-0">{{ pr.author }}</span>
                     <span class="text-moire-faint">·</span>
                     <span class="truncate font-mono text-[11px]"

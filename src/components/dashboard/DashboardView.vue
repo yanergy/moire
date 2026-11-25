@@ -286,7 +286,7 @@ const updated = computed(() =>
                                 <button
                                     type="button"
                                     data-slot="stack-group-header"
-                                    class="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-moire-hover"
+                                    class="flex w-full cursor-pointer items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-moire-hover"
                                     :aria-expanded="!foldedStacks.has(item.stackId)"
                                     @click="toggleStack(item.stackId)"
                                 >
@@ -309,7 +309,7 @@ const updated = computed(() =>
                                             {{ item.title || `Stack on ${item.trunk}` }}
                                         </div>
                                         <div
-                                            class="flex min-w-0 items-center gap-1.5 pt-0.5 text-[12px] text-moire-muted"
+                                            class="flex min-w-0 items-center gap-1.5 pt-1 text-[12px] text-moire-muted"
                                         >
                                             <span class="shrink-0">
                                                 Stack on
