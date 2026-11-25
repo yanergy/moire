@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { useRefreshCooldown } from '@/composables/useRefreshCooldown';
 import {
     ArrowLeft,
@@ -55,18 +55,39 @@ const selected = computed(
 const query = ref('');
 const searching = computed(() => query.value.trim() !== '');
 
-// Cmd+F (Ctrl+F elsewhere) focuses the search box and selects its text, as find
-// does in the diff viewer.
+// The search bar sits under the header, full width, and is hidden until the
+// header's search button (or Cmd+F, Ctrl+F elsewhere) opens it. Closing it clears
+// the search.
+const searchOpen = ref(false);
 const searchBox = useTemplateRef<HTMLElement>('searchBox');
 const FIND_SHORTCUT = navigator.userAgent.includes('Mac') ? '⌘F' : 'Ctrl+F';
-function focusSearch(event: KeyboardEvent) {
+
+async function openSearch() {
+    searchOpen.value = true;
+    await nextTick();
+    const input = searchBox.value?.querySelector('input');
+    input?.focus();
+    input?.select();
+}
+
+function closeSearch() {
+    query.value = '';
+    searchOpen.value = false;
+}
+
+function toggleSearch() {
+    if (searchOpen.value) {
+        closeSearch();
+        return;
+    }
+    void openSearch();
+}
+
+function onFindKey(event: KeyboardEvent) {
     if (event.defaultPrevented || event.altKey || event.shiftKey) return;
     if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'f') return;
-    const input = searchBox.value?.querySelector('input');
-    if (!input) return;
     event.preventDefault();
-    input.focus();
-    input.select();
+    void openSearch();
 }
 
 // Every PR in the snapshot once (a PR can sit in several of its lists).
@@ -152,7 +173,7 @@ const now = ref(Date.now());
 let clock: ReturnType<typeof setInterval> | undefined;
 
 onMounted(() => {
-    window.addEventListener('keydown', focusSearch);
+    window.addEventListener('keydown', onFindKey);
     void dashboard.load();
     clock = setInterval(() => {
         now.value = Date.now();
@@ -161,7 +182,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     clearInterval(clock);
-    window.removeEventListener('keydown', focusSearch);
+    window.removeEventListener('keydown', onFindKey);
 });
 
 // Another repository opened while the dashboard is showing: reload it (the page
@@ -271,37 +292,6 @@ const refreshTooltip = computed(() => {
                     <div class="flex-1" />
 
                     <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
-                    <!-- Search by title, number, branch or author, with a clear button
-                         inside its right edge while it has text. -->
-                    <div ref="searchBox" class="relative w-56 shrink-0">
-                        <Search
-                            :size="14"
-                            class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-moire-faint"
-                        />
-                        <Input
-                            v-model="query"
-                            :placeholder="`Search PRs (${FIND_SHORTCUT})`"
-                            aria-label="Search pull requests"
-                            data-slot="dashboard-search"
-                            class="h-7 border-moire-border bg-transparent pr-7 pl-8 text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
-                            @keydown.escape="query = ''"
-                        />
-                        <Tooltip v-if="query">
-                            <TooltipTrigger as-child>
-                                <Button
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    aria-label="Clear search"
-                                    data-slot="dashboard-search-clear"
-                                    class="absolute top-0.5 right-0.5 size-6 text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
-                                    @click="query = ''"
-                                >
-                                    <X :size="14" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Clear search</TooltipContent>
-                        </Tooltip>
-                    </div>
                     <!-- Whose PRs the cards count: the signed in account by default,
                          any mix of authors, or everyone. The other dashboard
                          settings are on the Settings page. -->
@@ -364,6 +354,24 @@ const refreshTooltip = computed(() => {
                         <TooltipTrigger as-child>
                             <Button
                                 variant="outline"
+                                size="sm"
+                                class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg aria-pressed:bg-moire-hover aria-pressed:text-moire-fg"
+                                :aria-pressed="searchOpen"
+                                data-slot="dashboard-search-toggle"
+                                @click="toggleSearch"
+                            >
+                                <Search :size="16" />
+                                Search
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{{
+                            searchOpen ? 'Close search' : `Open search (${FIND_SHORTCUT})`
+                        }}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <Button
+                                variant="outline"
                                 size="icon-sm"
                                 class="size-7 shrink-0 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                                 aria-label="Refresh"
@@ -378,6 +386,38 @@ const refreshTooltip = computed(() => {
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent>{{ refreshTooltip }}</TooltipContent>
+                    </Tooltip>
+                </div>
+
+                <!-- Search by title, number, branch or author, with a clear button
+                     inside its right edge while it has text. -->
+                <div v-if="searchOpen" ref="searchBox" class="relative pt-5">
+                    <Search
+                        :size="16"
+                        class="pointer-events-none absolute bottom-2.5 left-3 text-moire-faint"
+                    />
+                    <Input
+                        v-model="query"
+                        placeholder="Search by title, number, branch or author"
+                        aria-label="Search pull requests"
+                        data-slot="dashboard-search"
+                        class="h-9 border-moire-border bg-transparent pr-9 pl-9 text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                        @keydown.escape="closeSearch"
+                    />
+                    <Tooltip v-if="query">
+                        <TooltipTrigger as-child>
+                            <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                aria-label="Clear search"
+                                data-slot="dashboard-search-clear"
+                                class="absolute right-1.5 bottom-1.5 size-6 text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
+                                @click="query = ''"
+                            >
+                                <X :size="14" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Clear search</TooltipContent>
                     </Tooltip>
                 </div>
 

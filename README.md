@@ -263,10 +263,11 @@ last branch range are remembered per repository.
   or on GitHub when it comes from a fork or its branches are not available locally. Every row also
   has an **Open in browser** button, and shows the PR's labels in their GitHub colors (the first
   three, plus a count of the rest).
-- A search box in the dashboard header (focused with Cmd+F, or Ctrl+F) finds a PR by title,
-  number, branch or author. On a card it narrows the card's list; on the overview it lists the
-  matching PRs from every list in place of the cards. A stack with a matching PR still shows whole,
-  its other PRs dimmed.
+- A **Search** button in the dashboard header (or Cmd+F, Ctrl+F elsewhere) opens a full width search
+  bar under it that finds a PR by title, number, branch or author. On a card it narrows the card's
+  list; on the overview it lists the matching PRs from every list in place of the cards. A stack
+  with a matching PR still shows whole, its other PRs dimmed. Escape, or the button again, clears
+  and closes it.
 - A card with unread notifications about its PRs shows an "N new" pill.
 - A **Users** menu picks whose PRs the cards count (you by default, any mix of authors, or all of
   them). Whether drafts count (for the dashboard only; notifications have their own toggle), which

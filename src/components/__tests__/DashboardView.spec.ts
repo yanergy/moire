@@ -201,11 +201,18 @@ describe('DashboardView', () => {
                 ],
             });
 
+        // Opens the search bar from the header's toggle and returns its input.
+        async function openSearch(wrapper: VueWrapper) {
+            await wrapper.get('[data-slot="dashboard-search-toggle"]').trigger('click');
+            await flushPromises();
+            return wrapper.get('input[data-slot="dashboard-search"]');
+        }
+
         it("narrows a card's PRs, saying so when none match", async () => {
             const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
             await wrapper.getComponent(DashboardCard).trigger('click');
 
-            const search = wrapper.get('input[data-slot="dashboard-search"]');
+            const search = await openSearch(wrapper);
             await search.setValue('#9');
             expect(
                 wrapper.findAllComponents(DashboardPrRow).map((row) => row.props('pr').id)
@@ -219,7 +226,7 @@ describe('DashboardView', () => {
         it('lists the matching PRs from every list on the overview, until cleared', async () => {
             const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
 
-            const search = wrapper.get('input[data-slot="dashboard-search"]');
+            const search = await openSearch(wrapper);
             await search.setValue('billing');
             expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(0);
             expect(
@@ -229,14 +236,46 @@ describe('DashboardView', () => {
             await wrapper.get('[data-slot="dashboard-search-clear"]').trigger('click');
             expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
 
+            // Escape clears the search and closes the bar.
             await search.setValue('ann');
             await search.trigger('keydown', { key: 'Escape' });
             expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
+            expect(wrapper.find('[data-slot="dashboard-search"]').exists()).toBe(false);
         });
 
-        it('focuses the search box and selects its text on Cmd/Ctrl+F', async () => {
+        it('hides the search bar until the toggle opens it, and clears it on close', async () => {
             const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
+            const toggle = wrapper.get('[data-slot="dashboard-search-toggle"]');
+            expect(wrapper.find('[data-slot="dashboard-search"]').exists()).toBe(false);
+            expect(toggle.attributes('aria-pressed')).toBe('false');
+
+            const search = await openSearch(wrapper);
+            expect(toggle.attributes('aria-pressed')).toBe('true');
+            expect(document.activeElement).toBe(search.element);
+            await search.setValue('billing');
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(0);
+
+            await toggle.trigger('click');
+            expect(wrapper.find('[data-slot="dashboard-search"]').exists()).toBe(false);
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
+
+            // Reopened, it starts empty.
+            const reopened = await openSearch(wrapper);
+            expect((reopened.element as HTMLInputElement).value).toBe('');
+        });
+
+        it('opens and focuses the search bar, selecting its text, on Cmd/Ctrl+F', async () => {
+            const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
+            const open = new KeyboardEvent('keydown', {
+                key: 'f',
+                cancelable: true,
+                metaKey: true,
+            });
+            window.dispatchEvent(open);
+            await flushPromises();
+            expect(open.defaultPrevented).toBe(true);
             const search = wrapper.get('input[data-slot="dashboard-search"]');
+            expect(document.activeElement).toBe(search.element);
             await search.setValue('ann');
             const input = search.element as HTMLInputElement;
 
@@ -244,6 +283,7 @@ describe('DashboardView', () => {
                 input.blur();
                 const event = new KeyboardEvent('keydown', { key: 'f', cancelable: true, ...mod });
                 window.dispatchEvent(event);
+                await flushPromises();
                 expect(event.defaultPrevented).toBe(true);
                 expect(document.activeElement).toBe(input);
                 expect([input.selectionStart, input.selectionEnd]).toEqual([0, 3]);
@@ -283,7 +323,7 @@ describe('DashboardView', () => {
             );
             await wrapper.getComponent(DashboardCard).trigger('click');
 
-            await wrapper.get('input[data-slot="dashboard-search"]').setValue('top');
+            await (await openSearch(wrapper)).setValue('top');
             const rows = wrapper.findAll('[data-slot="stack-group-pr"]');
             expect(rows.map((r) => r.attributes('data-filtered-out'))).toEqual(['true', undefined]);
         });
