@@ -30,6 +30,19 @@ describe('DashboardPrRow', () => {
         expect(withAvatar.findComponent({ name: 'UserAvatar' }).exists()).toBe(true);
     });
 
+    it('shows only the head branch in a stack, with both branches on hover', () => {
+        const pr = dashboardPr();
+        const plain = mount(DashboardPrRow, { props: { pr, now: NOW } });
+        expect(plain.find('[data-slot="pr-branches"]').text()).toBe(
+            `${pr.headRefName} → ${pr.baseRefName}`
+        );
+
+        const stacked = mount(DashboardPrRow, { props: { pr, now: NOW, inStack: true } });
+        const branches = stacked.find('[data-slot="pr-branches"]');
+        expect(branches.text()).toBe(pr.headRefName);
+        expect(branches.attributes('title')).toBe(`${pr.headRefName} → ${pr.baseRefName}`);
+    });
+
     it('ages a closed PR by when it closed', () => {
         const pr = dashboardPr({ state: 'CLOSED', closedAt: '2026-10-25T12:00:00Z' });
         const wrapper = mount(DashboardPrRow, { props: { pr, now: NOW } });

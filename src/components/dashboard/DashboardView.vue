@@ -450,6 +450,7 @@ const updated = computed(() =>
                                                 :pr="pr"
                                                 :now="now"
                                                 :show-avatar="showAvatars"
+                                                in-stack
                                                 @open="dashboard.openPr"
                                                 @open-in-browser="openInBrowser"
                                             />

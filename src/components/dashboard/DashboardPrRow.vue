@@ -14,7 +14,14 @@ import UserAvatar from '@/components/pr/UserAvatar.vue';
 // Moiré; the always visible "Open in browser" button at its right end opens it on
 // GitHub instead. `now` (epoch ms) is passed in so every row ages against the same
 // ticking clock.
-const props = defineProps<{ pr: DashboardPr; now: number; showAvatar?: boolean }>();
+// inStack: the row sits in a stack group, where its base branch is the head of the
+// row above, so only its own branch is shown (the full pair stays in the tooltip).
+const props = defineProps<{
+    pr: DashboardPr;
+    now: number;
+    showAvatar?: boolean;
+    inStack?: boolean;
+}>();
 defineEmits<{ open: [pr: DashboardPr]; openInBrowser: [pr: DashboardPr] }>();
 
 const ci = computed(() => ciVisual(props.pr));
@@ -46,8 +53,12 @@ const age = computed(() => {
                 <div class="flex min-w-0 items-center gap-1.5 text-[12px] text-moire-faint">
                     <span class="shrink-0">{{ pr.author }}</span>
                     <span class="text-moire-faint">·</span>
-                    <span class="truncate font-mono text-[11px]"
-                        >{{ pr.headRefName }} → {{ pr.baseRefName }}</span
+                    <span
+                        data-slot="pr-branches"
+                        class="truncate font-mono text-[11px]"
+                        :title="`${pr.headRefName} → ${pr.baseRefName}`"
+                        >{{ pr.headRefName
+                        }}<template v-if="!inStack"> → {{ pr.baseRefName }}</template></span
                     >
                     <span class="text-moire-faint">·</span>
                     <span class="shrink-0">{{ age }}</span>
