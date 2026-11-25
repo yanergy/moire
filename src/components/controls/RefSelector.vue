@@ -16,7 +16,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     Command,
-    CommandEmpty,
     CommandGroup,
     CommandInput,
     CommandItem,
@@ -38,6 +37,13 @@ const search = ref('');
 const searching = computed(() => search.value.trim().length > 0);
 const collapsed = ref<Record<string, boolean>>({});
 
+// How many rows of the collapsible groups are mounted. A repository can have
+// thousands of branches, and mounting a row (with its star and tooltip) for each
+// made the picker lag on open, so rows mount a page at a time as the list
+// scrolls toward its end.
+const ROW_PAGE = 50;
+const rowLimit = ref(ROW_PAGE);
+
 // Reset the transient search when the popover closes, so a stale query does not
 // keep groups force-expanded the next time it opens.
 watch(open, (isOpen) => {
@@ -45,6 +51,18 @@ watch(open, (isOpen) => {
         search.value = '';
     }
 });
+
+watch([open, search], () => {
+    rowLimit.value = ROW_PAGE;
+});
+
+// Mount the next page once the list is scrolled near its end.
+function onListScroll(event: Event) {
+    const list = event.target as HTMLElement;
+    if (list.scrollTop + list.clientHeight >= list.scrollHeight - 80) {
+        rowLimit.value += ROW_PAGE;
+    }
+}
 
 function onSearch(event: Event) {
     search.value = (event.target as HTMLInputElement).value;
@@ -125,8 +143,7 @@ function groupByPrefix(list: BranchInfo[], topLabel: string): RefGroup[] {
     return groups;
 }
 
-// The full, unfiltered set of refs. Command does the text filtering itself as
-// the user types, so this component only owns the grouping.
+// The full, unfiltered set of refs, grouped. `shownGroups` filters it.
 const groups = computed<RefGroup[]>(() => {
     const result: RefGroup[] = [];
 
@@ -166,6 +183,47 @@ const groups = computed<RefGroup[]>(() => {
     result.push(...groupByPrefix(rest(comparison.localBranches), 'Local branches'));
     result.push(...groupByPrefix(rest(comparison.remoteBranches), 'Remotes'));
 
+    return result;
+});
+
+// Whether a ref matches the search: its full name or its note (such as
+// "default"), ignoring case.
+function matches(item: RefItem, query: string): boolean {
+    return `${item.name} ${item.meta}`.toLowerCase().includes(query);
+}
+
+interface ShownGroup extends RefGroup {
+    // The group's matches (all items while not searching), for its count.
+    total: number;
+    // The rows mounted now: none for a collapsed group, and the collapsible
+    // groups share the row budget.
+    rows: RefItem[];
+}
+
+// The groups as rendered. The filtering happens here rather than in Command, so
+// the unmounted rows (past the budget, or in a collapsed group) are searched too.
+// A group with no match while searching is left out.
+const shownGroups = computed<ShownGroup[]>(() => {
+    const query = search.value.trim().toLowerCase();
+    let budget = rowLimit.value;
+    const result: ShownGroup[] = [];
+    for (const group of groups.value) {
+        const items = query ? group.items.filter((item) => matches(item, query)) : group.items;
+        if (query && items.length === 0) {
+            continue;
+        }
+        if (group.pinned) {
+            result.push({ ...group, total: items.length, rows: items });
+            continue;
+        }
+        if (budget <= 0) {
+            break;
+        }
+
+        const rows = isCollapsed(group.label) ? [] : items.slice(0, budget);
+        budget -= rows.length;
+        result.push({ ...group, total: items.length, rows });
+    }
     return result;
 });
 
@@ -263,7 +321,7 @@ function showContextMenu() {
             class="w-[306px] overflow-hidden border-moire-border bg-moire-pop p-0"
             :style="{ boxShadow: 'var(--moire-pop-shadow)' }"
         >
-            <Command class="bg-transparent" @input="onSearch">
+            <Command class="bg-transparent" :should-filter="false" @input="onSearch">
                 <CommandInput placeholder="Search refs…" class="font-mono text-moire-fg" />
                 <div class="flex items-center justify-between px-2.5 py-1">
                     <span class="text-[10px] font-medium tracking-wider text-moire-faint uppercase">
@@ -289,10 +347,16 @@ function showContextMenu() {
                         }}</TooltipContent>
                     </Tooltip>
                 </div>
-                <CommandList class="max-h-[322px]">
-                    <CommandEmpty class="text-moire-faint">No refs found.</CommandEmpty>
+                <CommandList class="max-h-[322px]" @scroll="onListScroll">
+                    <div
+                        v-if="shownGroups.length === 0"
+                        data-slot="ref-empty"
+                        class="py-6 text-center text-sm text-moire-faint"
+                    >
+                        No refs found.
+                    </div>
                     <CommandGroup
-                        v-for="group in groups"
+                        v-for="group in shownGroups"
                         :key="group.label"
                         :heading="group.heading"
                         class="**:data-[slot=command-group-heading]:text-moire-faint"
@@ -314,16 +378,14 @@ function showContextMenu() {
                                 group.label
                             }}</span>
                             <span class="text-[10px] tabular-nums text-moire-faint">{{
-                                group.items.length
+                                group.total
                             }}</span>
                         </button>
                         <CommandItem
-                            v-for="item in group.items"
+                            v-for="item in group.rows"
                             :key="item.name"
                             :value="item.name"
-                            :disabled="isCollapsed(group.label)"
                             class="group/ref gap-2 font-mono text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
-                            :class="{ hidden: isCollapsed(group.label) }"
                             @select="pick(item.name)"
                         >
                             <Check
@@ -333,9 +395,6 @@ function showContextMenu() {
                                 "
                             />
                             <span class="flex-1 truncate" :title="item.name">{{ item.label }}</span>
-                            <!-- Full path, hidden but kept in the text so Command
-                                 searches match the prefix as well as the leaf. -->
-                            <span class="sr-only">{{ item.name }}</span>
                             <!-- The note gives way to the star wherever the star shows,
                                  since the star sits on top of it. -->
                             <span

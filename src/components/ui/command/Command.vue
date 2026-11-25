@@ -3,18 +3,28 @@ import type { ListboxRootEmits, ListboxRootProps } from 'reka-ui';
 import type { HTMLAttributes } from 'vue';
 import { reactiveOmit } from '@vueuse/core';
 import { ListboxRoot, useFilter, useForwardPropsEmits } from 'reka-ui';
-import { reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { cn } from '@/lib/utils';
 import { provideCommandContext } from '.';
 
-const props = withDefaults(defineProps<ListboxRootProps & { class?: HTMLAttributes['class'] }>(), {
-    modelValue: '',
-    highlightOnHover: true,
-});
+// `shouldFilter` (added here, after cmdk's prop of the same name): false leaves the
+// filtering to the consumer, which renders only its matches. Every mounted item
+// and group then shows, and CommandEmpty never does. A long list (the branch
+// picker) needs this to mount only part of its rows, since the built-in filter
+// can only see the items that are mounted.
+const props = withDefaults(
+    defineProps<ListboxRootProps & { class?: HTMLAttributes['class']; shouldFilter?: boolean }>(),
+    {
+        modelValue: '',
+        highlightOnHover: true,
+        shouldFilter: true,
+    }
+);
 
 const emits = defineEmits<ListboxRootEmits>();
 
-const delegatedProps = reactiveOmit(props, 'class');
+const delegatedProps = reactiveOmit(props, 'class', 'shouldFilter');
+const shouldFilter = computed(() => props.shouldFilter);
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
 
@@ -35,7 +45,7 @@ const filterState = reactive({
 });
 
 function filterItems() {
-    if (!filterState.search) {
+    if (!filterState.search || !shouldFilter.value) {
         filterState.filtered.count = allItems.value.size;
         // Do nothing, each item will know to show itself because search is empty
         return;
@@ -75,6 +85,7 @@ watch(
 provideCommandContext({
     allItems,
     allGroups,
+    shouldFilter,
     filterState,
 });
 </script>
