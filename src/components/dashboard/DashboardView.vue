@@ -8,18 +8,21 @@ import {
     Layers,
     LoaderCircle,
     RefreshCw,
+    Search,
     Settings,
     TriangleAlert,
     Users,
+    X,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
-import { dashboardNotice, stackProgress } from '@/lib/dashboard';
+import { dashboardNotice, prMatchesQuery, stackProgress } from '@/lib/dashboard';
 import { groupByStack } from '@/lib/pr-stacks';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -47,10 +50,46 @@ const selected = computed(
     () => dashboard.categories.find((category) => category.key === ui.dashboardCard) ?? null
 );
 
-// The card's PRs with each stack gathered into one foldable group, in stack order
-// (see lib/pr-stacks), so PRs that build on each other read together.
+// The search box's text. On a card it narrows the card's PRs; on the overview it
+// lists every PR the dashboard has that matches, in place of the cards.
+const query = ref('');
+const searching = computed(() => query.value.trim() !== '');
+
+// Every PR in the snapshot once (a PR can sit in several of its lists).
+const allPrs = computed(() => {
+    const snap = dashboard.snapshot;
+    const byId = new Map<string, DashboardPr>();
+    for (const pr of [
+        ...(snap?.toReview ?? []),
+        ...(snap?.mine ?? []),
+        ...(snap?.open ?? []),
+        ...(snap?.merged ?? []),
+    ]) {
+        if (!byId.has(pr.id)) {
+            byId.set(pr.id, pr);
+        }
+    }
+    return [...byId.values()];
+});
+
+// The PRs listed: the card's, or on the overview the search results. Null shows
+// the overview's cards.
+const listedPrs = computed<DashboardPr[] | null>(() => {
+    if (selected.value) {
+        return selected.value.prs.filter((pr) => prMatchesQuery(pr, query.value));
+    }
+    if (!searching.value) {
+        return null;
+    }
+
+    return allPrs.value.filter((pr) => prMatchesQuery(pr, query.value));
+});
+
+// The listed PRs with each stack gathered into one foldable group, in stack order
+// (see lib/pr-stacks), so PRs that build on each other read together. A stack
+// member the search leaves out is shown dimmed, as for a card's own filter.
 const selectedItems = computed(() =>
-    groupByStack(selected.value?.prs ?? [], dashboard.prStackPositions, dashboard.openPrsByNumber)
+    groupByStack(listedPrs.value ?? [], dashboard.prStackPositions, dashboard.openPrsByNumber)
 );
 
 // The stack progress ring's radius: a circumference of 100, so arc lengths are
@@ -214,6 +253,37 @@ const refreshTooltip = computed(() => {
                     <div class="flex-1" />
 
                     <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
+                    <!-- Search by title, number, branch or author, with a clear button
+                         inside its right edge while it has text. -->
+                    <div class="relative w-56 shrink-0">
+                        <Search
+                            :size="14"
+                            class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-moire-faint"
+                        />
+                        <Input
+                            v-model="query"
+                            placeholder="Search pull requests…"
+                            aria-label="Search pull requests"
+                            data-slot="dashboard-search"
+                            class="h-7 border-moire-border bg-transparent pr-7 pl-8 text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                            @keydown.escape="query = ''"
+                        />
+                        <Tooltip v-if="query">
+                            <TooltipTrigger as-child>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    aria-label="Clear search"
+                                    data-slot="dashboard-search-clear"
+                                    class="absolute top-0.5 right-0.5 size-6 text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
+                                    @click="query = ''"
+                                >
+                                    <X :size="14" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Clear search</TooltipContent>
+                        </Tooltip>
+                    </div>
                     <!-- Whose PRs the cards count: the signed in account by default,
                          any mix of authors, or everyone. The other dashboard
                          settings are on the Settings page. -->
@@ -305,10 +375,10 @@ const refreshTooltip = computed(() => {
                     Loading pull requests…
                 </div>
 
-                <!-- One card's PRs. -->
-                <div v-else-if="selected" class="pt-6">
+                <!-- One card's PRs, or the overview's search results. -->
+                <div v-else-if="listedPrs" class="pt-6">
                     <div
-                        v-if="selected.prs.length"
+                        v-if="listedPrs.length"
                         class="divide-y divide-moire-border overflow-hidden rounded-lg border border-moire-border"
                     >
                         <template
@@ -477,7 +547,11 @@ const refreshTooltip = computed(() => {
                         </template>
                     </div>
                     <div v-else class="py-10 text-[13px] text-moire-muted">
-                        No pull requests here.
+                        {{
+                            searching
+                                ? `No pull requests match “${query.trim()}”.`
+                                : 'No pull requests here.'
+                        }}
                     </div>
                 </div>
 

@@ -177,6 +177,82 @@ describe('DashboardView', () => {
         ).toEqual(['waiting']);
     });
 
+    describe('search', () => {
+        const snapshot = () =>
+            dashboardSnapshot({
+                toReview: [
+                    dashboardPr({ id: 'R1', number: 8, title: 'Add billing', author: 'ann' }),
+                    dashboardPr({ id: 'R2', number: 9, title: 'Fix login', author: 'bob' }),
+                ],
+                merged: [
+                    dashboardPr({
+                        id: 'M1',
+                        number: 3,
+                        title: 'Old billing page',
+                        state: 'MERGED',
+                        closedAt: '2026-10-25T12:00:00Z',
+                    }),
+                ],
+            });
+
+        it("narrows a card's PRs, saying so when none match", async () => {
+            const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
+            await wrapper.getComponent(DashboardCard).trigger('click');
+
+            const search = wrapper.get('input[data-slot="dashboard-search"]');
+            await search.setValue('#9');
+            expect(
+                wrapper.findAllComponents(DashboardPrRow).map((row) => row.props('pr').id)
+            ).toEqual(['R2']);
+
+            await search.setValue('nothing');
+            expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(0);
+            expect(wrapper.text()).toContain('No pull requests match “nothing”.');
+        });
+
+        it('lists the matching PRs from every list on the overview, until cleared', async () => {
+            const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
+
+            const search = wrapper.get('input[data-slot="dashboard-search"]');
+            await search.setValue('billing');
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(0);
+            expect(
+                wrapper.findAllComponents(DashboardPrRow).map((row) => row.props('pr').id)
+            ).toEqual(['R1', 'M1']);
+
+            await wrapper.get('[data-slot="dashboard-search-clear"]').trigger('click');
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
+
+            await search.setValue('ann');
+            await search.trigger('keydown', { key: 'Escape' });
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
+        });
+
+        it('keeps a matching stack whole, dimming the members that do not match', async () => {
+            const { wrapper } = await mountView(
+                dashboardState({
+                    snapshot: dashboardSnapshot({
+                        toReview: [
+                            dashboardPr({ id: 'B', number: 1, headRefName: 'a' }),
+                            dashboardPr({
+                                id: 'T',
+                                number: 2,
+                                title: 'Top of stack',
+                                headRefName: 'b',
+                                baseRefName: 'a',
+                            }),
+                        ],
+                    }),
+                })
+            );
+            await wrapper.getComponent(DashboardCard).trigger('click');
+
+            await wrapper.get('input[data-slot="dashboard-search"]').setValue('top');
+            const rows = wrapper.findAll('[data-slot="stack-group-pr"]');
+            expect(rows.map((r) => r.attributes('data-filtered-out'))).toEqual(['true', undefined]);
+        });
+    });
+
     it.each([
         ['me', false],
         [['ann'], false],
