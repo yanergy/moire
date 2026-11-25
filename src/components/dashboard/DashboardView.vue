@@ -56,8 +56,8 @@ const selectedItems = computed(() =>
 // percentages (as in PrReviewers' ring).
 const RING_RADIUS = 100 / (2 * Math.PI);
 
-// A stack group's progress: how many are ready, the ring's arcs (one per part,
-// laid end to end, lengths as percentages), and the tooltip's summary.
+// A stack group's progress: how many are ready, and the ring's arcs (one per part,
+// laid end to end, lengths as percentages), which the tooltip lists too.
 function stackProgressOf(item: { members: { pr: DashboardPr }[] }) {
     const parts = stackProgress(item.members.map((m) => m.pr));
     const total = item.members.length;
@@ -71,7 +71,6 @@ function stackProgressOf(item: { members: { pr: DashboardPr }[] }) {
     return {
         ready: parts.find((part) => part.key === 'ready')?.count ?? 0,
         arcs,
-        summary: parts.map((part) => `${part.count} ${part.label}`).join(' · '),
     };
 }
 
@@ -391,8 +390,16 @@ const updated = computed(() =>
                                                 </svg>
                                             </span>
                                         </TooltipTrigger>
+                                        <!-- One line per state, so several read as a list. -->
                                         <TooltipContent data-slot="stack-group-progress-summary">
-                                            {{ stackProgressOf(item).summary }}
+                                            <div class="flex flex-col gap-0.5">
+                                                <span
+                                                    v-for="arc in stackProgressOf(item).arcs"
+                                                    :key="arc.key"
+                                                >
+                                                    {{ arc.count }} {{ arc.label }}
+                                                </span>
+                                            </div>
                                         </TooltipContent>
                                     </Tooltip>
                                 </button>
