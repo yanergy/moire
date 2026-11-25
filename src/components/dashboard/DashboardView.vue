@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRefreshCooldown } from '@/composables/useRefreshCooldown';
 import {
     ArrowLeft,
     ChevronDown,
@@ -161,6 +162,20 @@ const updated = computed(() =>
         ? `Updated ${timeSince(Date.parse(dashboard.snapshot.fetchedAt), now.value)}`
         : ''
 );
+
+// The refresh button rests for a few seconds after the dashboard was last fetched
+// (by it or by the background poll), so clicks do not pile up GitHub requests.
+const { coolingDown } = useRefreshCooldown(() => {
+    const fetched = Date.parse(dashboard.snapshot?.fetchedAt ?? '');
+    return Number.isNaN(fetched) ? null : fetched;
+});
+const refreshTooltip = computed(() => {
+    if (dashboard.loading) {
+        return 'Refreshing…';
+    }
+
+    return coolingDown.value ? 'Refreshed just now' : 'Refresh';
+});
 </script>
 
 <template>
@@ -264,7 +279,8 @@ const updated = computed(() =>
                                 size="icon-sm"
                                 class="size-7 shrink-0 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
                                 aria-label="Refresh"
-                                :disabled="dashboard.loading"
+                                data-slot="dashboard-refresh"
+                                :disabled="dashboard.loading || coolingDown"
                                 @click="dashboard.refresh()"
                             >
                                 <RefreshCw
@@ -273,7 +289,7 @@ const updated = computed(() =>
                                 />
                             </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Refresh</TooltipContent>
+                        <TooltipContent>{{ refreshTooltip }}</TooltipContent>
                     </Tooltip>
                 </div>
 

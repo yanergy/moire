@@ -267,6 +267,10 @@ last branch range are remembered per repository.
   cards show and the Merged card's period are on the Settings page, opened with the **Dashboard
   settings** button.
 
+- The refresh buttons on the dashboard and in the PR view rest for a few seconds after the data
+  was last fetched (also by a background refresh), dimmed with a "Refreshed just now" hint, so
+  repeated clicks do not stack up GitHub requests.
+
 ### Notifications
 
 - GitHub notifications for the open repository and the active `gh` account, checked every two

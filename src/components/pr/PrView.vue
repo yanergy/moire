@@ -56,6 +56,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
+import { useRefreshCooldown } from '@/composables/useRefreshCooldown';
 import PrStackList from '@/components/pr/PrStackList.vue';
 import CopyButton from '@/components/controls/CopyButton.vue';
 import CheckboxModeToggle from '@/components/pr/CheckboxModeToggle.vue';
@@ -122,11 +123,14 @@ const taskError = ref('');
 const topMenuOpen = ref(false);
 
 const refreshing = ref(false);
+// The refresh rests for a few seconds after the PR was last fetched, whether by
+// this menu or a background reload, so clicks do not pile up gh requests.
+const { coolingDown: prCoolingDown } = useRefreshCooldown(() => comparison.prLoadedAt);
 async function refreshPr() {
     // Invoked from the header overflow menu; close it so the spinner on the
     // trigger is what reports progress.
     topMenuOpen.value = false;
-    if (refreshing.value) {
+    if (refreshing.value || prCoolingDown.value) {
         return;
     }
 
@@ -1386,14 +1390,19 @@ function renderComment(comment: PrComment): string {
                                                     <CommandItem
                                                         value="refresh"
                                                         aria-label="Refresh pull request"
-                                                        class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                                        :disabled="refreshing || prCoolingDown"
+                                                        class="gap-2 text-xs text-moire-file-fg data-[disabled]:opacity-50 data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
                                                         @select="refreshPr"
                                                     >
                                                         <RefreshCw
                                                             :size="14"
                                                             class="shrink-0 text-moire-faint"
                                                         />
-                                                        <span class="flex-1">Refresh</span>
+                                                        <span class="flex-1">{{
+                                                            prCoolingDown && !refreshing
+                                                                ? 'Refreshed just now'
+                                                                : 'Refresh'
+                                                        }}</span>
                                                     </CommandItem>
                                                     <CommandItem
                                                         value="github"

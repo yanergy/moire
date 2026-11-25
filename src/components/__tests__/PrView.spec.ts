@@ -121,6 +121,17 @@ describe('PrView', () => {
         expect(text).toContain('Does things.');
     });
 
+    it('disables Refresh for a moment after the PR was fetched', async () => {
+        const wrapper = mountWith(PR, 'ok', true);
+        useComparisonStore().prLoadedAt = Date.now();
+        await wrapper.get('button[aria-label="More actions"]').trigger('click');
+        await flushPromises();
+
+        const item = document.querySelector('[aria-label="Refresh pull request"]')!;
+        expect(item.hasAttribute('data-disabled')).toBe(true);
+        expect(item.textContent).toContain('Refreshed just now');
+    });
+
     it('shows a Stack tab only for a stacked PR', async () => {
         const wrapper = mountWith(PR);
         expect(wrapper.find('[data-slot="stack-tab"]').exists()).toBe(false);

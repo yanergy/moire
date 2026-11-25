@@ -275,6 +275,17 @@ describe('DashboardView', () => {
         expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
     });
 
+    it('rests the refresh button right after a fetch', async () => {
+        const fresh = dashboardState();
+        fresh.snapshot!.fetchedAt = new Date().toISOString();
+        const { api, wrapper } = await mountView(fresh);
+
+        const button = wrapper.get('[data-slot="dashboard-refresh"]');
+        expect(button.attributes('disabled')).toBeDefined();
+        await button.trigger('click');
+        expect(api.refreshDashboard).not.toHaveBeenCalled();
+    });
+
     it('keeps the Users filter on the page and sends the rest to the Settings page', async () => {
         const { api, wrapper } = await mountView(dashboardState());
 

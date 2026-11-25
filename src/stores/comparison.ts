@@ -325,6 +325,9 @@ export const useComparisonStore = defineStore('comparison', () => {
     // Empty when there are none or the lookup fails. `annotationsForFile` narrows by
     // file.
     const checkAnnotations = ref<CheckAnnotation[]>([]);
+    // When the open PR was last fetched (epoch ms), by a manual refresh or a
+    // background reload, for the PR view's refresh cooldown. Null without a PR.
+    const prLoadedAt = ref<number | null>(null);
     // The stack the open PR belongs to (see loadPrStack), or null when it is not
     // stacked.
     const prStack = ref<PrStack | null>(null);
@@ -629,6 +632,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             }
 
             pullRequest.value = result.pr;
+            prLoadedAt.value = result.pr ? Date.now() : null;
             prStatus.value = result.status;
             prMessage.value = result.message ?? '';
             prLoading.value = false;
@@ -1922,6 +1926,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         submitReview,
         discardReview,
         checkAnnotations,
+        prLoadedAt,
         prStack,
         annotationsForFile,
         annotationLevelForFile,
