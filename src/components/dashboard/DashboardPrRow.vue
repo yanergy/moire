@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 
-// One PR on the dashboard: status dot, author avatar, title, a meta line (author,
+// One PR on the dashboard: status dot, the author's avatar (only when the
+// dashboard shows several authors, see showAvatar), title, a meta line (author,
 // branches, age), the diff size and the CI state. Clicking the row opens the PR in
 // Moiré; the always visible "Open in browser" button at its right end opens it on
 // GitHub instead. `now` (epoch ms) is passed in so every row ages against the same
 // ticking clock.
-const props = defineProps<{ pr: DashboardPr; now: number }>();
+const props = defineProps<{ pr: DashboardPr; now: number; showAvatar?: boolean }>();
 defineEmits<{ open: [pr: DashboardPr]; openInBrowser: [pr: DashboardPr] }>();
 
 const ci = computed(() => ciVisual(props.pr));
@@ -36,7 +37,7 @@ const age = computed(() => {
             @click="$emit('open', pr)"
         >
             <span class="size-2.5 shrink-0 rounded-full" :class="prDotClass(pr)" />
-            <user-avatar :login="pr.author" :size="20" />
+            <user-avatar v-if="showAvatar" :login="pr.author" :size="20" />
             <div class="min-w-0 flex-1">
                 <div class="truncate text-[13px] text-moire-fg">
                     <span class="font-medium">{{ pr.title }}</span>

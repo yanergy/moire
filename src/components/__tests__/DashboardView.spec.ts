@@ -169,6 +169,23 @@ describe('DashboardView', () => {
         expect(wrapper.get('[data-slot="stack-group-header"]').text()).toContain('2 PRs');
     });
 
+    it.each([
+        ['me', false],
+        [['ann'], false],
+        ['all', true],
+        [['ann', 'bob'], true],
+    ] as const)('shows avatars on the rows for authors %j: %s', async (authors, shown) => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                authors: authors as DashboardState['authors'],
+                snapshot: dashboardSnapshot({ toReview: [dashboardPr({ id: 'R', number: 8 })] }),
+            })
+        );
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(shown);
+    });
+
     it('says so when a card has no PRs', async () => {
         const { wrapper } = await mountView(dashboardState());
 

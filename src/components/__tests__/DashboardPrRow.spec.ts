@@ -20,6 +20,16 @@ describe('DashboardPrRow', () => {
         expect(text).toContain('−2');
     });
 
+    it("shows the author's avatar only when asked", () => {
+        const plain = mount(DashboardPrRow, { props: { pr: dashboardPr(), now: NOW } });
+        expect(plain.findComponent({ name: 'UserAvatar' }).exists()).toBe(false);
+
+        const withAvatar = mount(DashboardPrRow, {
+            props: { pr: dashboardPr(), now: NOW, showAvatar: true },
+        });
+        expect(withAvatar.findComponent({ name: 'UserAvatar' }).exists()).toBe(true);
+    });
+
     it('ages a closed PR by when it closed', () => {
         const pr = dashboardPr({ state: 'CLOSED', closedAt: '2026-10-25T12:00:00Z' });
         const wrapper = mount(DashboardPrRow, { props: { pr, now: NOW } });

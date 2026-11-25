@@ -52,6 +52,13 @@ const selectedItems = computed(() =>
     groupByStack(selected.value?.prs ?? [], dashboard.prStackPositions, dashboard.openPrsByNumber)
 );
 
+// The rows show their author's avatar only when the author filter can list
+// several people (everyone, or two or more chosen); with one author it repeats.
+const showAvatars = computed(() => {
+    const authors = dashboard.authors;
+    return authors === 'all' || (Array.isArray(authors) && authors.length > 1);
+});
+
 // Stack groups start open; a click on a group's header folds it.
 const foldedStacks = ref<Set<number>>(new Set());
 function toggleStack(stackId: number) {
@@ -274,6 +281,7 @@ const updated = computed(() =>
                                 v-if="item.kind === 'pr'"
                                 :pr="item.pr"
                                 :now="now"
+                                :show-avatar="showAvatars"
                                 @open="dashboard.openPr"
                                 @open-in-browser="openInBrowser"
                             />
@@ -371,6 +379,7 @@ const updated = computed(() =>
                                             <dashboard-pr-row
                                                 :pr="pr"
                                                 :now="now"
+                                                :show-avatar="showAvatars"
                                                 @open="dashboard.openPr"
                                                 @open-in-browser="openInBrowser"
                                             />
