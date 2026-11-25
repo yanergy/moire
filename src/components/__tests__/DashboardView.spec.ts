@@ -170,7 +170,11 @@ describe('DashboardView', () => {
 
         // Progress over the whole stack: neither PR is approved yet.
         expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('0/2 ready to merge');
-        expect(wrapper.find('[data-slot="stack-group-progress-fill"]').exists()).toBe(false);
+        expect(
+            wrapper
+                .findAll('[data-slot="stack-group-progress"] circle')
+                .map((c) => c.attributes('data-part'))
+        ).toEqual(['waiting']);
     });
 
     it.each([
@@ -190,7 +194,7 @@ describe('DashboardView', () => {
         expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(shown);
     });
 
-    it('fills the stack progress ring by the share of PRs ready to merge', async () => {
+    it('splits the stack progress ring by where its PRs stand', async () => {
         const ready = { reviewDecision: 'APPROVED', ci: 'passing' } as const;
         const { wrapper } = await mountView(
             dashboardState({
@@ -218,8 +222,10 @@ describe('DashboardView', () => {
 
         await wrapper.getComponent(DashboardCard).trigger('click');
         expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('2/3 ready to merge');
-        const fill = wrapper.get('[data-slot="stack-group-progress-fill"]');
-        expect(Number(fill.attributes('stroke-dasharray')!.split(' ')[0])).toBeCloseTo(200 / 3);
+        const arcs = wrapper.findAll('[data-slot="stack-group-progress"] circle');
+        expect(arcs.map((c) => c.attributes('data-part'))).toEqual(['ready', 'waiting']);
+        expect(Number(arcs[0]!.attributes('stroke-dasharray')!.split(' ')[0])).toBeCloseTo(200 / 3);
+        expect(Number(arcs[1]!.attributes('stroke-dashoffset'))).toBeCloseTo(-200 / 3);
     });
 
     it('says so when a card has no PRs', async () => {

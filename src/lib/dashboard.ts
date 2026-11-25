@@ -55,6 +55,55 @@ export function prIsReady(pr: DashboardPr): boolean {
     );
 }
 
+// Where a stack's PRs stand, for its progress ring and tooltip: ready to merge,
+// changes requested, checks failing, or still waiting on a review (or running
+// checks), in that order of precedence. Each part with its ring color; only the
+// parts with PRs in them.
+export interface StackProgressPart {
+    key: 'ready' | 'changes' | 'failing' | 'waiting';
+    count: number;
+    label: string;
+    cls: string;
+}
+
+export function stackProgress(prs: DashboardPr[]): StackProgressPart[] {
+    const counts = { ready: 0, changes: 0, failing: 0, waiting: 0 };
+    for (const pr of prs) {
+        if (prIsReady(pr)) counts.ready++;
+        else if (pr.reviewDecision === 'CHANGES_REQUESTED') counts.changes++;
+        else if (pr.ci === 'failing') counts.failing++;
+        else counts.waiting++;
+    }
+
+    const parts: StackProgressPart[] = [
+        {
+            key: 'ready',
+            count: counts.ready,
+            label: 'ready to merge',
+            cls: 'stroke-moire-status-a',
+        },
+        {
+            key: 'changes',
+            count: counts.changes,
+            label: 'requested changes',
+            cls: 'stroke-moire-changes-fg',
+        },
+        {
+            key: 'failing',
+            count: counts.failing,
+            label: 'failing checks',
+            cls: 'stroke-moire-status-d',
+        },
+        {
+            key: 'waiting',
+            count: counts.waiting,
+            label: 'waiting on review',
+            cls: 'stroke-moire-border',
+        },
+    ];
+    return parts.filter((part) => part.count > 0);
+}
+
 // The CI icon at the end of a PR row, colored like the PR view's Checks tab (only
 // passing and failing get a color). Null when no checks ran.
 export function ciVisual(pr: DashboardPr): { icon: Component; cls: string; label: string } | null {

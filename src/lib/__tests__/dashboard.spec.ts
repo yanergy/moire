@@ -8,6 +8,7 @@ import {
     groupActivityByDay,
     prDotClass,
     prIsReady,
+    stackProgress,
 } from '@/lib/dashboard';
 import type { ActivityEntry, DashboardPr } from '@/shared/types';
 
@@ -180,5 +181,26 @@ describe('prIsReady', () => {
         expect(prIsReady(pr({ reviewDecision: 'APPROVED', ci: 'failing' }))).toBe(false);
         expect(prIsReady(pr({ reviewDecision: 'APPROVED', ci: 'pending' }))).toBe(false);
         expect(prIsReady(pr({ state: 'CLOSED', reviewDecision: 'APPROVED' }))).toBe(false);
+    });
+});
+
+describe('stackProgress', () => {
+    it('counts a stack by where its PRs stand, leaving out empty parts', () => {
+        const parts = stackProgress([
+            pr({ reviewDecision: 'APPROVED', ci: 'passing' }),
+            pr({ state: 'MERGED' }),
+            pr({ reviewDecision: 'CHANGES_REQUESTED', ci: 'failing' }),
+            pr({ reviewDecision: '', ci: 'pending' }),
+        ]);
+
+        expect(parts.map((p) => [p.key, p.count, p.label])).toEqual([
+            ['ready', 2, 'ready to merge'],
+            ['changes', 1, 'requested changes'],
+            ['waiting', 1, 'waiting on review'],
+        ]);
+    });
+
+    it('counts failing checks apart', () => {
+        expect(stackProgress([pr({ ci: 'failing' })]).map((p) => p.key)).toEqual(['failing']);
     });
 });

@@ -14,7 +14,7 @@ import {
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
-import { dashboardNotice, prIsReady } from '@/lib/dashboard';
+import { dashboardNotice, stackProgress } from '@/lib/dashboard';
 import { groupByStack } from '@/lib/pr-stacks';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
@@ -56,9 +56,23 @@ const selectedItems = computed(() =>
 // percentages (as in PrReviewers' ring).
 const RING_RADIUS = 100 / (2 * Math.PI);
 
-// How many PRs of a stack group are ready (or merged), for its progress ring.
-function stackReady(item: { members: { pr: DashboardPr }[] }): number {
-    return item.members.filter((m) => prIsReady(m.pr)).length;
+// A stack group's progress: how many are ready, the ring's arcs (one per part,
+// laid end to end, lengths as percentages), and the tooltip's summary.
+function stackProgressOf(item: { members: { pr: DashboardPr }[] }) {
+    const parts = stackProgress(item.members.map((m) => m.pr));
+    const total = item.members.length;
+    let offset = 0;
+    const arcs = parts.map((part) => {
+        const length = (part.count / total) * 100;
+        const arc = { ...part, length, offset };
+        offset += length;
+        return arc;
+    });
+    return {
+        ready: parts.find((part) => part.key === 'ready')?.count ?? 0,
+        arcs,
+        summary: parts.map((part) => `${part.count} ${part.label}`).join(' · '),
+    };
 }
 
 // The rows show their author's avatar only when the author filter can list
@@ -342,42 +356,45 @@ const updated = computed(() =>
                                         </div>
                                     </div>
                                     <!-- How far the stack is: a ring like the Reviewers tab's,
-                                         green for the share of its PRs that are ready to
-                                         merge (approved, checks green or none) or merged,
-                                         grey for the rest. -->
-                                    <span
-                                        data-slot="stack-group-progress"
-                                        class="flex shrink-0 items-center gap-2 text-[12px] text-moire-muted"
-                                    >
-                                        {{ stackReady(item) }}/{{ item.members.length }}
-                                        ready to merge
-                                        <svg
-                                            viewBox="0 0 36 36"
-                                            class="size-5 -rotate-90"
-                                            aria-hidden="true"
-                                        >
-                                            <circle
-                                                cx="18"
-                                                cy="18"
-                                                :r="RING_RADIUS"
-                                                fill="none"
-                                                stroke-width="5"
-                                                class="stroke-moire-border"
-                                            />
-                                            <circle
-                                                v-if="stackReady(item)"
-                                                data-slot="stack-group-progress-fill"
-                                                cx="18"
-                                                cy="18"
-                                                :r="RING_RADIUS"
-                                                fill="none"
-                                                stroke-width="5"
-                                                pathLength="100"
-                                                class="stroke-moire-status-a"
-                                                :stroke-dasharray="`${(stackReady(item) / item.members.length) * 100} 100`"
-                                            />
-                                        </svg>
-                                    </span>
+                                         one arc per state (green ready to merge, yellow
+                                         changes requested, red failing checks, grey waiting
+                                         on review), the counts in its tooltip. -->
+                                    <Tooltip>
+                                        <TooltipTrigger as-child>
+                                            <span
+                                                data-slot="stack-group-progress"
+                                                class="flex shrink-0 items-center gap-2 text-[12px] text-moire-muted"
+                                            >
+                                                {{ stackProgressOf(item).ready }}/{{
+                                                    item.members.length
+                                                }}
+                                                ready to merge
+                                                <svg
+                                                    viewBox="0 0 36 36"
+                                                    class="size-5 -rotate-90"
+                                                    aria-hidden="true"
+                                                >
+                                                    <circle
+                                                        v-for="arc in stackProgressOf(item).arcs"
+                                                        :key="arc.key"
+                                                        :data-part="arc.key"
+                                                        cx="18"
+                                                        cy="18"
+                                                        :r="RING_RADIUS"
+                                                        fill="none"
+                                                        stroke-width="5"
+                                                        pathLength="100"
+                                                        :class="arc.cls"
+                                                        :stroke-dasharray="`${arc.length} 100`"
+                                                        :stroke-dashoffset="-arc.offset"
+                                                    />
+                                                </svg>
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent data-slot="stack-group-progress-summary">
+                                            {{ stackProgressOf(item).summary }}
+                                        </TooltipContent>
+                                    </Tooltip>
                                 </button>
                                 <!-- The stack's PRs as in the PR view's Stack tab, without
                                      the cards: a numbered circle per PR, centered on its
