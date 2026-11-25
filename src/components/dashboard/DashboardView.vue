@@ -291,7 +291,24 @@ const refreshTooltip = computed(() => {
 
                     <div class="flex-1" />
 
-                    <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg aria-pressed:bg-moire-hover aria-pressed:text-moire-fg"
+                                :aria-pressed="searchOpen"
+                                data-slot="dashboard-search-toggle"
+                                @click="toggleSearch"
+                            >
+                                <Search :size="16" />
+                                Search
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{{
+                            searchOpen ? 'Close search' : `Open search (${FIND_SHORTCUT})`
+                        }}</TooltipContent>
+                    </Tooltip>
                     <!-- Whose PRs the cards count: the signed in account by default,
                          any mix of authors, or everyone. The other dashboard
                          settings are on the Settings page. -->
@@ -341,33 +358,7 @@ const refreshTooltip = computed(() => {
                             </DropdownMenuCheckboxItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                        @click="ui.openSettings('dashboard')"
-                    >
-                        <Settings :size="16" />
-                        Dashboard settings
-                    </Button>
-                    <Tooltip>
-                        <TooltipTrigger as-child>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg aria-pressed:bg-moire-hover aria-pressed:text-moire-fg"
-                                :aria-pressed="searchOpen"
-                                data-slot="dashboard-search-toggle"
-                                @click="toggleSearch"
-                            >
-                                <Search :size="16" />
-                                Search
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{{
-                            searchOpen ? 'Close search' : `Open search (${FIND_SHORTCUT})`
-                        }}</TooltipContent>
-                    </Tooltip>
+                    <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
                     <Tooltip>
                         <TooltipTrigger as-child>
                             <Button
@@ -387,6 +378,15 @@ const refreshTooltip = computed(() => {
                         </TooltipTrigger>
                         <TooltipContent>{{ refreshTooltip }}</TooltipContent>
                     </Tooltip>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                        @click="ui.openSettings('dashboard')"
+                    >
+                        <Settings :size="16" />
+                        Dashboard settings
+                    </Button>
                 </div>
 
                 <!-- Search by title, number, branch or author, with a clear button
