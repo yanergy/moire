@@ -165,7 +165,7 @@ describe('PrView', () => {
         // To a review: back on the Conversation tab, outlined.
         await wrapper.get('[data-slot="reviewers-tab"]').trigger('click');
         await wrapper.findAll('[data-slot="reviewer-row"]')[0]!.trigger('click');
-        await wrapper.get('[data-slot="activity-jump"]').trigger('click');
+        await wrapper.get('[data-slot="reviewer-activity"]').trigger('click');
         await flushPromises();
         expect(wrapper.find('[data-slot="reviewer"]').exists()).toBe(false);
         expect(wrapper.get('[data-entry-index="0"]').html()).toContain('ring-moire-accent');
@@ -173,7 +173,7 @@ describe('PrView', () => {
         // To a line comment: the thread's own focus request.
         await wrapper.get('[data-slot="reviewers-tab"]').trigger('click');
         await wrapper.findAll('[data-slot="reviewer-row"]')[1]!.trigger('click');
-        const jumps = wrapper.findAll('[data-slot="activity-jump"]');
+        const jumps = wrapper.findAll('[data-slot="reviewer-activity"]');
         await jumps[jumps.length - 1]!.trigger('click');
         await flushPromises();
         expect(wrapper.get('[data-thread-id="RT_1"]').classes()).toContain('ring-moire-accent');

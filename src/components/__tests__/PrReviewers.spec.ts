@@ -53,7 +53,7 @@ describe('PrReviewers', () => {
         ]);
         expect(shown[1]!.text()).toContain('this can race');
 
-        await shown[1]!.get('[data-slot="activity-jump"]').trigger('click');
+        await shown[1]!.trigger('click');
         expect(wrapper.emitted('jump')).toEqual([[{ thread: 'RT_1' }]]);
     });
 

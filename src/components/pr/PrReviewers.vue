@@ -2,7 +2,7 @@
 // The PR view's Reviewers tab: a progress summary, then one row per reviewer (a
 // requested user or team, or someone who reviewed) with where they stand. A
 // reviewer who left reviews or line comments can be unfolded to a short line per
-// item, each with a button that jumps to it in the conversation.
+// item, each a button that jumps to it in the conversation.
 import { computed, ref, type Component } from 'vue';
 import {
     ArrowUpRight,
@@ -19,7 +19,6 @@ import type { PrReviewer, PrReviewerState } from '@/shared/types';
 import { reviewProgress, reviewSummary } from '@/lib/review-progress';
 import type { ReviewActivity, ReviewActivityTarget } from '@/lib/review-activity';
 import { timeSince } from '@/lib/status-bar';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 
 const props = withDefaults(
@@ -164,12 +163,17 @@ function relative(iso: string): string {
 
             <!-- The reviewer's items, one short line each: what it is (a verdict or
                  the file), a one-line preview, its age, and a jump to it. -->
-            <div v-if="expanded.has(keyOf(reviewer))" class="flex flex-col pb-2 pl-[54px]">
-                <div
+            <div v-if="expanded.has(keyOf(reviewer))" class="flex flex-col pb-2 pl-[48px]">
+                <!-- The whole line is the jump, so it is an easy target; the
+                     arrow at its end marks it as a link. -->
+                <button
                     v-for="item in itemsFor(reviewer)"
                     :key="item.key"
+                    type="button"
                     data-slot="reviewer-activity"
-                    class="flex h-8 items-center gap-2 text-[12px]"
+                    :title="item.preview"
+                    class="group flex h-8 w-full cursor-pointer items-center gap-2 rounded pr-1 pl-1.5 text-left text-[12px] transition-colors hover:bg-moire-hover"
+                    @click="emit('jump', item.target)"
                 >
                     <component
                         :is="itemVisual(item).icon"
@@ -184,21 +188,11 @@ function relative(iso: string): string {
                         {{ item.preview }}
                     </span>
                     <span class="shrink-0 text-moire-faint">{{ relative(item.createdAt) }}</span>
-                    <Tooltip>
-                        <TooltipTrigger as-child>
-                            <button
-                                type="button"
-                                data-slot="activity-jump"
-                                aria-label="Go to comment"
-                                class="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                @click="emit('jump', item.target)"
-                            >
-                                <ArrowUpRight :size="14" />
-                            </button>
-                        </TooltipTrigger>
-                        <TooltipContent>Go to comment</TooltipContent>
-                    </Tooltip>
-                </div>
+                    <ArrowUpRight
+                        :size="14"
+                        class="shrink-0 text-moire-faint transition-colors group-hover:text-moire-fg"
+                    />
+                </button>
             </div>
         </div>
     </div>
