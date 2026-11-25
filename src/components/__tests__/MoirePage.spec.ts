@@ -169,6 +169,38 @@ describe('MoirePage', () => {
         expect(wrapper.findComponent(PrView).exists()).toBe(false);
     });
 
+    it("keeps the PR page up while the new range's PR loads", () => {
+        const comparison = useComparisonStore();
+        comparison.prStatus = 'ok';
+        comparison.pullRequest = PR;
+        comparison.prLoading = true;
+        useUiStore().setMainView('pr');
+
+        const wrapper = mount(MoirePage, { global: { plugins: [pinia], stubs } });
+        expect(wrapper.findComponent(PrView).exists()).toBe(true);
+        expect(wrapper.findComponent(DiffPane).exists()).toBe(false);
+    });
+
+    it('stays on the PR page while loading from no PR, then falls back if none is found', async () => {
+        const comparison = useComparisonStore();
+        comparison.prLoading = true;
+        const ui = useUiStore();
+        ui.setMainView('pr');
+
+        const wrapper = mount(MoirePage, { global: { plugins: [pinia], stubs } });
+        await nextTick();
+        expect(ui.mainView).toBe('pr');
+        expect(wrapper.findComponent(PrView).exists()).toBe(true);
+
+        // The lookup lands without a PR.
+        comparison.prStatus = 'no-pr';
+        comparison.prLoading = false;
+        await nextTick();
+
+        expect(ui.mainView).toBe('diff');
+        expect(wrapper.findComponent(DiffPane).exists()).toBe(true);
+    });
+
     it('resets the history and the open dashboard card when another repository opens', async () => {
         mount(MoirePage, { global: { plugins: [pinia], stubs } });
         const ui = useUiStore();
