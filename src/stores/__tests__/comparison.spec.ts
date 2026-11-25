@@ -326,15 +326,72 @@ describe('comparison store', () => {
         expect(store.allCollapsed).toBe(true);
     });
 
-    it('filters the tree and force-opens matching folders even when collapsed', () => {
+    it('filters the tree and opens folders the user never collapsed', () => {
         const store = seededStore();
-        store.collapseAll();
         store.setTreeFilter('parsers');
 
         const shown = files(store.treeNodes);
         expect(shown.length).toBeGreaterThan(0);
         expect(shown.every((n) => n.path.includes('parsers'))).toBe(true);
         expect(store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts')).toBe(true);
+    });
+
+    it('keeps a folder collapsed before searching collapsed during the search', () => {
+        const store = seededStore();
+        store.toggleDir('electron');
+        store.setTreeFilter('parsers');
+
+        // The search folds `electron` and `git` into one row, which stays closed.
+        const row = dirs(store.treeNodes).find((n) => n.path === 'electron/git');
+        expect(row?.open).toBe(false);
+        expect(store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts')).toBe(false);
+    });
+
+    it('collapses and expands folders while searching', () => {
+        const store = seededStore();
+        store.setTreeFilter('parsers');
+
+        store.toggleDir('electron/git');
+        expect(dirs(store.treeNodes).find((n) => n.path === 'electron/git')?.open).toBe(false);
+
+        store.toggleDir('electron/git');
+        expect(dirs(store.treeNodes).find((n) => n.path === 'electron/git')?.open).toBe(true);
+        expect(store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts')).toBe(true);
+    });
+
+    it('reopens a folded row collapsed through its top folder in one click', () => {
+        const store = seededStore();
+        store.toggleDir('electron');
+        store.setTreeFilter('parsers');
+
+        store.toggleDir('electron/git');
+        expect(dirs(store.treeNodes).find((n) => n.path === 'electron/git')?.open).toBe(true);
+    });
+
+    it('keeps the collapse state set during a search after clearing it', () => {
+        const store = seededStore();
+        store.setTreeFilter('parsers');
+        store.toggleDir('electron/git');
+        store.setTreeFilter('');
+
+        expect(store.treeNodes.some((n) => n.path === 'electron/git/parsers.ts')).toBe(false);
+    });
+
+    it('collapses and expands all shown folders while searching', () => {
+        const store = seededStore();
+        store.toggleDir('src');
+        store.setTreeFilter('parsers');
+
+        store.collapseAll();
+        expect(store.allCollapsed).toBe(true);
+        expect(files(store.treeNodes)).toHaveLength(0);
+
+        store.expandAll();
+        expect(files(store.treeNodes).length).toBeGreaterThan(0);
+
+        // A folder the search hid keeps the state the user gave it.
+        store.setTreeFilter('');
+        expect(dirs(store.treeNodes).find((n) => n.path === 'src')?.open).toBe(false);
     });
 
     describe('repository opening', () => {
@@ -1247,6 +1304,8 @@ describe('comparison store', () => {
                             createdAt: '',
                             isPending: false,
                             viewerDidAuthor: false,
+                            canEdit: false,
+                            canDelete: false,
                         },
                     ],
                 },
@@ -1267,6 +1326,8 @@ describe('comparison store', () => {
                             createdAt: '',
                             isPending: false,
                             viewerDidAuthor: false,
+                            canEdit: false,
+                            canDelete: false,
                         },
                     ],
                 },
@@ -1329,6 +1390,8 @@ describe('comparison store', () => {
                                 createdAt: '',
                                 isPending: false,
                                 viewerDidAuthor: false,
+                                canEdit: false,
+                                canDelete: false,
                             },
                         ],
                     },
@@ -1627,6 +1690,8 @@ describe('comparison store', () => {
                         createdAt: '',
                         isPending: true,
                         viewerDidAuthor: true,
+                        canEdit: true,
+                        canDelete: true,
                     },
                     {
                         id: 'RC_2',
@@ -1635,6 +1700,8 @@ describe('comparison store', () => {
                         createdAt: '',
                         isPending: true,
                         viewerDidAuthor: true,
+                        canEdit: true,
+                        canDelete: true,
                     },
                 ],
             };
@@ -1883,6 +1950,8 @@ describe('comparison store', () => {
                             createdAt: '',
                             isPending: false,
                             viewerDidAuthor: false,
+                            canEdit: false,
+                            canDelete: false,
                         },
                     ],
                 },

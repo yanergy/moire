@@ -163,7 +163,10 @@ const PR_FIELDS = `
   isCrossRepository additions deletions mergeable reviewDecision
   author { login } mergedBy { login } baseRefName headRefName
   latestReviews(first: 50) { nodes { id state author { login } } }
-  reviewRequests(first: 50) { nodes { requestedReviewer { ... on User { login } } } }
+  latestOpinionatedReviews(first: 50) { nodes { state author { login } } }
+  reviewRequests(first: 50) { nodes { requestedReviewer {
+    ... on User { login } ... on Bot { login } ... on Mannequin { login }
+  } } }
   commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { nodes {
     __typename
     ... on CheckRun { name status conclusion }
@@ -234,6 +237,9 @@ interface GqlPr {
     latestReviews?: {
         nodes?: ({ id?: string; state?: string; author?: { login?: string } | null } | null)[];
     } | null;
+    latestOpinionatedReviews?: {
+        nodes?: ({ state?: string; author?: { login?: string } | null } | null)[];
+    } | null;
     reviewRequests?: {
         nodes?: ({ requestedReviewer?: { login?: string } | null } | null)[];
     } | null;
@@ -273,18 +279,27 @@ interface GqlSearch {
 
 // The effective review decision. Like the PR view (see reviewDecisionOf in gh.ts),
 // GitHub fills reviewDecision only when branch protection requires reviews, so an
-// empty one is derived from each reviewer's latest review: changes requested
+// empty one is derived from each reviewer's standing review: changes requested
 // outranks an approval. Either way, changes requested is settled once the review
 // is re-requested from everyone who asked for them (see settleReRequestedChanges).
-function decisionOf(decision: string, reviews: DashboardReview[], requested: string[]): string {
-    const changesRequestedBy = reviews
+// `opinions` holds each reviewer's latest approval, change request, or dismissal,
+// not their latest review: a COMMENTED review (a reply in a thread) after a change
+// request leaves it standing on GitHub, and counting the comment instead hid the
+// reviewer from the settle check, so the PR never left "Changes requested".
+interface ReviewOpinion {
+    author: string;
+    state: string;
+}
+
+function decisionOf(decision: string, opinions: ReviewOpinion[], requested: string[]): string {
+    const changesRequestedBy = opinions
         .filter((r) => r.state === 'CHANGES_REQUESTED')
         .map((r) => r.author);
     if (decision) {
         return settleReRequestedChanges(decision, changesRequestedBy, requested, true);
     }
 
-    const states = new Set(reviews.map((r) => r.state));
+    const states = new Set(opinions.map((r) => r.state));
     if (states.has('CHANGES_REQUESTED')) {
         return settleReRequestedChanges('CHANGES_REQUESTED', changesRequestedBy, requested, false);
     }
@@ -342,6 +357,13 @@ function toDashboardPr(node: GqlPr): DashboardPr {
         .filter((r) => r !== null)
         .map((r) => ({ id: r.id ?? '', author: r.author?.login ?? '', state: r.state ?? '' }))
         .filter((r) => r.id && r.author);
+    // Falls back to the latest reviews when a response lacks the field.
+    const opinions: ReviewOpinion[] = node.latestOpinionatedReviews
+        ? (node.latestOpinionatedReviews.nodes ?? [])
+              .filter((r) => r !== null)
+              .map((r) => ({ author: r.author?.login ?? '', state: r.state ?? '' }))
+              .filter((r) => r.author)
+        : reviews;
     const requested = (node.reviewRequests?.nodes ?? [])
         .map((r) => r?.requestedReviewer?.login ?? '')
         .filter(Boolean);
@@ -380,7 +402,7 @@ function toDashboardPr(node: GqlPr): DashboardPr {
         additions: node.additions ?? 0,
         deletions: node.deletions ?? 0,
         mergeable: node.mergeable ?? 'UNKNOWN',
-        reviewDecision: decisionOf(node.reviewDecision ?? '', reviews, requested),
+        reviewDecision: decisionOf(node.reviewDecision ?? '', opinions, requested),
         ci: ciOf(rollup?.state),
         failedChecks,
         reviews,

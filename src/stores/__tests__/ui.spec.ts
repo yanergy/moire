@@ -1,6 +1,6 @@
 import { nextTick } from 'vue';
 import { setActivePinia, createPinia } from 'pinia';
-import { beforeEach, describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { useUiStore } from '@/stores/ui';
 
 describe('ui store', () => {
@@ -38,11 +38,16 @@ describe('ui store', () => {
         expect(document.documentElement.classList.contains('dark')).toBe(false);
     });
 
-    it('sets the view mode', () => {
+    it('sets and persists the view mode', async () => {
+        const setViewModePreference = vi.fn<(mode: string) => Promise<void>>().mockResolvedValue();
+        window.api = { setViewModePreference } as unknown as Window['api'];
         const store = useUiStore();
         expect(store.viewMode).toBe('split');
-        store.setViewMode('unified');
+
+        expect(await store.setViewMode('unified')).toBe(true);
         expect(store.viewMode).toBe('unified');
+        expect(setViewModePreference).toHaveBeenCalledWith('unified');
+        delete window.api;
     });
 
     it('defaults the main view to the diff and switches it to the PR view', () => {
@@ -135,6 +140,27 @@ describe('ui store', () => {
             expect(store.dashboardCard).toBeNull();
             store.goBack();
             expect(store.mainView).toBe('dashboard');
+        });
+    });
+
+    describe('rendered Markdown', () => {
+        it('toggles a file between source and rendered', () => {
+            const ui = useUiStore();
+            expect(ui.isMarkdownRendered('README.md')).toBe(false);
+
+            ui.toggleMarkdownRendered('README.md');
+            expect(ui.isMarkdownRendered('README.md')).toBe(true);
+            expect(ui.isMarkdownRendered('docs/a.md')).toBe(false);
+
+            ui.toggleMarkdownRendered('README.md');
+            expect(ui.isMarkdownRendered('README.md')).toBe(false);
+        });
+
+        it('forgets the choices when another repository opens', () => {
+            const ui = useUiStore();
+            ui.toggleMarkdownRendered('README.md');
+            ui.resetNavigation();
+            expect(ui.isMarkdownRendered('README.md')).toBe(false);
         });
     });
 });
