@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
     ArrowLeft,
     ChevronDown,
+    ChevronRight,
+    Layers,
     LoaderCircle,
     RefreshCw,
     Settings,
@@ -13,6 +15,7 @@ import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
 import { dashboardNotice } from '@/lib/dashboard';
+import { groupByStack } from '@/lib/pr-stacks';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
 import { Button } from '@/components/ui/button';
@@ -42,6 +45,24 @@ const ui = useUiStore();
 const selected = computed(
     () => dashboard.categories.find((category) => category.key === ui.dashboardCard) ?? null
 );
+
+// The card's PRs with each stack gathered into one foldable group, in stack order
+// (see lib/pr-stacks), so PRs that build on each other read together.
+const selectedItems = computed(() =>
+    groupByStack(selected.value?.prs ?? [], dashboard.prStackPositions)
+);
+
+// Stack groups start open; a click on a group's header folds it.
+const foldedStacks = ref<Set<number>>(new Set());
+function toggleStack(stackId: number) {
+    const next = new Set(foldedStacks.value);
+    if (next.has(stackId)) {
+        next.delete(stackId);
+    } else {
+        next.add(stackId);
+    }
+    foldedStacks.value = next;
+}
 
 // One clock for every "3h ago", ticking so the ages stay current while open.
 const now = ref(Date.now());
@@ -245,15 +266,72 @@ const updated = computed(() =>
                         v-if="selected.prs.length"
                         class="divide-y divide-moire-border overflow-hidden rounded-lg border border-moire-border"
                     >
-                        <dashboard-pr-row
-                            v-for="pr in selected.prs"
-                            :key="pr.id"
-                            :pr="pr"
-                            :now="now"
-                            :stack="dashboard.prStackPositions.get(pr.number)"
-                            @open="dashboard.openPr"
-                            @open-in-browser="openInBrowser"
-                        />
+                        <template
+                            v-for="item in selectedItems"
+                            :key="item.kind === 'pr' ? item.pr.id : `stack-${item.stackId}`"
+                        >
+                            <dashboard-pr-row
+                                v-if="item.kind === 'pr'"
+                                :pr="item.pr"
+                                :now="now"
+                                @open="dashboard.openPr"
+                                @open-in-browser="openInBrowser"
+                            />
+                            <!-- A stack: a header that folds it, then its PRs in stack
+                                 order, indented behind a line. -->
+                            <div v-else data-slot="stack-group">
+                                <button
+                                    type="button"
+                                    data-slot="stack-group-header"
+                                    class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[12px] text-moire-muted transition-colors hover:bg-moire-hover"
+                                    :aria-expanded="!foldedStacks.has(item.stackId)"
+                                    @click="toggleStack(item.stackId)"
+                                >
+                                    <ChevronRight
+                                        v-if="foldedStacks.has(item.stackId)"
+                                        :size="14"
+                                        class="shrink-0 text-moire-faint"
+                                    />
+                                    <ChevronDown
+                                        v-else
+                                        :size="14"
+                                        class="shrink-0 text-moire-faint"
+                                    />
+                                    <Layers :size="14" class="shrink-0" />
+                                    <span>
+                                        Stack on
+                                        <span class="font-mono text-moire-file-fg">{{
+                                            item.trunk
+                                        }}</span>
+                                    </span>
+                                    <span class="text-moire-faint">
+                                        · {{ item.prs.length }}
+                                        {{ item.prs.length === 1 ? 'PR' : 'PRs' }}
+                                        <template v-if="item.prs.length < item.total">
+                                            of {{ item.total }}
+                                        </template>
+                                    </span>
+                                </button>
+                                <div
+                                    v-if="!foldedStacks.has(item.stackId)"
+                                    class="border-t border-moire-border pl-6"
+                                >
+                                    <div
+                                        class="divide-y divide-moire-border border-l border-moire-border"
+                                    >
+                                        <dashboard-pr-row
+                                            v-for="pr in item.prs"
+                                            :key="pr.id"
+                                            :pr="pr"
+                                            :now="now"
+                                            :stack="dashboard.prStackPositions.get(pr.number)"
+                                            @open="dashboard.openPr"
+                                            @open-in-browser="openInBrowser"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                     <div v-else class="py-10 text-[13px] text-moire-muted">
                         No pull requests here.

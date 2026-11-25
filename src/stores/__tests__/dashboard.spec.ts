@@ -659,8 +659,8 @@ describe('prStackPositions', () => {
             })
         );
 
-        expect(store.prStackPositions.get(1)).toEqual({ index: 1, total: 2 });
-        expect(store.prStackPositions.get(2)).toEqual({ index: 2, total: 2 });
+        expect(store.prStackPositions.get(1)).toMatchObject({ index: 1, total: 2 });
+        expect(store.prStackPositions.get(2)).toMatchObject({ index: 2, total: 2 });
         expect(store.prStackPositions.has(9)).toBe(false);
     });
 });

@@ -8,6 +8,9 @@
 export interface StackPosition {
     index: number; // 1-based
     total: number;
+    // The stack it is in: its bottom PR's number, and the branch that PR is on.
+    stackId: number;
+    trunk: string;
 }
 
 interface StackablePr {
@@ -71,8 +74,56 @@ export function stackPositions(prs: StackablePr[]): Map<number, StackPosition> {
         };
         walk(root);
 
-        order.forEach((pr, i) => positions.set(pr.number, { index: i + 1, total: order.length }));
+        order.forEach((pr, i) =>
+            positions.set(pr.number, {
+                index: i + 1,
+                total: order.length,
+                stackId: root.number,
+                trunk: root.baseRefName,
+            })
+        );
     }
 
     return positions;
+}
+
+// A list of PRs as the dashboard shows it: each stack gathered into one group, in
+// stack order, at the place of its first PR in the list; every other PR as is.
+export type StackListItem<T> =
+    | { kind: 'pr'; pr: T }
+    | { kind: 'stack'; stackId: number; trunk: string; total: number; prs: T[] };
+
+export function groupByStack<T extends { number: number }>(
+    prs: T[],
+    positions: Map<number, StackPosition>
+): StackListItem<T>[] {
+    const items: StackListItem<T>[] = [];
+    const groups = new Map<number, Extract<StackListItem<T>, { kind: 'stack' }>>();
+    for (const pr of prs) {
+        const position = positions.get(pr.number);
+        if (!position) {
+            items.push({ kind: 'pr', pr });
+            continue;
+        }
+
+        let group = groups.get(position.stackId);
+        if (!group) {
+            group = {
+                kind: 'stack',
+                stackId: position.stackId,
+                trunk: position.trunk,
+                total: position.total,
+                prs: [],
+            };
+            groups.set(position.stackId, group);
+            items.push(group);
+        }
+        group.prs.push(pr);
+    }
+
+    for (const group of groups.values()) {
+        group.prs.sort((a, b) => positions.get(a.number)!.index - positions.get(b.number)!.index);
+    }
+
+    return items;
 }

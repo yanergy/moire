@@ -25,7 +25,11 @@ describe('DashboardPrRow', () => {
         expect(plain.find('[data-slot="stack-badge"]').exists()).toBe(false);
 
         const stacked = mount(DashboardPrRow, {
-            props: { pr: dashboardPr(), now: NOW, stack: { index: 2, total: 3 } },
+            props: {
+                pr: dashboardPr(),
+                now: NOW,
+                stack: { index: 2, total: 3, stackId: 1, trunk: 'main' },
+            },
         });
         expect(stacked.get('[data-slot="stack-badge"]').text()).toBe('2/3');
     });

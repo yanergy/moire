@@ -103,6 +103,37 @@ describe('DashboardView', () => {
         expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
     });
 
+    it("groups a stack's PRs under a foldable header, in stack order", async () => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                snapshot: dashboardSnapshot({
+                    toReview: [
+                        dashboardPr({ id: 'T', number: 3, headRefName: 'c', baseRefName: 'b' }),
+                        dashboardPr({ id: 'S', number: 7, headRefName: 's', baseRefName: 'main' }),
+                        dashboardPr({ id: 'B', number: 1, headRefName: 'a', baseRefName: 'main' }),
+                        dashboardPr({ id: 'M', number: 2, headRefName: 'b', baseRefName: 'a' }),
+                    ],
+                }),
+            })
+        );
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        const group = wrapper.get('[data-slot="stack-group"]');
+        expect(group.get('[data-slot="stack-group-header"]').text()).toContain('Stack on main');
+        expect(group.text()).toContain('3 PRs');
+        // In stack order inside the group; the unstacked PR stays outside it.
+        expect(group.findAll('[data-slot="stack-badge"]').map((b) => b.text())).toEqual([
+            '1/3',
+            '2/3',
+            '3/3',
+        ]);
+        expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(4);
+
+        await group.get('[data-slot="stack-group-header"]').trigger('click');
+        expect(group.find('[data-slot="stack-badge"]').exists()).toBe(false);
+        expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(1);
+    });
+
     it('says so when a card has no PRs', async () => {
         const { wrapper } = await mountView(dashboardState());
 
