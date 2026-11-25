@@ -43,7 +43,7 @@ const age = computed(() => {
                     <span class="font-medium">{{ pr.title }}</span>
                     <span class="text-moire-faint"> #{{ pr.number }}</span>
                 </div>
-                <div class="flex min-w-0 items-center gap-1.5 text-[12px] text-moire-muted">
+                <div class="flex min-w-0 items-center gap-1.5 text-[12px] text-moire-faint">
                     <span class="shrink-0">{{ pr.author }}</span>
                     <span class="text-moire-faint">·</span>
                     <span class="truncate font-mono text-[11px]"
