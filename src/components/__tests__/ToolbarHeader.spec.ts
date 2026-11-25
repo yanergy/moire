@@ -173,7 +173,7 @@ describe('ToolbarHeader', () => {
             expect(dotClass()).toContain('bg-moire-changes-fg');
         });
 
-        it('shows a disabled spinner tab while a lookup runs, hiding stale status', async () => {
+        it('shows a clickable spinner tab while a lookup runs, hiding stale status', async () => {
             const comparison = openRepo();
             // A leftover PR from the previous branch must not show through while the
             // new branch's lookup is in flight.
@@ -185,12 +185,13 @@ describe('ToolbarHeader', () => {
             const wrapper = mountToolbar();
             const tab = prTab(wrapper);
             expect(tab.attributes('data-state')).toBe('loading');
-            expect(tab.attributes('aria-disabled')).toBe('true');
+            expect(tab.attributes('aria-disabled')).toBeUndefined();
             expect(tab.find('.lucide-loader-circle').exists()).toBe(true);
             expect(wrapper.text()).not.toContain('PR #');
 
+            // The PR view shows its own spinner until the lookup lands.
             await tab.trigger('click');
-            expect(ui.mainView).toBe('diff');
+            expect(ui.mainView).toBe('pr');
         });
 
         it('shows a disabled warning tab when the gh lookup fails', () => {

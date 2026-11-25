@@ -169,7 +169,7 @@ describe('MoirePage', () => {
         expect(wrapper.findComponent(PrView).exists()).toBe(false);
     });
 
-    it("shows a spinner instead of the previous PR while the new range's PR loads", async () => {
+    it("keeps the PR page up while the new range's PR loads", () => {
         const comparison = useComparisonStore();
         comparison.prStatus = 'ok';
         comparison.pullRequest = PR;
@@ -177,17 +177,8 @@ describe('MoirePage', () => {
         useUiStore().setMainView('pr');
 
         const wrapper = mount(MoirePage, { global: { plugins: [pinia], stubs } });
-        expect(wrapper.find('[data-slot="pr-loading"]').exists()).toBe(true);
-        expect(wrapper.findComponent(PrView).exists()).toBe(false);
-        expect(wrapper.findComponent(DiffPane).exists()).toBe(false);
-
-        // The new PR lands.
-        comparison.pullRequest = { ...PR, number: 8 };
-        comparison.prLoading = false;
-        await nextTick();
-
-        expect(wrapper.find('[data-slot="pr-loading"]').exists()).toBe(false);
         expect(wrapper.findComponent(PrView).exists()).toBe(true);
+        expect(wrapper.findComponent(DiffPane).exists()).toBe(false);
     });
 
     it('stays on the PR page while loading from no PR, then falls back if none is found', async () => {
@@ -199,7 +190,7 @@ describe('MoirePage', () => {
         const wrapper = mount(MoirePage, { global: { plugins: [pinia], stubs } });
         await nextTick();
         expect(ui.mainView).toBe('pr');
-        expect(wrapper.find('[data-slot="pr-loading"]').exists()).toBe(true);
+        expect(wrapper.findComponent(PrView).exists()).toBe(true);
 
         // The lookup lands without a PR.
         comparison.prStatus = 'no-pr';

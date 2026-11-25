@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
-import { LoaderCircle } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
@@ -18,14 +17,13 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 const comparison = useComparisonStore();
 const ui = useUiStore();
 
-// While a new range's PR is being looked up (opening a PR from the dashboard, or
-// switching branches on the PR view), the PR page shows a spinner instead of the
-// previous PR, so it is clear the new one is on its way.
-const showPrLoading = computed(() => ui.mainView === 'pr' && comparison.prLoading);
-
-// The PR view is only reachable while a PR is detected for the range; any other
-// time the diff fills the pane.
-const showPrView = computed(() => ui.mainView === 'pr' && comparison.hasPullRequest);
+// The PR view is only reachable while a PR is detected for the range, or while
+// the range's PR is being looked up (the view then shows a spinner, so opening a
+// PR from the dashboard lands on its page straight away); any other time the diff
+// fills the pane.
+const showPrView = computed(
+    () => ui.mainView === 'pr' && (comparison.hasPullRequest || comparison.prLoading)
+);
 
 // The dashboard and the notifications are always about the open repository, so
 // they need one.
@@ -67,15 +65,7 @@ watch(
                  width; the file tree only belongs to the diff. (A thread's file link
                  in the PR view selects the file through the store, so it needs no
                  tree mounted.) -->
-            <div
-                v-if="showPrLoading"
-                data-slot="pr-loading"
-                class="flex min-h-0 flex-1 items-center justify-center gap-2 text-moire-muted"
-            >
-                <LoaderCircle :size="16" class="animate-spin" aria-hidden="true" />
-                Loading pull request…
-            </div>
-            <pr-view v-else-if="showPrView" />
+            <pr-view v-if="showPrView" />
             <dashboard-view v-else-if="showDashboard" />
             <notifications-view v-else-if="showNotifications" />
             <!-- Opens without a repository too, to say it needs one. -->
