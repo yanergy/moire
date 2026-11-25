@@ -280,10 +280,13 @@ const updated = computed(() =>
                             <!-- A stack: a header that folds it, then its PRs in stack
                                  order, indented behind a line. -->
                             <div v-else data-slot="stack-group">
+                                <!-- Styled like a PR row: the stack's first PR as its
+                                     title (so stacks on the same trunk tell apart), the
+                                     trunk and PR count below. -->
                                 <button
                                     type="button"
                                     data-slot="stack-group-header"
-                                    class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[12px] text-moire-muted transition-colors hover:bg-moire-hover"
+                                    class="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-moire-hover"
                                     :aria-expanded="!foldedStacks.has(item.stackId)"
                                     @click="toggleStack(item.stackId)"
                                 >
@@ -297,20 +300,33 @@ const updated = computed(() =>
                                         :size="14"
                                         class="shrink-0 text-moire-faint"
                                     />
-                                    <Layers :size="14" class="shrink-0" />
-                                    <span>
-                                        Stack on
-                                        <span class="font-mono text-moire-file-fg">{{
-                                            item.trunk
-                                        }}</span>
-                                    </span>
-                                    <span class="text-moire-faint">
-                                        · {{ item.prs.length }}
-                                        {{ item.prs.length === 1 ? 'PR' : 'PRs' }}
-                                        <template v-if="item.prs.length < item.total">
-                                            of {{ item.total }}
-                                        </template>
-                                    </span>
+                                    <Layers :size="18" class="shrink-0 text-moire-muted" />
+                                    <div class="min-w-0 flex-1">
+                                        <div
+                                            data-slot="stack-group-title"
+                                            class="truncate text-[13px] font-medium text-moire-fg"
+                                        >
+                                            {{ item.title || `Stack on ${item.trunk}` }}
+                                        </div>
+                                        <div
+                                            class="flex min-w-0 items-center gap-1.5 pt-0.5 text-[12px] text-moire-muted"
+                                        >
+                                            <span class="shrink-0">
+                                                Stack on
+                                                <span class="font-mono text-[11px]">{{
+                                                    item.trunk
+                                                }}</span>
+                                            </span>
+                                            <span class="text-moire-faint">·</span>
+                                            <span class="shrink-0">
+                                                {{ item.prs.length }}
+                                                {{ item.prs.length === 1 ? 'PR' : 'PRs' }}
+                                                <template v-if="item.prs.length < item.total">
+                                                    of {{ item.total }}
+                                                </template>
+                                            </span>
+                                        </div>
+                                    </div>
                                 </button>
                                 <!-- The stack's PRs as in the PR view's Stack tab, without
                                      the cards: a numbered circle per PR, centered on its

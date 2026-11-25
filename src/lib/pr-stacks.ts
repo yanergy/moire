@@ -8,13 +8,16 @@
 export interface StackPosition {
     index: number; // 1-based
     total: number;
-    // The stack it is in: its bottom PR's number, and the branch that PR is on.
+    // The stack it is in: its bottom PR's number and title, and the branch that PR
+    // is on.
     stackId: number;
+    stackTitle: string;
     trunk: string;
 }
 
 interface StackablePr {
     number: number;
+    title?: string;
     headRefName: string;
     baseRefName: string;
     isCrossRepository?: boolean;
@@ -79,6 +82,7 @@ export function stackPositions(prs: StackablePr[]): Map<number, StackPosition> {
                 index: i + 1,
                 total: order.length,
                 stackId: root.number,
+                stackTitle: root.title ?? '',
                 trunk: root.baseRefName,
             })
         );
@@ -91,7 +95,14 @@ export function stackPositions(prs: StackablePr[]): Map<number, StackPosition> {
 // stack order, at the place of its first PR in the list; every other PR as is.
 export type StackListItem<T> =
     | { kind: 'pr'; pr: T }
-    | { kind: 'stack'; stackId: number; trunk: string; total: number; prs: T[] };
+    | {
+          kind: 'stack';
+          stackId: number;
+          title: string;
+          trunk: string;
+          total: number;
+          prs: T[];
+      };
 
 export function groupByStack<T extends { number: number }>(
     prs: T[],
@@ -111,6 +122,7 @@ export function groupByStack<T extends { number: number }>(
             group = {
                 kind: 'stack',
                 stackId: position.stackId,
+                title: position.stackTitle,
                 trunk: position.trunk,
                 total: position.total,
                 prs: [],

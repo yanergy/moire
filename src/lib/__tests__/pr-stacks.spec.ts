@@ -17,7 +17,13 @@ describe('stackPositions', () => {
             pr(9, 'x', 'development'),
         ]);
 
-        expect(positions.get(1)).toEqual({ index: 1, total: 3, stackId: 1, trunk: 'development' });
+        expect(positions.get(1)).toEqual({
+            index: 1,
+            total: 3,
+            stackId: 1,
+            stackTitle: '',
+            trunk: 'development',
+        });
         expect(positions.get(2)).toMatchObject({ index: 2, total: 3, stackId: 1 });
         expect(positions.get(3)).toMatchObject({ index: 3, total: 3, stackId: 1 });
         expect(positions.has(9)).toBe(false);
@@ -72,7 +78,24 @@ describe('groupByStack', () => {
         const all = [pr(1, 'a', 'main'), pr(2, 'b', 'a'), pr(3, 'c', 'b')];
         const items = groupByStack([all[2]!, all[0]!], stackPositions(all));
         expect(items).toEqual([
-            { kind: 'stack', stackId: 1, trunk: 'main', total: 3, prs: [all[0], all[2]] },
+            {
+                kind: 'stack',
+                stackId: 1,
+                title: '',
+                trunk: 'main',
+                total: 3,
+                prs: [all[0], all[2]],
+            },
         ]);
+    });
+
+    it('names a group after the first PR of its stack', () => {
+        const all = [
+            { number: 1, title: 'Add the base', headRefName: 'a', baseRefName: 'main' },
+            { number: 2, title: 'Build on it', headRefName: 'b', baseRefName: 'a' },
+        ];
+        // Even when the list holds only a later PR of the stack.
+        const items = groupByStack([all[1]!], stackPositions(all));
+        expect(items[0]).toMatchObject({ kind: 'stack', title: 'Add the base' });
     });
 });

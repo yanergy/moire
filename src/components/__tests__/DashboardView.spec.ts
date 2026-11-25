@@ -110,7 +110,13 @@ describe('DashboardView', () => {
                     toReview: [
                         dashboardPr({ id: 'T', number: 3, headRefName: 'c', baseRefName: 'b' }),
                         dashboardPr({ id: 'S', number: 7, headRefName: 's', baseRefName: 'main' }),
-                        dashboardPr({ id: 'B', number: 1, headRefName: 'a', baseRefName: 'main' }),
+                        dashboardPr({
+                            id: 'B',
+                            number: 1,
+                            title: 'Add the base',
+                            headRefName: 'a',
+                            baseRefName: 'main',
+                        }),
                         dashboardPr({ id: 'M', number: 2, headRefName: 'b', baseRefName: 'a' }),
                     ],
                 }),
@@ -120,6 +126,7 @@ describe('DashboardView', () => {
         await wrapper.getComponent(DashboardCard).trigger('click');
         const group = wrapper.get('[data-slot="stack-group"]');
         expect(group.get('[data-slot="stack-group-header"]').text()).toContain('Stack on main');
+        expect(group.get('[data-slot="stack-group-title"]').text()).toBe('Add the base');
         expect(group.text()).toContain('3 PRs');
         // In stack order inside the group; the unstacked PR stays outside it.
         expect(group.findAll('[data-slot="stack-group-position"]').map((b) => b.text())).toEqual([
