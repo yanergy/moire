@@ -2402,7 +2402,7 @@ function renderComment(comment: PrComment): string {
                                         :class="
                                             composerOpen
                                                 ? 'min-h-20'
-                                                : 'min-h-12 resize-none border-transparent'
+                                                : 'min-h-16 resize-none border-transparent'
                                         "
                                     />
                                     <span v-if="postError" class="text-[12px] text-moire-status-d">
