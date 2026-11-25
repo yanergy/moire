@@ -169,7 +169,7 @@ describe('DashboardView', () => {
         expect(wrapper.get('[data-slot="stack-group-header"]').text()).toContain('2 PRs');
 
         // Progress over the whole stack: neither PR is approved yet.
-        expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('0/2 ready');
+        expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('0/2 ready to merge');
         expect(wrapper.find('[data-slot="stack-group-progress-fill"]').exists()).toBe(false);
     });
 
@@ -190,7 +190,7 @@ describe('DashboardView', () => {
         expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(shown);
     });
 
-    it('fills the stack progress pie by the share of ready PRs', async () => {
+    it('fills the stack progress ring by the share of PRs ready to merge', async () => {
         const ready = { reviewDecision: 'APPROVED', ci: 'passing' } as const;
         const { wrapper } = await mountView(
             dashboardState({
@@ -217,7 +217,7 @@ describe('DashboardView', () => {
         );
 
         await wrapper.getComponent(DashboardCard).trigger('click');
-        expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('2/3 ready');
+        expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('2/3 ready to merge');
         const fill = wrapper.get('[data-slot="stack-group-progress-fill"]');
         expect(Number(fill.attributes('stroke-dasharray')!.split(' ')[0])).toBeCloseTo(200 / 3);
     });

@@ -52,7 +52,11 @@ const selectedItems = computed(() =>
     groupByStack(selected.value?.prs ?? [], dashboard.prStackPositions, dashboard.openPrsByNumber)
 );
 
-// How many PRs of a stack group are ready (or merged), for its progress pie.
+// The stack progress ring's radius: a circumference of 100, so arc lengths are
+// percentages (as in PrReviewers' ring).
+const RING_RADIUS = 100 / (2 * Math.PI);
+
+// How many PRs of a stack group are ready (or merged), for its progress ring.
 function stackReady(item: { members: { pr: DashboardPr }[] }): number {
     return item.members.filter((m) => prIsReady(m.pr)).length;
 }
@@ -337,32 +341,39 @@ const updated = computed(() =>
                                             </span>
                                         </div>
                                     </div>
-                                    <!-- How far the stack is: a solid pie, green for the
-                                         share of its PRs that are ready (approved, checks
-                                         green) or merged. -->
+                                    <!-- How far the stack is: a ring like the Reviewers tab's,
+                                         green for the share of its PRs that are ready to
+                                         merge (approved, checks green or none) or merged,
+                                         grey for the rest. -->
                                     <span
                                         data-slot="stack-group-progress"
                                         class="flex shrink-0 items-center gap-2 text-[12px] text-moire-muted"
                                     >
-                                        {{ stackReady(item) }}/{{ item.members.length }} ready
-                                        <svg viewBox="0 0 20 20" class="size-4" aria-hidden="true">
+                                        {{ stackReady(item) }}/{{ item.members.length }}
+                                        ready to merge
+                                        <svg
+                                            viewBox="0 0 36 36"
+                                            class="size-5 -rotate-90"
+                                            aria-hidden="true"
+                                        >
                                             <circle
-                                                cx="10"
-                                                cy="10"
-                                                r="10"
-                                                class="fill-moire-border"
+                                                cx="18"
+                                                cy="18"
+                                                :r="RING_RADIUS"
+                                                fill="none"
+                                                stroke-width="5"
+                                                class="stroke-moire-border"
                                             />
                                             <circle
                                                 v-if="stackReady(item)"
                                                 data-slot="stack-group-progress-fill"
-                                                cx="10"
-                                                cy="10"
-                                                r="5"
+                                                cx="18"
+                                                cy="18"
+                                                :r="RING_RADIUS"
                                                 fill="none"
-                                                stroke-width="10"
+                                                stroke-width="5"
                                                 pathLength="100"
-                                                class="-rotate-90 stroke-moire-status-a"
-                                                style="transform-origin: center"
+                                                class="stroke-moire-status-a"
                                                 :stroke-dasharray="`${(stackReady(item) / item.members.length) * 100} 100`"
                                             />
                                         </svg>
