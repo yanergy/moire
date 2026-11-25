@@ -540,6 +540,20 @@ describe('registerIpcHandlers', () => {
     });
 
     describe('gh:pr-stack', () => {
+        beforeEach(() => {
+            state.getRepoBranches.mockResolvedValue({ main: 'master', development: 'development' });
+        });
+
+        it("passes the repo's main and development branch as trunks", async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.getPrStack.mockResolvedValue(null);
+            await invoke('gh:pr-stack', 'b');
+            expect(state.getPrStack).toHaveBeenCalledWith('/repos/moire', 'b', undefined, [
+                'master',
+                'development',
+            ]);
+        });
+
         const entry = (number: number, head: string, base: string, state = 'OPEN') => ({
             number,
             headRefName: head,

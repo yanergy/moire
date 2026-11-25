@@ -62,78 +62,98 @@ function open(entry: PrStackEntry) {
         >
             {{ error }}
         </p>
-        <ol class="flex flex-col gap-1">
-            <li v-for="(entry, index) in rows" :key="entry.number">
-                <component
-                    :is="canOpen(entry) ? 'button' : 'div'"
-                    :type="canOpen(entry) ? 'button' : undefined"
-                    data-slot="stack-entry"
-                    :data-current="entry.isCurrent || undefined"
-                    :aria-current="entry.isCurrent ? 'true' : undefined"
-                    class="flex w-full items-start gap-3 rounded-md border-l-[3px] py-2.5 pr-3 pl-2.5 text-left"
-                    :class="[
-                        entry.isCurrent
-                            ? 'border-moire-accent bg-moire-hover'
-                            : 'border-transparent',
-                        canOpen(entry) ? 'cursor-pointer hover:bg-moire-hover' : '',
-                    ]"
-                    @click="open(entry)"
-                >
+        <!-- A timeline like the conversation's: a numbered dot per PR, joined to
+             the next by a line, beside a bordered card. -->
+        <ol>
+            <li v-for="(entry, index) in rows" :key="entry.number" class="flex gap-3">
+                <div class="flex w-6 shrink-0 flex-col items-center">
                     <span
                         data-slot="stack-position"
-                        class="w-5 shrink-0 pt-px text-right font-mono text-[12px] text-moire-faint"
+                        class="flex size-6 shrink-0 items-center justify-center rounded-full border font-mono text-[11px]"
+                        :class="
+                            entry.isCurrent
+                                ? 'border-moire-accent bg-moire-accent text-white'
+                                : 'border-moire-border bg-moire-app text-moire-muted'
+                        "
                     >
                         {{ index + 1 }}
                     </span>
-                    <component
-                        :is="entry.state === 'MERGED' ? GitMerge : GitPullRequest"
-                        :size="14"
-                        class="mt-0.5 shrink-0"
-                        :class="
-                            entry.state === 'MERGED' ? 'text-moire-faint' : 'text-moire-status-a'
-                        "
+                    <span
+                        v-if="index < rows.length - 1"
+                        data-slot="stack-connector"
+                        class="w-px flex-1 bg-moire-border"
                     />
-                    <span class="flex min-w-0 flex-1 flex-col gap-1">
-                        <span class="flex min-w-0 items-center gap-2 text-[12.5px]">
-                            <span class="min-w-0 truncate text-moire-fg">
-                                <span class="text-moire-faint">#{{ entry.number }}</span>
-                                {{ entry.title }}
+                </div>
+                <div class="min-w-0 flex-1" :class="{ 'pb-3': index < rows.length - 1 }">
+                    <component
+                        :is="canOpen(entry) ? 'button' : 'div'"
+                        :type="canOpen(entry) ? 'button' : undefined"
+                        data-slot="stack-entry"
+                        :data-current="entry.isCurrent || undefined"
+                        :aria-current="entry.isCurrent ? 'true' : undefined"
+                        class="flex w-full items-start gap-2.5 rounded-lg border bg-moire-app px-3.5 py-2.5 text-left transition-colors"
+                        :class="[
+                            entry.isCurrent ? 'border-moire-accent' : 'border-moire-border',
+                            canOpen(entry) ? 'cursor-pointer hover:bg-moire-hover' : '',
+                        ]"
+                        @click="open(entry)"
+                    >
+                        <component
+                            :is="entry.state === 'MERGED' ? GitMerge : GitPullRequest"
+                            :size="14"
+                            class="mt-0.5 shrink-0"
+                            :class="
+                                entry.state === 'MERGED'
+                                    ? 'text-moire-faint'
+                                    : 'text-moire-status-a'
+                            "
+                        />
+                        <span class="flex min-w-0 flex-1 flex-col gap-1">
+                            <span class="flex min-w-0 items-center gap-2 text-[12.5px]">
+                                <span class="min-w-0 truncate text-moire-fg">
+                                    <span class="text-moire-faint">#{{ entry.number }}</span>
+                                    {{ entry.title }}
+                                </span>
+                                <span
+                                    v-if="entry.isCurrent"
+                                    class="shrink-0 text-[11px] font-medium text-moire-accent"
+                                >
+                                    This PR
+                                </span>
                             </span>
-                            <span
-                                v-if="entry.isCurrent"
-                                class="shrink-0 text-[11px] font-medium text-moire-accent"
-                            >
-                                This PR
+                            <span class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px]">
+                                <span class="font-mono text-moire-faint">
+                                    {{ entry.headRefName }}
+                                </span>
+                                <span v-if="entry.state === 'MERGED'" class="text-moire-faint">
+                                    Merged
+                                </span>
+                                <span v-else-if="entry.isDraft" class="text-moire-faint">
+                                    Draft
+                                </span>
+                                <span v-if="reviewLabel(entry)" :class="reviewLabel(entry)!.cls">
+                                    {{ reviewLabel(entry)!.text }}
+                                </span>
+                                <span
+                                    v-if="entry.needsRetarget"
+                                    data-slot="stack-retarget"
+                                    class="flex items-center gap-1 text-moire-status-d"
+                                >
+                                    <CircleAlert :size="12" />
+                                    Base PR merged: retarget onto {{ stack.trunk }}
+                                </span>
+                                <span
+                                    v-else-if="entry.needsRebase"
+                                    data-slot="stack-rebase"
+                                    class="flex items-center gap-1 text-moire-status-d"
+                                >
+                                    <CircleAlert :size="12" />
+                                    Needs a rebase onto {{ entry.baseRefName }}
+                                </span>
                             </span>
                         </span>
-                        <span class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px]">
-                            <span class="font-mono text-moire-faint">{{ entry.headRefName }}</span>
-                            <span v-if="entry.state === 'MERGED'" class="text-moire-faint">
-                                Merged
-                            </span>
-                            <span v-else-if="entry.isDraft" class="text-moire-faint">Draft</span>
-                            <span v-if="reviewLabel(entry)" :class="reviewLabel(entry)!.cls">
-                                {{ reviewLabel(entry)!.text }}
-                            </span>
-                            <span
-                                v-if="entry.needsRetarget"
-                                data-slot="stack-retarget"
-                                class="flex items-center gap-1 text-moire-status-d"
-                            >
-                                <CircleAlert :size="12" />
-                                Base PR merged: retarget onto {{ stack.trunk }}
-                            </span>
-                            <span
-                                v-else-if="entry.needsRebase"
-                                data-slot="stack-rebase"
-                                class="flex items-center gap-1 text-moire-status-d"
-                            >
-                                <CircleAlert :size="12" />
-                                Needs a rebase onto {{ entry.baseRefName }}
-                            </span>
-                        </span>
-                    </span>
-                </component>
+                    </component>
+                </div>
             </li>
         </ol>
     </div>

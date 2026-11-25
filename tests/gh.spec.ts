@@ -1362,6 +1362,18 @@ describe('stacked PRs', () => {
         ]);
     });
 
+    it('never takes a merged PR from a trunk branch as a base PR', () => {
+        // A "development into master" release PR merged earlier: the current PR,
+        // based on development, is not stacked on it.
+        const release = pr(4514, 'development', 'master');
+        expect(buildStack('feat', [pr(4566, 'feat', 'development')], [release])).toBeNull();
+
+        // The repo's own trunk names count too, from its settings.
+        const trunk = pr(1, 'trunk-x', 'main');
+        expect(buildStack('feat', [pr(2, 'feat', 'trunk-x')], [trunk], ['trunk-x'])).toBeNull();
+        expect(buildStack('feat', [pr(2, 'feat', 'trunk-x')], [trunk])!.entries).toHaveLength(2);
+    });
+
     it('stops on a cycle instead of looping', () => {
         const open = [pr(1, 'a', 'b'), pr(2, 'b', 'a')];
         expect(buildStack('a', open, [])!.entries).toHaveLength(2);

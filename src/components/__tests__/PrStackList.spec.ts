@@ -51,7 +51,7 @@ describe('PrStackList', () => {
         const wrapper = mount(PrStackList, { props: { stack } });
         const rows = wrapper.findAll('[data-slot="stack-entry"]');
 
-        expect(rows.map((r) => r.get('[data-slot="stack-position"]').text())).toEqual([
+        expect(wrapper.findAll('[data-slot="stack-position"]').map((p) => p.text())).toEqual([
             '1',
             '2',
             '3',
@@ -62,6 +62,8 @@ describe('PrStackList', () => {
         expect(rows[1]!.attributes('data-current')).toBe('true');
         expect(rows[1]!.classes()).toContain('border-moire-accent');
         expect(rows[1]!.text()).toContain('This PR');
+        // A line joins each PR to the next, none after the last.
+        expect(wrapper.findAll('[data-slot="stack-connector"]')).toHaveLength(2);
         expect(rows[0]!.text()).toContain('Approved');
         expect(rows[2]!.text()).toContain('Draft');
         expect(rows[2]!.find('[data-slot="stack-rebase"]').text()).toContain('rebase onto b');

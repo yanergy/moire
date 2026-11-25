@@ -719,14 +719,38 @@ const STACK_FIELDS = 'number,title,url,headRefName,baseRefName,isDraft,reviewDec
 // PR's head ends the walk, as the base the bottom PR must be retargeted from),
 // then head branches up through every dependent PR, depth first. Null when the PR
 // is not in a stack (no PR below or above it). Pure, for testing.
-export function buildStack(head: string, open: GhStackPr[], merged: GhStackPr[]): PrStack | null {
+// Branch names that are trunks rather than a stacked PR's branch. A merged PR from
+// one of these (a "development into master" release PR, say) is not a base PR the
+// stack sits on, so it never joins the stack.
+const LONG_LIVED_BRANCHES = [
+    'main',
+    'master',
+    'develop',
+    'development',
+    'dev',
+    'staging',
+    'production',
+    'release',
+];
+
+// `longLived` adds the repo's own trunk names (its main and development branch from
+// the Settings page) to LONG_LIVED_BRANCHES.
+export function buildStack(
+    head: string,
+    open: GhStackPr[],
+    merged: GhStackPr[],
+    longLived: string[] = []
+): PrStack | null {
     const current = open.find((pr) => pr.headRefName === head);
     if (!current) {
         return null;
     }
 
     const openByHead = new Map(open.map((pr) => [pr.headRefName, pr]));
-    const mergedByHead = new Map(merged.map((pr) => [pr.headRefName, pr]));
+    const trunks = new Set([...LONG_LIVED_BRANCHES, ...longLived]);
+    const mergedByHead = new Map(
+        merged.filter((pr) => !trunks.has(pr.headRefName)).map((pr) => [pr.headRefName, pr])
+    );
     const entry = (pr: GhStackPr, state: PrStackEntry['state']): PrStackEntry => ({
         number: pr.number,
         title: pr.title,
@@ -793,7 +817,8 @@ export function buildStack(head: string, open: GhStackPr[], merged: GhStackPr[])
 export async function getPrStack(
     repoPath: string,
     head: string,
-    run: GhRunner = defaultRunner
+    run: GhRunner = defaultRunner,
+    longLived: string[] = []
 ): Promise<PrStack | null> {
     if (!repoPath || !head || head === WORKING_TREE) {
         return null;
@@ -807,7 +832,7 @@ export async function getPrStack(
 
     try {
         const [open, merged] = await Promise.all([list('open', 200), list('merged', 50)]);
-        return buildStack(head, open, merged);
+        return buildStack(head, open, merged, longLived);
     } catch {
         return null;
     }

@@ -449,7 +449,10 @@ function registerIpcHandlers({
     // what the PRs show, falling back to local ones.
     handle('gh:pr-stack', async (head: string) => {
         const repo = requireRepo();
-        const stack = await getPrStack(repo.repoPath, head);
+        // The repo's own main and development branch are trunks, not stacked PRs.
+        const { main, development } = await getRepoBranches(repo.repoPath);
+        const longLived = [main, development].filter((b): b is string => !!b);
+        const stack = await getPrStack(repo.repoPath, head, undefined, longLived);
         if (!stack) {
             return null;
         }
