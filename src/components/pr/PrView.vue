@@ -531,6 +531,11 @@ const posting = ref(false);
 const postError = ref('');
 const composerCollapsed = ref(false);
 const composerInput = ref<InstanceType<typeof Textarea> | null>(null);
+function clearComposer() {
+    draft.value = '';
+    postError.value = '';
+}
+
 async function expandComposer() {
     composerCollapsed.value = false;
     await nextTick();
@@ -2423,19 +2428,33 @@ function renderComment(comment: PrComment): string {
                                             </TooltipTrigger>
                                             <TooltipContent>Collapse comment box</TooltipContent>
                                         </Tooltip>
-                                        <Button
-                                            size="sm"
-                                            class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
-                                            :disabled="!draft.trim() || posting"
-                                            @click="submitComment"
-                                        >
-                                            <LoaderCircle
-                                                v-if="posting"
-                                                :size="14"
-                                                class="animate-spin"
-                                            />
-                                            Comment
-                                        </Button>
+                                        <div class="flex items-center gap-2">
+                                            <!-- Clears the draft (and any error), leaving the
+                                                 box open. -->
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                data-slot="composer-cancel"
+                                                class="h-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                                :disabled="(!draft && !postError) || posting"
+                                                @click="clearComposer"
+                                            >
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
+                                                :disabled="!draft.trim() || posting"
+                                                @click="submitComment"
+                                            >
+                                                <LoaderCircle
+                                                    v-if="posting"
+                                                    :size="14"
+                                                    class="animate-spin"
+                                                />
+                                                Comment
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

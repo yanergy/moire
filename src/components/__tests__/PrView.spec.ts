@@ -877,6 +877,19 @@ describe('PrView', () => {
             expect(commentButton().attributes('disabled')).toBeUndefined();
         });
 
+        it('clears the draft with Cancel', async () => {
+            const wrapper = mountWith({ ...PR, comments: [] });
+            const cancel = () => wrapper.get('[data-slot="composer-cancel"]');
+            expect(cancel().attributes('disabled')).toBeDefined();
+
+            const box = wrapper.get('textarea[aria-label="Add a comment"]');
+            await box.setValue('Never mind');
+            await cancel().trigger('click');
+
+            expect((box.element as HTMLTextAreaElement).value).toBe('');
+            expect(cancel().attributes('disabled')).toBeDefined();
+        });
+
         it('collapses the composer to a one-line bar, keeping the draft', async () => {
             const wrapper = mountWith({ ...PR, comments: [] });
             await wrapper.get('textarea[aria-label="Add a comment"]').setValue('Half a thought');
