@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, useTemplateRef, wa
 import { LoaderCircle, X } from '@lucide/vue';
 import { monacoThemeFor } from '@/lib/monaco-themes';
 import { renderMarkdown } from '@/lib/markdown';
+import { findWidgetOffset, revealDelta, scrollParent } from '@/lib/diff-find';
 import { timeSince } from '@/lib/status-bar';
 import type {
     CheckAnnotation,
@@ -721,7 +722,125 @@ function onDocMouseDown(e: MouseEvent) {
 function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
         closeThreadPopover();
+        return;
     }
+
+    openFindFromWindow(e);
+}
+
+// Cmd/Ctrl+F opens Monaco's find widget. Monaco handles it itself while one of its
+// editors has focus; this covers the rest (focus on the file tree, say), so the
+// shortcut works whenever the single-file diff is on screen. Text fields keep
+// their own Cmd+F. The stacked view has one editor per file and no obvious
+// target, so there it needs a click into the file first.
+function openFindFromWindow(e: KeyboardEvent) {
+    if (!editor || props.fitContent || e.defaultPrevented) {
+        return;
+    }
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'f') {
+        return;
+    }
+    const target = e.target;
+    if (target instanceof Element && target.closest('input, textarea, [contenteditable="true"]')) {
+        return;
+    }
+
+    e.preventDefault();
+    const modifiedEditor = editor.getModifiedEditor();
+    modifiedEditor.focus();
+    void modifiedEditor.getAction('actions.find')?.run();
+}
+
+// The slice of Monaco's find controller read here (not in the public typings).
+interface FindController {
+    getState(): {
+        isRevealed: boolean;
+        onFindReplaceStateChange: (cb: () => void) => { dispose: () => void };
+    };
+}
+
+function findControllerOf(sub: monaco.editor.ICodeEditor): FindController | null {
+    return sub.getContribution<monaco.editor.IEditorContribution & FindController>(
+        'editor.contrib.findController'
+    );
+}
+
+// The stacked view only (see lib/diff-find): keep each side's find widget below
+// the sticky header as the page scrolls, and scroll the page to each match the
+// widget selects, since the content-sized editor cannot scroll to it itself.
+let findListeners: { dispose: () => void }[] = [];
+let findScroller: HTMLElement | null = null;
+
+function pinFindWidget(sub: monaco.editor.ICodeEditor) {
+    const node = sub.getDomNode();
+    const widget = node?.querySelector<HTMLElement>('.find-widget');
+    if (!node || !widget || !findScroller) {
+        return;
+    }
+
+    const offset = findWidgetOffset(
+        findScroller.getBoundingClientRect().top,
+        node.getBoundingClientRect().top,
+        node.clientHeight,
+        widget.offsetHeight
+    );
+    widget.style.marginTop = `${offset}px`;
+}
+
+function pinFindWidgets() {
+    if (!editor) {
+        return;
+    }
+
+    pinFindWidget(editor.getOriginalEditor());
+    pinFindWidget(editor.getModifiedEditor());
+}
+
+function revealFindMatch(sub: monaco.editor.ICodeEditor) {
+    const node = sub.getDomNode();
+    const selection = sub.getSelection();
+    if (!node || !selection || !findScroller || !findControllerOf(sub)?.getState().isRevealed) {
+        return;
+    }
+
+    const box = findScroller.getBoundingClientRect();
+    const lineTop =
+        node.getBoundingClientRect().top + sub.getTopForLineNumber(selection.startLineNumber);
+    const delta = revealDelta(
+        lineTop,
+        sub.getOption(monaco.editor.EditorOption.lineHeight),
+        box.top,
+        box.height
+    );
+    if (delta !== 0) {
+        findScroller.scrollTop += delta;
+    }
+}
+
+function setUpStackedFind() {
+    if (!editor || !props.fitContent) {
+        return;
+    }
+
+    findScroller = scrollParent(containerRef.value);
+    findScroller?.addEventListener('scroll', pinFindWidgets, { passive: true });
+    for (const sub of [editor.getOriginalEditor(), editor.getModifiedEditor()]) {
+        findListeners.push(sub.onDidChangeCursorSelection(() => revealFindMatch(sub)));
+        const state = findControllerOf(sub)?.getState();
+        if (state) {
+            findListeners.push(state.onFindReplaceStateChange(() => pinFindWidget(sub)));
+        }
+    }
+}
+
+function tearDownStackedFind() {
+    for (const listener of findListeners) {
+        listener.dispose();
+    }
+
+    findListeners = [];
+    findScroller?.removeEventListener('scroll', pinFindWidgets);
+    findScroller = null;
 }
 
 function buildModels() {
@@ -1013,6 +1132,7 @@ onMounted(() => {
         originalEditor.onMouseLeave(() => showAddButton(null, 'LEFT')),
     ];
     window.addEventListener('keydown', onKeydown);
+    setUpStackedFind();
     // Dismiss the popover on a click anywhere outside it and the editor.
     document.addEventListener('mousedown', onDocMouseDown);
     // fitContent tracks the content height: an initial sync happens on the first
@@ -1136,6 +1256,7 @@ onBeforeUnmount(() => {
     }
 
     contentSizeListeners = [];
+    tearDownStackedFind();
     window.removeEventListener('keydown', onKeydown);
     document.removeEventListener('mousedown', onDocMouseDown);
     // The editor first, so it lets go of its models before they are disposed.

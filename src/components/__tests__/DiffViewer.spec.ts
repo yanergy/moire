@@ -162,6 +162,42 @@ describe('DiffViewer', () => {
         expect(editor.createDiffEditor).toHaveBeenCalled();
     });
 
+    describe('Cmd+F', () => {
+        const press = (init: KeyboardEventInit, target: EventTarget = window) =>
+            target.dispatchEvent(
+                new KeyboardEvent('keydown', { key: 'f', bubbles: true, ...init })
+            );
+
+        it('opens the find widget in the head side from anywhere but a text field', () => {
+            const wrapper = mount(DiffViewer, { props: { ...baseProps }, attachTo: document.body });
+            const modified = lastEditor().getModifiedEditor();
+
+            press({ metaKey: true });
+            expect(modified.focus).toHaveBeenCalled();
+            expect(modified.findAction.run).toHaveBeenCalledTimes(1);
+
+            press({ ctrlKey: true });
+            expect(modified.findAction.run).toHaveBeenCalledTimes(2);
+
+            const input = document.createElement('input');
+            document.body.append(input);
+            press({ metaKey: true }, input);
+            press({ metaKey: true, shiftKey: true });
+            press({});
+            expect(modified.findAction.run).toHaveBeenCalledTimes(2);
+
+            wrapper.unmount();
+            input.remove();
+        });
+
+        it('leaves the shortcut alone in the stacked view', () => {
+            const wrapper = mount(DiffViewer, { props: { ...baseProps, fitContent: true } });
+            press({ metaKey: true });
+            expect(lastEditor().getModifiedEditor().findAction.run).not.toHaveBeenCalled();
+            wrapper.unmount();
+        });
+    });
+
     it('selects the first change on the first press, then steps to the boundaries', () => {
         const wrapper = mount(DiffViewer, { props: { ...baseProps } });
         const diff = lastEditor();
