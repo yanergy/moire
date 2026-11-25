@@ -330,16 +330,18 @@ describe('DashboardView', () => {
     });
 
     it.each([
-        ['me', false],
-        [['ann'], false],
-        ['all', true],
+        [['me'], false],
+        [['me', 'ann'], true],
+        [['ann'], true],
         [['ann', 'bob'], true],
-    ] as const)('shows avatars on the open card for authors %j: %s', async (authors, shown) => {
-        const pr = dashboardPr({ id: 'O', number: 8, author: 'ann' });
+    ] as const)('shows avatars for the listed authors %j: %s', async (authors, shown) => {
+        const prs = authors.map((author, i) =>
+            dashboardPr({ id: `O${i}`, number: 10 + i, author })
+        );
         const { wrapper } = await mountView(
             dashboardState({
-                authors: authors as DashboardState['authors'],
-                snapshot: dashboardSnapshot({ mine: [pr], open: [pr] }),
+                authors: 'all',
+                snapshot: dashboardSnapshot({ login: 'me', open: prs }),
             })
         );
 
@@ -347,25 +349,24 @@ describe('DashboardView', () => {
             .findAllComponents(DashboardCard)
             .find((card) => card.props('category').key === 'open');
         await open!.trigger('click');
-        expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(shown);
+        const rows = wrapper.findAllComponents(DashboardPrRow);
+        expect(rows).toHaveLength(authors.length);
+        expect(rows.every((row) => row.props('showAvatar') === shown)).toBe(true);
     });
 
-    it.each(['me', ['ann']] as const)(
-        'always shows avatars on the review card, even for authors %j',
-        async (authors) => {
-            const { wrapper } = await mountView(
-                dashboardState({
-                    authors: authors as DashboardState['authors'],
-                    snapshot: dashboardSnapshot({
-                        toReview: [dashboardPr({ id: 'R', number: 8 })],
-                    }),
-                })
-            );
+    it('shows the avatar on a review request, even when it is the only row', async () => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                snapshot: dashboardSnapshot({
+                    login: 'me',
+                    toReview: [dashboardPr({ id: 'R', number: 8, author: 'ann' })],
+                }),
+            })
+        );
 
-            await wrapper.getComponent(DashboardCard).trigger('click');
-            expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(true);
-        }
-    );
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(true);
+    });
 
     it('splits the stack progress ring by where its PRs stand', async () => {
         const ready = { reviewDecision: 'APPROVED', ci: 'passing' } as const;
