@@ -55,6 +55,9 @@ import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
+import PrReviewers from '@/components/pr/PrReviewers.vue';
+import { reviewProgress } from '@/lib/review-progress';
+import { reviewActivityByLogin, type ReviewActivityTarget } from '@/lib/review-activity';
 import ReviewThreadActions from '@/components/pr/ReviewThreadActions.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
@@ -130,8 +133,16 @@ async function refreshPr() {
 }
 
 // The PR view is tabbed, as in the design: the description and conversation under
-// "Conversation", the CI checks under "Checks". Commits are a planned third tab.
-const activeTab = ref<'conversation' | 'checks'>('conversation');
+// "Conversation", the CI checks under "Checks", and who reviews under "Reviewers".
+const activeTab = ref<'conversation' | 'checks' | 'reviewers'>('conversation');
+
+const reviewers = computed(() => pr.value?.reviewers ?? []);
+
+// The Reviewers tab label shows approvals over reviewers, like the Checks tab.
+const reviewersSummary = computed(() => {
+    const { approved, total } = reviewProgress(reviewers.value);
+    return `${approved}/${total}`;
+});
 
 const checks = computed(() => pr.value?.checks ?? []);
 
@@ -384,6 +395,31 @@ async function focusRequestedThread() {
 onMounted(() => void focusRequestedThread());
 watch([() => ui.prFocusThread, comments], () => void focusRequestedThread());
 onBeforeUnmount(() => clearTimeout(focusTimer));
+
+// Each reviewer's reviews and line comments, for their row in the Reviewers tab.
+const reviewerActivity = computed(() =>
+    reviewActivityByLogin(comments.value, comparison.reviewThreads)
+);
+
+// A jump from the Reviewers tab: back to the conversation, then to the thread (as
+// "Show in PR" does) or to the review entry, unfolded and outlined for a moment.
+const focusedEntry = ref<number | null>(null);
+async function jumpToActivity(target: ReviewActivityTarget) {
+    activeTab.value = 'conversation';
+    if ('thread' in target) {
+        ui.prFocusThread = target.thread;
+        return;
+    }
+
+    expandComment(target.entry);
+    await nextTick();
+    document
+        .querySelector(`[data-entry-index="${target.entry}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    focusedEntry.value = target.entry;
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => (focusedEntry.value = null), FOCUS_MS);
+}
 
 // The file name above a thread's code opens that file in the diff, as picking it
 // in the file tree does (the stacked layout scrolls to it).
@@ -872,13 +908,17 @@ const mergeStatus = computed<StatusBox | null>(() => {
 
 // The status box leading the active tab: the merge state on the Conversation tab,
 // the CI checks' state on the Checks tab (only when there are checks to sum up).
-const tabStatus = computed<StatusBox | null>(() =>
-    activeTab.value === 'conversation'
-        ? mergeStatus.value
-        : checks.value.length
-          ? checksStatus.value
-          : null
-);
+// The Reviewers tab carries its own summary line instead.
+const tabStatus = computed<StatusBox | null>(() => {
+    if (activeTab.value === 'conversation') {
+        return mergeStatus.value;
+    }
+    if (activeTab.value === 'checks' && checks.value.length) {
+        return checksStatus.value;
+    }
+
+    return null;
+});
 
 // Open a GitHub URL (the PR, or a check's run) in the user's browser through the
 // preload bridge. The main process only opens http(s).
@@ -1433,6 +1473,22 @@ function renderComment(comment: PrComment): string {
                                     {{ checksSummary }}
                                 </span>
                             </button>
+                            <button
+                                type="button"
+                                data-slot="reviewers-tab"
+                                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                                :class="
+                                    activeTab === 'reviewers'
+                                        ? 'bg-moire-hover text-moire-fg'
+                                        : 'text-moire-muted hover:text-moire-fg'
+                                "
+                                @click="activeTab = 'reviewers'"
+                            >
+                                Reviewers
+                                <span v-if="reviewers.length" class="text-moire-faint">
+                                    {{ reviewersSummary }}
+                                </span>
+                            </button>
                         </div>
 
                         <div class="flex-1" />
@@ -1671,7 +1727,12 @@ function renderComment(comment: PrComment): string {
                         <!-- Conversation entries. One with a body renders as a card
                              matching the description (header bar, then body); a bare
                              review verdict stays a compact one-line row, as on GitHub. -->
-                        <div v-for="(comment, i) in comments" :key="i" class="flex gap-3">
+                        <div
+                            v-for="(comment, i) in comments"
+                            :key="i"
+                            :data-entry-index="i"
+                            class="flex gap-3"
+                        >
                             <div class="flex w-6 shrink-0 flex-col items-center">
                                 <!-- Center the avatar in the header band so it lines up
                                      with the header's middle, with an equal margin above
@@ -1692,7 +1753,8 @@ function renderComment(comment: PrComment): string {
                             <div class="min-w-0 flex-1 pb-5">
                                 <div
                                     v-if="hasCard(comment)"
-                                    class="rounded-lg border border-moire-border bg-moire-app"
+                                    class="rounded-lg border border-moire-border bg-moire-app ring-offset-2 ring-offset-moire-app transition-shadow duration-500"
+                                    :class="focusedEntry === i ? 'ring-2 ring-moire-accent' : ''"
                                 >
                                     <div
                                         class="flex items-center justify-between gap-1.5 px-3.5 py-2.5 text-[13px] text-moire-faint"
@@ -2273,7 +2335,8 @@ function renderComment(comment: PrComment): string {
                                      and no chevron. -->
                                 <div
                                     v-else
-                                    class="flex flex-wrap items-center gap-1.5 text-[13px] text-moire-faint"
+                                    class="flex flex-wrap items-center gap-1.5 rounded text-[13px] text-moire-faint ring-offset-4 ring-offset-moire-app transition-shadow duration-500"
+                                    :class="focusedEntry === i ? 'ring-2 ring-moire-accent' : ''"
                                 >
                                     <span class="text-[14px] font-medium text-moire-fg">
                                         {{ comment.author }}
@@ -2321,6 +2384,12 @@ function renderComment(comment: PrComment): string {
 
                     <!-- Checks: a summary of the CI run, then one row per check
                          (status glyph, name, faint detail), or an empty state. -->
+                    <pr-reviewers
+                        v-else-if="activeTab === 'reviewers'"
+                        :reviewers="reviewers"
+                        :activity="reviewerActivity"
+                        @jump="jumpToActivity"
+                    />
                     <div v-else-if="activeTab === 'checks'">
                         <div v-if="checks.length">
                             <div

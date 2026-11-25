@@ -204,7 +204,12 @@ last branch range are remembered per repository.
 ### Pull requests
 
 - A pull-request viewer for the compared branches: title, status, merge state, labels, description
-  and conversation as Markdown, and a Checks tab with the head commit's CI.
+  and conversation as Markdown, a Checks tab with the head commit's CI, and a Reviewers tab listing
+  the requested reviewers (users and teams) and everyone who reviewed, each with their state
+  (awaiting review, approved, requested changes, commented) under a summary such as
+  "1/2 approved · 1 pending". A re-requested reviewer shows as awaiting review, with their earlier
+  verdict after it ("previously requested changes"). A reviewer's row unfolds to one short line per
+  review or line comment they left, each with a button that jumps to it in the conversation.
 - Inline review threads and CI check annotations show on their lines in the diff. The file tree
   flags each file that carries review threads or annotations.
 - In the PR view's conversation, each review lists its line comments under it: the file (a link
