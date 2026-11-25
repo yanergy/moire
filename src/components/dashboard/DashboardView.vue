@@ -291,6 +291,7 @@ const refreshTooltip = computed(() => {
 
                     <div class="flex-1" />
 
+                    <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
                     <Tooltip>
                         <TooltipTrigger as-child>
                             <Button
@@ -358,7 +359,6 @@ const refreshTooltip = computed(() => {
                             </DropdownMenuCheckboxItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
                     <Tooltip>
                         <TooltipTrigger as-child>
                             <Button
