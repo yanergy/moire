@@ -44,6 +44,21 @@ export function prDotClass(pr: DashboardPr): string {
     return 'bg-moire-pr-open';
 }
 
+// Whether a PR matches the dashboard search. Every whitespace separated term must
+// match the title, the author, either branch, or the number ("12" or "#12").
+export function prMatchesQuery(pr: DashboardPr, query: string): boolean {
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const haystack = [pr.title, pr.author, pr.headRefName, pr.baseRefName].join('\n').toLowerCase();
+    return terms.every((term) => {
+        const number = /^#?(\d+)$/.exec(term);
+        if (number && Number(number[1]) === pr.number) {
+            return true;
+        }
+
+        return haystack.includes(term);
+    });
+}
+
 // Whether a PR is done or ready to merge: merged, or approved with no failing or
 // running checks. Drives a stack group's progress pie.
 export function prIsReady(pr: DashboardPr): boolean {

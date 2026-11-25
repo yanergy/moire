@@ -399,6 +399,8 @@ export interface DashboardPr {
     ci: CiState;
     failedChecks: string[];
     reviews: DashboardReview[];
+    // Left out in snapshots saved before labels were fetched.
+    labels?: PrLabel[];
     // The recent comments, fetched on the viewer's open PRs only.
     comments?: { id: string; author: string }[];
 }

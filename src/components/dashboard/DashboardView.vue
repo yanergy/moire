@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { useRefreshCooldown } from '@/composables/useRefreshCooldown';
 import {
     ArrowLeft,
@@ -7,19 +7,25 @@ import {
     ChevronRight,
     Layers,
     LoaderCircle,
+    MoreHorizontal,
     RefreshCw,
+    Search,
     Settings,
     TriangleAlert,
     Users,
+    X,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
-import { dashboardNotice, stackProgress } from '@/lib/dashboard';
+import { dashboardNotice, prMatchesQuery, stackProgress } from '@/lib/dashboard';
 import { groupByStack } from '@/lib/pr-stacks';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
 import { Button } from '@/components/ui/button';
+import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -47,10 +53,81 @@ const selected = computed(
     () => dashboard.categories.find((category) => category.key === ui.dashboardCard) ?? null
 );
 
-// The card's PRs with each stack gathered into one foldable group, in stack order
-// (see lib/pr-stacks), so PRs that build on each other read together.
+// The search box's text. On a card it narrows the card's PRs; on the overview it
+// lists every PR the dashboard has that matches, in place of the cards.
+const query = ref('');
+const searching = computed(() => query.value.trim() !== '');
+
+// The search bar sits under the header, full width, and is hidden until the
+// header's search button (or Cmd+F, Ctrl+F elsewhere) opens it. Closing it clears
+// the search.
+const searchOpen = ref(false);
+const searchBox = useTemplateRef<HTMLElement>('searchBox');
+const FIND_SHORTCUT = navigator.userAgent.includes('Mac') ? '⌘F' : 'Ctrl+F';
+
+async function openSearch() {
+    searchOpen.value = true;
+    await nextTick();
+    const input = searchBox.value?.querySelector('input');
+    input?.focus();
+    input?.select();
+}
+
+function closeSearch() {
+    query.value = '';
+    searchOpen.value = false;
+}
+
+function toggleSearch() {
+    if (searchOpen.value) {
+        closeSearch();
+        return;
+    }
+    void openSearch();
+}
+
+function onFindKey(event: KeyboardEvent) {
+    if (event.defaultPrevented || event.altKey || event.shiftKey) return;
+    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'f') return;
+    event.preventDefault();
+    void openSearch();
+}
+
+// Every PR in the snapshot once (a PR can sit in several of its lists).
+const allPrs = computed(() => {
+    const snap = dashboard.snapshot;
+    const byId = new Map<string, DashboardPr>();
+    for (const pr of [
+        ...(snap?.toReview ?? []),
+        ...(snap?.mine ?? []),
+        ...(snap?.open ?? []),
+        ...(snap?.merged ?? []),
+    ]) {
+        if (!byId.has(pr.id)) {
+            byId.set(pr.id, pr);
+        }
+    }
+    return [...byId.values()];
+});
+
+// The PRs listed: the card's, or on the overview the search results. Null shows
+// the overview's cards.
+const listedPrs = computed<DashboardPr[] | null>(() => {
+    if (selected.value) {
+        return selected.value.prs.filter((pr) => prMatchesQuery(pr, query.value));
+    }
+    if (!searching.value) {
+        return null;
+    }
+
+    return allPrs.value.filter((pr) => prMatchesQuery(pr, query.value));
+});
+
+// The listed PRs with each stack gathered into one foldable group, in stack order
+// (see lib/pr-stacks), so PRs that build on each other read together. A stack
+// member the search leaves out is shown dimmed, as for a card's own filter.
 const selectedItems = computed(() =>
-    groupByStack(selected.value?.prs ?? [], dashboard.prStackPositions, dashboard.openPrsByNumber)
+    groupByStack(listedPrs.value ?? [], dashboard.prStackPositions, dashboard.openPrsByNumber)
 );
 
 // The stack progress ring's radius: a circumference of 100, so arc lengths are
@@ -99,13 +176,17 @@ const now = ref(Date.now());
 let clock: ReturnType<typeof setInterval> | undefined;
 
 onMounted(() => {
+    window.addEventListener('keydown', onFindKey);
     void dashboard.load();
     clock = setInterval(() => {
         now.value = Date.now();
     }, 30_000);
 });
 
-onBeforeUnmount(() => clearInterval(clock));
+onBeforeUnmount(() => {
+    clearInterval(clock);
+    window.removeEventListener('keydown', onFindKey);
+});
 
 // Another repository opened while the dashboard is showing: reload it (the page
 // resets to the overview with the history, see MoirePage).
@@ -169,13 +250,30 @@ const { coolingDown } = useRefreshCooldown(() => {
     const fetched = Date.parse(dashboard.snapshot?.fetchedAt ?? '');
     return Number.isNaN(fetched) ? null : fetched;
 });
-const refreshTooltip = computed(() => {
+const refreshLabel = computed(() => {
     if (dashboard.loading) {
         return 'Refreshing…';
     }
 
     return coolingDown.value ? 'Refreshed just now' : 'Refresh';
 });
+
+// The header's overflow ("...") menu, holding Refresh and Dashboard settings, as
+// in the PR view. While a refresh runs, its trigger spins in place of the glyph.
+const moreOpen = ref(false);
+
+function refreshFromMenu() {
+    moreOpen.value = false;
+    if (dashboard.loading || coolingDown.value) {
+        return;
+    }
+    void dashboard.refresh();
+}
+
+function openDashboardSettings() {
+    moreOpen.value = false;
+    ui.openSettings('dashboard');
+}
 </script>
 
 <template>
@@ -214,6 +312,24 @@ const refreshTooltip = computed(() => {
                     <div class="flex-1" />
 
                     <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg aria-pressed:bg-moire-hover aria-pressed:text-moire-fg"
+                                :aria-pressed="searchOpen"
+                                data-slot="dashboard-search-toggle"
+                                @click="toggleSearch"
+                            >
+                                <Search :size="16" />
+                                Search
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{{
+                            searchOpen ? 'Close search' : `Open search (${FIND_SHORTCUT})`
+                        }}</TooltipContent>
+                    </Tooltip>
                     <!-- Whose PRs the cards count: the signed in account by default,
                          any mix of authors, or everyone. The other dashboard
                          settings are on the Settings page. -->
@@ -263,33 +379,107 @@ const refreshTooltip = computed(() => {
                             </DropdownMenuCheckboxItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        class="h-7 shrink-0 gap-1.5 border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                        @click="ui.openSettings('dashboard')"
-                    >
-                        <Settings :size="16" />
-                        Dashboard settings
-                    </Button>
-                    <Tooltip>
+                    <!-- Refresh and Dashboard settings tuck into an overflow menu, as in
+                         the PR view. While a refresh runs, the trigger shows the spinner
+                         in place of the "..." glyph. -->
+                    <Popover :open="moreOpen" @update:open="moreOpen = $event">
+                        <!-- The popover's own anchor, outside the tooltip (see PrView). -->
+                        <PopoverAnchor as-child>
+                            <span class="inline-flex shrink-0">
+                                <Tooltip>
+                                    <TooltipTrigger as-child>
+                                        <PopoverTrigger as-child>
+                                            <Button
+                                                variant="outline"
+                                                size="icon-sm"
+                                                class="size-7 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                aria-label="More actions"
+                                                data-slot="dashboard-more"
+                                            >
+                                                <RefreshCw
+                                                    v-if="dashboard.loading"
+                                                    :size="16"
+                                                    class="animate-spin"
+                                                />
+                                                <MoreHorizontal v-else :size="16" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                    </TooltipTrigger>
+                                    <TooltipContent>More actions</TooltipContent>
+                                </Tooltip>
+                            </span>
+                        </PopoverAnchor>
+                        <PopoverContent
+                            align="end"
+                            :side-offset="6"
+                            class="w-48 overflow-hidden border-moire-border bg-moire-pop p-0"
+                            :style="menuSurfaceStyle"
+                        >
+                            <Command class="bg-transparent">
+                                <CommandList>
+                                    <CommandGroup>
+                                        <CommandItem
+                                            value="refresh"
+                                            aria-label="Refresh"
+                                            data-slot="dashboard-refresh"
+                                            :disabled="dashboard.loading || coolingDown"
+                                            class="gap-2 text-xs text-moire-file-fg data-[disabled]:opacity-50 data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                            @select="refreshFromMenu"
+                                        >
+                                            <RefreshCw
+                                                :size="14"
+                                                class="shrink-0 text-moire-faint"
+                                            />
+                                            <span class="flex-1">{{ refreshLabel }}</span>
+                                        </CommandItem>
+                                        <CommandItem
+                                            value="settings"
+                                            data-slot="dashboard-settings"
+                                            class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
+                                            @select="openDashboardSettings"
+                                        >
+                                            <Settings
+                                                :size="14"
+                                                class="shrink-0 text-moire-faint"
+                                            />
+                                            <span class="flex-1">Dashboard settings</span>
+                                        </CommandItem>
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                <!-- Search by title, number, branch or author, with a clear button
+                     inside its right edge while it has text. -->
+                <div v-if="searchOpen" ref="searchBox" class="relative pt-5">
+                    <Search
+                        :size="16"
+                        class="pointer-events-none absolute bottom-2.5 left-3 text-moire-faint"
+                    />
+                    <Input
+                        v-model="query"
+                        placeholder="Search by title, number, branch or author"
+                        aria-label="Search pull requests"
+                        data-slot="dashboard-search"
+                        class="h-9 border-moire-border bg-transparent pr-9 pl-9 text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                        @keydown.escape="closeSearch"
+                    />
+                    <Tooltip v-if="query">
                         <TooltipTrigger as-child>
                             <Button
-                                variant="outline"
-                                size="icon-sm"
-                                class="size-7 shrink-0 border-moire-border text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
-                                aria-label="Refresh"
-                                data-slot="dashboard-refresh"
-                                :disabled="dashboard.loading || coolingDown"
-                                @click="dashboard.refresh()"
+                                variant="ghost"
+                                size="icon-xs"
+                                aria-label="Clear search"
+                                data-slot="dashboard-search-clear"
+                                class="absolute right-1.5 bottom-1.5 size-6 text-moire-faint hover:bg-moire-hover hover:text-moire-fg"
+                                @click="query = ''"
                             >
-                                <RefreshCw
-                                    :size="16"
-                                    :class="{ 'animate-spin': dashboard.loading }"
-                                />
+                                <X :size="14" />
                             </Button>
                         </TooltipTrigger>
-                        <TooltipContent>{{ refreshTooltip }}</TooltipContent>
+                        <TooltipContent>Clear search</TooltipContent>
                     </Tooltip>
                 </div>
 
@@ -305,10 +495,10 @@ const refreshTooltip = computed(() => {
                     Loading pull requests…
                 </div>
 
-                <!-- One card's PRs. -->
-                <div v-else-if="selected" class="pt-6">
+                <!-- One card's PRs, or the overview's search results. -->
+                <div v-else-if="listedPrs" class="pt-6">
                     <div
-                        v-if="selected.prs.length"
+                        v-if="listedPrs.length"
                         class="divide-y divide-moire-border overflow-hidden rounded-lg border border-moire-border"
                     >
                         <template
@@ -477,7 +667,11 @@ const refreshTooltip = computed(() => {
                         </template>
                     </div>
                     <div v-else class="py-10 text-[13px] text-moire-muted">
-                        No pull requests here.
+                        {{
+                            searching
+                                ? `No pull requests match “${query.trim()}”.`
+                                : 'No pull requests here.'
+                        }}
                     </div>
                 </div>
 

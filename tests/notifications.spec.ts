@@ -271,6 +271,27 @@ describe('fetchSnapshot', () => {
         });
     });
 
+    it("maps a PR's labels, dropping nameless ones", async () => {
+        const run = searchRunner({
+            allOpen: {
+                nodes: [
+                    gqlPr({
+                        labels: {
+                            nodes: [
+                                { name: 'bug', color: 'd73a4a', description: null },
+                                null,
+                                { color: 'ffffff' },
+                            ],
+                        },
+                    }),
+                ],
+            },
+        });
+        const { snapshot: snap } = await fetchSnapshot('/repo', 'o/r', now, run);
+
+        expect(snap!.open![0]!.labels).toEqual([{ name: 'bug', color: 'd73a4a', description: '' }]);
+    });
+
     it('derives the review decision from the latest reviews when GitHub leaves it empty', async () => {
         const run = searchRunner({
             mineOpen: {

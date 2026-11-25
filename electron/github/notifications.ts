@@ -15,6 +15,7 @@ import {
     toCheck,
     type GhCheckNode,
     type GhRunner,
+    type PrLabel,
     type PrStatus,
 } from './gh';
 
@@ -64,6 +65,8 @@ export interface DashboardPr {
     ci: CiState;
     failedChecks: string[];
     reviews: DashboardReview[];
+    // Left out in snapshots saved before labels were fetched.
+    labels?: PrLabel[];
     // The recent comments by anyone, for the commented event. Only the viewer's
     // open PRs fetch them, so on other PRs, and in snapshots saved before they
     // existed, it is left out.
@@ -162,6 +165,7 @@ const PR_FIELDS = `
   id number title url isDraft state merged closedAt createdAt updatedAt
   isCrossRepository additions deletions mergeable reviewDecision
   author { login } mergedBy { login } baseRefName headRefName
+  labels(first: 10) { nodes { name color description } }
   latestReviews(first: 50) { nodes { id state author { login } } }
   latestOpinionatedReviews(first: 50) { nodes { state author { login } } }
   reviewRequests(first: 50) { nodes { requestedReviewer {
@@ -199,6 +203,7 @@ fragment Pr on PullRequest {
   id number title url isDraft state merged closedAt createdAt updatedAt
   isCrossRepository additions deletions
   author { login } mergedBy { login } baseRefName headRefName
+  labels(first: 10) { nodes { name color description } }
 }`;
 
 // One search, sent as its own request. One combined query for all of them timed
@@ -234,6 +239,9 @@ interface GqlPr {
     mergedBy?: { login?: string } | null;
     baseRefName?: string;
     headRefName?: string;
+    labels?: {
+        nodes?: ({ name?: string; color?: string; description?: string | null } | null)[];
+    } | null;
     latestReviews?: {
         nodes?: ({ id?: string; state?: string; author?: { login?: string } | null } | null)[];
     } | null;
@@ -406,6 +414,14 @@ function toDashboardPr(node: GqlPr): DashboardPr {
         ci: ciOf(rollup?.state),
         failedChecks,
         reviews,
+        labels: (node.labels?.nodes ?? [])
+            .filter((l) => l !== null)
+            .map((l) => ({
+                name: l.name ?? '',
+                color: l.color ?? '',
+                description: l.description ?? '',
+            }))
+            .filter((l) => l.name),
         ...(comments ? { comments } : {}),
     };
 }

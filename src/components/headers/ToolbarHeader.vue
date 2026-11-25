@@ -95,6 +95,7 @@ function showPresetMenu() {
                 <toolbar-nav-button
                     v-if="comparison.repoPath"
                     :selected="currentPage === 'dashboard'"
+                    :reselectable="ui.dashboardCard !== null"
                     @navigate="ui.openDashboard()"
                 >
                     <LayoutDashboard :size="18" />

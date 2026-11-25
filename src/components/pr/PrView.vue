@@ -66,6 +66,7 @@ import { reviewActivityByLogin, type ReviewActivityTarget } from '@/lib/review-a
 import ReviewThreadActions from '@/components/pr/ReviewThreadActions.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
+import { labelStyle } from '@/lib/labels';
 import type {
     CommentMutationResult,
     PrCheckState,
@@ -855,24 +856,6 @@ function relative(iso: string): string {
     return Number.isNaN(ms) ? '' : timeSince(ms, Date.now());
 }
 
-// Lighten a channel so a dark label color stays legible as text on its own tint.
-const lighten = (c: number) => Math.min(c + 45, 235);
-
-// A label pill, tinted from its GitHub color the way the design tones labels: the
-// color drives a faint fill, a stronger border, and a lightened, legible text.
-// The per-label colors are data, not theme tokens, so they are applied inline.
-function labelStyle(color: string): Record<string, string> {
-    const hex = /^[0-9a-f]{6}$/i.test(color) ? color : '888888';
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-    return {
-        backgroundColor: `rgba(${r}, ${g}, ${b}, 0.14)`,
-        borderColor: `rgba(${r}, ${g}, ${b}, 0.45)`,
-        color: `rgb(${lighten(r)}, ${lighten(g)}, ${lighten(b)})`,
-    };
-}
-
 // The Conversation tab's status box, describing the PR's merge state. Draft,
 // closed, and merged states read first; otherwise it reflects mergeability.
 // UNKNOWN yields no box. `cls` tints the box; `icon` is its colored glyph.
@@ -1304,7 +1287,16 @@ function renderComment(comment: PrComment): string {
 
 <template>
     <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
-        <ScrollArea v-if="pr" ref="scrollArea" class="pr-scroll-area min-h-0 flex-1">
+        <!-- A new range's PR is being looked up: a spinner, not the previous PR. -->
+        <div
+            v-if="comparison.prLoading"
+            data-slot="pr-loading"
+            class="flex min-h-0 flex-1 items-center justify-center gap-2 text-moire-muted"
+        >
+            <LoaderCircle :size="16" class="animate-spin" aria-hidden="true" />
+            Loading pull request…
+        </div>
+        <ScrollArea v-else-if="pr" ref="scrollArea" class="pr-scroll-area min-h-0 flex-1">
             <!-- Extra room at the bottom, so the end of the page (the comment box)
                  can scroll up from the window's bottom edge. -->
             <div class="w-full max-w-[1040px] pb-40">
@@ -2600,7 +2592,11 @@ function renderComment(comment: PrComment): string {
             </div>
         </ScrollArea>
         <!-- Beside the 1040px content column above. -->
-        <scroll-jump-buttons v-if="pr" :target="scrollViewport" :column="1040" />
+        <scroll-jump-buttons
+            v-if="pr && !comparison.prLoading"
+            :target="scrollViewport"
+            :column="1040"
+        />
 
         <!-- Delete confirmation. A modal, deliberately outside the comment card, so
              the destructive action reads clearly and is not mistaken for part of the

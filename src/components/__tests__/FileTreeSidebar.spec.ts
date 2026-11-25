@@ -187,6 +187,46 @@ describe('FileTreeSidebar', () => {
         expect(store.selectedPath).toBe('shared/types.ts');
     });
 
+    describe('modifier click', () => {
+        function openApi() {
+            const openFile = vi
+                .fn<(path: string) => Promise<{ ok: boolean }>>()
+                .mockResolvedValue({ ok: true });
+            window.api = { openFile } as unknown as Window['api'];
+            return openFile;
+        }
+
+        afterEach(() => {
+            delete window.api;
+        });
+
+        it('opens the file in the editor without selecting it', async () => {
+            const openFile = openApi();
+            const wrapper = mountTree();
+            await flushPromises();
+
+            await wrapper.find('[data-path="shared/types.ts"]').trigger('click', { metaKey: true });
+            await wrapper.find('[data-path="shared/types.ts"]').trigger('click', { ctrlKey: true });
+
+            expect(openFile).toHaveBeenCalledTimes(2);
+            expect(openFile).toHaveBeenCalledWith('shared/types.ts');
+            expect(useComparisonStore().selectedPath).toBe('electron/git/parsers.ts');
+        });
+
+        it('does nothing on a deleted file', async () => {
+            const openFile = openApi();
+            const wrapper = mountTree();
+            await flushPromises();
+
+            await wrapper
+                .find('[data-path="src/components/LegacyDiff.vue"]')
+                .trigger('click', { metaKey: true });
+
+            expect(openFile).not.toHaveBeenCalled();
+            expect(useComparisonStore().selectedPath).toBe('electron/git/parsers.ts');
+        });
+    });
+
     it('leaves the PR view for the diff when a file is clicked', async () => {
         const wrapper = mountTree();
         await flushPromises();

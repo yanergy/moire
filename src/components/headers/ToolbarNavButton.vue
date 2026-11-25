@@ -6,9 +6,12 @@ import { Button } from '@/components/ui/button';
 // A toolbar tab that goes to a page (Diff, PR, Dashboard, Notifications,
 // Settings). Not a toggle: the current page's tab shows as selected (underlined in
 // the accent color on the toolbar's bottom edge), and clicking it does nothing, so
-// the only way off a page is another page's tab (or back/forward).
+// the only way off a page is another page's tab (or back/forward). The exception is
+// a selected tab marked `reselectable`: it is on a sub-page of its page (a dashboard
+// card), and clicking it returns to the page itself.
 const props = defineProps<{
     selected: boolean;
+    reselectable?: boolean;
     // A page that is not available right now (the PR tab without a PR): dimmed
     // and inert, but still hoverable so a tooltip around it can say why.
     disabled?: boolean;
@@ -20,9 +23,11 @@ const emit = defineEmits<{
 }>();
 
 function onClick() {
-    if (!props.selected && !props.disabled) {
-        emit('navigate');
+    if (props.disabled || (props.selected && !props.reselectable)) {
+        return;
     }
+
+    emit('navigate');
 }
 </script>
 
@@ -37,7 +42,8 @@ function onClick() {
             cn(
                 'relative h-full gap-2 rounded-none px-2 text-[13px] font-medium text-moire-muted hover:bg-transparent hover:text-moire-fg dark:hover:bg-transparent',
                 selected &&
-                    'cursor-default text-moire-fg after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-moire-accent',
+                    'text-moire-fg after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-moire-accent',
+                selected && !reselectable && 'cursor-default',
                 disabled && 'cursor-default opacity-50 hover:text-moire-muted',
                 props.class
             )

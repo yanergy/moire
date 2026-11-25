@@ -2,6 +2,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import PrView from '@/components/pr/PrView.vue';
+import { nextTick } from 'vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import type { PrComment, PrReviewThread, PrStatus, PullRequest } from '@/shared/types';
@@ -108,6 +109,21 @@ describe('PrView', () => {
         document.body.innerHTML = '';
         // Some task-list tests drive the debounce with fake timers; never leak them.
         vi.useRealTimers();
+    });
+
+    it("shows a spinner instead of the previous PR while the new range's PR loads", async () => {
+        const wrapper = mountWith(PR);
+        const store = useComparisonStore();
+        store.prLoading = true;
+        await nextTick();
+
+        expect(wrapper.find('[data-slot="pr-loading"]').exists()).toBe(true);
+        expect(wrapper.find('[data-slot="pr-header"]').exists()).toBe(false);
+
+        store.prLoading = false;
+        await nextTick();
+        expect(wrapper.find('[data-slot="pr-loading"]').exists()).toBe(false);
+        expect(wrapper.find('[data-slot="pr-header"]').exists()).toBe(true);
     });
 
     it('renders the header, refs, and the description as the first entry', () => {
