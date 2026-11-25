@@ -1144,6 +1144,25 @@ describe('PrView', () => {
             expect(edit).toHaveBeenCalledWith('- [x] todo\n- [ ] done');
         });
 
+        it('ticks a checkbox from a click on its wider hit area, not just the box', async () => {
+            vi.useFakeTimers();
+            const store = useComparisonStore();
+            const edit = vi.spyOn(store, 'editDescription').mockResolvedValue({ ok: true });
+
+            const wrapper = await mountEditable({ ...PR, body: '- [ ] todo' });
+            await enableCheckboxes(wrapper);
+
+            // A click on the label's padding reaches the checkbox natively.
+            await wrapper.get('label.pr-task-hit').trigger('click');
+            expect(
+                (wrapper.get('input.pr-task-checkbox').element as HTMLInputElement).checked
+            ).toBe(true);
+
+            await vi.advanceTimersByTimeAsync(2000);
+            await flushPromises();
+            expect(edit).toHaveBeenCalledWith('- [x] todo');
+        });
+
         it('coalesces several quick ticks into a single write', async () => {
             vi.useFakeTimers();
             const store = useComparisonStore();

@@ -86,12 +86,33 @@
 }
 
 .pr-markdown .pr-task-checkbox {
-    margin: 0 0.5em 0 0;
+    margin: 0;
     vertical-align: middle;
     accent-color: var(--moire-accent);
 }
 
-/* Interactive (edit-mode) checkboxes read as clickable; disabled ones do not. */
+/* The label around each checkbox: 6px of padding on every side widens the click
+   area, and the matching negative margin keeps the box where it was (with the
+   0.5em gap before the item's text). */
+.pr-markdown .pr-task-hit {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    padding: 6px;
+    margin: -6px calc(0.5em - 6px) -6px -6px;
+    border-radius: 4px;
+}
+
+/* Interactive (checkbox mode) checkboxes read as clickable, with a faint hover on
+   the whole hit area; disabled ones do not. */
+.pr-markdown .pr-task-hit:has(.pr-task-checkbox:not([disabled])) {
+    cursor: pointer;
+}
+
+.pr-markdown .pr-task-hit:has(.pr-task-checkbox:not([disabled])):hover {
+    background: var(--moire-hover);
+}
+
 .pr-markdown .pr-task-checkbox:not([disabled]) {
     cursor: pointer;
 }

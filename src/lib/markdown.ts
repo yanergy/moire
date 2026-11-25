@@ -90,6 +90,8 @@ const ALLOWED_TAGS = [
     'details',
     'summary',
     'input',
+    // Wraps a task checkbox to widen its click area (see the task_checkbox rule).
+    'label',
 ];
 
 // Attributes kept on the tags above. Links and images carry href/src/title/alt;
@@ -199,7 +201,10 @@ function taskLists(markdown: typeof md): void {
         const disabled = (env as { interactive?: boolean } | undefined)?.interactive
             ? ''
             : ' disabled';
-        return `<input class="pr-task-checkbox" type="checkbox" data-task-index="${meta?.index ?? 0}"${disabled}${checked}> `;
+        // Wrapped in a label whose padding (offset by a negative margin, see
+        // markdown.css) widens the click area without growing the box: a click on
+        // the label reaches the checkbox natively.
+        return `<label class="pr-task-hit"><input class="pr-task-checkbox" type="checkbox" data-task-index="${meta?.index ?? 0}"${disabled}${checked}></label> `;
     };
 }
 

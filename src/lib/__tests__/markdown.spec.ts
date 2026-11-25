@@ -182,6 +182,15 @@ describe('toggleTask', () => {
     });
 });
 
+describe('task checkboxes', () => {
+    it('wraps each checkbox in a label that widens its click area', () => {
+        const holder = document.createElement('div');
+        holder.innerHTML = renderMarkdown('- [ ] todo');
+        const box = holder.querySelector('input.pr-task-checkbox');
+        expect(box?.parentElement?.matches('label.pr-task-hit')).toBe(true);
+    });
+});
+
 describe('hasTaskList', () => {
     it('finds a task-list item the way toggleTask does', () => {
         expect(hasTaskList('- [ ] todo')).toBe(true);
