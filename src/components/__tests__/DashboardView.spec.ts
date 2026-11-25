@@ -1,6 +1,6 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import DashboardView from '@/components/dashboard/DashboardView.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
@@ -39,7 +39,12 @@ describe('DashboardView', () => {
         vi.setSystemTime(new Date('2026-10-26T12:05:00Z'));
     });
 
+    // Unmounted after each test, so a view's window listeners (Cmd+F) do not
+    // outlive it.
+    const mounted: VueWrapper[] = [];
+
     afterEach(() => {
+        mounted.splice(0).forEach((wrapper) => wrapper.unmount());
         delete window.api;
         vi.useRealTimers();
         document.body.innerHTML = '';
@@ -52,6 +57,7 @@ describe('DashboardView', () => {
             global: { plugins: [pinia] },
             attachTo: document.body,
         });
+        mounted.push(wrapper);
         await flushPromises();
         return { api, wrapper };
     }
@@ -177,6 +183,152 @@ describe('DashboardView', () => {
         ).toEqual(['waiting']);
     });
 
+    describe('search', () => {
+        const snapshot = () =>
+            dashboardSnapshot({
+                toReview: [
+                    dashboardPr({ id: 'R1', number: 8, title: 'Add billing', author: 'ann' }),
+                    dashboardPr({ id: 'R2', number: 9, title: 'Fix login', author: 'bob' }),
+                ],
+                merged: [
+                    dashboardPr({
+                        id: 'M1',
+                        number: 3,
+                        title: 'Old billing page',
+                        state: 'MERGED',
+                        closedAt: '2026-10-25T12:00:00Z',
+                    }),
+                ],
+            });
+
+        // Opens the search bar from the header's toggle and returns its input.
+        async function openSearch(wrapper: VueWrapper) {
+            await wrapper.get('[data-slot="dashboard-search-toggle"]').trigger('click');
+            await flushPromises();
+            return wrapper.get('input[data-slot="dashboard-search"]');
+        }
+
+        it("narrows a card's PRs, saying so when none match", async () => {
+            const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
+            await wrapper.getComponent(DashboardCard).trigger('click');
+
+            const search = await openSearch(wrapper);
+            await search.setValue('#9');
+            expect(
+                wrapper.findAllComponents(DashboardPrRow).map((row) => row.props('pr').id)
+            ).toEqual(['R2']);
+
+            await search.setValue('nothing');
+            expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(0);
+            expect(wrapper.text()).toContain('No pull requests match “nothing”.');
+        });
+
+        it('lists the matching PRs from every list on the overview, until cleared', async () => {
+            const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
+
+            const search = await openSearch(wrapper);
+            await search.setValue('billing');
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(0);
+            expect(
+                wrapper.findAllComponents(DashboardPrRow).map((row) => row.props('pr').id)
+            ).toEqual(['R1', 'M1']);
+
+            await wrapper.get('[data-slot="dashboard-search-clear"]').trigger('click');
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
+
+            // Escape clears the search and closes the bar.
+            await search.setValue('ann');
+            await search.trigger('keydown', { key: 'Escape' });
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
+            expect(wrapper.find('[data-slot="dashboard-search"]').exists()).toBe(false);
+        });
+
+        it('hides the search bar until the toggle opens it, and clears it on close', async () => {
+            const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
+            const toggle = wrapper.get('[data-slot="dashboard-search-toggle"]');
+            expect(wrapper.find('[data-slot="dashboard-search"]').exists()).toBe(false);
+            expect(toggle.attributes('aria-pressed')).toBe('false');
+
+            const search = await openSearch(wrapper);
+            expect(toggle.attributes('aria-pressed')).toBe('true');
+            expect(document.activeElement).toBe(search.element);
+            await search.setValue('billing');
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(0);
+
+            await toggle.trigger('click');
+            expect(wrapper.find('[data-slot="dashboard-search"]').exists()).toBe(false);
+            expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
+
+            // Reopened, it starts empty.
+            const reopened = await openSearch(wrapper);
+            expect((reopened.element as HTMLInputElement).value).toBe('');
+        });
+
+        it('opens and focuses the search bar, selecting its text, on Cmd/Ctrl+F', async () => {
+            const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
+            const open = new KeyboardEvent('keydown', {
+                key: 'f',
+                cancelable: true,
+                metaKey: true,
+            });
+            window.dispatchEvent(open);
+            await flushPromises();
+            expect(open.defaultPrevented).toBe(true);
+            const search = wrapper.get('input[data-slot="dashboard-search"]');
+            expect(document.activeElement).toBe(search.element);
+            await search.setValue('ann');
+            const input = search.element as HTMLInputElement;
+
+            for (const mod of [{ metaKey: true }, { ctrlKey: true }]) {
+                input.blur();
+                const event = new KeyboardEvent('keydown', { key: 'f', cancelable: true, ...mod });
+                window.dispatchEvent(event);
+                await flushPromises();
+                expect(event.defaultPrevented).toBe(true);
+                expect(document.activeElement).toBe(input);
+                expect([input.selectionStart, input.selectionEnd]).toEqual([0, 3]);
+            }
+
+            // Not with Shift or Alt, nor a plain F.
+            input.blur();
+            for (const extra of [{ shiftKey: true }, { altKey: true }, { metaKey: false }]) {
+                const event = new KeyboardEvent('keydown', {
+                    key: 'f',
+                    cancelable: true,
+                    metaKey: true,
+                    ...extra,
+                });
+                window.dispatchEvent(event);
+                expect(event.defaultPrevented).toBe(false);
+            }
+            expect(document.activeElement).not.toBe(input);
+        });
+
+        it('keeps a matching stack whole, dimming the members that do not match', async () => {
+            const { wrapper } = await mountView(
+                dashboardState({
+                    snapshot: dashboardSnapshot({
+                        toReview: [
+                            dashboardPr({ id: 'B', number: 1, headRefName: 'a' }),
+                            dashboardPr({
+                                id: 'T',
+                                number: 2,
+                                title: 'Top of stack',
+                                headRefName: 'b',
+                                baseRefName: 'a',
+                            }),
+                        ],
+                    }),
+                })
+            );
+            await wrapper.getComponent(DashboardCard).trigger('click');
+
+            await (await openSearch(wrapper)).setValue('top');
+            const rows = wrapper.findAll('[data-slot="stack-group-pr"]');
+            expect(rows.map((r) => r.attributes('data-filtered-out'))).toEqual(['true', undefined]);
+        });
+    });
+
     it.each([
         ['me', false],
         [['ann'], false],
@@ -268,22 +420,43 @@ describe('DashboardView', () => {
         expect(wrapper.text()).toContain('Every card is hidden.');
     });
 
-    it('refreshes through the store', async () => {
+    // Opens the header's "..." menu and returns its item with the given data-slot
+    // (teleported to the body).
+    async function moreItem(wrapper: VueWrapper, slot: string) {
+        await wrapper.get('[data-slot="dashboard-more"]').trigger('click');
+        await flushPromises();
+        return document.querySelector(`[data-slot="${slot}"]`) as HTMLElement;
+    }
+
+    it('refreshes through the store from the "..." menu', async () => {
         const { api, wrapper } = await mountView(dashboardState());
 
-        await wrapper.get('[aria-label="Refresh"]').trigger('click');
+        (await moreItem(wrapper, 'dashboard-refresh')).click();
+        await flushPromises();
         expect(api.refreshDashboard).toHaveBeenCalledTimes(1);
     });
 
-    it('rests the refresh button right after a fetch', async () => {
+    it('rests the refresh item right after a fetch', async () => {
         const fresh = dashboardState();
         fresh.snapshot!.fetchedAt = new Date().toISOString();
         const { api, wrapper } = await mountView(fresh);
 
-        const button = wrapper.get('[data-slot="dashboard-refresh"]');
-        expect(button.attributes('disabled')).toBeDefined();
-        await button.trigger('click');
+        const item = await moreItem(wrapper, 'dashboard-refresh');
+        expect(item.hasAttribute('data-disabled')).toBe(true);
+        expect(item.textContent).toContain('Refreshed just now');
+        item.click();
+        await flushPromises();
         expect(api.refreshDashboard).not.toHaveBeenCalled();
+    });
+
+    it('spins the "..." trigger while the dashboard loads', async () => {
+        const { wrapper } = await mountView(dashboardState());
+        const trigger = wrapper.get('[data-slot="dashboard-more"]');
+        expect(trigger.find('.lucide-ellipsis, .lucide-more-horizontal').exists()).toBe(true);
+
+        useDashboardStore().loading = true;
+        await nextTick();
+        expect(trigger.find('.animate-spin').exists()).toBe(true);
     });
 
     it('keeps the Users filter on the page and sends the rest to the Settings page', async () => {
@@ -304,8 +477,8 @@ describe('DashboardView', () => {
         await flushPromises();
         expect(api.setDashboardAuthors).toHaveBeenCalledWith('all');
 
-        const settings = wrapper.findAll('button').find((b) => b.text() === 'Dashboard settings');
-        await settings!.trigger('click');
+        (await moreItem(wrapper, 'dashboard-settings')).click();
+        await flushPromises();
         expect(useUiStore().mainView).toBe('settings');
         expect(useUiStore().settingsSection).toBe('dashboard');
         wrapper.unmount();

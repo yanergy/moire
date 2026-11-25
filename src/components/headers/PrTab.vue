@@ -12,7 +12,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 // tabs never shift when the range changes:
 //   - a PR is found: "PR #n" with its status dot, going to the PR view
 //   - the lookup is running: a spinner (the previous range's status is not shown,
-//     so it cannot be misread as the new one's)
+//     so it cannot be misread as the new one's), still going to the PR view,
+//     which shows a spinner until the PR lands
 //   - no PR for the branches, or the gh lookup failed: disabled, with the reason
 //     (and how to fix a failed lookup) in the tooltip
 const props = defineProps<{
@@ -62,8 +63,6 @@ const statusDotClass = computed(() => {
 
 const hint = computed<string[]>(() => {
     switch (state.value) {
-        case 'loading':
-            return ['Checking for a pull request…'];
         case 'warning':
             return comparison.prWarning ?? [];
         case 'none':
@@ -75,8 +74,24 @@ const hint = computed<string[]>(() => {
 </script>
 
 <template>
+    <!-- Loading: still clickable, the PR view shows a spinner until the PR lands. -->
+    <Tooltip v-if="state === 'loading'">
+        <TooltipTrigger as-child>
+            <toolbar-nav-button
+                :selected="props.selected"
+                data-slot="pr-tab"
+                data-state="loading"
+                @navigate="ui.setMainView('pr')"
+            >
+                <LoaderCircle :size="18" class="animate-spin" />
+                PR
+            </toolbar-nav-button>
+        </TooltipTrigger>
+        <TooltipContent>Checking for a pull request…</TooltipContent>
+    </Tooltip>
+
     <toolbar-nav-button
-        v-if="state === 'ok'"
+        v-else-if="state === 'ok'"
         :selected="props.selected"
         data-slot="pr-tab"
         @navigate="ui.setMainView('pr')"
@@ -98,12 +113,7 @@ const hint = computed<string[]>(() => {
                     data-slot="pr-tab"
                     :data-state="state"
                 >
-                    <LoaderCircle v-if="state === 'loading'" :size="18" class="animate-spin" />
-                    <TriangleAlert
-                        v-else-if="state === 'warning'"
-                        :size="18"
-                        class="text-moire-warn"
-                    />
+                    <TriangleAlert v-if="state === 'warning'" :size="18" class="text-moire-warn" />
                     <GitPullRequest v-else :size="18" />
                     PR
                 </toolbar-nav-button>

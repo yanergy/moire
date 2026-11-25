@@ -8,6 +8,7 @@ import {
     groupActivityByDay,
     prDotClass,
     prIsReady,
+    prMatchesQuery,
     stackProgress,
 } from '@/lib/dashboard';
 import type { ActivityEntry, DashboardPr } from '@/shared/types';
@@ -202,5 +203,38 @@ describe('stackProgress', () => {
 
     it('counts failing checks apart', () => {
         expect(stackProgress([pr({ ci: 'failing' })]).map((p) => p.key)).toEqual(['failing']);
+    });
+});
+
+describe('prMatchesQuery', () => {
+    const subject = pr({
+        number: 42,
+        title: 'Add notifications',
+        author: 'ann',
+        headRefName: 'feat/notify',
+        baseRefName: 'develop',
+    });
+
+    it('matches everything on an empty query', () => {
+        expect(prMatchesQuery(subject, '   ')).toBe(true);
+    });
+
+    it('matches the title, author and branches, ignoring case', () => {
+        expect(prMatchesQuery(subject, 'NOTIFICATIONS')).toBe(true);
+        expect(prMatchesQuery(subject, 'ann')).toBe(true);
+        expect(prMatchesQuery(subject, 'feat/not')).toBe(true);
+        expect(prMatchesQuery(subject, 'develop')).toBe(true);
+        expect(prMatchesQuery(subject, 'billing')).toBe(false);
+    });
+
+    it('matches the number with or without a hash', () => {
+        expect(prMatchesQuery(subject, '42')).toBe(true);
+        expect(prMatchesQuery(subject, '#42')).toBe(true);
+        expect(prMatchesQuery(subject, '#4')).toBe(false);
+    });
+
+    it('needs every term to match', () => {
+        expect(prMatchesQuery(subject, 'ann notify')).toBe(true);
+        expect(prMatchesQuery(subject, 'ann billing')).toBe(false);
     });
 });

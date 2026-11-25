@@ -17,9 +17,13 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 const comparison = useComparisonStore();
 const ui = useUiStore();
 
-// The PR view is only reachable while a PR is detected for the range; any other
-// time the diff fills the pane.
-const showPrView = computed(() => ui.mainView === 'pr' && comparison.hasPullRequest);
+// The PR view is only reachable while a PR is detected for the range, or while
+// the range's PR is being looked up (the view then shows a spinner, so opening a
+// PR from the dashboard lands on its page straight away); any other time the diff
+// fills the pane.
+const showPrView = computed(
+    () => ui.mainView === 'pr' && (comparison.hasPullRequest || comparison.prLoading)
+);
 
 // The dashboard and the notifications are always about the open repository, so
 // they need one.
@@ -34,9 +38,10 @@ watch(
 );
 
 // If the PR disappears while it is being viewed (a range change to a branch with
-// no PR), fall back to the diff so the toggle and the pane stay in step.
+// no PR), or a lookup started from the PR page finds none, fall back to the diff
+// so the toggle and the pane stay in step.
 watch(
-    () => comparison.hasPullRequest,
+    () => comparison.hasPullRequest || comparison.prLoading,
     (has) => {
         if (!has && ui.mainView === 'pr') {
             ui.setMainView('diff');

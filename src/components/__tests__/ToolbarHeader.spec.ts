@@ -1,5 +1,6 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import ToolbarHeader from '@/components/headers/ToolbarHeader.vue';
 import { useComparisonStore } from '@/stores/comparison';
@@ -172,7 +173,7 @@ describe('ToolbarHeader', () => {
             expect(dotClass()).toContain('bg-moire-changes-fg');
         });
 
-        it('shows a disabled spinner tab while a lookup runs, hiding stale status', async () => {
+        it('shows a clickable spinner tab while a lookup runs, hiding stale status', async () => {
             const comparison = openRepo();
             // A leftover PR from the previous branch must not show through while the
             // new branch's lookup is in flight.
@@ -184,12 +185,13 @@ describe('ToolbarHeader', () => {
             const wrapper = mountToolbar();
             const tab = prTab(wrapper);
             expect(tab.attributes('data-state')).toBe('loading');
-            expect(tab.attributes('aria-disabled')).toBe('true');
+            expect(tab.attributes('aria-disabled')).toBeUndefined();
             expect(tab.find('.lucide-loader-circle').exists()).toBe(true);
             expect(wrapper.text()).not.toContain('PR #');
 
+            // The PR view shows its own spinner until the lookup lands.
             await tab.trigger('click');
-            expect(ui.mainView).toBe('diff');
+            expect(ui.mainView).toBe('pr');
         });
 
         it('shows a disabled warning tab when the gh lookup fails', () => {
@@ -271,6 +273,21 @@ describe('ToolbarHeader', () => {
             expect(ui.mainView).toBe('diff');
             ui.goBack();
             expect(ui.mainView).toBe('diff');
+        });
+
+        it("goes back to the dashboard overview from a card's page", async () => {
+            useComparisonStore().repoPath = '/repos/moire';
+            const ui = useUiStore();
+            const wrapper = mountToolbar();
+
+            await pageButton(wrapper, 'Dashboard').trigger('click');
+            ui.setDashboardCard('review');
+            await nextTick();
+            await pageButton(wrapper, 'Dashboard').trigger('click');
+
+            expect(ui.mainView).toBe('dashboard');
+            expect(ui.dashboardCard).toBeNull();
+            expect(selectedPages(wrapper)).toEqual(['Dashboard']);
         });
 
         it('selects Diff while the PR page is set but no PR is detected', () => {
