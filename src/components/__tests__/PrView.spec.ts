@@ -121,6 +121,56 @@ describe('PrView', () => {
         expect(text).toContain('Does things.');
     });
 
+    it('shows a Stack tab only for a stacked PR', async () => {
+        const wrapper = mountWith(PR);
+        expect(wrapper.find('[data-slot="stack-tab"]').exists()).toBe(false);
+        expect(wrapper.find('[data-slot="stack-badge"]').exists()).toBe(false);
+
+        useComparisonStore().prStack = {
+            trunk: 'main',
+            entries: [
+                {
+                    number: 41,
+                    title: 'Base',
+                    url: '',
+                    headRefName: 'base-work',
+                    baseRefName: 'main',
+                    state: 'OPEN',
+                    isDraft: false,
+                    reviewDecision: '',
+                    depth: 0,
+                    isCurrent: false,
+                    needsRetarget: false,
+                },
+                {
+                    number: 42,
+                    title: 'Cross-file navigation',
+                    url: '',
+                    headRefName: 'feature',
+                    baseRefName: 'base-work',
+                    state: 'OPEN',
+                    isDraft: false,
+                    reviewDecision: '',
+                    depth: 1,
+                    isCurrent: true,
+                    needsRetarget: false,
+                },
+            ],
+        };
+        await flushPromises();
+
+        // The title gets a badge with the PR's place in the stack, opening the tab.
+        expect(wrapper.find('[data-slot="stack-badge"]').exists()).toBe(true);
+        expect(wrapper.get('[data-slot="stack-badge"]').text()).toBe('2/2');
+        await wrapper.get('[data-slot="stack-badge"]').trigger('click');
+        expect(wrapper.findAll('[data-slot="stack-entry"]')).toHaveLength(2);
+
+        // The tab label shows the same place, like the badge.
+        expect(wrapper.get('[data-slot="stack-tab"]').text()).toBe('Stack 2/2');
+        await wrapper.get('[data-slot="stack-tab"]').trigger('click');
+        expect(wrapper.findAll('[data-slot="stack-entry"]')).toHaveLength(2);
+    });
+
     it('copies the base and head branch names from the header', async () => {
         const copyText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
         window.api = { copyText } as unknown as Window['api'];

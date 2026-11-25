@@ -65,6 +65,7 @@ describe('preload bridge', () => {
             'discardReview',
             'resolveCommit',
             'openExternal',
+            'getPrStack',
             'copyText',
             'showBranchPickerMenu',
             'openFile',

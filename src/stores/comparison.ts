@@ -13,6 +13,7 @@ import type {
     PrReviewThread,
     ReviewCommentInput,
     PrStatus,
+    PrStack,
     PullRequest,
     RepoBranchSettings,
 } from '@/shared/types';
@@ -317,6 +318,9 @@ export const useComparisonStore = defineStore('comparison', () => {
     // Empty when there are none or the lookup fails. `annotationsForFile` narrows by
     // file.
     const checkAnnotations = ref<CheckAnnotation[]>([]);
+    // The stack the open PR belongs to (see loadPrStack), or null when it is not
+    // stacked.
+    const prStack = ref<PrStack | null>(null);
     function annotationsForFile(path: string): CheckAnnotation[] {
         return path ? checkAnnotations.value.filter((a) => a.path === path) : [];
     }
@@ -602,6 +606,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             reviewState.value = { ...NO_REVIEW };
             headCommit.value = null;
             checkAnnotations.value = [];
+            prStack.value = null;
             prLoading.value = false;
             return;
         }
@@ -624,6 +629,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             void loadReviewState(result.pr?.id, token);
             void loadHeadCommit(head.value, token);
             void loadCheckAnnotations(result.pr?.headRefOid, token);
+            void loadPrStack(result.pr?.headRefName, token);
         } catch {
             if (token === prRequest) {
                 pullRequest.value = null;
@@ -633,8 +639,28 @@ export const useComparisonStore = defineStore('comparison', () => {
                 reviewState.value = { ...NO_REVIEW };
                 headCommit.value = null;
                 checkAnnotations.value = [];
+                prStack.value = null;
                 prLoading.value = false;
             }
+        }
+    }
+
+    // Fetch the stack the PR belongs to, for the PR view's Stack tab, guarded by the
+    // same request token as the PR load. Supplementary: no PR, or any failure, just
+    // clears it.
+    async function loadPrStack(headBranch: string | undefined, token: number) {
+        const api = window.api;
+        let stack: PrStack | null = null;
+        if (api?.getPrStack && headBranch) {
+            try {
+                stack = await api.getPrStack(headBranch);
+            } catch {
+                stack = null;
+            }
+        }
+
+        if (token === prRequest) {
+            prStack.value = stack;
         }
     }
 
@@ -1818,6 +1844,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         submitReview,
         discardReview,
         checkAnnotations,
+        prStack,
         annotationsForFile,
         annotationLevelForFile,
         loadPullRequest,

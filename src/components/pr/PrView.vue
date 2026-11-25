@@ -25,6 +25,7 @@ import {
     CircleX,
     ExternalLink,
     GitMerge,
+    Layers,
     GitPullRequestClosed,
     GitPullRequestDraft,
     History,
@@ -55,6 +56,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
+import PrStackList from '@/components/pr/PrStackList.vue';
 import CopyButton from '@/components/controls/CopyButton.vue';
 import CheckboxModeToggle from '@/components/pr/CheckboxModeToggle.vue';
 import PrReviewers from '@/components/pr/PrReviewers.vue';
@@ -140,8 +142,9 @@ async function refreshPr() {
 }
 
 // The PR view is tabbed, as in the design: the description and conversation under
-// "Conversation", the CI checks under "Checks", and who reviews under "Reviewers".
-const activeTab = ref<'conversation' | 'checks' | 'reviewers'>('conversation');
+// "Conversation", the CI checks under "Checks", who reviews under "Reviewers",
+// and, for a stacked PR, the PRs stacked with it under "Stack".
+const activeTab = ref<'conversation' | 'checks' | 'reviewers' | 'stack'>('conversation');
 
 const reviewers = computed(() => pr.value?.reviewers ?? []);
 
@@ -149,6 +152,22 @@ const reviewers = computed(() => pr.value?.reviewers ?? []);
 const reviewersSummary = computed(() => {
     const { approved, total } = reviewProgress(reviewers.value);
     return `${approved}/${total}`;
+});
+
+const stack = computed(() => comparison.prStack);
+
+// This PR's place in its stack (1 is on the trunk), for the badge before the title.
+const stackPosition = computed(() => {
+    const entries = stack.value?.entries ?? [];
+    const index = entries.findIndex((e) => e.isCurrent);
+    return index === -1 ? null : { index: index + 1, total: entries.length };
+});
+
+// The Stack tab disappears when the PR is not (or no longer) stacked.
+watch(stack, (current) => {
+    if (!current && activeTab.value === 'stack') {
+        activeTab.value = 'conversation';
+    }
 });
 
 const checks = computed(() => pr.value?.checks ?? []);
@@ -1297,6 +1316,26 @@ function renderComment(comment: PrComment): string {
                             <div
                                 class="min-w-0 flex-1 text-[18px] leading-[1.35] font-bold text-moire-fg"
                             >
+                                <!-- A stacked PR's place in its stack, as a badge before
+                                     the title; a click opens the Stack tab. -->
+                                <Tooltip v-if="stackPosition">
+                                    <TooltipTrigger as-child>
+                                        <button
+                                            type="button"
+                                            data-slot="stack-badge"
+                                            class="mr-2 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-moire-ring px-2.5 align-middle text-[13px] font-normal text-moire-file-fg transition-colors hover:border-moire-fg hover:text-moire-fg"
+                                            :aria-label="`PR ${stackPosition.index} of ${stackPosition.total} in its stack`"
+                                            @click="activeTab = 'stack'"
+                                        >
+                                            <Layers :size="14" />
+                                            {{ stackPosition.index }}/{{ stackPosition.total }}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        PR {{ stackPosition.index }} of {{ stackPosition.total }} in
+                                        its stack
+                                    </TooltipContent>
+                                </Tooltip>
                                 {{ pr.title }}
                                 <span class="font-normal text-moire-faint">#{{ pr.number }}</span>
                             </div>
@@ -1493,6 +1532,27 @@ function renderComment(comment: PrComment): string {
                                 Reviewers
                                 <span v-if="reviewers.length" class="text-moire-faint">
                                     {{ reviewersSummary }}
+                                </span>
+                            </button>
+                            <button
+                                v-if="stack"
+                                type="button"
+                                data-slot="stack-tab"
+                                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-[5px] text-[12px] font-medium whitespace-nowrap transition-colors"
+                                :class="
+                                    activeTab === 'stack'
+                                        ? 'bg-moire-hover text-moire-fg'
+                                        : 'text-moire-muted hover:text-moire-fg'
+                                "
+                                @click="activeTab = 'stack'"
+                            >
+                                Stack
+                                <span class="text-moire-faint">
+                                    {{
+                                        stackPosition
+                                            ? `${stackPosition.index}/${stackPosition.total}`
+                                            : stack.entries.length
+                                    }}
                                 </span>
                             </button>
                         </div>
@@ -2482,6 +2542,7 @@ function renderComment(comment: PrComment): string {
                         :activity="reviewerActivity"
                         @jump="jumpToActivity"
                     />
+                    <pr-stack-list v-else-if="activeTab === 'stack' && stack" :stack="stack" />
                     <div v-else-if="activeTab === 'checks'">
                         <div v-if="checks.length">
                             <div
