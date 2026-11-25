@@ -112,8 +112,8 @@ the popup never appears.
    diff, or search and filter the tree (by name, or by filetype, mutation type, or marker) to focus
    on what matters. Mark a file or a whole folder as viewed to track what you have read, and step
    through changes with the previous and next buttons in the diff header, which cross into the
-   adjacent file at each end. Click the filename in the diff header to open the file in an editor
-   (choose which under **View > Open Files In**). Renames, binary files, and images get their own
+   adjacent file at each end. Click the filename in the diff header (or Cmd+click a file in the tree) to open the file in an
+   editor (choose which under **View > Open Files In**). Renames, binary files, and images get their own
    previews, and very large files sit behind a click so they never lock up the window.
 6. **Review the pull request.** The **PR** tab next to **Diff** in the toolbar opens a PR view of
    the pull request for the selected branches, with its description, status, labels, conversation,
@@ -197,7 +197,8 @@ last branch range are remembered per repository.
 - Next and previous change navigation that steps through the open file, then crosses into the
   adjacent file (in sidebar order) once a boundary is reached, wrapping around the whole change set.
 - Open a changed file from the diff header. The filename is a link (with an external-link icon)
-  that opens the working-tree copy, and **View > Open Files In** chooses the OS default app or a
+  that opens the working-tree copy. Cmd+click (Ctrl+click on Windows and Linux) a file in the tree
+  does the same. **View > Open Files In** chooses the OS default app or a
   detected editor (auto-detected per machine and persisted across launches).
 - Rename detection, binary-file notices, and inline image previews.
 - A rendered view for Markdown files (`.md`, `.markdown`): a **Source / Rendered** toggle in the
@@ -260,7 +261,8 @@ last branch range are remembered per repository.
   drafts.
 - Each card opens a list of its PRs. Clicking a PR opens it in the PR view on its remote branches,
   or on GitHub when it comes from a fork or its branches are not available locally. Every row also
-  has an **Open in browser** button.
+  has an **Open in browser** button, and shows the PR's labels in their GitHub colors (the first
+  three, plus a count of the rest).
 - A card with unread notifications about its PRs shows an "N new" pill.
 - A **Users** menu picks whose PRs the cards count (you by default, any mix of authors, or all of
   them). Whether drafts count (for the dashboard only; notifications have their own toggle), which

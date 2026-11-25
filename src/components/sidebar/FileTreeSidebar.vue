@@ -38,6 +38,21 @@ function openFile(path: string): void {
     ui.setMainView('diff');
 }
 
+// Cmd+click (Ctrl+click off macOS) opens the working-tree copy in the editor, like
+// the diff header's file name. A deleted file has no working-tree copy to open.
+const OPEN_MODIFIER = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl';
+
+function onFileClick(event: MouseEvent, node: FileNode): void {
+    if (!(event.metaKey || event.ctrlKey)) {
+        openFile(node.path);
+        return;
+    }
+
+    if (node.status !== 'D') {
+        void comparison.openFile(node.path);
+    }
+}
+
 // The change set has files but the search box or the filter menu hides every one,
 // so the tree would render blank. Show a hint with a one-click way back instead.
 const filteredEmpty = computed(() => comparison.fileCount > 0 && comparison.treeNodes.length === 0);
@@ -518,7 +533,7 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                             role="button"
                             tabindex="0"
                             :aria-current="node.selected ? 'true' : undefined"
-                            @click="openFile(node.path)"
+                            @click="onFileClick($event, node)"
                             @dblclick="comparison.toggleViewed(node.path)"
                             @keydown="onFileKey($event, node)"
                         >
@@ -573,7 +588,12 @@ function onFileKey(event: KeyboardEvent, node: FileNode): void {
                         </div>
                     </TooltipTrigger>
                     <TooltipContent side="top" class="font-mono">
-                        {{ node.oldPath ? `${node.oldPath} → ${node.path}` : node.path }}
+                        <div>
+                            {{ node.oldPath ? `${node.oldPath} → ${node.path}` : node.path }}
+                        </div>
+                        <div v-if="node.status !== 'D'" class="font-sans opacity-70">
+                            {{ OPEN_MODIFIER }}+click to open in editor
+                        </div>
                     </TooltipContent>
                 </Tooltip>
             </recycle-scroller>

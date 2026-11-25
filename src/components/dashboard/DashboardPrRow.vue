@@ -4,6 +4,7 @@ import { ExternalLink, LoaderCircle } from '@lucide/vue';
 import type { DashboardPr } from '@/shared/types';
 import { ciVisual, prDotClass, ROW_ACTION_CLASS } from '@/lib/dashboard';
 import { timeSince } from '@/lib/status-bar';
+import { labelStyle } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
@@ -28,6 +29,12 @@ defineEmits<{ open: [pr: DashboardPr]; openInBrowser: [pr: DashboardPr] }>();
 
 const ci = computed(() => ciVisual(props.pr));
 
+// A few labels fit beside the title; the rest collapse into a "+N" so the row
+// stays one line high.
+const MAX_LABELS = 3;
+const labels = computed(() => (props.pr.labels ?? []).slice(0, MAX_LABELS));
+const hiddenLabels = computed(() => (props.pr.labels ?? []).slice(MAX_LABELS));
+
 const age = computed(() => {
     const { pr, now } = props;
     if (pr.state === 'OPEN') {
@@ -49,9 +56,29 @@ const age = computed(() => {
             <span class="size-2.5 shrink-0 rounded-full" :class="prDotClass(pr)" />
             <user-avatar v-if="showAvatar" :login="pr.author" :size="20" />
             <div class="min-w-0 flex-1">
-                <div class="truncate text-[13px] text-moire-fg">
-                    <span class="font-medium">{{ pr.title }}</span>
-                    <span class="text-moire-faint"> #{{ pr.number }}</span>
+                <div class="flex min-w-0 items-center gap-1.5 text-[13px] text-moire-fg">
+                    <span class="truncate">
+                        <span class="font-medium">{{ pr.title }}</span>
+                        <span class="text-moire-faint"> #{{ pr.number }}</span>
+                    </span>
+                    <span
+                        v-for="label in labels"
+                        :key="label.name"
+                        data-slot="pr-label"
+                        :title="label.description || undefined"
+                        class="max-w-32 shrink-0 truncate rounded-full border px-2 text-[11px] leading-4 font-medium whitespace-nowrap"
+                        :style="labelStyle(label.color)"
+                    >
+                        {{ label.name }}
+                    </span>
+                    <span
+                        v-if="hiddenLabels.length"
+                        data-slot="pr-label-more"
+                        class="shrink-0 text-[11px] text-moire-faint"
+                        :title="hiddenLabels.map((l) => l.name).join(', ')"
+                    >
+                        +{{ hiddenLabels.length }}
+                    </span>
                 </div>
                 <div class="flex min-w-0 items-center gap-1.5 text-[12px] text-moire-faint">
                     <span class="shrink-0">{{ pr.author }}</span>
