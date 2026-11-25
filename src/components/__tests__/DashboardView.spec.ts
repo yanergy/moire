@@ -1,6 +1,6 @@
 import { setActivePinia, createPinia, type Pinia } from 'pinia';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import DashboardView from '@/components/dashboard/DashboardView.vue';
 import DashboardPrRow from '@/components/dashboard/DashboardPrRow.vue';
@@ -39,7 +39,12 @@ describe('DashboardView', () => {
         vi.setSystemTime(new Date('2026-10-26T12:05:00Z'));
     });
 
+    // Unmounted after each test, so a view's window listeners (Cmd+F) do not
+    // outlive it.
+    const mounted: VueWrapper[] = [];
+
     afterEach(() => {
+        mounted.splice(0).forEach((wrapper) => wrapper.unmount());
         delete window.api;
         vi.useRealTimers();
         document.body.innerHTML = '';
@@ -52,6 +57,7 @@ describe('DashboardView', () => {
             global: { plugins: [pinia] },
             attachTo: document.body,
         });
+        mounted.push(wrapper);
         await flushPromises();
         return { api, wrapper };
     }
@@ -226,6 +232,36 @@ describe('DashboardView', () => {
             await search.setValue('ann');
             await search.trigger('keydown', { key: 'Escape' });
             expect(wrapper.findAllComponents(DashboardCard)).toHaveLength(9);
+        });
+
+        it('focuses the search box and selects its text on Cmd/Ctrl+F', async () => {
+            const { wrapper } = await mountView(dashboardState({ snapshot: snapshot() }));
+            const search = wrapper.get('input[data-slot="dashboard-search"]');
+            await search.setValue('ann');
+            const input = search.element as HTMLInputElement;
+
+            for (const mod of [{ metaKey: true }, { ctrlKey: true }]) {
+                input.blur();
+                const event = new KeyboardEvent('keydown', { key: 'f', cancelable: true, ...mod });
+                window.dispatchEvent(event);
+                expect(event.defaultPrevented).toBe(true);
+                expect(document.activeElement).toBe(input);
+                expect([input.selectionStart, input.selectionEnd]).toEqual([0, 3]);
+            }
+
+            // Not with Shift or Alt, nor a plain F.
+            input.blur();
+            for (const extra of [{ shiftKey: true }, { altKey: true }, { metaKey: false }]) {
+                const event = new KeyboardEvent('keydown', {
+                    key: 'f',
+                    cancelable: true,
+                    metaKey: true,
+                    ...extra,
+                });
+                window.dispatchEvent(event);
+                expect(event.defaultPrevented).toBe(false);
+            }
+            expect(document.activeElement).not.toBe(input);
         });
 
         it('keeps a matching stack whole, dimming the members that do not match', async () => {

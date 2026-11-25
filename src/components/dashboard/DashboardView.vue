@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { useRefreshCooldown } from '@/composables/useRefreshCooldown';
 import {
     ArrowLeft,
@@ -54,6 +54,20 @@ const selected = computed(
 // lists every PR the dashboard has that matches, in place of the cards.
 const query = ref('');
 const searching = computed(() => query.value.trim() !== '');
+
+// Cmd+F (Ctrl+F elsewhere) focuses the search box and selects its text, as find
+// does in the diff viewer.
+const searchBox = useTemplateRef<HTMLElement>('searchBox');
+const FIND_SHORTCUT = navigator.userAgent.includes('Mac') ? '⌘F' : 'Ctrl+F';
+function focusSearch(event: KeyboardEvent) {
+    if (event.defaultPrevented || event.altKey || event.shiftKey) return;
+    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'f') return;
+    const input = searchBox.value?.querySelector('input');
+    if (!input) return;
+    event.preventDefault();
+    input.focus();
+    input.select();
+}
 
 // Every PR in the snapshot once (a PR can sit in several of its lists).
 const allPrs = computed(() => {
@@ -138,13 +152,17 @@ const now = ref(Date.now());
 let clock: ReturnType<typeof setInterval> | undefined;
 
 onMounted(() => {
+    window.addEventListener('keydown', focusSearch);
     void dashboard.load();
     clock = setInterval(() => {
         now.value = Date.now();
     }, 30_000);
 });
 
-onBeforeUnmount(() => clearInterval(clock));
+onBeforeUnmount(() => {
+    clearInterval(clock);
+    window.removeEventListener('keydown', focusSearch);
+});
 
 // Another repository opened while the dashboard is showing: reload it (the page
 // resets to the overview with the history, see MoirePage).
@@ -255,14 +273,14 @@ const refreshTooltip = computed(() => {
                     <span class="shrink-0 text-[12px] text-moire-faint">{{ updated }}</span>
                     <!-- Search by title, number, branch or author, with a clear button
                          inside its right edge while it has text. -->
-                    <div class="relative w-56 shrink-0">
+                    <div ref="searchBox" class="relative w-56 shrink-0">
                         <Search
                             :size="14"
                             class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-moire-faint"
                         />
                         <Input
                             v-model="query"
-                            placeholder="Search pull requests…"
+                            :placeholder="`Search PRs (${FIND_SHORTCUT})`"
                             aria-label="Search pull requests"
                             data-slot="dashboard-search"
                             class="h-7 border-moire-border bg-transparent pr-7 pl-8 text-moire-fg focus-visible:border-moire-ring focus-visible:ring-0"
