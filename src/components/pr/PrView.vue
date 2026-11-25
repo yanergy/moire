@@ -1266,7 +1266,9 @@ function renderComment(comment: PrComment): string {
 <template>
     <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
         <ScrollArea v-if="pr" ref="scrollArea" class="pr-scroll-area min-h-0 flex-1">
-            <div class="w-full max-w-[1040px]">
+            <!-- Extra room at the bottom, so the end of the page (the comment box)
+                 can scroll up from the window's bottom edge. -->
+            <div class="w-full max-w-[1040px] pb-40">
                 <!-- The header and the tabs, pinned at the top while the conversation
                      scrolls when the Sticky PR header setting is on (the default). -->
                 <div
@@ -2361,8 +2363,9 @@ function renderComment(comment: PrComment): string {
 
                         <!-- New-comment composer. Indented to the cards' left edge. Posts
                              through the store, which re-fetches so the comment appears.
-                             gap, not margin (the unlayered reset). -->
-                        <div class="pl-9">
+                             gap, not margin (the unlayered reset); padded off the last
+                             entry so it reads as its own block. -->
+                        <div class="pt-4 pl-9">
                             <div class="rounded-lg border border-moire-border bg-moire-app p-3.5">
                                 <div class="flex flex-col gap-2.5">
                                     <Textarea
