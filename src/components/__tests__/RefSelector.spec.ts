@@ -325,7 +325,7 @@ describe('RefSelector', () => {
 
         const rows = () => document.querySelectorAll('[data-slot="command-item"]').length;
         const shownBefore = rows();
-        expect(shownBefore).toBeLessThan(150);
+        expect(shownBefore).toBeLessThan(80);
         expect(commandItem('origin/team/branch-499')).toBeFalsy();
 
         const list = document.querySelector('[data-slot="command-list"]') as HTMLElement;

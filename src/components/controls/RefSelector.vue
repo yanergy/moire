@@ -41,7 +41,7 @@ const collapsed = ref<Record<string, boolean>>({});
 // thousands of branches, and mounting a row (with its star and tooltip) for each
 // made the picker lag on open, so rows mount a page at a time as the list
 // scrolls toward its end.
-const ROW_PAGE = 100;
+const ROW_PAGE = 50;
 const rowLimit = ref(ROW_PAGE);
 
 // Reset the transient search when the popover closes, so a stale query does not
