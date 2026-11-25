@@ -190,6 +190,28 @@ class GitService {
         }
     }
 
+    // The paths with changes staged in the index (`git add`ed), for the file tree's
+    // git add mode. Includes staged deletions and both sides of a staged rename.
+    async stagedPaths(): Promise<string[]> {
+        const out = await this.git.raw(['diff', '--cached', '--name-only', '-z']);
+        return parseNulPaths(out);
+    }
+
+    // Stage these paths as they are on disk, deletions included (`git add -A`).
+    async stage(paths: string[]): Promise<void> {
+        if (paths.length) {
+            await this.git.raw(['add', '-A', '--', ...paths]);
+        }
+    }
+
+    // Unstage these paths, leaving the working tree alone. `git reset` rather than
+    // `git restore --staged`, which fails in a repository without a commit yet.
+    async unstage(paths: string[]): Promise<void> {
+        if (paths.length) {
+            await this.git.raw(['reset', '-q', '--', ...paths]);
+        }
+    }
+
     // Whether `ancestor` is in the history of `descendant` (`git merge-base
     // --is-ancestor`, exit 0 yes, 1 no). Null when git cannot tell, e.g. a ref that
     // does not exist here.

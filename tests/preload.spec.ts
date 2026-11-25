@@ -65,6 +65,9 @@ describe('preload bridge', () => {
             'discardReview',
             'resolveCommit',
             'openExternal',
+            'getStagedPaths',
+            'stagePaths',
+            'unstagePaths',
             'getPrStack',
             'copyText',
             'showBranchPickerMenu',
@@ -152,6 +155,8 @@ describe('preload bridge', () => {
             'https://github.com/o/r/pull/1'
         );
 
+        await api().stagePaths!(['a.ts']);
+        expect(bridge.invoke).toHaveBeenCalledWith('git:stage', ['a.ts']);
         await api().copyText!('npm install');
         expect(bridge.invoke).toHaveBeenCalledWith('clipboard:write-text', 'npm install');
 

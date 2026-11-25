@@ -343,6 +343,31 @@ describe('GitService.filePair images', () => {
     });
 });
 
+describe('GitService staging', () => {
+    it('stages and unstages paths, deletions included, and lists what is staged', async () => {
+        const repo = await mkdtemp(path.join(tmpdir(), 'moire-stage-'));
+        const git = (...args: string[]) =>
+            execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args]);
+        git('init', '-q', '-b', 'main');
+        await writeFile(path.join(repo, 'gone.txt'), 'x\n');
+        await writeFile(path.join(repo, 'a b.txt'), 'one\n');
+        git('add', '-A');
+        git('commit', '-q', '-m', 'init');
+        execFileSync('rm', [path.join(repo, 'gone.txt')]);
+        await writeFile(path.join(repo, 'a b.txt'), 'two\n');
+        await writeFile(path.join(repo, 'new.txt'), 'new\n');
+
+        const service = new GitService(repo);
+        expect(await service.stagedPaths()).toEqual([]);
+
+        await service.stage(['a b.txt', 'gone.txt', 'new.txt']);
+        expect((await service.stagedPaths()).sort()).toEqual(['a b.txt', 'gone.txt', 'new.txt']);
+
+        await service.unstage(['new.txt']);
+        expect((await service.stagedPaths()).sort()).toEqual(['a b.txt', 'gone.txt']);
+    });
+});
+
 describe('GitService.isAncestor', () => {
     it('tells whether one ref is in the history of another, and null when unknown', async () => {
         const repo = await mkdtemp(path.join(tmpdir(), 'moire-ancestor-'));

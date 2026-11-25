@@ -556,6 +556,11 @@ export interface MoireApi {
     // Open a URL (a PR link) in the user's default browser, via the main process.
     // Restricted to http(s) URLs on the main side.
     openExternal(url: string): Promise<void>;
+    // The file tree's git add mode (working-tree head only): the staged paths, and
+    // staging or unstaging paths in the open repository.
+    getStagedPaths(): Promise<string[]>;
+    stagePaths(paths: string[]): Promise<void>;
+    unstagePaths(paths: string[]): Promise<void>;
     // The stack the PR with this head branch belongs to, or null when it is not
     // stacked (or gh fails).
     getPrStack(headBranch: string): Promise<PrStack | null>;

@@ -539,6 +539,12 @@ describe('registerIpcHandlers', () => {
         expect(state.openWithEditor).not.toHaveBeenCalled();
     });
 
+    it('refuses to stage anything but a list of paths', async () => {
+        await invoke('repo:open', '/repos/moire');
+        await expect(invoke('git:stage', 'a.ts')).rejects.toThrow('Expected a list of paths');
+        await expect(invoke('git:unstage', [1])).rejects.toThrow('Expected a list of paths');
+    });
+
     describe('gh:pr-stack', () => {
         beforeEach(() => {
             state.getRepoBranches.mockResolvedValue({ main: 'master', development: 'development' });

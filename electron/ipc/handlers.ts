@@ -132,6 +132,15 @@ async function getCurrentBranches(): Promise<BranchInfo[]> {
     }
 }
 
+// A list of paths from the renderer, checked before it reaches git.
+function stringList(value: unknown): string[] {
+    if (!Array.isArray(value) || !value.every((v) => typeof v === 'string')) {
+        throw new TypeError('Expected a list of paths');
+    }
+
+    return value;
+}
+
 // The comparison presets for the open repository, with the development branch
 // picked on its Settings page. Shared by the Git menu (through main.ts) and the
 // branch pickers' context menu.
@@ -428,6 +437,11 @@ function registerIpcHandlers({
 
     // The commit a ref points at, for checking the head is at the PR's head commit.
     handle('git:resolve-commit', (ref: string) => requireRepo().resolveCommit(ref));
+
+    // The file tree's git add mode: what is staged, and staging or unstaging paths.
+    handle('git:staged-paths', () => requireRepo().stagedPaths());
+    handle('git:stage', (paths: unknown) => requireRepo().stage(stringList(paths)));
+    handle('git:unstage', (paths: unknown) => requireRepo().unstage(stringList(paths)));
 
     handle(
         'git:file-pair',

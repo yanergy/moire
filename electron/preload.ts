@@ -65,6 +65,9 @@ contextBridge.exposeInMainWorld('api', {
     resolveCommit: (ref: string) => ipcRenderer.invoke('git:resolve-commit', ref),
     // Open a PR link in the default browser (main restricts it to http(s)).
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
+    getStagedPaths: () => ipcRenderer.invoke('git:staged-paths'),
+    stagePaths: (paths: string[]) => ipcRenderer.invoke('git:stage', paths),
+    unstagePaths: (paths: string[]) => ipcRenderer.invoke('git:unstage', paths),
     getPrStack: (headBranch: string) => ipcRenderer.invoke('gh:pr-stack', headBranch),
     copyText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text),
     showBranchPickerMenu: (ref?: string) => ipcRenderer.invoke('menu:branch-picker', ref),
