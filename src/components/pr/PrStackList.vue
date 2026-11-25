@@ -97,7 +97,7 @@ function open(entry: PrStackEntry) {
                         :aria-current="entry.isCurrent ? 'true' : undefined"
                         class="flex w-full items-start gap-2.5 rounded-lg border bg-moire-app px-3.5 py-2.5 text-left transition-colors"
                         :class="[
-                            entry.isCurrent ? 'border-moire-ring' : 'border-moire-border',
+                            entry.isCurrent ? 'border-moire-accent' : 'border-moire-border',
                             canOpen(entry) ? 'cursor-pointer hover:bg-moire-hover' : '',
                         ]"
                         @click="open(entry)"
