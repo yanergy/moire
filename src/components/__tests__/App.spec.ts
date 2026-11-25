@@ -206,7 +206,7 @@ describe('App', () => {
         const { api } = stubApi();
         const comparison = useComparisonStore();
         vi.spyOn(comparison, 'restoreLastRepo').mockResolvedValue(undefined);
-        const openPr = vi.spyOn(useDashboardStore(), 'openPr').mockImplementation(() => {});
+        const openPr = vi.spyOn(useDashboardStore(), 'openPr').mockResolvedValue(undefined);
 
         mountApp();
         await flushPromises();

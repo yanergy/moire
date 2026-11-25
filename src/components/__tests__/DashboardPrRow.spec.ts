@@ -49,6 +49,14 @@ describe('DashboardPrRow', () => {
         expect(wrapper.text()).toContain('closed 1d ago');
     });
 
+    it('shows a spinner in place of the CI icon while opening', () => {
+        const pr = dashboardPr({ ci: 'failing', failedChecks: ['lint'] });
+        const wrapper = mount(DashboardPrRow, { props: { pr, now: NOW, opening: true } });
+        expect(wrapper.find('[aria-label="Opening"]').exists()).toBe(true);
+        expect(wrapper.find('[aria-label="Failed: lint"]').exists()).toBe(false);
+        expect(wrapper.get('button').attributes('aria-busy')).toBe('true');
+    });
+
     it('names the failed checks on the CI icon', () => {
         const pr = dashboardPr({ ci: 'failing', failedChecks: ['lint'] });
         const wrapper = mount(DashboardPrRow, { props: { pr, now: NOW } });

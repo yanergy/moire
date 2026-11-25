@@ -1,4 +1,4 @@
-import { computed, ref, watch, type Ref } from 'vue';
+import { computed, nextTick, ref, watch, type Ref } from 'vue';
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import type {
     BranchInfo,
@@ -605,7 +605,27 @@ export const useComparisonStore = defineStore('comparison', () => {
     // new lookup lands and can't be misread. A watcher-driven refresh keeps the same
     // range (same PR), so it updates the status in place rather than flashing the
     // button away on every on-disk change.
-    async function loadPullRequest(showSpinner = false) {
+    // The newest lookup, so a caller can wait for the PR of a range it just picked.
+    let prLookup: Promise<void> = Promise.resolve();
+
+    function loadPullRequest(showSpinner = false): Promise<void> {
+        prLookup = runPullRequestLookup(showSpinner);
+        return prLookup;
+    }
+
+    // Resolves once the PR lookup for the current range has landed. The range
+    // watcher starts that lookup on the next tick, so wait for it first, and keep
+    // waiting while newer lookups replace the one being awaited.
+    async function pullRequestSettled(): Promise<void> {
+        await nextTick();
+        let lookup: Promise<void>;
+        do {
+            lookup = prLookup;
+            await lookup;
+        } while (lookup !== prLookup);
+    }
+
+    async function runPullRequestLookup(showSpinner: boolean) {
         const api = window.api;
         const token = ++prRequest;
         if (!api || !repoPath.value || !base.value || !head.value || head.value === WORKING_TREE) {
@@ -1906,6 +1926,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         prStatus,
         prMessage,
         prLoading,
+        pullRequestSettled,
         hasPullRequest,
         prWarning,
         reviewThreads,

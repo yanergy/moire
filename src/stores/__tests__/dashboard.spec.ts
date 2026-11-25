@@ -1,4 +1,5 @@
 import { setActivePinia, createPinia } from 'pinia';
+import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import {
     isReadyToMerge,
@@ -544,7 +545,7 @@ describe('dashboard store', () => {
     });
 
     describe('openPr', () => {
-        it('selects the PR range and switches to the PR view', () => {
+        it('selects the PR range and switches to the PR view', async () => {
             openApi();
             const comparison = useComparisonStore();
             comparison.repoPath = '/repo';
@@ -553,13 +554,62 @@ describe('dashboard store', () => {
                 { name: 'origin/feat/x', kind: 'remote' },
             ];
 
-            useDashboardStore().openPr(pr());
+            await useDashboardStore().openPr(pr());
 
             expect([comparison.base, comparison.head]).toEqual(['main', 'origin/feat/x']);
             expect(useUiStore().mainView).toBe('pr');
         });
 
-        it("opens a notification's PR when the snapshot has it, else its GitHub page", () => {
+        it('switches to the PR view only once the PR lookup has landed', async () => {
+            openApi();
+            let land!: (value: unknown) => void;
+            const lookup = new Promise((resolve) => (land = resolve));
+            (window.api as unknown as Record<string, unknown>).getPullRequest = vi
+                .fn<() => Promise<unknown>>()
+                .mockReturnValue(lookup);
+            const comparison = useComparisonStore();
+            comparison.repoPath = '/repo';
+            comparison.branches = [
+                { name: 'main', kind: 'local' },
+                { name: 'feat/x', kind: 'local' },
+            ];
+            const store = useDashboardStore();
+            const ui = useUiStore();
+
+            const opening = store.openPr(pr());
+            await flushPromises();
+            expect(ui.mainView).toBe('diff');
+            expect(store.openingPrId).toBe(pr().id);
+
+            land({ status: 'no-pr', pr: null });
+            await opening;
+            expect(ui.mainView).toBe('pr');
+            expect(store.openingPrId).toBeNull();
+        });
+
+        it('navigates only for the last of two quick clicks', async () => {
+            openApi();
+            const comparison = useComparisonStore();
+            comparison.repoPath = '/repo';
+            comparison.branches = [
+                { name: 'main', kind: 'local' },
+                { name: 'feat/x', kind: 'local' },
+                { name: 'feat/y', kind: 'local' },
+            ];
+            const store = useDashboardStore();
+            const setMainView = vi.spyOn(useUiStore(), 'setMainView');
+
+            await Promise.all([
+                store.openPr(pr()),
+                store.openPr(pr({ id: 'other', headRefName: 'feat/y' })),
+            ]);
+
+            expect(comparison.head).toBe('feat/y');
+            expect(setMainView).toHaveBeenCalledTimes(1);
+            expect(store.openingPrId).toBeNull();
+        });
+
+        it("opens a notification's PR when the snapshot has it, else its GitHub page", async () => {
             const openExternal = openApi();
             const comparison = useComparisonStore();
             comparison.repoPath = '/repo';
@@ -578,6 +628,7 @@ describe('dashboard store', () => {
             };
 
             store.openActivity(entry);
+            await flushPromises();
             expect(useUiStore().mainView).toBe('pr');
             expect(openExternal).not.toHaveBeenCalled();
 
@@ -643,8 +694,8 @@ describe('dashboard store', () => {
             ];
             const store = useDashboardStore();
 
-            store.openPr(pr({ isCrossRepository: true }));
-            store.openPr(pr({ headRefName: 'feat/missing' }));
+            void store.openPr(pr({ isCrossRepository: true }));
+            void store.openPr(pr({ headRefName: 'feat/missing' }));
 
             expect(openExternal).toHaveBeenCalledTimes(2);
             expect(useUiStore().mainView).toBe('diff');

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ExternalLink } from '@lucide/vue';
+import { ExternalLink, LoaderCircle } from '@lucide/vue';
 import type { DashboardPr } from '@/shared/types';
 import { ciVisual, prDotClass, ROW_ACTION_CLASS } from '@/lib/dashboard';
 import { timeSince } from '@/lib/status-bar';
@@ -21,6 +21,8 @@ const props = defineProps<{
     now: number;
     showAvatar?: boolean;
     inStack?: boolean;
+    // The PR is being opened: its lookup runs before the PR view shows.
+    opening?: boolean;
 }>();
 defineEmits<{ open: [pr: DashboardPr]; openInBrowser: [pr: DashboardPr] }>();
 
@@ -41,6 +43,7 @@ const age = computed(() => {
         <button
             type="button"
             class="flex min-w-0 flex-1 items-center gap-3 py-4 pl-3.5 text-left"
+            :aria-busy="opening || undefined"
             @click="$emit('open', pr)"
         >
             <span class="size-2.5 shrink-0 rounded-full" :class="prDotClass(pr)" />
@@ -69,9 +72,15 @@ const age = computed(() => {
                 <span class="text-moire-del-fg"> −{{ pr.deletions }}</span>
             </span>
             <span class="flex w-4 shrink-0 justify-center">
+                <LoaderCircle
+                    v-if="opening"
+                    :size="16"
+                    class="animate-spin text-moire-muted"
+                    aria-label="Opening"
+                />
                 <component
                     :is="ci.icon"
-                    v-if="ci"
+                    v-else-if="ci"
                     :size="16"
                     :class="ci.cls"
                     :aria-label="ci.label"

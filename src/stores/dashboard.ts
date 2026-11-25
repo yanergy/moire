@@ -113,22 +113,6 @@ export function toggleAuthor(
     return list.length === 1 && list[0] === me ? 'me' : list;
 }
 
-// Open a PR in Moiré's PR view by selecting its base and head as the range.
-// A PR from a fork, or one whose branches are not available locally or as
-// remote tracking branches, opens on GitHub instead.
-function openPr(pr: DashboardPr) {
-    const comparison = useComparisonStore();
-    if (
-        !pr.isCrossRepository &&
-        comparison.selectPullRequestRange(pr.baseRefName, pr.headRefName)
-    ) {
-        useUiStore().setMainView('pr');
-        return;
-    }
-
-    void window.api?.openExternal(pr.url);
-}
-
 // The GitHub dashboard for the repository open in Moiré. The data is owned by the
 // notifier in the main process; this store mirrors the last state it sent and
 // derives the overview cards from it. "Show drafts" filters every card, and the
@@ -146,6 +130,41 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const notificationSettings = ref<NotificationSettings | null>(null);
     const mergedPeriod = ref<MergedPeriod>('week');
     const loading = ref(false);
+    // The PR being opened in the PR view, while its lookup runs. The view switches
+    // only once it has landed, so the previous PR never shows on the way.
+    const openingPrId = ref<string | null>(null);
+    let openRequest = 0;
+
+    // Open a PR in Moiré's PR view by selecting its base and head as the range.
+    // A PR from a fork, or one whose branches are not available locally or as
+    // remote tracking branches, opens on GitHub instead. A later click wins: an
+    // earlier one still loading no longer navigates.
+    async function openPr(pr: DashboardPr) {
+        const comparison = useComparisonStore();
+        if (
+            pr.isCrossRepository ||
+            !comparison.selectPullRequestRange(pr.baseRefName, pr.headRefName)
+        ) {
+            void window.api?.openExternal(pr.url);
+            return;
+        }
+
+        const token = ++openRequest;
+        openingPrId.value = pr.id;
+        try {
+            await comparison.pullRequestSettled();
+        } finally {
+            if (token === openRequest) {
+                openingPrId.value = null;
+            }
+        }
+        if (token !== openRequest) {
+            return;
+        }
+
+        // A failed lookup still navigates: the PR view shows its error state.
+        useUiStore().setMainView('pr');
+    }
 
     function applyState(state: DashboardState) {
         status.value = state.status;
@@ -358,7 +377,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
             ...(snap?.merged ?? []),
         ].find((candidate) => candidate.number === entry.number);
         if (pr) {
-            openPr(pr);
+            void openPr(pr);
         } else {
             void window.api?.openExternal(entry.url);
         }
@@ -576,6 +595,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         toggleAuthorSelected,
         toggleAllAuthors,
         openPr,
+        openingPrId,
         openActivity,
         openActivityInBrowser,
         unreadCount,
