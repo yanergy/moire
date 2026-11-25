@@ -92,7 +92,14 @@ export function stackPositions(prs: StackablePr[]): Map<number, StackPosition> {
 }
 
 // A list of PRs as the dashboard shows it: each stack gathered into one group, in
-// stack order, at the place of its first PR in the list; every other PR as is.
+// stack order, at the place of its first PR in the list; every other PR as is. A
+// group holds its whole stack: the PRs missing from the list (filtered out of a
+// card) are filled in from `all` and marked `inList: false`, for showing dimmed.
+export interface StackMember<T> {
+    pr: T;
+    inList: boolean;
+}
+
 export type StackListItem<T> =
     | { kind: 'pr'; pr: T }
     | {
@@ -101,12 +108,13 @@ export type StackListItem<T> =
           title: string;
           trunk: string;
           total: number;
-          prs: T[];
+          members: StackMember<T>[];
       };
 
 export function groupByStack<T extends { number: number }>(
     prs: T[],
-    positions: Map<number, StackPosition>
+    positions: Map<number, StackPosition>,
+    all: Map<number, T> = new Map()
 ): StackListItem<T>[] {
     const items: StackListItem<T>[] = [];
     const groups = new Map<number, Extract<StackListItem<T>, { kind: 'stack' }>>();
@@ -125,16 +133,25 @@ export function groupByStack<T extends { number: number }>(
                 title: position.stackTitle,
                 trunk: position.trunk,
                 total: position.total,
-                prs: [],
+                members: [],
             };
             groups.set(position.stackId, group);
             items.push(group);
         }
-        group.prs.push(pr);
+        group.members.push({ pr, inList: true });
     }
 
+    for (const [number, position] of positions) {
+        const group = groups.get(position.stackId);
+        const pr = all.get(number);
+        if (group && pr && !group.members.some((m) => m.pr.number === number)) {
+            group.members.push({ pr, inList: false });
+        }
+    }
+
+    const indexOf = (member: StackMember<T>) => positions.get(member.pr.number)!.index;
     for (const group of groups.values()) {
-        group.prs.sort((a, b) => positions.get(a.number)!.index - positions.get(b.number)!.index);
+        group.members.sort((a, b) => indexOf(a) - indexOf(b));
     }
 
     return items;

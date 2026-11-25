@@ -49,7 +49,7 @@ const selected = computed(
 // The card's PRs with each stack gathered into one foldable group, in stack order
 // (see lib/pr-stacks), so PRs that build on each other read together.
 const selectedItems = computed(() =>
-    groupByStack(selected.value?.prs ?? [], dashboard.prStackPositions)
+    groupByStack(selected.value?.prs ?? [], dashboard.prStackPositions, dashboard.openPrsByNumber)
 );
 
 // Stack groups start open; a click on a group's header folds it.
@@ -319,11 +319,8 @@ const updated = computed(() =>
                                             </span>
                                             <span class="text-moire-faint">·</span>
                                             <span class="shrink-0">
-                                                {{ item.prs.length }}
-                                                {{ item.prs.length === 1 ? 'PR' : 'PRs' }}
-                                                <template v-if="item.prs.length < item.total">
-                                                    of {{ item.total }}
-                                                </template>
+                                                {{ item.members.length }}
+                                                {{ item.members.length === 1 ? 'PR' : 'PRs' }}
                                             </span>
                                         </div>
                                     </div>
@@ -336,9 +333,10 @@ const updated = computed(() =>
                                     class="border-t border-moire-border"
                                 >
                                     <li
-                                        v-for="(pr, index) in item.prs"
+                                        v-for="({ pr, inList }, index) in item.members"
                                         :key="pr.id"
                                         data-slot="stack-group-pr"
+                                        :data-filtered-out="!inList || undefined"
                                         class="flex"
                                     >
                                         <div
@@ -349,7 +347,7 @@ const updated = computed(() =>
                                                 class="absolute top-0 bottom-[calc(50%+18px)] left-1/2 w-px -translate-x-1/2 bg-moire-border"
                                             />
                                             <span
-                                                v-if="index < item.prs.length - 1"
+                                                v-if="index < item.members.length - 1"
                                                 class="absolute top-[calc(50%+18px)] bottom-0 left-1/2 w-px -translate-x-1/2 bg-moire-border"
                                             />
                                             <span
@@ -361,9 +359,14 @@ const updated = computed(() =>
                                                 }}
                                             </span>
                                         </div>
+                                        <!-- A PR of the stack this card's filter leaves out is
+                                             shown dimmed, so the stack reads whole. -->
                                         <div
                                             class="min-w-0 flex-1"
-                                            :class="{ 'border-t border-moire-border': index > 0 }"
+                                            :class="{
+                                                'border-t border-moire-border': index > 0,
+                                                'opacity-45': !inList,
+                                            }"
                                         >
                                             <dashboard-pr-row
                                                 :pr="pr"

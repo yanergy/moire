@@ -68,15 +68,16 @@ describe('groupByStack', () => {
 
         expect(
             items.map((item) =>
-                item.kind === 'pr' ? item.pr.number : item.prs.map((p) => p.number)
+                item.kind === 'pr' ? item.pr.number : item.members.map((m) => m.pr.number)
             )
         ).toEqual([5, [1, 2, 3], [19, 20]]);
         expect(items[1]).toMatchObject({ kind: 'stack', stackId: 1, trunk: 'main', total: 3 });
     });
 
-    it('shows only the PRs of a stack that are in the list, with the full count', () => {
+    it('fills in the PRs of a stack the list leaves out, marked as not in it', () => {
         const all = [pr(1, 'a', 'main'), pr(2, 'b', 'a'), pr(3, 'c', 'b')];
-        const items = groupByStack([all[2]!, all[0]!], stackPositions(all));
+        const byNumber = new Map(all.map((p) => [p.number, p]));
+        const items = groupByStack([all[2]!, all[0]!], stackPositions(all), byNumber);
         expect(items).toEqual([
             {
                 kind: 'stack',
@@ -84,7 +85,11 @@ describe('groupByStack', () => {
                 title: '',
                 trunk: 'main',
                 total: 3,
-                prs: [all[0], all[2]],
+                members: [
+                    { pr: all[0], inList: true },
+                    { pr: all[1], inList: false },
+                    { pr: all[2], inList: true },
+                ],
             },
         ]);
     });

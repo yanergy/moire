@@ -146,6 +146,29 @@ describe('DashboardView', () => {
         expect(wrapper.findAllComponents(DashboardPrRow)).toHaveLength(1);
     });
 
+    it('shows the whole stack, dimming the PRs the card leaves out', async () => {
+        const { wrapper } = await mountView(
+            dashboardState({
+                snapshot: dashboardSnapshot({
+                    // Only the top PR asks for the viewer's review; its base PR is
+                    // in the repository's open list only.
+                    toReview: [
+                        dashboardPr({ id: 'T', number: 2, headRefName: 'b', baseRefName: 'a' }),
+                    ],
+                    open: [
+                        dashboardPr({ id: 'B', number: 1, headRefName: 'a', baseRefName: 'main' }),
+                    ],
+                }),
+            })
+        );
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        const rows = wrapper.findAll('[data-slot="stack-group-pr"]');
+        expect(rows.map((r) => r.attributes('data-filtered-out'))).toEqual(['true', undefined]);
+        expect(rows[0]!.find('.opacity-45').exists()).toBe(true);
+        expect(wrapper.get('[data-slot="stack-group-header"]').text()).toContain('2 PRs');
+    });
+
     it('says so when a card has no PRs', async () => {
         const { wrapper } = await mountView(dashboardState());
 

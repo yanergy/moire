@@ -375,7 +375,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // Each open PR's place in its stack, by PR number, for the rows' stack badges.
     // Worked out over every open PR the snapshot has, so a stack shows whole even
     // when a card lists only part of it.
-    const prStackPositions = computed(() => {
+    // Every open PR the snapshot has, by number: what the stacks are worked out
+    // from, and where a stack group finds its PRs that a card's filter left out.
+    const openPrsByNumber = computed(() => {
         const snap = snapshot.value;
         const byNumber = new Map<number, DashboardPr>();
         for (const pr of [
@@ -387,7 +389,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
                 byNumber.set(pr.number, pr);
             }
         }
-        return stackPositions([...byNumber.values()]);
+        return byNumber;
+    });
+    const prStackPositions = computed(() => {
+        return stackPositions([...openPrsByNumber.value.values()]);
     });
 
     // The open PRs the cards count, by the author filter. The viewer's own come from
@@ -551,6 +556,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         authorsLabel,
         loading,
         toReview,
+        openPrsByNumber,
         prStackPositions,
         categories,
         openCount,
