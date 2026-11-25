@@ -144,8 +144,8 @@ the popup never appears.
    checks GitHub every two minutes and sends a notification when something changes. Click a PR to
    open it in the PR view.
 8. **Adjust the settings.** The **Settings** button in the toolbar (or **Moiré > Settings…**,
-   `Cmd/Ctrl+,`) opens the Settings page, also reached from the **Dashboard settings** and
-   **Notification settings** buttons on those pages.
+   `Cmd/Ctrl+,`) opens the Settings page, also reached from **Dashboard settings** in the
+   dashboard's **...** menu and the **Notification settings** button.
    It holds the repository's main and development branch, which events notify you (and whether
    draft PRs and the dock badge do), and what the dashboard shows (drafts, the cards, and the
    Merged card's period). Every setting is kept per repository, so the page needs one open.
@@ -263,13 +263,18 @@ last branch range are remembered per repository.
   or on GitHub when it comes from a fork or its branches are not available locally. Every row also
   has an **Open in browser** button, and shows the PR's labels in their GitHub colors (the first
   three, plus a count of the rest).
+- A **Search** button in the dashboard header (or Cmd+F, Ctrl+F elsewhere) opens a full width search
+  bar under it that finds a PR by title, number, branch or author. On a card it narrows the card's
+  list; on the overview it lists the matching PRs from every list in place of the cards. A stack
+  with a matching PR still shows whole, its other PRs dimmed. Escape, or the button again, clears
+  and closes it.
 - A card with unread notifications about its PRs shows an "N new" pill.
 - A **Users** menu picks whose PRs the cards count (you by default, any mix of authors, or all of
   them). Whether drafts count (for the dashboard only; notifications have their own toggle), which
-  cards show and the Merged card's period are on the Settings page, opened with the **Dashboard
-  settings** button.
+  cards show and the Merged card's period are on the Settings page, opened with **Dashboard
+  settings** in the header's **...** menu, next to **Refresh**.
 
-- The refresh buttons on the dashboard and in the PR view rest for a few seconds after the data
+- Refresh on the dashboard and in the PR view (both in the header's **...** menu) rests for a few seconds after the data
   was last fetched (also by a background refresh), dimmed with a "Refreshed just now" hint, so
   repeated clicks do not stack up GitHub requests.
 
