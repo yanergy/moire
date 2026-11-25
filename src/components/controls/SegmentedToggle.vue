@@ -55,7 +55,7 @@ function onChange(value: unknown) {
         type="single"
         :spacing="1"
         :model-value="modelValue"
-        class="gap-0.5 rounded-md bg-moire-chrome p-[3px]"
+        class="gap-1 rounded-md bg-moire-chrome p-1"
         :class="[bordered ? 'border border-moire-border' : '', block ? 'flex w-full' : '']"
         @update:model-value="onChange"
     >
