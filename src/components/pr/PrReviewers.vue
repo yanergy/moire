@@ -126,7 +126,7 @@ function relative(iso: string): string {
             <svg
                 data-slot="review-ring"
                 viewBox="0 0 36 36"
-                class="size-4 shrink-0 -rotate-90"
+                class="size-5 shrink-0 -rotate-90"
                 aria-hidden="true"
             >
                 <circle
