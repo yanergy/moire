@@ -181,6 +181,9 @@ last branch range are remembered per repository.
 ### Reading the diff
 
 - Split and unified layouts, powered by the Monaco editor.
+- Cmd+F (Ctrl+F on Windows and Linux) searches the file in the diff, with Enter and Shift+Enter
+  stepping through the matches. In the single file view it works from anywhere outside a text
+  field; in the "all files" view, click into a file first.
 - A choice of diff layout under **View > Diff Layout**: the single-file view, or a GitHub-style
   "all files" list that stacks every changed file's diff in one scroll. The stacked view windows
   its editors so large pull requests stay responsive, marking a file viewed collapses it, and

@@ -22,5 +22,8 @@ import 'monaco-editor/esm/vs/basic-languages/php/php.contribution';
 import 'monaco-editor/esm/vs/basic-languages/ini/ini.contribution';
 import 'monaco-editor/esm/vs/basic-languages/dockerfile/dockerfile.contribution';
 import 'monaco-editor/esm/vs/language/json/monaco.contribution';
+// The find widget (Cmd/Ctrl+F) is an editor contribution, which the bare editor
+// API leaves out; the barrel's editor.all would register it along with many more.
+import 'monaco-editor/esm/vs/editor/contrib/find/browser/findController';
 
 export * from 'monaco-editor/esm/vs/editor/editor.api';

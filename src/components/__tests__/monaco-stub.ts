@@ -27,7 +27,19 @@ function makeInnerEditor() {
     // getContentHeight + onDidContentSizeChange; tests drive it with fireContentSize.
     let contentSizeCb: (() => void) | null = null;
     let contentHeight = 0;
+    // Cmd+F runs the find action; tests assert on findAction.run.
+    const findAction = { run: vi.fn<() => Promise<void>>().mockResolvedValue() };
     return {
+        findAction,
+        focus: vi.fn<() => void>(),
+        getAction: vi.fn<(id: string) => typeof findAction | null>((id) =>
+            id === 'actions.find' ? findAction : null
+        ),
+        getContribution: vi.fn<(id: string) => null>(() => null),
+        getDomNode: vi.fn<() => null>(() => null),
+        onDidChangeCursorSelection: vi.fn<(cb: () => void) => { dispose: () => void }>(() => ({
+            dispose: vi.fn<() => void>(),
+        })),
         revealLineInCenter: vi.fn<(line: number) => void>(),
         revealLine: vi.fn<(line: number) => void>(),
         setPosition: vi.fn<(position: { lineNumber: number; column: number }) => void>(),
