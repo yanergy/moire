@@ -273,9 +273,10 @@ last branch range are remembered per repository.
   and closes it.
 - A card with unread notifications about its PRs shows an "N new" pill.
 - A **Users** menu picks whose PRs the cards count (you by default, any mix of authors, or all of
-  them). Whether drafts count (for the dashboard only; notifications have their own toggle), which
-  cards show and the Merged card's period are on the Settings page, opened with **Dashboard
-  settings** in the header's **...** menu, next to **Refresh**.
+  them). Whether drafts count in the cards (for the dashboard only; notifications have their own
+  toggle), which cards show and the Merged card's period are on the Settings page, opened with
+  **Dashboard settings** in the header's **...** menu, next to **Refresh**. The Drafts card lists
+  the drafts either way, and is hidden like any other card.
 
 - Refresh on the dashboard and in the PR view (both in the header's **...** menu) rests for a few seconds after the data
   was last fetched (also by a background refresh), dimmed with a "Refreshed just now" hint, so

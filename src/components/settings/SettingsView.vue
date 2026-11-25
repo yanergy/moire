@@ -493,7 +493,7 @@ const groupLabel =
                                     >
                                         <Check :size="11" />
                                     </Checkbox>
-                                    Include draft PRs
+                                    Show drafts in PR lists
                                 </label>
                                 <div :class="rowClass">
                                     <span class="flex-1">Merged card counts</span>
