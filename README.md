@@ -118,9 +118,9 @@ the popup never appears.
    the pull request for the selected branches, with its description, status, labels, conversation,
    and CI checks. The tab shows the PR number and a status dot; while there is no pull request it
    stays in place but is disabled, and its tooltip says why (including how to fix a failed lookup). Inline
-   review comments and check annotations show on their lines in the diff. An optional edit mode
-   lets you reply to and resolve threads, post and edit your own comments, edit the description,
-   and tick task-list boxes. The **Diff** tab takes you back to the diff.
+   review comments and check annotations show on their lines in the diff. You can post comments,
+   edit the description and your own comments (each with its own pencil button), and tick task-list
+   boxes after turning on that block's checkbox mode. The **Diff** tab takes you back to the diff.
 
    To review the pull request yourself, click **Review** at the top right of the PR view. The diff
    opens, and hovering a line of the PR's diff shows a **+** between the line numbers and the code;
@@ -217,16 +217,19 @@ last branch range are remembered per repository.
   and below), and the thread's comments. Under each thread, a **Reply** box posts into it and
   **Resolve conversation** resolves it (folding it) or unresolves it, without reloading the PR. A
   resolved thread starts folded, with a Resolved badge (and an Outdated one when its code moved on).
-  In edit mode line comments get the same Edit and Delete menu as conversation comments. Both follow
+  Line comments get the same pencil (Edit) and Delete menu as conversation comments. Both follow
   GitHub's own permissions, so a maintainer can also edit or delete other people's comments. The
   other way, **Show in PR** on a review comment in the diff jumps to it in the conversation.
 - **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the
   PR view. Each is enabled while its end is more than a screen away.
-- The PR view's whole header (title, Review and Edit mode buttons, author, labels, tabs and the
+- The PR view's whole header (title, Review button, author, labels, tabs and the
   tab's status box) stays at the top while the conversation scrolls. Turn **Sticky header** off on the Settings page to let
   it scroll away.
-- An edit mode (off by default) adds posting, editing, and deleting your own comments, editing the
-  description, ticking task-list checkboxes, and replying to and resolving threads in place.
+- Posting comments is always available at the bottom of the conversation. The description and each
+  of your own comments have their own pencil button that opens just that block for editing, and your
+  comments a "..." menu with Delete. A block with a task list gets a **checkbox mode** toggle next to
+  its pencil: while on, its checkboxes can be ticked (saved after a short pause), and while off they
+  are read only, so a stray click changes nothing.
 - Code reviews from within the app: start a review, comment on lines or ranges in the diff
   (suggested changes included), keep track of the pending comments, and submit the review as
   Comment, Approve or Request changes, or discard it. Line comments are offered only when the diff
@@ -332,7 +335,8 @@ Track bugs and limitations here.
   side's lines can be commented on, since the removed lines are not real editor lines there.
 - **A task-list tick can be lost if you quit within the debounce window.** Ticking a checkbox
   writes back after a short quiet period (about two seconds), batching a burst into one save.
-  Pending ticks are flushed on the usual exits (leaving edit mode, refreshing, switching tab, the
+  Pending ticks are flushed on the usual exits (turning a block's checkbox mode off, refreshing,
+  switching tab, the
   window losing focus, and switching the branch or PR, which flushes to the old PR before the new
   one loads). They are not flushed when the app quits within that window, so a tick made in the
   last couple of seconds before quitting can still be dropped. Handling that needs the main

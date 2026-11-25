@@ -15,7 +15,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 // The PR view's review control, at the top right of its header. Without a pending
-// review it starts one (an explicit write, like edit mode next to it), after which
+// review it starts one (an explicit write), after which
 // the diff offers a comment button on each line. With one pending it shows how many
 // comments the review holds and opens the dialog that submits or discards it.
 // The pending review lives on GitHub, so one started on github.com shows here too.

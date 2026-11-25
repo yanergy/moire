@@ -13,6 +13,7 @@ import {
     ArrowRight,
     Check,
     ChevronDown,
+    ChevronUp,
     ChevronRight,
     ChevronsDownUp,
     ChevronsUpDown,
@@ -35,7 +36,7 @@ import {
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
-import { renderMarkdown, toggleTask } from '@/lib/markdown';
+import { hasTaskList, renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
 import { parseHunkTail, type HunkLine } from '@/lib/diff-hunk';
 import { Badge } from '@/components/ui/badge';
@@ -51,10 +52,10 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
+import CheckboxModeToggle from '@/components/pr/CheckboxModeToggle.vue';
 import PrReviewers from '@/components/pr/PrReviewers.vue';
 import { reviewProgress } from '@/lib/review-progress';
 import { reviewActivityByLogin, type ReviewActivityTarget } from '@/lib/review-activity';
@@ -91,9 +92,14 @@ const scrollViewport = computed(() =>
     scrollArea.value?.$el.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
 );
 
-// Whether the PR view is in edit mode (toggled from the header). Declared here
-// because the rendered Markdown and several actions below read it.
-const editing = ref(false);
+// The blocks whose task-list checkboxes are tickable ("checkbox mode"), keyed like
+// taskDrafts: 'description' or a comment's node id. Off by default, so a stray
+// click never changes a checkbox. Declared here because the rendered Markdown and
+// the click handlers read it; toggled from each block's header.
+const checkboxMode = ref(new Set<string>());
+function isCheckboxMode(key: string): boolean {
+    return checkboxMode.value.has(key);
+}
 
 // Local, unsaved task-list checkbox edits, keyed by target ('description' or a
 // comment's node id), holding that body's edited Markdown source. A tick updates
@@ -213,12 +219,12 @@ const checksStatus = computed<StatusBox | null>(() => {
 
 // The description is Markdown; renderMarkdown returns HTML that is safe to insert
 // with v-html (raw tags escaped, unsafe link schemes rejected). See lib/markdown.
-// In edit mode its task-list checkboxes render interactive (onBodyClick flips them).
+// In checkbox mode its task-list checkboxes render interactive (a click flips them).
 // While a task-list edit is pending (see the task-list section), render from the
 // local draft so ticks show at once, before the debounced write reaches GitHub.
 const renderedBody = computed(() =>
     renderMarkdown(taskDrafts.value.get('description') ?? pr.value?.body, {
-        interactive: editing.value,
+        interactive: isCheckboxMode('description'),
     })
 );
 const hasBody = computed(() => !!pr.value?.body.trim());
@@ -509,18 +515,32 @@ function toggleAll() {
     descriptionCollapsed.value = hasBody.value;
 }
 
-// --- Edit mode ---
+// --- Editing ---
 //
-// The conversation is read-only until the user turns on edit mode from the header
-// (`editing`, declared up top since the rendered Markdown reads it). Only then does
-// the composer at the bottom appear and each of the user's own comments gain an
-// Edit action, and task-list checkboxes become tickable. Posting, editing, and
-// deleting go through the store, which writes via gh and re-fetches so it shows.
+// The composer at the bottom is always there. The description and each of the
+// user's own comments have their own pencil button that opens just that block for
+// editing, and a block with a task list has a checkbox mode toggle (see
+// checkboxMode above). Posting, editing, and deleting go through the store, which
+// writes via gh and re-fetches so it shows.
 
-// New-comment composer.
+// New-comment composer, pinned to the bottom of the conversation. Its Comment
+// button is always shown, disabled until something is typed. It can be collapsed
+// to a one-line bar to free the view; expanding it focuses the field.
 const draft = ref('');
 const posting = ref(false);
 const postError = ref('');
+const composerCollapsed = ref(false);
+const composerInput = ref<InstanceType<typeof Textarea> | null>(null);
+function clearComposer() {
+    draft.value = '';
+    postError.value = '';
+}
+
+async function expandComposer() {
+    composerCollapsed.value = false;
+    await nextTick();
+    (composerInput.value?.$el as HTMLTextAreaElement | undefined)?.focus();
+}
 
 // The comment currently being edited (its node id), plus its working copy.
 const editingId = ref<string | null>(null);
@@ -545,25 +565,24 @@ const descriptionDraft = ref('');
 const savingDescription = ref(false);
 const descriptionError = ref('');
 
-// Leaving edit mode drops any in-progress draft, open editor, delete prompt, menu,
-// and error so the view returns cleanly to read-only. Any pending task-list edits
-// are flushed first (saved now, not dropped) so turning the mode off never loses a
-// tick.
-watch(editing, (on) => {
-    if (!on) {
-        void flushTasks();
-        editingId.value = null;
-        draft.value = '';
-        editDraft.value = '';
-        postError.value = '';
-        editError.value = '';
-        openMenuId.value = null;
-        confirmingDeleteId.value = null;
-        deleteError.value = '';
-        editingDescription.value = false;
-        descriptionError.value = '';
+// Turn a block's checkbox mode on or off. Turning it off saves that block's pending
+// ticks now rather than after the debounce, so the box reads as settled.
+function toggleCheckboxMode(key: string) {
+    const next = new Set(checkboxMode.value);
+    if (next.delete(key)) {
+        void flushTask(key);
+    } else {
+        next.add(key);
     }
-});
+
+    checkboxMode.value = next;
+}
+
+// Whether a block's Markdown has a task list, so its checkbox mode toggle shows.
+// Reads the pending draft too, so the toggle does not vanish mid-edit.
+function blockHasTasks(key: string, source: string | null | undefined): boolean {
+    return hasTaskList(taskDrafts.value.get(key) ?? source ?? '');
+}
 
 // Switching the compared range (base or head) swaps `pr` to a different PR, but
 // only a moment later: the store's PR lookup is async, so `pr` still points at the
@@ -583,7 +602,9 @@ watch(
     () => pr.value?.number,
     () => {
         cancelTaskSaves();
-        editing.value = false;
+        checkboxMode.value = new Set();
+        editingId.value = null;
+        editError.value = '';
         topMenuOpen.value = false;
         openMenuId.value = null;
         confirmingDeleteId.value = null;
@@ -949,7 +970,7 @@ function onBodyClick(event: MouseEvent) {
 
 // --- Task-list checkboxes ---
 //
-// In edit mode a task checkbox is clickable. A click flips the matching marker (by
+// In a block's checkbox mode its task checkboxes are clickable. A click flips the matching marker (by
 // its data-task-index) in the body's Markdown source, held as a local draft in
 // `taskDrafts`, and the rendered body reads from that draft, so the box flips at
 // once and more can be ticked without waiting. The write to GitHub is debounced:
@@ -957,7 +978,7 @@ function onBodyClick(event: MouseEvent) {
 // its accumulated draft is written in one call, then the re-fetch confirms it and
 // the draft is dropped. On failure the draft is dropped (reverting to the server
 // state) and an error banner shows. Pending drafts are flushed on the exits that
-// would otherwise lose them (leaving edit mode, refreshing, switching tab, the
+// would otherwise lose them (leaving checkbox mode, refreshing, switching tab, the
 // window losing focus, unmount, and switching the compared range before the PR
 // swaps; see the watchers).
 const TASK_SAVE_DEBOUNCE_MS = 2000;
@@ -1213,12 +1234,12 @@ function cancelTaskSaves() {
     taskSaved.value = new Set();
 }
 
-// A click in the description body: a task checkbox flips (edit mode only), else a
+// A click in the description body: a task checkbox flips (checkbox mode only), else a
 // link opens externally. The native toggle is prevented; the flip comes from the
 // re-render off the updated draft, so the box always mirrors the source.
 function onDescriptionBodyClick(event: MouseEvent) {
     const box = (event.target as HTMLElement).closest<HTMLInputElement>('input.pr-task-checkbox');
-    if (editing.value && box) {
+    if (isCheckboxMode('description') && box) {
         event.preventDefault();
         const index = Number(box.dataset.taskIndex);
         if (!Number.isNaN(index)) {
@@ -1231,11 +1252,11 @@ function onDescriptionBodyClick(event: MouseEvent) {
     onBodyClick(event);
 }
 
-// The same, for a comment body: only the viewer's own comments (canEdit) toggle,
-// since GitHub allows editing only those.
+// The same, for a comment body: only comments the viewer may edit (canEdit,
+// GitHub's viewerCanUpdate) toggle.
 function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
     const box = (event.target as HTMLElement).closest<HTMLInputElement>('input.pr-task-checkbox');
-    if (editing.value && comment.canEdit && box) {
+    if (isCheckboxMode(comment.id) && comment.canEdit && box) {
         event.preventDefault();
         const index = Number(box.dataset.taskIndex);
         if (!Number.isNaN(index)) {
@@ -1252,7 +1273,7 @@ function onCommentBodyClick(event: MouseEvent, comment: PrComment) {
 // so ticks show before the debounced write lands (mirrors renderedBody).
 function renderComment(comment: PrComment): string {
     return renderMarkdown(taskDrafts.value.get(comment.id) ?? comment.body, {
-        interactive: editing.value && comment.canEdit,
+        interactive: isCheckboxMode(comment.id) && comment.canEdit,
     });
 }
 </script>
@@ -1260,7 +1281,9 @@ function renderComment(comment: PrComment): string {
 <template>
     <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-moire-app">
         <ScrollArea v-if="pr" ref="scrollArea" class="pr-scroll-area min-h-0 flex-1">
-            <div class="w-full max-w-[1040px]">
+            <!-- Extra room at the bottom, so the end of the page (the comment box)
+                 can scroll up from the window's bottom edge. -->
+            <div class="w-full max-w-[1040px] pb-40">
                 <!-- The header and the tabs, pinned at the top while the conversation
                      scrolls when the Sticky PR header setting is on (the default). -->
                 <div
@@ -1279,36 +1302,6 @@ function renderComment(comment: PrComment): string {
                             <div class="flex shrink-0 items-center gap-1.5">
                                 <!-- Starts a review of this PR, or finishes the pending one. -->
                                 <review-button />
-                                <!-- The conversation is read-only until this is on; then the
-                                 composer and per-comment Edit actions appear. -->
-                                <Toggle
-                                    variant="outline"
-                                    size="sm"
-                                    :model-value="editing"
-                                    class="h-7 gap-1.5 border border-moire-border px-2.5 text-moire-muted hover:bg-moire-hover hover:text-moire-fg data-[state=on]:bg-moire-hover data-[state=on]:text-moire-fg"
-                                    aria-label="Toggle edit mode"
-                                    title="Edit mode: post and edit comments"
-                                    @update:model-value="editing = $event"
-                                >
-                                    <!-- Checkbox look borrowed from the diff viewer's "Mark
-                                     viewed" button: a bordered square that fills with a
-                                     check when on, so the state is unmistakable. Kept
-                                     neutral (filled with the foreground, not an accent),
-                                     matching this toggle's neutral pressed state. Not the
-                                     real Checkbox primitive: it renders a button, and a
-                                     button inside this Toggle would be invalid. -->
-                                    <span
-                                        class="flex size-[15px] shrink-0 items-center justify-center rounded-sm border"
-                                        :class="
-                                            editing
-                                                ? 'border-moire-fg bg-moire-fg text-moire-check-fg'
-                                                : 'border-current'
-                                        "
-                                    >
-                                        <Check v-if="editing" class="size-[11px]" />
-                                    </span>
-                                    Edit mode
-                                </Toggle>
                                 <!-- Secondary actions (refresh, open on GitHub) tuck into an
                                  overflow menu so the header stays uncluttered. While a
                                  refresh runs, the trigger shows the spinner in place of
@@ -1604,10 +1597,18 @@ function renderComment(comment: PrComment): string {
                                             </span>
                                         </div>
                                         <div class="flex shrink-0 items-center gap-0.5">
-                                            <!-- Edit the description, in edit mode. Shown even
-                                                 with no body yet, so one can be added. Swaps
-                                                 the body for an editor. -->
-                                            <Tooltip v-if="editing && !editingDescription">
+                                            <checkbox-mode-toggle
+                                                v-if="
+                                                    !editingDescription &&
+                                                    blockHasTasks('description', pr.body)
+                                                "
+                                                :pressed="isCheckboxMode('description')"
+                                                @toggle="toggleCheckboxMode('description')"
+                                            />
+                                            <!-- Edit the description. Shown even with no body
+                                                 yet, so one can be added. Swaps the body for
+                                                 an editor. -->
+                                            <Tooltip v-if="!editingDescription">
                                                 <TooltipTrigger as-child>
                                                     <button
                                                         type="button"
@@ -1799,14 +1800,43 @@ function renderComment(comment: PrComment): string {
                                             </span>
                                         </div>
                                         <div class="flex shrink-0 items-center gap-0.5">
-                                            <!-- Edit and delete for your own comments, tucked
-                                                 behind a "..." menu, and only in edit mode.
-                                                 Hidden while this comment is already being
-                                                 edited or is awaiting a delete confirmation. -->
+                                            <!-- Comments the viewer may edit (their own, or
+                                                 any as a maintainer, as GitHub allows):
+                                                 checkbox mode (when the comment has a task
+                                                 list) and a pencil that opens it for editing.
+                                                 Delete sits behind a "..." menu where it is
+                                                 allowed. Hidden while this comment is being
+                                                 edited or awaits a delete confirmation. -->
+                                            <template
+                                                v-if="
+                                                    comment.canEdit &&
+                                                    editingId !== comment.id &&
+                                                    confirmingDeleteId !== comment.id
+                                                "
+                                            >
+                                                <checkbox-mode-toggle
+                                                    v-if="blockHasTasks(comment.id, comment.body)"
+                                                    :pressed="isCheckboxMode(comment.id)"
+                                                    @toggle="toggleCheckboxMode(comment.id)"
+                                                />
+                                                <Tooltip>
+                                                    <TooltipTrigger as-child>
+                                                        <button
+                                                            type="button"
+                                                            data-slot="edit-comment"
+                                                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                            aria-label="Edit comment"
+                                                            @click="startEdit(comment, i)"
+                                                        >
+                                                            <Pencil :size="13" />
+                                                        </button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Edit comment</TooltipContent>
+                                                </Tooltip>
+                                            </template>
                                             <Popover
                                                 v-if="
-                                                    editing &&
-                                                    (comment.canEdit || comment.canDelete) &&
+                                                    comment.canDelete &&
                                                     editingId !== comment.id &&
                                                     confirmingDeleteId !== comment.id
                                                 "
@@ -1852,20 +1882,6 @@ function renderComment(comment: PrComment): string {
                                                         <CommandList>
                                                             <CommandGroup>
                                                                 <CommandItem
-                                                                    v-if="comment.canEdit"
-                                                                    value="edit"
-                                                                    aria-label="Edit comment"
-                                                                    class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
-                                                                    @select="startEdit(comment, i)"
-                                                                >
-                                                                    <Pencil
-                                                                        :size="14"
-                                                                        class="shrink-0 text-moire-faint"
-                                                                    />
-                                                                    <span class="flex-1">Edit</span>
-                                                                </CommandItem>
-                                                                <CommandItem
-                                                                    v-if="comment.canDelete"
                                                                     value="delete"
                                                                     aria-label="Delete comment"
                                                                     class="gap-2 text-xs text-moire-status-d data-[highlighted]:bg-moire-danger data-[highlighted]:text-moire-status-d"
@@ -2145,123 +2161,136 @@ function renderComment(comment: PrComment): string {
                                                             <span>{{
                                                                 relative(threadComment.createdAt)
                                                             }}</span>
-                                                            <!-- Edit and Delete where GitHub allows them
-                                                                 (the viewer's own line comments, or any
-                                                                 as a maintainer), in edit mode, like
-                                                                 the conversation's comment menus. -->
-                                                            <Popover
+                                                            <!-- Like a conversation comment: a pencil
+                                                                 where GitHub allows editing (the viewer's
+                                                                 own line comments, or any as a
+                                                                 maintainer), and Delete behind a "..."
+                                                                 menu where it allows deleting. -->
+                                                            <div
                                                                 v-if="
-                                                                    editing &&
-                                                                    (threadComment.canEdit ||
-                                                                        threadComment.canDelete) &&
                                                                     editingId !==
                                                                         threadComment.id &&
                                                                     confirmingDeleteId !==
                                                                         threadComment.id
                                                                 "
-                                                                :open="
-                                                                    openMenuId === threadComment.id
-                                                                "
-                                                                @update:open="
-                                                                    openMenuId = $event
-                                                                        ? threadComment.id
-                                                                        : null
-                                                                "
+                                                                class="ml-auto flex items-center gap-0.5"
                                                             >
-                                                                <PopoverAnchor as-child>
-                                                                    <span
-                                                                        class="ml-auto inline-flex"
+                                                                <Tooltip
+                                                                    v-if="threadComment.canEdit"
+                                                                >
+                                                                    <TooltipTrigger as-child>
+                                                                        <button
+                                                                            type="button"
+                                                                            data-slot="edit-thread-comment"
+                                                                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                                            aria-label="Edit comment"
+                                                                            @click="
+                                                                                startEditThreadComment(
+                                                                                    threadComment
+                                                                                )
+                                                                            "
+                                                                        >
+                                                                            <Pencil :size="13" />
+                                                                        </button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent
+                                                                        >Edit
+                                                                        comment</TooltipContent
                                                                     >
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger
-                                                                                as-child
-                                                                            >
-                                                                                <PopoverTrigger
+                                                                </Tooltip>
+                                                                <Popover
+                                                                    v-if="
+                                                                        threadComment.canDelete &&
+                                                                        editingId !==
+                                                                            threadComment.id &&
+                                                                        confirmingDeleteId !==
+                                                                            threadComment.id
+                                                                    "
+                                                                    :open="
+                                                                        openMenuId ===
+                                                                        threadComment.id
+                                                                    "
+                                                                    @update:open="
+                                                                        openMenuId = $event
+                                                                            ? threadComment.id
+                                                                            : null
+                                                                    "
+                                                                >
+                                                                    <PopoverAnchor as-child>
+                                                                        <span class="inline-flex">
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger
                                                                                     as-child
                                                                                 >
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        data-slot="thread-comment-menu"
-                                                                                        class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                                                                        aria-label="Comment actions"
+                                                                                    <PopoverTrigger
+                                                                                        as-child
                                                                                     >
-                                                                                        <MoreHorizontal
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            data-slot="thread-comment-menu"
+                                                                                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                                                            aria-label="Comment actions"
+                                                                                        >
+                                                                                            <MoreHorizontal
+                                                                                                :size="
+                                                                                                    14
+                                                                                                "
+                                                                                            />
+                                                                                        </button>
+                                                                                    </PopoverTrigger>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent
+                                                                                    >Comment
+                                                                                    actions</TooltipContent
+                                                                                >
+                                                                            </Tooltip>
+                                                                        </span>
+                                                                    </PopoverAnchor>
+                                                                    <PopoverContent
+                                                                        align="end"
+                                                                        :side-offset="6"
+                                                                        class="w-44 overflow-hidden border-moire-border bg-moire-pop p-0"
+                                                                        :style="{
+                                                                            boxShadow:
+                                                                                'var(--moire-pop-shadow)',
+                                                                        }"
+                                                                    >
+                                                                        <Command
+                                                                            class="bg-transparent"
+                                                                        >
+                                                                            <CommandList>
+                                                                                <CommandGroup>
+                                                                                    <CommandItem
+                                                                                        v-if="
+                                                                                            threadComment.canDelete
+                                                                                        "
+                                                                                        value="delete"
+                                                                                        aria-label="Delete comment"
+                                                                                        class="gap-2 text-xs text-moire-status-d data-[highlighted]:bg-moire-danger data-[highlighted]:text-moire-status-d"
+                                                                                        @select="
+                                                                                            startDelete(
+                                                                                                threadComment
+                                                                                            )
+                                                                                        "
+                                                                                    >
+                                                                                        <Trash2
                                                                                             :size="
                                                                                                 14
                                                                                             "
+                                                                                            class="shrink-0"
                                                                                         />
-                                                                                    </button>
-                                                                                </PopoverTrigger>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent
-                                                                                >Comment
-                                                                                actions</TooltipContent
-                                                                            >
-                                                                        </Tooltip>
-                                                                    </span>
-                                                                </PopoverAnchor>
-                                                                <PopoverContent
-                                                                    align="end"
-                                                                    :side-offset="6"
-                                                                    class="w-44 overflow-hidden border-moire-border bg-moire-pop p-0"
-                                                                    :style="{
-                                                                        boxShadow:
-                                                                            'var(--moire-pop-shadow)',
-                                                                    }"
-                                                                >
-                                                                    <Command class="bg-transparent">
-                                                                        <CommandList>
-                                                                            <CommandGroup>
-                                                                                <CommandItem
-                                                                                    v-if="
-                                                                                        threadComment.canEdit
-                                                                                    "
-                                                                                    value="edit"
-                                                                                    aria-label="Edit comment"
-                                                                                    class="gap-2 text-xs text-moire-file-fg data-[highlighted]:bg-moire-hover data-[highlighted]:text-moire-fg"
-                                                                                    @select="
-                                                                                        startEditThreadComment(
-                                                                                            threadComment
-                                                                                        )
-                                                                                    "
-                                                                                >
-                                                                                    <Pencil
-                                                                                        :size="14"
-                                                                                        class="shrink-0 text-moire-faint"
-                                                                                    />
-                                                                                    <span
-                                                                                        class="flex-1"
-                                                                                        >Edit</span
-                                                                                    >
-                                                                                </CommandItem>
-                                                                                <CommandItem
-                                                                                    v-if="
-                                                                                        threadComment.canDelete
-                                                                                    "
-                                                                                    value="delete"
-                                                                                    aria-label="Delete comment"
-                                                                                    class="gap-2 text-xs text-moire-status-d data-[highlighted]:bg-moire-danger data-[highlighted]:text-moire-status-d"
-                                                                                    @select="
-                                                                                        startDelete(
-                                                                                            threadComment
-                                                                                        )
-                                                                                    "
-                                                                                >
-                                                                                    <Trash2
-                                                                                        :size="14"
-                                                                                        class="shrink-0"
-                                                                                    />
-                                                                                    <span
-                                                                                        class="flex-1"
-                                                                                    >
-                                                                                        Delete
-                                                                                    </span>
-                                                                                </CommandItem>
-                                                                            </CommandGroup>
-                                                                        </CommandList>
-                                                                    </Command>
-                                                                </PopoverContent>
-                                                            </Popover>
+                                                                                        <span
+                                                                                            class="flex-1"
+                                                                                        >
+                                                                                            Delete
+                                                                                        </span>
+                                                                                    </CommandItem>
+                                                                                </CommandGroup>
+                                                                            </CommandList>
+                                                                        </Command>
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                            </div>
                                                         </div>
                                                         <!-- v-html is safe: renderMarkdown
                                                              sanitizes via DOMPurify. -->
@@ -2347,13 +2376,35 @@ function renderComment(comment: PrComment): string {
                             </div>
                         </div>
 
-                        <!-- New-comment composer, shown only in edit mode. Indented to the
-                             cards' left edge. Posts through the store, which re-fetches so
-                             the comment appears. gap, not margin (the unlayered reset). -->
-                        <div v-if="editing" class="pl-9">
-                            <div class="rounded-lg border border-moire-border bg-moire-app p-3.5">
+                        <!-- New-comment composer, pinned to the bottom of the view while
+                             the conversation scrolls (on an opaque band so entries pass
+                             under it). Indented to the cards' left edge. Collapsible to a
+                             one-line bar (see composerCollapsed). Posts through the store,
+                             which re-fetches so the comment appears. gap, not margin (the
+                             unlayered reset). -->
+                        <div
+                            data-slot="comment-composer"
+                            :data-collapsed="composerCollapsed || undefined"
+                            class="sticky bottom-0 z-10 bg-moire-app pt-4 pb-8 pl-9"
+                        >
+                            <button
+                                v-if="composerCollapsed"
+                                type="button"
+                                data-slot="composer-expand"
+                                class="flex h-10 w-full cursor-pointer items-center justify-between rounded-lg border border-moire-border bg-moire-app px-3.5 text-left text-[14px] text-moire-faint transition-colors hover:border-moire-ring"
+                                aria-label="Expand comment box"
+                                @click="expandComposer"
+                            >
+                                <span class="truncate">{{ draft.trim() || 'Add a comment…' }}</span>
+                                <ChevronUp :size="16" class="shrink-0" />
+                            </button>
+                            <div
+                                v-else
+                                class="rounded-lg border border-moire-border bg-moire-app p-3.5"
+                            >
                                 <div class="flex flex-col gap-2.5">
                                     <Textarea
+                                        ref="composerInput"
                                         v-model="draft"
                                         placeholder="Add a comment…"
                                         aria-label="Add a comment"
@@ -2362,20 +2413,48 @@ function renderComment(comment: PrComment): string {
                                     <span v-if="postError" class="text-[12px] text-moire-status-d">
                                         {{ postError }}
                                     </span>
-                                    <div class="flex justify-end">
-                                        <Button
-                                            size="sm"
-                                            class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
-                                            :disabled="!draft.trim() || posting"
-                                            @click="submitComment"
-                                        >
-                                            <LoaderCircle
-                                                v-if="posting"
-                                                :size="14"
-                                                class="animate-spin"
-                                            />
-                                            Comment
-                                        </Button>
+                                    <div class="flex items-center justify-between">
+                                        <Tooltip>
+                                            <TooltipTrigger as-child>
+                                                <button
+                                                    type="button"
+                                                    data-slot="composer-collapse"
+                                                    class="inline-flex size-7 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                    aria-label="Collapse comment box"
+                                                    @click="composerCollapsed = true"
+                                                >
+                                                    <ChevronDown :size="16" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Collapse comment box</TooltipContent>
+                                        </Tooltip>
+                                        <div class="flex items-center gap-2">
+                                            <!-- Clears the draft (and any error), leaving the
+                                                 box open. -->
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                data-slot="composer-cancel"
+                                                class="h-7 text-moire-muted hover:bg-moire-hover hover:text-moire-fg"
+                                                :disabled="(!draft && !postError) || posting"
+                                                @click="clearComposer"
+                                            >
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
+                                                :disabled="!draft.trim() || posting"
+                                                @click="submitComment"
+                                            >
+                                                <LoaderCircle
+                                                    v-if="posting"
+                                                    :size="14"
+                                                    class="animate-spin"
+                                                />
+                                                Comment
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

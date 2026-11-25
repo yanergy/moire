@@ -90,6 +90,8 @@ const ALLOWED_TAGS = [
     'details',
     'summary',
     'input',
+    // Wraps a task checkbox to widen its click area (see the task_checkbox rule).
+    'label',
 ];
 
 // Attributes kept on the tags above. Links and images carry href/src/title/alt;
@@ -195,11 +197,14 @@ function taskLists(markdown: typeof md): void {
     markdown.renderer.rules.task_checkbox = (tokens, idx, _options, env) => {
         const meta = tokens[idx]!.meta as { checked?: boolean; index?: number } | undefined;
         const checked = meta?.checked ? ' checked' : '';
-        // Interactive only when the caller asks (edit mode); otherwise display-only.
+        // Interactive only when the caller asks (checkbox mode); otherwise display-only.
         const disabled = (env as { interactive?: boolean } | undefined)?.interactive
             ? ''
             : ' disabled';
-        return `<input class="pr-task-checkbox" type="checkbox" data-task-index="${meta?.index ?? 0}"${disabled}${checked}> `;
+        // Wrapped in a label whose padding (offset by a negative margin, see
+        // markdown.css) widens the click area without growing the box: a click on
+        // the label reaches the checkbox natively.
+        return `<label class="pr-task-hit"><input class="pr-task-checkbox" type="checkbox" data-task-index="${meta?.index ?? 0}"${disabled}${checked}></label> `;
     };
 }
 
@@ -215,13 +220,22 @@ for (const instance of [md, fileMd]) {
 
 // Render Markdown source to a sanitized HTML string. Empty or missing input
 // yields an empty string so callers can treat "no description" uniformly. When
-// `interactive` is set, task-list checkboxes render enabled (for edit mode); the
+// `interactive` is set, task-list checkboxes render enabled (for checkbox mode); the
 // caller wires the click handler that flips the source via toggleTask.
 export function renderMarkdown(
     source: string | null | undefined,
     options: { interactive?: boolean } = {}
 ): string {
     return source ? sanitize(md.render(source, { interactive: options.interactive })) : '';
+}
+
+// A task-list item line: a bullet or number followed by a `[ ]`/`[x]` marker.
+const TASK_MARKER = /^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]/;
+
+// Whether Markdown source has a task-list item, so the PR view can offer to make
+// its checkboxes tickable. Matches the same lines toggleTask flips.
+export function hasTaskList(source: string): boolean {
+    return source.split('\n').some((line) => TASK_MARKER.test(line));
 }
 
 // Render a Markdown file (a README or a doc from either branch) to sanitized HTML,
@@ -259,7 +273,7 @@ export function isRelativeUrl(url: string): boolean {
 // shape the renderer turns into a checkbox, so the index lines up with the rendered
 // checkbox's data-task-index.
 export function toggleTask(source: string, index: number): string | null {
-    const marker = /^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX])\]/;
+    const marker = TASK_MARKER;
     const lines = source.split('\n');
     let seen = 0;
     for (let i = 0; i < lines.length; i++) {

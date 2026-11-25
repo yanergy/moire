@@ -738,7 +738,7 @@ export const useComparisonStore = defineStore('comparison', () => {
     //
     // A review collects line comments on GitHub as a pending review, then submits
     // them at once. Starting one is the user's explicit choice (the toolbar's Review
-    // button), like edit mode in the PR view. Each write re-reads the threads and the
+    // button). Each write re-reads the threads and the
     // review state, so the diff and the toolbar follow.
 
     const hasPendingReview = computed(() => !!reviewState.value.pendingReviewId);
@@ -916,7 +916,7 @@ export const useComparisonStore = defineStore('comparison', () => {
     // range change swaps the PR, so this run drives the spinner.
     watch([base, head], () => void loadPullRequest(true));
 
-    // Post a new comment on the current PR (edit mode only), then re-fetch so it
+    // Post a new comment on the current PR, then re-fetch so it
     // shows. Returns gh's ok/message result for the view to surface an inline error.
     async function postComment(body: string): Promise<CommentMutationResult> {
         const api = window.api;

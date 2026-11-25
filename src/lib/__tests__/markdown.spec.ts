@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    hasTaskList,
     isMarkdownFile,
     isRelativeUrl,
     renderMarkdown,
@@ -178,6 +179,25 @@ describe('toggleTask', () => {
     it('returns null when there is no marker at that index', () => {
         expect(toggleTask('- [ ] only', 1)).toBeNull();
         expect(toggleTask('plain text', 0)).toBeNull();
+    });
+});
+
+describe('task checkboxes', () => {
+    it('wraps each checkbox in a label that widens its click area', () => {
+        const holder = document.createElement('div');
+        holder.innerHTML = renderMarkdown('- [ ] todo');
+        const box = holder.querySelector('input.pr-task-checkbox');
+        expect(box?.parentElement?.matches('label.pr-task-hit')).toBe(true);
+    });
+});
+
+describe('hasTaskList', () => {
+    it('finds a task-list item the way toggleTask does', () => {
+        expect(hasTaskList('- [ ] todo')).toBe(true);
+        expect(hasTaskList('intro\n  * [x] done')).toBe(true);
+        expect(hasTaskList('1. [ ] numbered')).toBe(true);
+        expect(hasTaskList('- plain item\n[ ] not a list')).toBe(false);
+        expect(hasTaskList('')).toBe(false);
     });
 });
 
