@@ -1323,11 +1323,11 @@ function renderComment(comment: PrComment): string {
                                         <button
                                             type="button"
                                             data-slot="stack-badge"
-                                            class="mr-2 inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-moire-ring px-2.5 align-middle text-[14px] font-medium text-moire-file-fg transition-colors hover:border-moire-fg hover:text-moire-fg"
+                                            class="mr-2 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-moire-ring px-2.5 align-middle text-[13px] font-normal text-moire-file-fg transition-colors hover:border-moire-fg hover:text-moire-fg"
                                             :aria-label="`PR ${stackPosition.index} of ${stackPosition.total} in its stack`"
                                             @click="activeTab = 'stack'"
                                         >
-                                            <Layers :size="15" />
+                                            <Layers :size="14" />
                                             {{ stackPosition.index }}/{{ stackPosition.total }}
                                         </button>
                                     </TooltipTrigger>
