@@ -865,6 +865,28 @@ describe('PrView', () => {
             expect(wrapper.find('textarea[aria-label="Add a comment"]').exists()).toBe(true);
         });
 
+        it('pins the composer to the bottom, folded until it is used', async () => {
+            const wrapper = mountWith({ ...PR, comments: [] });
+            const composer = wrapper.get('[data-slot="comment-composer"]');
+            const commentButton = () =>
+                wrapper.findAll('button').find((b) => b.text() === 'Comment');
+
+            expect(composer.classes()).toContain('sticky');
+            expect(composer.attributes('data-open')).toBeUndefined();
+            expect(commentButton()).toBeUndefined();
+
+            // Focus opens it; leaving it empty folds it back.
+            await composer.trigger('focusin');
+            expect(commentButton()).toBeDefined();
+            await composer.trigger('focusout');
+            expect(commentButton()).toBeUndefined();
+
+            // A draft keeps it open after focus leaves.
+            await wrapper.get('textarea[aria-label="Add a comment"]').setValue('Draft');
+            await composer.trigger('focusout');
+            expect(commentButton()).toBeDefined();
+        });
+
         it('posts a new comment through the store', async () => {
             const store = useComparisonStore();
             const post = vi.spyOn(store, 'postComment').mockResolvedValue({ ok: true });

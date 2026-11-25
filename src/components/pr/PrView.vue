@@ -522,10 +522,24 @@ function toggleAll() {
 // checkboxMode above). Posting, editing, and deleting go through the store, which
 // writes via gh and re-fetches so it shows.
 
-// New-comment composer.
+// New-comment composer. Pinned to the bottom of the conversation as a one-line
+// field that grows into the full editor (with the Comment button) while it has
+// focus, a draft, a post in flight or an error to show, and shrinks back after.
 const draft = ref('');
 const posting = ref(false);
 const postError = ref('');
+const composerFocused = ref(false);
+const composerOpen = computed(
+    () => composerFocused.value || !!draft.value.trim() || posting.value || !!postError.value
+);
+// Focus moving between the textarea and the Comment button stays inside the
+// composer, so it only folds when focus leaves it altogether.
+function onComposerFocusOut(event: FocusEvent) {
+    const composer = event.currentTarget as HTMLElement;
+    if (!composer.contains(event.relatedTarget as Node | null)) {
+        composerFocused.value = false;
+    }
+}
 
 // The comment currently being edited (its node id), plus its working copy.
 const editingId = ref<string | null>(null);
@@ -2361,23 +2375,40 @@ function renderComment(comment: PrComment): string {
                             </div>
                         </div>
 
-                        <!-- New-comment composer. Indented to the cards' left edge. Posts
-                             through the store, which re-fetches so the comment appears.
-                             gap, not margin (the unlayered reset); padded off the last
-                             entry so it reads as its own block. -->
-                        <div class="pt-4 pl-9">
-                            <div class="rounded-lg border border-moire-border bg-moire-app p-3.5">
+                        <!-- New-comment composer, pinned to the bottom of the view while
+                             the conversation scrolls (on an opaque band so entries pass
+                             under it). Indented to the cards' left edge. Folded to a
+                             one-line field until used (see composerOpen). Posts through
+                             the store, which re-fetches so the comment appears. gap, not
+                             margin (the unlayered reset). -->
+                        <div
+                            data-slot="comment-composer"
+                            :data-open="composerOpen || undefined"
+                            class="sticky bottom-0 z-10 bg-moire-app pt-4 pb-4 pl-9"
+                            @focusin="composerFocused = true"
+                            @focusout="onComposerFocusOut"
+                        >
+                            <div
+                                class="rounded-lg border border-moire-border bg-moire-app"
+                                :class="composerOpen ? 'p-3.5' : 'p-1.5'"
+                            >
                                 <div class="flex flex-col gap-2.5">
                                     <Textarea
                                         v-model="draft"
                                         placeholder="Add a comment…"
                                         aria-label="Add a comment"
-                                        class="min-h-20 border-moire-border bg-transparent text-[14px] leading-[1.6] text-moire-file-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                                        :rows="composerOpen ? undefined : 1"
+                                        class="border-moire-border bg-transparent text-[14px] leading-[1.6] text-moire-file-fg focus-visible:border-moire-ring focus-visible:ring-0"
+                                        :class="
+                                            composerOpen
+                                                ? 'min-h-20'
+                                                : 'min-h-0 resize-none border-transparent'
+                                        "
                                     />
                                     <span v-if="postError" class="text-[12px] text-moire-status-d">
                                         {{ postError }}
                                     </span>
-                                    <div class="flex justify-end">
+                                    <div v-if="composerOpen" class="flex justify-end">
                                         <Button
                                             size="sm"
                                             class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
