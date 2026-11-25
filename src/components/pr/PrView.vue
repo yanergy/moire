@@ -2384,13 +2384,13 @@ function renderComment(comment: PrComment): string {
                         <div
                             data-slot="comment-composer"
                             :data-open="composerOpen || undefined"
-                            class="sticky bottom-0 z-10 bg-moire-app pt-4 pb-4 pl-9"
+                            class="sticky bottom-0 z-10 bg-moire-app pt-4 pb-8 pl-9"
                             @focusin="composerFocused = true"
                             @focusout="onComposerFocusOut"
                         >
                             <div
                                 class="rounded-lg border border-moire-border bg-moire-app"
-                                :class="composerOpen ? 'p-3.5' : 'p-1.5'"
+                                :class="composerOpen ? 'p-3.5' : 'p-2'"
                             >
                                 <div class="flex flex-col gap-2.5">
                                     <Textarea
@@ -2402,7 +2402,7 @@ function renderComment(comment: PrComment): string {
                                         :class="
                                             composerOpen
                                                 ? 'min-h-20'
-                                                : 'min-h-0 resize-none border-transparent'
+                                                : 'min-h-12 resize-none border-transparent'
                                         "
                                     />
                                     <span v-if="postError" class="text-[12px] text-moire-status-d">
