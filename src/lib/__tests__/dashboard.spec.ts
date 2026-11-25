@@ -7,6 +7,7 @@ import {
     dashboardNotice,
     groupActivityByDay,
     prDotClass,
+    prIsReady,
 } from '@/lib/dashboard';
 import type { ActivityEntry, DashboardPr } from '@/shared/types';
 
@@ -164,5 +165,20 @@ describe('groupActivityByDay', () => {
 
     it('returns no groups without notifications', () => {
         expect(groupActivityByDay([], NOW)).toEqual([]);
+    });
+});
+
+describe('prIsReady', () => {
+    it('counts an approved PR with green or no checks, and a merged one', () => {
+        expect(prIsReady(pr({ reviewDecision: 'APPROVED', ci: 'passing' }))).toBe(true);
+        expect(prIsReady(pr({ reviewDecision: 'APPROVED', ci: 'none' }))).toBe(true);
+        expect(prIsReady(pr({ state: 'MERGED' }))).toBe(true);
+    });
+
+    it('does not count one still waiting on review or checks', () => {
+        expect(prIsReady(pr({ reviewDecision: '', ci: 'passing' }))).toBe(false);
+        expect(prIsReady(pr({ reviewDecision: 'APPROVED', ci: 'failing' }))).toBe(false);
+        expect(prIsReady(pr({ reviewDecision: 'APPROVED', ci: 'pending' }))).toBe(false);
+        expect(prIsReady(pr({ state: 'CLOSED', reviewDecision: 'APPROVED' }))).toBe(false);
     });
 });

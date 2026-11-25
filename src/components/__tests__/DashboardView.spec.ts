@@ -167,6 +167,10 @@ describe('DashboardView', () => {
         expect(rows.map((r) => r.attributes('data-filtered-out'))).toEqual(['true', undefined]);
         expect(rows[0]!.find('.opacity-45.grayscale').exists()).toBe(true);
         expect(wrapper.get('[data-slot="stack-group-header"]').text()).toContain('2 PRs');
+
+        // Progress over the whole stack: neither PR is approved yet.
+        expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('0/2 ready');
+        expect(wrapper.find('[data-slot="stack-group-progress-fill"]').exists()).toBe(false);
     });
 
     it.each([
@@ -184,6 +188,38 @@ describe('DashboardView', () => {
 
         await wrapper.getComponent(DashboardCard).trigger('click');
         expect(wrapper.getComponent(DashboardPrRow).props('showAvatar')).toBe(shown);
+    });
+
+    it('fills the stack progress pie by the share of ready PRs', async () => {
+        const ready = { reviewDecision: 'APPROVED', ci: 'passing' } as const;
+        const { wrapper } = await mountView(
+            dashboardState({
+                snapshot: dashboardSnapshot({
+                    toReview: [
+                        dashboardPr({
+                            id: 'A',
+                            number: 1,
+                            headRefName: 'a',
+                            baseRefName: 'main',
+                            ...ready,
+                        }),
+                        dashboardPr({
+                            id: 'B',
+                            number: 2,
+                            headRefName: 'b',
+                            baseRefName: 'a',
+                            ...ready,
+                        }),
+                        dashboardPr({ id: 'C', number: 3, headRefName: 'c', baseRefName: 'b' }),
+                    ],
+                }),
+            })
+        );
+
+        await wrapper.getComponent(DashboardCard).trigger('click');
+        expect(wrapper.get('[data-slot="stack-group-progress"]').text()).toBe('2/3 ready');
+        const fill = wrapper.get('[data-slot="stack-group-progress-fill"]');
+        expect(Number(fill.attributes('stroke-dasharray')!.split(' ')[0])).toBeCloseTo(200 / 3);
     });
 
     it('says so when a card has no PRs', async () => {

@@ -44,6 +44,17 @@ export function prDotClass(pr: DashboardPr): string {
     return 'bg-moire-pr-open';
 }
 
+// Whether a PR is done or ready to merge: merged, or approved with no failing or
+// running checks. Drives a stack group's progress pie.
+export function prIsReady(pr: DashboardPr): boolean {
+    if (pr.state === 'MERGED') return true;
+    return (
+        pr.state === 'OPEN' &&
+        pr.reviewDecision === 'APPROVED' &&
+        (pr.ci === 'passing' || pr.ci === 'none')
+    );
+}
+
 // The CI icon at the end of a PR row, colored like the PR view's Checks tab (only
 // passing and failing get a color). Null when no checks ran.
 export function ciVisual(pr: DashboardPr): { icon: Component; cls: string; label: string } | null {

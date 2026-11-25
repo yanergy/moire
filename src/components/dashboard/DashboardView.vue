@@ -14,7 +14,7 @@ import {
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { useDashboardStore } from '@/stores/dashboard';
-import { dashboardNotice } from '@/lib/dashboard';
+import { dashboardNotice, prIsReady } from '@/lib/dashboard';
 import { groupByStack } from '@/lib/pr-stacks';
 import { timeSince } from '@/lib/status-bar';
 import type { DashboardPr } from '@/shared/types';
@@ -51,6 +51,11 @@ const selected = computed(
 const selectedItems = computed(() =>
     groupByStack(selected.value?.prs ?? [], dashboard.prStackPositions, dashboard.openPrsByNumber)
 );
+
+// How many PRs of a stack group are ready (or merged), for its progress pie.
+function stackReady(item: { members: { pr: DashboardPr }[] }): number {
+    return item.members.filter((m) => prIsReady(m.pr)).length;
+}
 
 // The rows show their author's avatar only when the author filter can list
 // several people (everyone, or two or more chosen); with one author it repeats.
@@ -332,6 +337,36 @@ const updated = computed(() =>
                                             </span>
                                         </div>
                                     </div>
+                                    <!-- How far the stack is: a solid pie, green for the
+                                         share of its PRs that are ready (approved, checks
+                                         green) or merged. -->
+                                    <span
+                                        data-slot="stack-group-progress"
+                                        class="flex shrink-0 items-center gap-2 text-[12px] text-moire-muted"
+                                    >
+                                        {{ stackReady(item) }}/{{ item.members.length }} ready
+                                        <svg viewBox="0 0 20 20" class="size-4" aria-hidden="true">
+                                            <circle
+                                                cx="10"
+                                                cy="10"
+                                                r="10"
+                                                class="fill-moire-border"
+                                            />
+                                            <circle
+                                                v-if="stackReady(item)"
+                                                data-slot="stack-group-progress-fill"
+                                                cx="10"
+                                                cy="10"
+                                                r="5"
+                                                fill="none"
+                                                stroke-width="10"
+                                                pathLength="100"
+                                                class="-rotate-90 stroke-moire-status-a"
+                                                style="transform-origin: center"
+                                                :stroke-dasharray="`${(stackReady(item) / item.members.length) * 100} 100`"
+                                            />
+                                        </svg>
+                                    </span>
                                 </button>
                                 <!-- The stack's PRs as in the PR view's Stack tab, without
                                      the cards: a numbered circle per PR, centered on its
