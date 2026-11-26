@@ -1820,6 +1820,9 @@ describe('comparison store', () => {
                     discardReview: vi
                         .fn<(reviewId: string) => Promise<unknown>>()
                         .mockResolvedValue({ ok: true }),
+                    requestReview: vi
+                        .fn<(prId: string, login: string) => Promise<unknown>>()
+                        .mockResolvedValue({ ok: true }),
                 };
                 window.api = api as unknown as Window['api'];
                 const store = useComparisonStore();
@@ -1900,6 +1903,37 @@ describe('comparison store', () => {
 
                 expect(await store.discardReview()).toEqual({ ok: true });
                 expect(api.discardReview).toHaveBeenCalledWith('PRR_1');
+            });
+
+            it('re-requests a reviewer and re-reads the pull request', async () => {
+                const { store, api } = reviewStore();
+                await store.loadPullRequest();
+                await flushPromises();
+                api.getPullRequest.mockClear();
+
+                expect(await store.requestReview('ann')).toEqual({ ok: true });
+                await flushPromises();
+                expect(api.requestReview).toHaveBeenCalledWith('PR_7', 'ann');
+                expect(api.getPullRequest).toHaveBeenCalledTimes(1);
+                expect(store.requestingReviewer).toBe(null);
+                expect(store.reviewerRequestError).toBe(null);
+            });
+
+            it('keeps GitHub refusing a re-request for the row to show', async () => {
+                const { store, api } = reviewStore();
+                api.requestReview.mockResolvedValue({ ok: false, message: 'Not allowed.' });
+                await store.loadPullRequest();
+                await flushPromises();
+
+                expect(await store.requestReview('ann')).toEqual({
+                    ok: false,
+                    message: 'Not allowed.',
+                });
+                expect(store.reviewerRequestError).toEqual({
+                    login: 'ann',
+                    message: 'Not allowed.',
+                });
+                expect(store.requestingReviewer).toBe(null);
             });
 
             it('reports a failed write without throwing', async () => {

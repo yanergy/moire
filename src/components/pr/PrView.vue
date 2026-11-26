@@ -157,6 +157,8 @@ async function refreshPr() {
 const activeTab = ref<'conversation' | 'checks' | 'reviewers' | 'stack'>('conversation');
 
 const reviewers = computed(() => pr.value?.reviewers ?? []);
+// Requesting reviewers takes the same right as changing the PR (GitHub's viewerCanUpdate).
+const canRequestReviewers = computed(() => pr.value?.viewerCanUpdate ?? false);
 
 // The Reviewers tab label shows approvals over reviewers, like the Checks tab.
 const reviewersSummary = computed(() => {
@@ -2602,7 +2604,11 @@ function renderComment(comment: PrComment): string {
                         v-else-if="activeTab === 'reviewers'"
                         :reviewers="reviewers"
                         :activity="reviewerActivity"
+                        :can-request="canRequestReviewers"
+                        :requesting="comparison.requestingReviewer"
+                        :request-error="comparison.reviewerRequestError"
                         @jump="jumpToActivity"
+                        @request="comparison.requestReview"
                     />
                     <pr-stack-list v-else-if="activeTab === 'stack' && stack" :stack="stack" />
                     <div v-else-if="activeTab === 'checks'">

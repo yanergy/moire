@@ -1689,6 +1689,33 @@ export async function submitReview(
     }
 }
 
+// Re-request a user's review on the PR by login, after they requested changes. The
+// union flag adds the request to the pending ones instead of replacing them, so the
+// other reviewers stay requested. The login goes in as a variable, never into the query.
+export async function requestReview(
+    repoPath: string,
+    prId: string,
+    login: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !prId || !login) {
+        return { ok: false, message: 'Nothing to request.' };
+    }
+
+    const query =
+        'mutation($id:ID!,$login:String!){requestReviewsByLogin(' +
+        'input:{pullRequestId:$id,userLogins:[$login],union:true}){clientMutationId}}';
+    try {
+        await run(
+            ['api', 'graphql', '-f', `query=${query}`, '-f', `id=${prId}`, '-f', `login=${login}`],
+            repoPath
+        );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
 // Discard the pending review via deletePullRequestReview, which deletes its comments.
 export async function discardReview(
     repoPath: string,

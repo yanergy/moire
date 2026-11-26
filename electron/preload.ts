@@ -63,6 +63,9 @@ contextBridge.exposeInMainWorld('api', {
     submitReview: (reviewId: string, event: string, body: string) =>
         ipcRenderer.invoke('gh:submit-review', reviewId, event, body),
     discardReview: (reviewId: string) => ipcRenderer.invoke('gh:discard-review', reviewId),
+    // Re-request review from a reviewer who requested changes, by the PR's node id and login.
+    requestReview: (prId: string, login: string) =>
+        ipcRenderer.invoke('gh:request-review', prId, login),
     // The commit a ref points at (null when it does not resolve).
     resolveCommit: (ref: string) => ipcRenderer.invoke('git:resolve-commit', ref),
     // Open a PR link in the default browser (main restricts it to http(s)).

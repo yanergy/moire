@@ -28,6 +28,7 @@ import {
     deleteReviewComment,
     submitReview,
     discardReview,
+    requestReview,
     type ReviewCommentInput,
     type ReviewEvent,
 } from '../github/gh';
@@ -603,6 +604,10 @@ function registerIpcHandlers({
     );
     handle('gh:discard-review', (reviewId: string) =>
         discardReview(requireRepo().repoPath, reviewId)
+    );
+    // Re-request a reviewer who requested changes, by the PR's node id and their login.
+    handle('gh:request-review', (prId: string, login: string) =>
+        requestReview(requireRepo().repoPath, prId, login)
     );
 
     // Open an external URL (a PR link) in the default browser. Restricted to

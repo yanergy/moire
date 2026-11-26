@@ -19,6 +19,7 @@ import {
     deleteReviewComment,
     submitReview,
     discardReview,
+    requestReview,
     getPrStack,
     toPrStack,
     findStackAction,
@@ -1394,6 +1395,38 @@ describe('submitReview and discardReview', () => {
         expect(await submitReview('/repo', 'PRR_1', 'APPROVE', '', run)).toEqual({
             ok: false,
             message: 'Can not approve your own pull request',
+        });
+    });
+});
+
+describe('requestReview', () => {
+    it('re-requests by login, adding to the pending requests rather than replacing them', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        expect(await requestReview('/repo', 'PR_1', 'ann', run)).toEqual({ ok: true });
+        expect(calls[0]!.args[0]).toBe('api');
+        expect(calls[0]!.args.some((a) => a.includes('requestReviewsByLogin('))).toBe(true);
+        expect(calls[0]!.args.some((a) => a.includes('union:true'))).toBe(true);
+        expect(calls[0]!.args).toContain('id=PR_1');
+        expect(calls[0]!.args).toContain('login=ann');
+    });
+
+    it('rejects a missing login without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+
+        expect(await requestReview('/repo', 'PR_1', '', run)).toEqual({
+            ok: false,
+            message: 'Nothing to request.',
+        });
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('surfaces GitHub refusing the request', async () => {
+        const run = failRunner({ stderr: 'Review cannot be requested from pull request author.' });
+
+        expect(await requestReview('/repo', 'PR_1', 'ann', run)).toEqual({
+            ok: false,
+            message: 'Review cannot be requested from pull request author.',
         });
     });
 });

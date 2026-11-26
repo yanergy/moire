@@ -294,6 +294,9 @@ export const useComparisonStore = defineStore('comparison', () => {
     // the PR's head commit, without which line numbers would not match the PR.
     const NO_REVIEW: ReviewState = { pendingReviewId: null, viewerIsAuthor: false };
     const reviewState = ref<ReviewState>({ ...NO_REVIEW });
+    // The reviewer whose re-request is running, and the last one GitHub refused.
+    const requestingReviewer = ref<string | null>(null);
+    const reviewerRequestError = ref<{ login: string; message: string } | null>(null);
     const headCommit = ref<string | null>(null);
     function threadsForFile(path: string): PrReviewThread[] {
         return path ? reviewThreads.value.filter((t) => t.path === path) : [];
@@ -949,6 +952,34 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
 
         return result;
+    }
+
+    // Re-request review from a reviewer who requested changes, then re-read the PR so
+    // the row shows as awaiting review. A refusal is kept for the row to show.
+    async function requestReview(login: string): Promise<CommentMutationResult> {
+        const api = window.api;
+        const prId = pullRequest.value?.id;
+        if (!api?.requestReview || !prId || !login || requestingReviewer.value) {
+            return { ok: false, message: 'Nothing to request.' };
+        }
+
+        requestingReviewer.value = login;
+        reviewerRequestError.value = null;
+        try {
+            const result = await api.requestReview(prId, login);
+            if (result.ok) {
+                await loadPullRequest();
+            } else {
+                reviewerRequestError.value = {
+                    login,
+                    message: result.message ?? 'GitHub could not request the review.',
+                };
+            }
+
+            return result;
+        } finally {
+            requestingReviewer.value = null;
+        }
     }
 
     // Discard the pending review, deleting its comments.
@@ -1984,6 +2015,9 @@ export const useComparisonStore = defineStore('comparison', () => {
         replyToReviewThread,
         setReviewThreadResolved,
         reviewState,
+        requestingReviewer,
+        reviewerRequestError,
+        requestReview,
         headCommit,
         hasPendingReview,
         pendingCommentCount,

@@ -602,6 +602,9 @@ export interface MoireApi {
         body: string
     ): Promise<CommentMutationResult>;
     discardReview(reviewId: string): Promise<CommentMutationResult>;
+    // Re-request review from a user who requested changes, by the PR's node id and
+    // their login. Other pending reviewers stay requested. Resolves an ok/message result.
+    requestReview(prId: string, login: string): Promise<CommentMutationResult>;
     // The commit a ref points at, or null when it does not resolve. Used to check
     // the compared head is at the PR's head commit before offering line comments.
     resolveCommit(ref: string): Promise<string | null>;
