@@ -401,6 +401,15 @@ Track bugs and limitations here.
 - **The Stack tab and the dashboard's stack groups show at most 100 PRs of a GitHub stack.** The
   stack is read with one GraphQL page of 100 entries, so a longer stack is cut short without a
   notice.
+- **Creating and extending a stack is unverified against a live repository.** The Stacks REST API
+  (`POST /repos/{owner}/{repo}/stacks` and `POST /repos/{owner}/{repo}/stacks/{number}/add`) is part
+  of GitHub's public preview for stacked PRs. Its payload follows the reference and client code of
+  the `github/gh-stack` extension, but Moiré has not yet created a stack on a real repository to
+  confirm it. A refusal shows GitHub's own message in the dialog.
+- **The "Create stack" offer leaves out fork PRs and ambiguous chains.** A chain stops at a fork,
+  at a branch that more than one open PR is based on, and at a PR already in a stack. A PR whose
+  upper neighbour is already in a stack is not offered as an add, because GitHub appends only to
+  the top of a stack.
 
 ## Planned features
 

@@ -63,6 +63,9 @@ const state = vi.hoisted(() => ({
         vi.fn<() => Promise<{ id: string; label: string; kind: string; target: string }[]>>(),
     openWithEditor: vi.fn<(editor: unknown, p: string) => Promise<string>>(),
     getPrStack: vi.fn<(repoPath: string, head: string) => Promise<unknown>>(),
+    getStackAction: vi.fn<(repoPath: string, prNumber: number) => Promise<unknown>>(),
+    createStack: vi.fn<(repoPath: string, prNumbers: number[]) => Promise<unknown>>(),
+    addToStack: vi.fn<(repoPath: string, stack: number, prNumbers: number[]) => Promise<unknown>>(),
     branches: [] as { name: string; kind: string }[],
     isAncestor: vi.fn<(a: string, b: string) => Promise<boolean | null>>(),
     getDiffDisplay: vi.fn<() => Promise<unknown>>(),
@@ -119,6 +122,9 @@ vi.mock('../electron/git/GitService', () => ({
 vi.mock('../electron/github/gh', () => ({
     getPullRequest: state.getPullRequest,
     getPrStack: state.getPrStack,
+    getStackAction: state.getStackAction,
+    createStack: state.createStack,
+    addToStack: state.addToStack,
     addReviewComment: state.addReviewComment,
     submitReview: state.submitReview,
 }));
@@ -594,6 +600,41 @@ describe('registerIpcHandlers', () => {
             await invoke('repo:open', '/repos/moire');
             state.getPrStack.mockResolvedValue(null);
             expect(await invoke('gh:pr-stack', 'PR_1')).toBeNull();
+        });
+    });
+
+    describe('stack writes', () => {
+        it('reads the stack action for a PR number in the open repository', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.getStackAction.mockResolvedValue(null);
+            await invoke('gh:stack-action', 42);
+            expect(state.getStackAction).toHaveBeenCalledWith('/repos/moire', 42);
+        });
+
+        it('creates a stack from PR numbers, bottom to top', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.createStack.mockResolvedValue({ ok: true });
+            expect(await invoke('gh:create-stack', [41, 42])).toEqual({ ok: true });
+            expect(state.createStack).toHaveBeenCalledWith('/repos/moire', [41, 42]);
+        });
+
+        it('adds PR numbers to the top of a stack by its number', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.addToStack.mockResolvedValue({ ok: false, message: 'Validation Failed' });
+            expect(await invoke('gh:add-to-stack', 7, [43])).toEqual({
+                ok: false,
+                message: 'Validation Failed',
+            });
+            expect(state.addToStack).toHaveBeenCalledWith('/repos/moire', 7, [43]);
+        });
+
+        it('rejects malformed arguments before reaching gh', async () => {
+            await invoke('repo:open', '/repos/moire');
+            await expect(invoke('gh:stack-action', '42')).rejects.toThrow(TypeError);
+            await expect(invoke('gh:create-stack', [41, '42'])).rejects.toThrow(TypeError);
+            await expect(invoke('gh:add-to-stack', '7', [43])).rejects.toThrow(TypeError);
+            expect(state.createStack).not.toHaveBeenCalled();
+            expect(state.addToStack).not.toHaveBeenCalled();
         });
     });
 

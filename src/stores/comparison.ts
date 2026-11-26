@@ -14,6 +14,8 @@ import type {
     ReviewCommentInput,
     PrStatus,
     PrStack,
+    StackAction,
+    StackMutationResult,
     PullRequest,
     RepoBranchSettings,
 } from '@/shared/types';
@@ -331,6 +333,9 @@ export const useComparisonStore = defineStore('comparison', () => {
     // The stack the open PR belongs to (see loadPrStack), or null when it is not
     // stacked.
     const prStack = ref<PrStack | null>(null);
+    // The stack the open PR could be turned into or added to (see loadStackAction), or
+    // null. Only read for a PR that is in no stack.
+    const prStackAction = ref<StackAction | null>(null);
     function annotationsForFile(path: string): CheckAnnotation[] {
         return path ? checkAnnotations.value.filter((a) => a.path === path) : [];
     }
@@ -617,6 +622,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             headCommit.value = null;
             checkAnnotations.value = [];
             prStack.value = null;
+            prStackAction.value = null;
             prLoading.value = false;
             return;
         }
@@ -640,7 +646,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             void loadReviewState(result.pr?.id, token);
             void loadHeadCommit(head.value, token);
             void loadCheckAnnotations(result.pr?.headRefOid, token);
-            void loadPrStack(result.pr?.id, token);
+            void loadPrStack(result.pr, token);
         } catch {
             if (token === prRequest) {
                 pullRequest.value = null;
@@ -651,6 +657,7 @@ export const useComparisonStore = defineStore('comparison', () => {
                 headCommit.value = null;
                 checkAnnotations.value = [];
                 prStack.value = null;
+                prStackAction.value = null;
                 prLoading.value = false;
             }
         }
@@ -659,20 +666,65 @@ export const useComparisonStore = defineStore('comparison', () => {
     // Fetch the GitHub stack the PR is in, for the PR view's Stack tab, guarded by the
     // same request token as the PR load. Supplementary: no PR, or any failure, just
     // clears it.
-    async function loadPrStack(pullRequestId: string | undefined, token: number) {
+    async function loadPrStack(pr: PullRequest | null, token: number) {
         const api = window.api;
         let stack: PrStack | null = null;
-        if (api?.getPrStack && pullRequestId) {
+        if (api?.getPrStack && pr?.id) {
             try {
-                stack = await api.getPrStack(pullRequestId);
+                stack = await api.getPrStack(pr.id);
             } catch {
                 stack = null;
             }
         }
 
-        if (token === prRequest) {
-            prStack.value = stack;
+        if (token !== prRequest) {
+            return;
         }
+
+        prStack.value = stack;
+        prStackAction.value = null;
+        if (!stack && pr?.state === 'OPEN') {
+            void loadStackAction(pr.number, token);
+        }
+    }
+
+    // The stack action for an open PR in no stack (see getStackAction). It reads the
+    // repository's open PRs, so it runs only once GitHub has said the PR is not stacked.
+    async function loadStackAction(prNumber: number, token: number) {
+        const api = window.api;
+        let action: StackAction | null = null;
+        if (api?.getStackAction) {
+            try {
+                action = await api.getStackAction(prNumber);
+            } catch {
+                action = null;
+            }
+        }
+
+        if (token === prRequest) {
+            prStackAction.value = action;
+        }
+    }
+
+    // Create the stack, or add to the existing one, that the action describes, then
+    // re-fetch the PR so its Stack tab and the stack action update. GitHub's refusal is
+    // returned for the view to show.
+    async function applyStackAction(action: StackAction): Promise<StackMutationResult> {
+        const api = window.api;
+        if (!api) {
+            return { ok: false, message: 'Nothing to create.' };
+        }
+
+        const numbers = action.entries.map((entry) => entry.number);
+        const result =
+            action.kind === 'create'
+                ? await api.createStack(numbers)
+                : await api.addToStack(action.stackNumber, numbers);
+        if (result.ok) {
+            await loadPullRequest();
+        }
+
+        return result;
     }
 
     // Fetch the head commit's CI check annotations for the diff viewer's warning
@@ -1928,6 +1980,8 @@ export const useComparisonStore = defineStore('comparison', () => {
         checkAnnotations,
         prLoadedAt,
         prStack,
+        prStackAction,
+        applyStackAction,
         annotationsForFile,
         annotationLevelForFile,
         loadPullRequest,
