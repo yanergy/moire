@@ -63,6 +63,7 @@ describe('preload bridge', () => {
             'deleteReviewComment',
             'submitReview',
             'discardReview',
+            'requestReview',
             'resolveCommit',
             'openExternal',
             'getStagedPaths',
@@ -145,6 +146,9 @@ describe('preload bridge', () => {
 
         await api().discardReview!('PRR_1');
         expect(bridge.invoke).toHaveBeenCalledWith('gh:discard-review', 'PRR_1');
+
+        await api().requestReview!('PR_1', 'ann');
+        expect(bridge.invoke).toHaveBeenCalledWith('gh:request-review', 'PR_1', 'ann');
 
         await api().resolveCommit!('origin/feature');
         expect(bridge.invoke).toHaveBeenCalledWith('git:resolve-commit', 'origin/feature');

@@ -113,6 +113,9 @@ export interface PullRequest {
     checks: PrCheck[];
     // The reviewers and where each stands, for the Reviewers tab.
     reviewers?: PrReviewer[];
+    // Whether the signed-in account may request reviewers on the PR, which gates the
+    // Reviewers tab's re-request button. Only read when a reviewer has requested changes.
+    canRequestReviewers: boolean;
 }
 
 export interface PullRequestResult {
@@ -511,6 +514,7 @@ function toPullRequest(pr: GhPr): PullRequest {
         reviewDecision: reviewDecisionOf(pr),
         checks: buildChecks(pr),
         reviewers: buildReviewers(pr),
+        canRequestReviewers: false,
     };
 }
 
@@ -641,6 +645,7 @@ export async function getPullRequest(
 
     const pr = toPullRequest(raw);
     await applyCommentPermissions(repoPath, pr, run);
+    await applyRequestPermission(repoPath, pr, run);
     return { status: 'ok', pr };
 }
 
@@ -690,6 +695,37 @@ async function applyCommentPermissions(
 
         comment.canEdit = !!permission.viewerCanUpdate;
         comment.canDelete = !!permission.viewerCanDelete;
+    }
+}
+
+// Whether the viewer may request reviewers, read from GitHub's viewerCanUpdate on the
+// PR. The request itself is refused by GitHub when the viewer lacks the right, so this
+// only decides whether the button is offered. It is read only when a reviewer has
+// requested changes, since that is the only row the button appears on. Best effort:
+// on a failure the button stays hidden.
+const REQUEST_PERMISSION_QUERY =
+    'query($id:ID!){node(id:$id){... on PullRequest{viewerCanUpdate}}}';
+
+async function applyRequestPermission(
+    repoPath: string,
+    pr: PullRequest,
+    run: GhRunner
+): Promise<void> {
+    if (!pr.id || !pr.reviewers?.some((r) => r.state === 'CHANGES_REQUESTED')) {
+        return;
+    }
+
+    try {
+        const { stdout } = await run(
+            ['api', 'graphql', '-f', `query=${REQUEST_PERMISSION_QUERY}`, '-f', `id=${pr.id}`],
+            repoPath
+        );
+        const parsed = JSON.parse(stdout) as {
+            data?: { node?: { viewerCanUpdate?: boolean | null } | null };
+        };
+        pr.canRequestReviewers = !!parsed.data?.node?.viewerCanUpdate;
+    } catch {
+        return;
     }
 }
 
@@ -1466,6 +1502,33 @@ export async function submitReview(
                 '-f',
                 `body=${body}`,
             ],
+            repoPath
+        );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// Re-request a user's review on the PR by login, after they requested changes. The
+// union flag adds the request to the pending ones instead of replacing them, so the
+// other reviewers stay requested. The login goes in as a variable, never into the query.
+export async function requestReview(
+    repoPath: string,
+    prId: string,
+    login: string,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !prId || !login) {
+        return { ok: false, message: 'Nothing to request.' };
+    }
+
+    const query =
+        'mutation($id:ID!,$login:String!){requestReviewsByLogin(' +
+        'input:{pullRequestId:$id,userLogins:[$login],union:true}){clientMutationId}}';
+    try {
+        await run(
+            ['api', 'graphql', '-f', `query=${query}`, '-f', `id=${prId}`, '-f', `login=${login}`],
             repoPath
         );
         return { ok: true };

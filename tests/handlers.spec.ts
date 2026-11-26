@@ -56,6 +56,7 @@ const state = vi.hoisted(() => ({
         vi.fn<
             (repoPath: string, reviewId: string, event: string, body: string) => Promise<unknown>
         >(),
+    requestReview: vi.fn<(repoPath: string, prId: string, login: string) => Promise<unknown>>(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
     openPath: vi.fn<(p: string) => Promise<string>>(),
     getEditorPreference: vi.fn<() => Promise<string>>(),
@@ -121,6 +122,7 @@ vi.mock('../electron/github/gh', () => ({
     getPrStack: state.getPrStack,
     addReviewComment: state.addReviewComment,
     submitReview: state.submitReview,
+    requestReview: state.requestReview,
 }));
 vi.mock('../electron/watcher/RepoWatcher', () => ({ watchRepo: state.watchRepo }));
 vi.mock('../electron/settings', () => ({
@@ -354,6 +356,13 @@ describe('registerIpcHandlers', () => {
 
             expect(result).toEqual({ ok: false, message: 'Nothing to add.' });
             expect(state.addReviewComment).not.toHaveBeenCalled();
+        });
+
+        it('re-requests a reviewer by the PR id and login', async () => {
+            state.requestReview.mockResolvedValue({ ok: true });
+
+            expect(await invoke('gh:request-review', 'PR_1', 'ann')).toEqual({ ok: true });
+            expect(state.requestReview).toHaveBeenCalledWith('/repos/moire', 'PR_1', 'ann');
         });
 
         it('submits an unknown verdict as a comment', async () => {

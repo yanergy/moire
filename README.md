@@ -399,6 +399,12 @@ Track bugs and limitations here.
   "Changed files" label, the count badge, the Filter button, the collapse button, and the "viewed"
   counter no longer fit, so the viewed counter runs past the sidebar edge and overlaps the diff
   header.
+- **The Reviewers tab's re-request button uses `viewerCanUpdate` as its permission check.** The
+  button appears on a reviewer who requested changes when GitHub says the signed-in account can
+  update the PR. GitHub's own rule for requesting reviewers is not exposed directly, so the two can
+  differ. When the button is missing for someone who should have it, or GitHub refuses a request,
+  the refusal shows on the reviewer's row. The permission is read only when a reviewer has
+  requested changes.
 
 ## Planned features
 

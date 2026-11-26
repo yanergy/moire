@@ -18,6 +18,7 @@ import {
     deleteReviewComment,
     submitReview,
     discardReview,
+    requestReview,
     buildStack,
     getPrStack,
     type GhRunner,
@@ -1311,6 +1312,86 @@ describe('submitReview and discardReview', () => {
             ok: false,
             message: 'Can not approve your own pull request',
         });
+    });
+});
+
+describe('requestReview', () => {
+    it('re-requests by login, adding to the pending requests rather than replacing them', async () => {
+        const { run, calls } = okRunner('{"data":{}}');
+
+        expect(await requestReview('/repo', 'PR_1', 'ann', run)).toEqual({ ok: true });
+        expect(calls[0]!.args[0]).toBe('api');
+        expect(calls[0]!.args.some((a) => a.includes('requestReviewsByLogin('))).toBe(true);
+        expect(calls[0]!.args.some((a) => a.includes('union:true'))).toBe(true);
+        expect(calls[0]!.args).toContain('id=PR_1');
+        expect(calls[0]!.args).toContain('login=ann');
+    });
+
+    it('rejects a missing login without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+
+        expect(await requestReview('/repo', 'PR_1', '', run)).toEqual({
+            ok: false,
+            message: 'Nothing to request.',
+        });
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('surfaces GitHub refusing the request', async () => {
+        const run = failRunner({ stderr: 'Review cannot be requested from pull request author.' });
+
+        expect(await requestReview('/repo', 'PR_1', 'ann', run)).toEqual({
+            ok: false,
+            message: 'Review cannot be requested from pull request author.',
+        });
+    });
+});
+
+describe('getPullRequest request permission', () => {
+    const withChangesRequested = {
+        ...ghPr,
+        id: 'PR_1',
+        reviews: [{ ...ghPr.reviews[0]!, state: 'CHANGES_REQUESTED' }],
+    };
+
+    it('reads whether the viewer can request reviewers when a reviewer requested changes', async () => {
+        const calls: string[][] = [];
+        const run: GhRunner = (args) => {
+            calls.push(args);
+            const stdout =
+                args[0] === 'pr'
+                    ? JSON.stringify([withChangesRequested])
+                    : JSON.stringify({ data: { node: { viewerCanUpdate: true } } });
+            return Promise.resolve({ stdout, stderr: '' });
+        };
+
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+
+        expect(calls[1]).toContain('id=PR_1');
+        expect(result.pr!.canRequestReviewers).toBe(true);
+    });
+
+    it('does not read the permission without a changes request, and leaves it off', async () => {
+        const { run, calls } = okRunner(JSON.stringify([{ ...ghPr, id: 'PR_1' }]));
+
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+
+        expect(
+            calls.some((c) => c.args.some((a) => a.includes('PullRequest{viewerCanUpdate}')))
+        ).toBe(false);
+        expect(result.pr!.canRequestReviewers).toBe(false);
+    });
+
+    it('keeps the button off when the permission lookup fails', async () => {
+        const run: GhRunner = (args) =>
+            Promise.resolve({
+                stdout: args[0] === 'pr' ? JSON.stringify([withChangesRequested]) : 'not json',
+                stderr: '',
+            });
+
+        const result = await getPullRequest('/repo', 'main', 'feature', run);
+
+        expect(result.pr!.canRequestReviewers).toBe(false);
     });
 });
 
