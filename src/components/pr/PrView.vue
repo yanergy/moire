@@ -61,8 +61,9 @@ import PrStackList from '@/components/pr/PrStackList.vue';
 import CopyButton from '@/components/controls/CopyButton.vue';
 import CheckboxModeToggle from '@/components/pr/CheckboxModeToggle.vue';
 import PrReviewers from '@/components/pr/PrReviewers.vue';
-import { reviewProgress } from '@/lib/review-progress';
+import { reviewProgress, reviewSummary } from '@/lib/review-progress';
 import { reviewActivityByLogin, type ReviewActivityTarget } from '@/lib/review-activity';
+import ReviewRing from '@/components/pr/ReviewRing.vue';
 import ReviewThreadActions from '@/components/pr/ReviewThreadActions.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
@@ -157,6 +158,15 @@ const reviewers = computed(() => pr.value?.reviewers ?? []);
 const reviewersSummary = computed(() => {
     const { approved, total } = reviewProgress(reviewers.value);
     return `${approved}/${total}`;
+});
+
+// The ring is aria-hidden, so the tab's accessible name carries the text summary
+// the ring stands for (and the same text shows on hover).
+const reviewersLabel = computed(() => {
+    if (!reviewers.value.length) {
+        return '';
+    }
+    return `Reviewers: ${reviewSummary(reviewProgress(reviewers.value))}`;
 });
 
 const stack = computed(() => comparison.prStack);
@@ -1528,8 +1538,15 @@ function renderComment(comment: PrComment): string {
                                         ? 'bg-moire-hover text-moire-fg'
                                         : 'text-moire-muted hover:text-moire-fg'
                                 "
+                                :aria-label="reviewersLabel || undefined"
+                                :title="reviewersLabel || undefined"
                                 @click="activeTab = 'reviewers'"
                             >
+                                <review-ring
+                                    v-if="reviewers.length"
+                                    :reviewers="reviewers"
+                                    :size="13"
+                                />
                                 Reviewers
                                 <span v-if="reviewers.length" class="text-moire-faint">
                                     {{ reviewersSummary }}
