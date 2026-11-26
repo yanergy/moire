@@ -29,6 +29,8 @@ function stubApi(state: DashboardState) {
     return api;
 }
 
+const at = (position: number, size: number) => ({ number: 1, size, baseRefName: 'main', position });
+
 describe('DashboardView', () => {
     let pinia: Pinia;
 
@@ -114,16 +116,29 @@ describe('DashboardView', () => {
             dashboardState({
                 snapshot: dashboardSnapshot({
                     toReview: [
-                        dashboardPr({ id: 'T', number: 3, headRefName: 'c', baseRefName: 'b' }),
+                        dashboardPr({
+                            id: 'T',
+                            number: 3,
+                            stack: at(3, 3),
+                            headRefName: 'c',
+                            baseRefName: 'b',
+                        }),
                         dashboardPr({ id: 'S', number: 7, headRefName: 's', baseRefName: 'main' }),
                         dashboardPr({
                             id: 'B',
                             number: 1,
+                            stack: at(1, 3),
                             title: 'Add the base',
                             headRefName: 'a',
                             baseRefName: 'main',
                         }),
-                        dashboardPr({ id: 'M', number: 2, headRefName: 'b', baseRefName: 'a' }),
+                        dashboardPr({
+                            id: 'M',
+                            number: 2,
+                            stack: at(2, 3),
+                            headRefName: 'b',
+                            baseRefName: 'a',
+                        }),
                     ],
                 }),
             })
@@ -159,10 +174,22 @@ describe('DashboardView', () => {
                     // Only the top PR asks for the viewer's review; its base PR is
                     // in the repository's open list only.
                     toReview: [
-                        dashboardPr({ id: 'T', number: 2, headRefName: 'b', baseRefName: 'a' }),
+                        dashboardPr({
+                            id: 'T',
+                            number: 2,
+                            stack: at(2, 2),
+                            headRefName: 'b',
+                            baseRefName: 'a',
+                        }),
                     ],
                     open: [
-                        dashboardPr({ id: 'B', number: 1, headRefName: 'a', baseRefName: 'main' }),
+                        dashboardPr({
+                            id: 'B',
+                            number: 1,
+                            stack: at(1, 2),
+                            headRefName: 'a',
+                            baseRefName: 'main',
+                        }),
                     ],
                 }),
             })
@@ -309,10 +336,11 @@ describe('DashboardView', () => {
                 dashboardState({
                     snapshot: dashboardSnapshot({
                         toReview: [
-                            dashboardPr({ id: 'B', number: 1, headRefName: 'a' }),
+                            dashboardPr({ id: 'B', number: 1, stack: at(1, 2), headRefName: 'a' }),
                             dashboardPr({
                                 id: 'T',
                                 number: 2,
+                                stack: at(2, 2),
                                 title: 'Top of stack',
                                 headRefName: 'b',
                                 baseRefName: 'a',
@@ -377,6 +405,7 @@ describe('DashboardView', () => {
                         dashboardPr({
                             id: 'A',
                             number: 1,
+                            stack: at(1, 3),
                             headRefName: 'a',
                             baseRefName: 'main',
                             ...ready,
@@ -384,11 +413,18 @@ describe('DashboardView', () => {
                         dashboardPr({
                             id: 'B',
                             number: 2,
+                            stack: at(2, 3),
                             headRefName: 'b',
                             baseRefName: 'a',
                             ...ready,
                         }),
-                        dashboardPr({ id: 'C', number: 3, headRefName: 'c', baseRefName: 'b' }),
+                        dashboardPr({
+                            id: 'C',
+                            number: 3,
+                            stack: at(3, 3),
+                            headRefName: 'c',
+                            baseRefName: 'b',
+                        }),
                     ],
                 }),
             })

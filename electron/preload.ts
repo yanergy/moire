@@ -68,7 +68,7 @@ contextBridge.exposeInMainWorld('api', {
     getStagedPaths: () => ipcRenderer.invoke('git:staged-paths'),
     stagePaths: (paths: string[]) => ipcRenderer.invoke('git:stage', paths),
     unstagePaths: (paths: string[]) => ipcRenderer.invoke('git:unstage', paths),
-    getPrStack: (headBranch: string) => ipcRenderer.invoke('gh:pr-stack', headBranch),
+    getPrStack: (pullRequestId: string) => ipcRenderer.invoke('gh:pr-stack', pullRequestId),
     copyText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text),
     showBranchPickerMenu: (ref?: string) => ipcRenderer.invoke('menu:branch-picker', ref),
     openFile: (filePath: string) => ipcRenderer.invoke('shell:open-path', filePath),

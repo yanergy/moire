@@ -18,8 +18,8 @@ import {
     deleteReviewComment,
     submitReview,
     discardReview,
-    buildStack,
     getPrStack,
+    toPrStack,
     type GhRunner,
 } from '../electron/github/gh';
 
@@ -1315,84 +1315,75 @@ describe('submitReview and discardReview', () => {
 });
 
 describe('stacked PRs', () => {
-    const pr = (number: number, head: string, base: string) => ({
-        number,
-        title: `PR ${number}`,
-        url: `https://github.com/o/r/pull/${number}`,
-        headRefName: head,
-        baseRefName: base,
-        isDraft: false,
-        reviewDecision: '',
+    const entryNode = (position: number, number: number, state = 'OPEN', isDraft = false) => ({
+        position,
+        pullRequest: {
+            number,
+            title: `PR ${number}`,
+            url: `https://github.com/o/r/pull/${number}`,
+            headRefName: `branch-${number}`,
+            baseRefName: position === 1 ? 'main' : `branch-${number - 1}`,
+            state,
+            isDraft,
+            reviewDecision: null,
+        },
     });
 
-    it('walks base branches down to the trunk and head branches up', () => {
-        const open = [pr(1, 'a', 'main'), pr(2, 'b', 'a'), pr(3, 'c', 'b'), pr(9, 'x', 'main')];
-        const stack = buildStack('b', open, [])!;
+    const stackNode = (entries: ReturnType<typeof entryNode>[], current?: number) => ({
+        stackEntry: current === undefined ? null : { position: current },
+        stack: {
+            number: 580,
+            size: entries.length,
+            baseRefName: 'main',
+            entries: { nodes: entries },
+        },
+    });
 
-        expect(stack.trunk).toBe('main');
-        expect(stack.entries.map((e) => [e.number, e.depth, e.isCurrent])).toEqual([
-            [1, 0, false],
-            [2, 1, true],
-            [3, 2, false],
+    it('reads the stack in order and marks the current PR', () => {
+        const stack = toPrStack(
+            stackNode(
+                [entryNode(2, 2), entryNode(1, 1, 'MERGED'), entryNode(3, 3, 'OPEN', true)],
+                2
+            )
+        );
+
+        expect(stack).toMatchObject({ number: 580, size: 3, baseRefName: 'main' });
+        expect(stack!.entries.map((e) => [e.number, e.position, e.state, e.isCurrent])).toEqual([
+            [1, 1, 'MERGED', false],
+            [2, 2, 'OPEN', true],
+            [3, 3, 'OPEN', false],
         ]);
+        expect(stack!.entries[2]).toMatchObject({ isDraft: true, reviewDecision: '' });
     });
 
-    it('lists every dependent PR when the stack branches', () => {
-        const open = [pr(1, 'a', 'main'), pr(2, 'b', 'a'), pr(3, 'c', 'a')];
-        const stack = buildStack('a', open, [])!;
-        expect(stack.entries.map((e) => [e.number, e.depth])).toEqual([
-            [1, 0],
-            [2, 1],
-            [3, 1],
-        ]);
+    it('is null for a PR GitHub has in no stack', () => {
+        expect(toPrStack({ stack: null, stackEntry: null })).toBeNull();
+        expect(toPrStack(undefined)).toBeNull();
     });
 
-    it('is null for a PR that is not stacked', () => {
-        expect(buildStack('x', [pr(9, 'x', 'main')], [])).toBeNull();
-        expect(buildStack('nope', [pr(9, 'x', 'main')], [])).toBeNull();
+    it('skips entries whose PR is not visible to the viewer', () => {
+        const stack = toPrStack(
+            stackNode([entryNode(1, 1), { position: 2, pullRequest: null }], 1)
+        );
+        expect(stack!.entries.map((e) => e.number)).toEqual([1]);
     });
 
-    it('flags a PR whose base PR merged, which needs retargeting', () => {
-        const stack = buildStack('b', [pr(2, 'b', 'a')], [pr(1, 'a', 'main')])!;
-
-        expect(stack.trunk).toBe('main');
-        expect(stack.entries.map((e) => [e.number, e.state, e.needsRetarget])).toEqual([
-            [1, 'MERGED', false],
-            [2, 'OPEN', true],
-        ]);
-    });
-
-    it('never takes a merged PR from a trunk branch as a base PR', () => {
-        // A "development into master" release PR merged earlier: the current PR,
-        // based on development, is not stacked on it.
-        const release = pr(4514, 'development', 'master');
-        expect(buildStack('feat', [pr(4566, 'feat', 'development')], [release])).toBeNull();
-
-        // The repo's own trunk names count too, from its settings.
-        const trunk = pr(1, 'trunk-x', 'main');
-        expect(buildStack('feat', [pr(2, 'feat', 'trunk-x')], [trunk], ['trunk-x'])).toBeNull();
-        expect(buildStack('feat', [pr(2, 'feat', 'trunk-x')], [trunk])!.entries).toHaveLength(2);
-    });
-
-    it('stops on a cycle instead of looping', () => {
-        const open = [pr(1, 'a', 'b'), pr(2, 'b', 'a')];
-        expect(buildStack('a', open, [])!.entries).toHaveLength(2);
-    });
-
-    it('reads the open and merged PRs through gh, and reads a failure as no stack', async () => {
+    it('queries the stack by the PR node id through gh, and reads a failure as no stack', async () => {
         const calls: string[][] = [];
         const run: GhRunner = (args) => {
             calls.push(args);
-            const state = args[args.indexOf('--state') + 1];
-            const list = state === 'open' ? [pr(1, 'a', 'main'), pr(2, 'b', 'a')] : [];
-            return Promise.resolve({ stdout: JSON.stringify(list), stderr: '' });
+            const body = { data: { node: stackNode([entryNode(1, 1), entryNode(2, 2)], 2) } };
+            return Promise.resolve({ stdout: JSON.stringify(body), stderr: '' });
         };
-        const stack = await getPrStack('/repo', 'b', run);
+
+        const stack = await getPrStack('/repo', 'PR_1', run);
         expect(stack!.entries.map((e) => e.number)).toEqual([1, 2]);
-        expect(calls.map((c) => c[c.indexOf('--state') + 1]).sort()).toEqual(['merged', 'open']);
+        expect(calls[0]).toContain('id=PR_1');
+        expect(calls[0]!.some((a) => a.includes('stack{number size baseRefName'))).toBe(true);
 
         const failing: GhRunner = () => Promise.reject(new Error('offline'));
-        expect(await getPrStack('/repo', 'b', failing)).toBeNull();
+        expect(await getPrStack('/repo', 'PR_1', failing)).toBeNull();
+        expect(await getPrStack('/repo', '', run)).toBeNull();
     });
 });
 

@@ -18,6 +18,7 @@ import {
     type PrLabel,
     type PrStatus,
 } from './gh';
+import type { PrStackMembership } from '../../src/shared/types';
 
 // How far back the viewer's closed PRs are fetched, for the closed and merged
 // events.
@@ -71,6 +72,8 @@ export interface DashboardPr {
     // open PRs fetch them, so on other PRs, and in snapshots saved before they
     // existed, it is left out.
     comments?: DashboardComment[];
+    // The GitHub stack the PR is in and its place there, or null when it is not stacked.
+    stack?: PrStackMembership | null;
 }
 
 // One comment on a PR: in its conversation, the summary of a review left as a
@@ -165,6 +168,7 @@ const PR_FIELDS = `
   id number title url isDraft state merged closedAt createdAt updatedAt
   isCrossRepository additions deletions mergeable reviewDecision
   author { login } mergedBy { login } baseRefName headRefName
+  stack { number size baseRefName } stackEntry { position }
   labels(first: 10) { nodes { name color description } }
   latestReviews(first: 50) { nodes { id state author { login } } }
   latestOpinionatedReviews(first: 50) { nodes { state author { login } } }
@@ -239,6 +243,8 @@ interface GqlPr {
     mergedBy?: { login?: string } | null;
     baseRefName?: string;
     headRefName?: string;
+    stack?: { number?: number; size?: number; baseRefName?: string } | null;
+    stackEntry?: { position?: number | null } | null;
     labels?: {
         nodes?: ({ name?: string; color?: string; description?: string | null } | null)[];
     } | null;
@@ -422,7 +428,24 @@ function toDashboardPr(node: GqlPr): DashboardPr {
                 description: l.description ?? '',
             }))
             .filter((l) => l.name),
+        stack: stackMembershipOf(node),
         ...(comments ? { comments } : {}),
+    };
+}
+
+// The GitHub stack the PR is in and its place there. Null when GitHub has it in none.
+function stackMembershipOf(node: GqlPr): DashboardPr['stack'] {
+    const stack = node.stack;
+    const position = node.stackEntry?.position;
+    if (!stack?.number || !position) {
+        return null;
+    }
+
+    return {
+        number: stack.number,
+        size: stack.size ?? 0,
+        baseRefName: stack.baseRefName ?? '',
+        position,
     };
 }
 

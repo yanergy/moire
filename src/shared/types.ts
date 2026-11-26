@@ -274,31 +274,42 @@ export interface PrReviewer {
     previousState: Exclude<PrReviewerState, 'PENDING'> | null;
 }
 
-// One PR in a stack (a PR whose base is another PR's head branch), for the PR
-// view's Stack tab. `depth` counts up from the PR nearest the trunk (0). A merged
-// PR shows up only as the base a stacked PR still points at, which then needs
-// retargeting. `needsRebase` is set when the parent PR's head is not in this PR's
-// history any more (the parent moved on), and left undefined when that could not
-// be checked (a branch not fetched).
+// One PR in a GitHub stack (a stack made with `gh stack` or the GitHub UI), for the PR
+// view's Stack tab. `position` counts from the trunk up (1 is the PR on the trunk). A
+// merged PR stays listed while it is in the stack. `needsRebase` is set when the parent
+// PR's head is no longer in this PR's history (the parent moved on), and left undefined
+// when that could not be checked (a branch not fetched).
 export interface PrStackEntry {
     number: number;
     title: string;
     url: string;
     headRefName: string;
     baseRefName: string;
-    state: 'OPEN' | 'MERGED';
+    state: 'OPEN' | 'CLOSED' | 'MERGED';
     isDraft: boolean;
     reviewDecision: string;
-    depth: number;
+    position: number;
     isCurrent: boolean;
-    needsRetarget: boolean;
     needsRebase?: boolean;
 }
 
-// A PR's stack, bottom (nearest the trunk) first, and the trunk branch it sits on.
+// The GitHub stack a PR is in, bottom (nearest the trunk) first. `number` is GitHub's
+// stack number, shared by every PR in it, and `baseRefName` the trunk branch its bottom
+// PR targets. `size` is GitHub's count of the stack's PRs.
 export interface PrStack {
-    trunk: string;
+    number: number;
+    size: number;
+    baseRefName: string;
     entries: PrStackEntry[];
+}
+
+// A PR's place in its GitHub stack, as the dashboard's search returns it (the same
+// fields as PrStack, for the PR itself).
+export interface PrStackMembership {
+    number: number;
+    size: number;
+    baseRefName: string;
+    position: number;
 }
 
 // Why a PR lookup produced no PR, so the renderer can show the right hint:
@@ -403,6 +414,9 @@ export interface DashboardPr {
     labels?: PrLabel[];
     // The recent comments, fetched on the viewer's open PRs only.
     comments?: { id: string; author: string }[];
+    // The GitHub stack the PR is in and its place there, or null when it is not stacked.
+    // Left out in snapshots saved before stacks were fetched.
+    stack?: PrStackMembership | null;
 }
 
 export interface DashboardSnapshot {
@@ -563,9 +577,9 @@ export interface MoireApi {
     getStagedPaths(): Promise<string[]>;
     stagePaths(paths: string[]): Promise<void>;
     unstagePaths(paths: string[]): Promise<void>;
-    // The stack the PR with this head branch belongs to, or null when it is not
-    // stacked (or gh fails).
-    getPrStack(headBranch: string): Promise<PrStack | null>;
+    // The GitHub stack the PR with this node id is in, or null when it is not stacked
+    // (or gh fails).
+    getPrStack(pullRequestId: string): Promise<PrStack | null>;
     // Write text to the system clipboard.
     copyText(text: string): Promise<void>;
     // Pop up a toolbar branch picker's native context menu at the cursor, for the

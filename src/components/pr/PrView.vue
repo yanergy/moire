@@ -163,9 +163,12 @@ const stack = computed(() => comparison.prStack);
 
 // This PR's place in its stack (1 is on the trunk), for the badge before the title.
 const stackPosition = computed(() => {
-    const entries = stack.value?.entries ?? [];
-    const index = entries.findIndex((e) => e.isCurrent);
-    return index === -1 ? null : { index: index + 1, total: entries.length };
+    const current = stack.value?.entries.find((e) => e.isCurrent);
+    if (!stack.value || !current) {
+        return null;
+    }
+
+    return { index: current.position, total: stack.value.size };
 });
 
 // The Stack tab disappears when the PR is not (or no longer) stacked.

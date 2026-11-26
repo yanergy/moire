@@ -457,16 +457,13 @@ function registerIpcHandlers({
         getPullRequest(requireRepo().repoPath, base, head)
     );
 
-    // The stack the PR with this head branch belongs to (see getPrStack), with each
-    // PR checked against its parent: when the parent's head is no longer in its
+    // The GitHub stack the PR with this node id is in (see getPrStack), with each PR
+    // in it checked against its parent: when the parent's head is no longer in its
     // history, it needs a rebase. Read from the remote tracking branches, which is
     // what the PRs show, falling back to local ones.
-    handle('gh:pr-stack', async (head: string) => {
+    handle('gh:pr-stack', async (pullRequestId: string) => {
         const repo = requireRepo();
-        // The repo's own main and development branch are trunks, not stacked PRs.
-        const { main, development } = await getRepoBranches(repo.repoPath);
-        const longLived = [main, development].filter((b): b is string => !!b);
-        const stack = await getPrStack(repo.repoPath, head, undefined, longLived);
+        const stack = await getPrStack(repo.repoPath, pullRequestId);
         if (!stack) {
             return null;
         }
