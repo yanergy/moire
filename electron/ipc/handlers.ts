@@ -18,6 +18,7 @@ import {
     editComment,
     deleteComment,
     editDescription,
+    markReadyForReview,
     replyToReviewThread,
     setReviewThreadResolved,
     getReviewState,
@@ -559,6 +560,10 @@ function registerIpcHandlers({
 
     handle('gh:edit-description', (prNumber: number, body: string) =>
         editDescription(requireRepo().repoPath, prNumber, body)
+    );
+
+    handle('gh:mark-ready-for-review', (prNumber: number) =>
+        markReadyForReview(requireRepo().repoPath, prNumber)
     );
 
     // Inline review-thread writes from the diff popover: reply into a thread, or

@@ -1074,6 +1074,24 @@ export const useComparisonStore = defineStore('comparison', () => {
         return result;
     }
 
+    // Take the current draft PR out of draft state, then re-fetch so the status box,
+    // the header badge and the draft flag all follow. GitHub's refusal comes back in
+    // the result for the view to show.
+    async function markReadyForReview(): Promise<CommentMutationResult> {
+        const api = window.api;
+        const pr = pullRequest.value;
+        if (!api || !pr) {
+            return { ok: false, message: 'Nothing to mark ready.' };
+        }
+
+        const result = await api.markReadyForReview(pr.number);
+        if (result.ok) {
+            await loadPullRequest();
+        }
+
+        return result;
+    }
+
     // The diff pane shows a "Load diff" gate in place of the editor when the
     // selected file is over the size threshold and has not been loaded yet. Binary
     // files are excluded: their content is already withheld, so there is nothing to
@@ -1989,6 +2007,7 @@ export const useComparisonStore = defineStore('comparison', () => {
         editComment,
         deleteComment,
         editDescription,
+        markReadyForReview,
         isViewed,
         localBranches,
         remoteBranches,

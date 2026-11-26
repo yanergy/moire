@@ -258,6 +258,9 @@ export interface PullRequest {
     // Everyone asked to review or who reviewed, with where each stands, for the
     // Reviewers tab. Optional because older fetches and test fixtures may omit it.
     reviewers?: PrReviewer[];
+    // Whether the signed-in account may change the PR (author or write access).
+    // Gates the "Ready for review" button on a draft. Unset when the lookup failed.
+    viewerCanUpdate?: boolean;
 }
 
 // One reviewer of a PR. A user or team with a pending request is PENDING, a
@@ -575,6 +578,9 @@ export interface MoireApi {
     deleteComment(commentId: string): Promise<CommentMutationResult>;
     // `editDescription` rewrites the PR's own body (Markdown), addressed by number.
     editDescription(prNumber: number, body: string): Promise<CommentMutationResult>;
+    // `markReadyForReview` takes a draft PR out of draft state (addressed by number).
+    // GitHub refuses it for an account without write access; that comes back as the message.
+    markReadyForReview(prNumber: number): Promise<CommentMutationResult>;
     // Inline review-thread writes, from the diff viewer's popover. `replyToReviewThread`
     // posts a reply into a thread by its node id; `setReviewThreadResolved` resolves or
     // unresolves one (write access to the repo suffices). Both resolve an ok/message

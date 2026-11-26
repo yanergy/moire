@@ -1205,6 +1205,46 @@ describe('comparison store', () => {
             expect(getPullRequest).toHaveBeenLastCalledWith('main', 'origin/x');
         });
 
+        describe('markReadyForReview', () => {
+            const DRAFT = { ...PR, isDraft: true };
+
+            it('marks the PR ready by number, then re-reads it', async () => {
+                const { store, getPullRequest } = prStore({ status: 'ok', pr: DRAFT });
+                const markReady = vi
+                    .fn<(prNumber: number) => Promise<unknown>>()
+                    .mockResolvedValue({ ok: true });
+                window.api = {
+                    ...window.api,
+                    markReadyForReview: markReady,
+                } as unknown as Window['api'];
+                await store.loadPullRequest();
+                getPullRequest.mockClear();
+
+                expect(await store.markReadyForReview()).toEqual({ ok: true });
+                expect(markReady).toHaveBeenCalledWith(7);
+                expect(getPullRequest).toHaveBeenCalledTimes(1);
+            });
+
+            it("returns GitHub's refusal without re-reading the PR", async () => {
+                const { store, getPullRequest } = prStore({ status: 'ok', pr: DRAFT });
+                const markReady = vi
+                    .fn<(prNumber: number) => Promise<unknown>>()
+                    .mockResolvedValue({ ok: false, message: 'no write access' });
+                window.api = {
+                    ...window.api,
+                    markReadyForReview: markReady,
+                } as unknown as Window['api'];
+                await store.loadPullRequest();
+                getPullRequest.mockClear();
+
+                expect(await store.markReadyForReview()).toEqual({
+                    ok: false,
+                    message: 'no write access',
+                });
+                expect(getPullRequest).not.toHaveBeenCalled();
+            });
+        });
+
         describe('selectPullRequestRange', () => {
             it('prefers the origin tracking branches over the local ones', () => {
                 const store = branchStore();

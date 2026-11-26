@@ -36,6 +36,7 @@ import {
     Trash2,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { useDashboardStore } from '@/stores/dashboard';
 import { useUiStore } from '@/stores/ui';
 import { hasTaskList, renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
@@ -87,6 +88,7 @@ interface StatusBox {
 }
 
 const comparison = useComparisonStore();
+const dashboard = useDashboardStore();
 const ui = useUiStore();
 
 const pr = computed(() => comparison.pullRequest);
@@ -558,6 +560,8 @@ function toggleAll() {
 const draft = ref('');
 const posting = ref(false);
 const postError = ref('');
+const markingReady = ref(false);
+const readyError = ref('');
 const composerCollapsed = ref(false);
 const composerInput = ref<InstanceType<typeof Textarea> | null>(null);
 function clearComposer() {
@@ -676,6 +680,31 @@ async function submitComment() {
     }
 
     postError.value = result.message ?? 'Could not post the comment.';
+}
+
+// The draft box's "Ready for review" button is shown to the author or someone with
+// write access (GitHub's viewerCanUpdate). A closed or merged PR is never a draft
+// to promote, so only an open draft gets it.
+const canMarkReady = computed(() => {
+    const p = pr.value;
+    return !!p && p.isDraft && p.state === 'OPEN' && !!p.viewerCanUpdate;
+});
+
+async function markReady() {
+    if (markingReady.value) {
+        return;
+    }
+
+    markingReady.value = true;
+    readyError.value = '';
+    const result = await comparison.markReadyForReview();
+    markingReady.value = false;
+    if (result.ok) {
+        void dashboard.refresh();
+        return;
+    }
+
+    readyError.value = result.message ?? 'Could not mark the pull request ready for review.';
 }
 
 // Reveal a folded comment (index i) so an inline editor or delete prompt shows.
@@ -1593,7 +1622,32 @@ function renderComment(comment: PrComment): string {
                     <!-- The active tab's status box (the merge state, or the CI
                          checks' state), part of the header so it stays in view with it. -->
                     <div v-if="tabStatus" data-slot="pr-tab-status" class="px-4 pt-4">
-                        <pr-status-box :status="tabStatus" />
+                        <pr-status-box :status="tabStatus">
+                            <div
+                                v-if="activeTab === 'conversation' && canMarkReady"
+                                class="ml-auto flex shrink-0 flex-col items-end gap-1"
+                            >
+                                <Button
+                                    size="sm"
+                                    class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
+                                    :disabled="markingReady"
+                                    @click="markReady"
+                                >
+                                    <LoaderCircle
+                                        v-if="markingReady"
+                                        :size="14"
+                                        class="animate-spin"
+                                    />
+                                    {{ markingReady ? 'Marking ready...' : 'Ready for review' }}
+                                </Button>
+                                <p
+                                    v-if="readyError"
+                                    class="max-w-xs text-right text-[12px] text-moire-status-d"
+                                >
+                                    {{ readyError }}
+                                </p>
+                            </div>
+                        </pr-status-box>
                     </div>
                 </div>
                 <div :class="tabStatus ? 'px-4 pb-4' : 'p-4'">
