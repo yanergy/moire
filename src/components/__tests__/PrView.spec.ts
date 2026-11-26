@@ -531,10 +531,17 @@ describe('PrView', () => {
             ...PR,
             comments: [comment({ author: 'bob', body: 'Nice work.', createdAt: '' })],
         });
-        // The description's header and the comment's header both pin, rounded to the card.
-        const headers = wrapper.findAll('.sticky.rounded-t-lg');
-        expect(headers).toHaveLength(2);
-        headers.forEach((header) => expect(header.attributes('style')).toContain('top: 0px'));
+        // The description's header and the comment's header both pin. The sticky layer is
+        // square and opaque, so nothing shows through round the rounded header inside it.
+        const layers = wrapper
+            .findAll('.sticky')
+            .filter((layer) => layer.element.firstElementChild?.classList.contains('rounded-t-lg'));
+        expect(layers).toHaveLength(2);
+        layers.forEach((layer) => {
+            expect(layer.attributes('style')).toContain('top: 0px');
+            expect(layer.classes()).toContain('bg-moire-app');
+            expect(layer.classes()).not.toContain('rounded-t-lg');
+        });
     });
 
     it('sticks a review thread header and not its card, so the card clips without blocking it', () => {

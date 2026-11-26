@@ -1711,120 +1711,142 @@ function renderComment(comment: PrComment): string {
 
                         <!-- The description reads as the first entry. -->
                         <div class="flex gap-3">
-                            <div class="flex w-6 shrink-0 flex-col items-center">
+                            <!-- pb-5 matches the card column's, so the sticky avatar leaves
+                                 together with the card's sticky header. -->
+                            <div class="flex w-6 shrink-0 flex-col items-center pb-5">
                                 <!-- Center the avatar within the header band (h-10, the
                                      header's height) so it lines up with the header's
                                      middle, which reads best when the card is collapsed.
-                                     The description has no connector below it; a divider
-                                     separates it from the conversation instead. -->
-                                <div class="flex h-10 shrink-0 items-center">
+                                     It sticks with the header. The description has no
+                                     connector below it; a divider separates it from the
+                                     conversation instead. -->
+                                <div
+                                    class="sticky z-10 flex h-10 shrink-0 items-center"
+                                    :style="{ top: stickyTop() }"
+                                >
                                     <user-avatar :login="pr.author" :size="24" />
                                 </div>
                             </div>
                             <div class="min-w-0 flex-1 pb-5">
                                 <div class="rounded-lg border border-moire-border bg-moire-app">
-                                    <!-- The header draws its own top and side border over the
-                                         card's (-mx-px -mt-px), so when it sticks it keeps the
-                                         card's top edge and rounded corners. -->
+                                    <!-- The sticky layer lies over the card's border on every
+                                         side (-mx-px -mt-px -mb-px) and is square and opaque. Stuck,
+                                         the header keeps its own top border and rounded corners with
+                                         nothing showing through round them; at the card's end, its
+                                         bottom border lands on the card's (sticky stops at the
+                                         margin box), so the card's corners hide under it. -->
                                     <div
-                                        class="sticky z-10 -mx-px -mt-px flex items-center justify-between gap-1.5 rounded-t-lg border-x border-t border-moire-border bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
-                                        :class="{
-                                            'border-b border-moire-border': !descriptionCollapsed,
-                                        }"
+                                        class="sticky z-10 -mx-px -mt-px -mb-px bg-moire-app"
                                         :style="{ top: stickyTop() }"
                                     >
-                                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-                                            <span class="text-[14px] font-medium text-moire-fg">
-                                                {{ pr.author }}
-                                            </span>
-                                            <span>opened this pull request</span>
-                                            <!-- Task-list edits apply at once and save on a
-                                                 debounce; note the pending, then saving, then
-                                                 saved state. Padded off the header text so it
-                                                 reads as a separate status, not the sentence. -->
-                                            <span
-                                                v-if="taskStatus('description') === 'unsaved'"
-                                                class="pl-3 text-moire-faint italic"
-                                                role="status"
+                                        <div
+                                            class="flex items-center justify-between gap-1.5 rounded-t-lg border-x border-t border-moire-border bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                            :class="{
+                                                'border-b border-moire-border':
+                                                    !descriptionCollapsed,
+                                            }"
+                                        >
+                                            <div
+                                                class="flex min-w-0 flex-wrap items-center gap-1.5"
                                             >
-                                                Unsaved changes
-                                            </span>
-                                            <span
-                                                v-else-if="taskStatus('description') === 'saving'"
-                                                class="flex items-center gap-1 pl-3 text-moire-faint italic"
-                                                role="status"
-                                            >
-                                                <LoaderCircle :size="12" class="animate-spin" />
-                                                Saving…
-                                            </span>
-                                            <span
-                                                v-else-if="taskStatus('description') === 'saved'"
-                                                class="flex items-center gap-1 pl-3 text-moire-status-a italic"
-                                                role="status"
-                                            >
-                                                <Check :size="12" />
-                                                Saved
-                                            </span>
-                                        </div>
-                                        <div class="flex shrink-0 items-center gap-0.5">
-                                            <checkbox-mode-toggle
-                                                v-if="
-                                                    !editingDescription &&
-                                                    blockHasTasks('description', pr.body)
-                                                "
-                                                :pressed="isCheckboxMode('description')"
-                                                @toggle="toggleCheckboxMode('description')"
-                                            />
-                                            <!-- Edit the description. Shown even with no body
-                                                 yet, so one can be added. Swaps the body for
-                                                 an editor. -->
-                                            <Tooltip v-if="!editingDescription">
-                                                <TooltipTrigger as-child>
-                                                    <button
-                                                        type="button"
-                                                        class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                        aria-label="Edit description"
-                                                        @click="startEditDescription"
+                                                <span class="text-[14px] font-medium text-moire-fg">
+                                                    {{ pr.author }}
+                                                </span>
+                                                <span>opened this pull request</span>
+                                                <!-- Task-list edits apply at once and save on a
+                                                     debounce; note the pending, then saving, then
+                                                     saved state. Padded off the header text so it
+                                                     reads as a separate status, not the sentence. -->
+                                                <span
+                                                    v-if="taskStatus('description') === 'unsaved'"
+                                                    class="pl-3 text-moire-faint italic"
+                                                    role="status"
+                                                >
+                                                    Unsaved changes
+                                                </span>
+                                                <span
+                                                    v-else-if="
+                                                        taskStatus('description') === 'saving'
+                                                    "
+                                                    class="flex items-center gap-1 pl-3 text-moire-faint italic"
+                                                    role="status"
+                                                >
+                                                    <LoaderCircle :size="12" class="animate-spin" />
+                                                    Saving…
+                                                </span>
+                                                <span
+                                                    v-else-if="
+                                                        taskStatus('description') === 'saved'
+                                                    "
+                                                    class="flex items-center gap-1 pl-3 text-moire-status-a italic"
+                                                    role="status"
+                                                >
+                                                    <Check :size="12" />
+                                                    Saved
+                                                </span>
+                                            </div>
+                                            <div class="flex shrink-0 items-center gap-0.5">
+                                                <checkbox-mode-toggle
+                                                    v-if="
+                                                        !editingDescription &&
+                                                        blockHasTasks('description', pr.body)
+                                                    "
+                                                    :pressed="isCheckboxMode('description')"
+                                                    @toggle="toggleCheckboxMode('description')"
+                                                />
+                                                <!-- Edit the description. Shown even with no body
+                                                     yet, so one can be added. Swaps the body for
+                                                     an editor. -->
+                                                <Tooltip v-if="!editingDescription">
+                                                    <TooltipTrigger as-child>
+                                                        <button
+                                                            type="button"
+                                                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                            aria-label="Edit description"
+                                                            @click="startEditDescription"
+                                                        >
+                                                            <Pencil :size="13" />
+                                                        </button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent
+                                                        >Edit description</TooltipContent
                                                     >
-                                                        <Pencil :size="13" />
-                                                    </button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Edit description</TooltipContent>
-                                            </Tooltip>
-                                            <!-- Fold the description down to its header. Points
-                                                 down to expand, up to collapse. Only when there
-                                                 is a description. -->
-                                            <Tooltip v-if="hasBody">
-                                                <TooltipTrigger as-child>
-                                                    <button
-                                                        type="button"
-                                                        class="-mr-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                        :aria-expanded="!descriptionCollapsed"
-                                                        :aria-label="
-                                                            descriptionCollapsed
-                                                                ? 'Expand description'
-                                                                : 'Collapse description'
-                                                        "
-                                                        @click="
-                                                            descriptionCollapsed =
-                                                                !descriptionCollapsed
-                                                        "
-                                                    >
-                                                        <!-- Same disclosure as the file tree: down when
-                                                             open, right when collapsed. -->
-                                                        <ChevronDown
-                                                            v-if="!descriptionCollapsed"
-                                                            :size="14"
-                                                        />
-                                                        <ChevronRight v-else :size="14" />
-                                                    </button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>{{
-                                                    descriptionCollapsed
-                                                        ? 'Expand description'
-                                                        : 'Collapse description'
-                                                }}</TooltipContent>
-                                            </Tooltip>
+                                                </Tooltip>
+                                                <!-- Fold the description down to its header. Points
+                                                     down to expand, up to collapse. Only when there
+                                                     is a description. -->
+                                                <Tooltip v-if="hasBody">
+                                                    <TooltipTrigger as-child>
+                                                        <button
+                                                            type="button"
+                                                            class="-mr-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                            :aria-expanded="!descriptionCollapsed"
+                                                            :aria-label="
+                                                                descriptionCollapsed
+                                                                    ? 'Expand description'
+                                                                    : 'Collapse description'
+                                                            "
+                                                            @click="
+                                                                descriptionCollapsed =
+                                                                    !descriptionCollapsed
+                                                            "
+                                                        >
+                                                            <!-- Same disclosure as the file tree: down when
+                                                                 open, right when collapsed. -->
+                                                            <ChevronDown
+                                                                v-if="!descriptionCollapsed"
+                                                                :size="14"
+                                                            />
+                                                            <ChevronRight v-else :size="14" />
+                                                        </button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{{
+                                                        descriptionCollapsed
+                                                            ? 'Expand description'
+                                                            : 'Collapse description'
+                                                    }}</TooltipContent>
+                                                </Tooltip>
+                                            </div>
                                         </div>
                                     </div>
                                     <div v-if="!descriptionCollapsed" class="px-3.5 py-3">
@@ -1904,21 +1926,32 @@ function renderComment(comment: PrComment): string {
                             :data-entry-index="i"
                             class="flex gap-3"
                         >
-                            <div class="flex w-6 shrink-0 flex-col items-center">
+                            <!-- pb-5 matches the card column's, so a card's sticky avatar
+                                 leaves together with its sticky header; the connector is
+                                 absolute so it still runs through that padding to the next
+                                 entry. -->
+                            <div class="relative flex w-6 shrink-0 flex-col items-center pb-5">
                                 <!-- Center the avatar in the header band so it lines up
                                      with the header's middle, with an equal margin above
                                      and below (no extra gap before the connector line). A
-                                     card header is h-10; a bare verdict is a single h-6
-                                     line. -->
+                                     card header is h-10 and its avatar sticks with it, on an
+                                     opaque band that hides the connector line it passes over,
+                                     so the gap round the avatar stays; a bare verdict is a
+                                     single h-6 line. -->
                                 <div
                                     class="flex shrink-0 items-center"
-                                    :class="hasCard(comment) ? 'h-10' : 'h-6'"
+                                    :class="
+                                        hasCard(comment) ? 'sticky z-10 h-10 bg-moire-app' : 'h-6'
+                                    "
+                                    :style="hasCard(comment) ? { top: stickyTop() } : undefined"
                                 >
                                     <user-avatar :login="comment.author" :size="24" />
                                 </div>
                                 <span
                                     v-if="i < comments.length - 1"
-                                    class="w-px flex-1 bg-moire-border"
+                                    data-slot="entry-connector"
+                                    class="absolute bottom-0 left-1/2 w-px -translate-x-1/2 bg-moire-border"
+                                    :class="hasCard(comment) ? 'top-10' : 'top-6'"
                                 />
                             </div>
                             <div class="min-w-0 flex-1 pb-5">
@@ -1929,178 +1962,190 @@ function renderComment(comment: PrComment): string {
                                 >
                                     <div
                                         :ref="stickyHeights.track(comment.id)"
-                                        class="sticky z-10 -mx-px -mt-px flex items-center justify-between gap-1.5 rounded-t-lg border-x border-t border-moire-border bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
-                                        :class="{
-                                            'border-b border-moire-border': !isCollapsed(i),
-                                        }"
+                                        class="sticky z-10 -mx-px -mt-px -mb-px bg-moire-app"
                                         :style="{ top: stickyTop() }"
                                     >
-                                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
-                                            <span class="text-[14px] font-medium text-moire-fg">
-                                                {{ comment.author }}
-                                            </span>
-                                            <span :class="verb(comment).cls">
-                                                {{ verb(comment).text }}
-                                            </span>
-                                            <span>{{ relative(comment.createdAt) }}</span>
-                                            <!-- Task-list edits apply at once and save on a
-                                                 debounce; note the pending, then saving, then
-                                                 saved state. Padded off the header text so it
-                                                 reads as a separate status, not the sentence. -->
-                                            <span
-                                                v-if="taskStatus(comment.id) === 'unsaved'"
-                                                class="pl-3 text-moire-faint italic"
-                                                role="status"
+                                        <div
+                                            class="flex items-center justify-between gap-1.5 rounded-t-lg border-x border-t border-moire-border bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                            :class="{
+                                                'border-b border-moire-border': !isCollapsed(i),
+                                            }"
+                                        >
+                                            <div
+                                                class="flex min-w-0 flex-wrap items-center gap-1.5"
                                             >
-                                                Unsaved changes
-                                            </span>
-                                            <span
-                                                v-else-if="taskStatus(comment.id) === 'saving'"
-                                                class="flex items-center gap-1 pl-3 text-moire-faint italic"
-                                                role="status"
-                                            >
-                                                <LoaderCircle :size="12" class="animate-spin" />
-                                                Saving…
-                                            </span>
-                                            <span
-                                                v-else-if="taskStatus(comment.id) === 'saved'"
-                                                class="flex items-center gap-1 pl-3 text-moire-status-a italic"
-                                                role="status"
-                                            >
-                                                <Check :size="12" />
-                                                Saved
-                                            </span>
-                                        </div>
-                                        <div class="flex shrink-0 items-center gap-0.5">
-                                            <!-- Comments the viewer may edit (their own, or
-                                                 any as a maintainer, as GitHub allows):
-                                                 checkbox mode (when the comment has a task
-                                                 list) and a pencil that opens it for editing.
-                                                 Delete sits behind a "..." menu where it is
-                                                 allowed. Hidden while this comment is being
-                                                 edited or awaits a delete confirmation. -->
-                                            <template
-                                                v-if="
-                                                    comment.canEdit &&
-                                                    editingId !== comment.id &&
-                                                    confirmingDeleteId !== comment.id
-                                                "
-                                            >
-                                                <checkbox-mode-toggle
-                                                    v-if="blockHasTasks(comment.id, comment.body)"
-                                                    :pressed="isCheckboxMode(comment.id)"
-                                                    @toggle="toggleCheckboxMode(comment.id)"
-                                                />
+                                                <span class="text-[14px] font-medium text-moire-fg">
+                                                    {{ comment.author }}
+                                                </span>
+                                                <span :class="verb(comment).cls">
+                                                    {{ verb(comment).text }}
+                                                </span>
+                                                <span>{{ relative(comment.createdAt) }}</span>
+                                                <!-- Task-list edits apply at once and save on a
+                                                     debounce; note the pending, then saving, then
+                                                     saved state. Padded off the header text so it
+                                                     reads as a separate status, not the sentence. -->
+                                                <span
+                                                    v-if="taskStatus(comment.id) === 'unsaved'"
+                                                    class="pl-3 text-moire-faint italic"
+                                                    role="status"
+                                                >
+                                                    Unsaved changes
+                                                </span>
+                                                <span
+                                                    v-else-if="taskStatus(comment.id) === 'saving'"
+                                                    class="flex items-center gap-1 pl-3 text-moire-faint italic"
+                                                    role="status"
+                                                >
+                                                    <LoaderCircle :size="12" class="animate-spin" />
+                                                    Saving…
+                                                </span>
+                                                <span
+                                                    v-else-if="taskStatus(comment.id) === 'saved'"
+                                                    class="flex items-center gap-1 pl-3 text-moire-status-a italic"
+                                                    role="status"
+                                                >
+                                                    <Check :size="12" />
+                                                    Saved
+                                                </span>
+                                            </div>
+                                            <div class="flex shrink-0 items-center gap-0.5">
+                                                <!-- Comments the viewer may edit (their own, or
+                                                     any as a maintainer, as GitHub allows):
+                                                     checkbox mode (when the comment has a task
+                                                     list) and a pencil that opens it for editing.
+                                                     Delete sits behind a "..." menu where it is
+                                                     allowed. Hidden while this comment is being
+                                                     edited or awaits a delete confirmation. -->
+                                                <template
+                                                    v-if="
+                                                        comment.canEdit &&
+                                                        editingId !== comment.id &&
+                                                        confirmingDeleteId !== comment.id
+                                                    "
+                                                >
+                                                    <checkbox-mode-toggle
+                                                        v-if="
+                                                            blockHasTasks(comment.id, comment.body)
+                                                        "
+                                                        :pressed="isCheckboxMode(comment.id)"
+                                                        @toggle="toggleCheckboxMode(comment.id)"
+                                                    />
+                                                    <Tooltip>
+                                                        <TooltipTrigger as-child>
+                                                            <button
+                                                                type="button"
+                                                                data-slot="edit-comment"
+                                                                class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                                aria-label="Edit comment"
+                                                                @click="startEdit(comment, i)"
+                                                            >
+                                                                <Pencil :size="13" />
+                                                            </button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent
+                                                            >Edit comment</TooltipContent
+                                                        >
+                                                    </Tooltip>
+                                                </template>
+                                                <Popover
+                                                    v-if="
+                                                        comment.canDelete &&
+                                                        editingId !== comment.id &&
+                                                        confirmingDeleteId !== comment.id
+                                                    "
+                                                    :open="openMenuId === comment.id"
+                                                    @update:open="
+                                                        openMenuId = $event ? comment.id : null
+                                                    "
+                                                >
+                                                    <!-- The popover's own anchor, outside the tooltip: nested in the tooltip,
+                                                         PopoverTrigger would register the button as the tooltip's anchor and
+                                                         leave the popover unpositioned (both build on Reka's Popper). -->
+                                                    <PopoverAnchor as-child>
+                                                        <span class="inline-flex">
+                                                            <Tooltip>
+                                                                <TooltipTrigger as-child>
+                                                                    <PopoverTrigger as-child>
+                                                                        <button
+                                                                            type="button"
+                                                                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
+                                                                            aria-label="Comment actions"
+                                                                        >
+                                                                            <MoreHorizontal
+                                                                                :size="14"
+                                                                            />
+                                                                        </button>
+                                                                    </PopoverTrigger>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent
+                                                                    >Comment actions</TooltipContent
+                                                                >
+                                                            </Tooltip>
+                                                        </span>
+                                                    </PopoverAnchor>
+                                                    <PopoverContent
+                                                        align="end"
+                                                        :side-offset="6"
+                                                        class="w-44 overflow-hidden border-moire-border bg-moire-pop p-0"
+                                                        :style="{
+                                                            boxShadow: 'var(--moire-pop-shadow)',
+                                                        }"
+                                                    >
+                                                        <Command class="bg-transparent">
+                                                            <CommandList>
+                                                                <CommandGroup>
+                                                                    <CommandItem
+                                                                        value="delete"
+                                                                        aria-label="Delete comment"
+                                                                        class="gap-2 text-xs text-moire-status-d data-[highlighted]:bg-moire-danger data-[highlighted]:text-moire-status-d"
+                                                                        @select="
+                                                                            startDelete(comment)
+                                                                        "
+                                                                    >
+                                                                        <Trash2
+                                                                            :size="14"
+                                                                            class="shrink-0"
+                                                                        />
+                                                                        <span class="flex-1">
+                                                                            Delete
+                                                                        </span>
+                                                                    </CommandItem>
+                                                                </CommandGroup>
+                                                            </CommandList>
+                                                        </Command>
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <!-- Fold this comment down to its header; points
+                                                     down to expand, up to collapse (as the file
+                                                     tree does). -->
                                                 <Tooltip>
                                                     <TooltipTrigger as-child>
                                                         <button
                                                             type="button"
-                                                            data-slot="edit-comment"
-                                                            class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                            aria-label="Edit comment"
-                                                            @click="startEdit(comment, i)"
+                                                            class="-mr-1 inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                            :aria-expanded="!isCollapsed(i)"
+                                                            :aria-label="
+                                                                isCollapsed(i)
+                                                                    ? 'Expand comment'
+                                                                    : 'Collapse comment'
+                                                            "
+                                                            @click="toggleCollapsed(i)"
                                                         >
-                                                            <Pencil :size="13" />
+                                                            <ChevronDown
+                                                                v-if="!isCollapsed(i)"
+                                                                :size="14"
+                                                            />
+                                                            <ChevronRight v-else :size="14" />
                                                         </button>
                                                     </TooltipTrigger>
-                                                    <TooltipContent>Edit comment</TooltipContent>
+                                                    <TooltipContent>{{
+                                                        isCollapsed(i)
+                                                            ? 'Expand comment'
+                                                            : 'Collapse comment'
+                                                    }}</TooltipContent>
                                                 </Tooltip>
-                                            </template>
-                                            <Popover
-                                                v-if="
-                                                    comment.canDelete &&
-                                                    editingId !== comment.id &&
-                                                    confirmingDeleteId !== comment.id
-                                                "
-                                                :open="openMenuId === comment.id"
-                                                @update:open="
-                                                    openMenuId = $event ? comment.id : null
-                                                "
-                                            >
-                                                <!-- The popover's own anchor, outside the tooltip: nested in the tooltip,
-                                                     PopoverTrigger would register the button as the tooltip's anchor and
-                                                     leave the popover unpositioned (both build on Reka's Popper). -->
-                                                <PopoverAnchor as-child>
-                                                    <span class="inline-flex">
-                                                        <Tooltip>
-                                                            <TooltipTrigger as-child>
-                                                                <PopoverTrigger as-child>
-                                                                    <button
-                                                                        type="button"
-                                                                        class="inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg data-[state=open]:bg-moire-hover data-[state=open]:text-moire-fg"
-                                                                        aria-label="Comment actions"
-                                                                    >
-                                                                        <MoreHorizontal
-                                                                            :size="14"
-                                                                        />
-                                                                    </button>
-                                                                </PopoverTrigger>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent
-                                                                >Comment actions</TooltipContent
-                                                            >
-                                                        </Tooltip>
-                                                    </span>
-                                                </PopoverAnchor>
-                                                <PopoverContent
-                                                    align="end"
-                                                    :side-offset="6"
-                                                    class="w-44 overflow-hidden border-moire-border bg-moire-pop p-0"
-                                                    :style="{
-                                                        boxShadow: 'var(--moire-pop-shadow)',
-                                                    }"
-                                                >
-                                                    <Command class="bg-transparent">
-                                                        <CommandList>
-                                                            <CommandGroup>
-                                                                <CommandItem
-                                                                    value="delete"
-                                                                    aria-label="Delete comment"
-                                                                    class="gap-2 text-xs text-moire-status-d data-[highlighted]:bg-moire-danger data-[highlighted]:text-moire-status-d"
-                                                                    @select="startDelete(comment)"
-                                                                >
-                                                                    <Trash2
-                                                                        :size="14"
-                                                                        class="shrink-0"
-                                                                    />
-                                                                    <span class="flex-1">
-                                                                        Delete
-                                                                    </span>
-                                                                </CommandItem>
-                                                            </CommandGroup>
-                                                        </CommandList>
-                                                    </Command>
-                                                </PopoverContent>
-                                            </Popover>
-                                            <!-- Fold this comment down to its header; points
-                                                 down to expand, up to collapse (as the file
-                                                 tree does). -->
-                                            <Tooltip>
-                                                <TooltipTrigger as-child>
-                                                    <button
-                                                        type="button"
-                                                        class="-mr-1 inline-flex size-5 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                        :aria-expanded="!isCollapsed(i)"
-                                                        :aria-label="
-                                                            isCollapsed(i)
-                                                                ? 'Expand comment'
-                                                                : 'Collapse comment'
-                                                        "
-                                                        @click="toggleCollapsed(i)"
-                                                    >
-                                                        <ChevronDown
-                                                            v-if="!isCollapsed(i)"
-                                                            :size="14"
-                                                        />
-                                                        <ChevronRight v-else :size="14" />
-                                                    </button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>{{
-                                                    isCollapsed(i)
-                                                        ? 'Expand comment'
-                                                        : 'Collapse comment'
-                                                }}</TooltipContent>
-                                            </Tooltip>
+                                            </div>
                                         </div>
                                     </div>
                                     <div
@@ -2182,80 +2227,86 @@ function renderComment(comment: PrComment): string {
                                             "
                                         >
                                             <div
-                                                class="sticky z-10 -mx-px -mt-px flex items-center gap-2 rounded-t-md border-x border-t border-moire-border bg-moire-chrome px-4 py-2.5 text-[12px]"
-                                                :class="{
-                                                    'border-b border-moire-border':
-                                                        !isThreadCollapsed(thread),
-                                                }"
+                                                class="sticky z-10 -mx-px -mt-px -mb-px bg-moire-app"
                                                 :style="{ top: stickyTop(comment.id) }"
                                             >
-                                                <!-- Fold this line comment down to its file
-                                                     name, as GitHub does. -->
-                                                <button
-                                                    type="button"
-                                                    data-slot="thread-toggle"
-                                                    class="-ml-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
-                                                    :aria-expanded="!isThreadCollapsed(thread)"
-                                                    :aria-label="
-                                                        isThreadCollapsed(thread)
-                                                            ? 'Expand line comment'
-                                                            : 'Collapse line comment'
-                                                    "
-                                                    @click="toggleThreadCollapsed(thread)"
+                                                <div
+                                                    class="flex items-center gap-2 rounded-t-md border-x border-t border-moire-border bg-moire-chrome px-4 py-2.5 text-[12px]"
+                                                    :class="{
+                                                        'border-b border-moire-border':
+                                                            !isThreadCollapsed(thread),
+                                                    }"
                                                 >
-                                                    <ChevronRight
-                                                        v-if="isThreadCollapsed(thread)"
-                                                        :size="14"
-                                                    />
-                                                    <ChevronDown v-else :size="14" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    data-slot="thread-file"
-                                                    class="min-w-0 cursor-pointer truncate font-mono text-moire-accent hover:underline"
-                                                    :title="`Open ${thread.path} in the diff`"
-                                                    @click="openThreadFile(thread.path)"
-                                                >
-                                                    {{ thread.path }}
-                                                </button>
-                                                <!-- Tinted badges, so the thread's state reads at a
-                                                     glance even when it is folded: amber for code
-                                                     that moved on, green for a settled thread. Once
-                                                     resolved, being outdated matters less, so it
-                                                     shrinks to its icon (named by a tooltip). -->
-                                                <Tooltip
-                                                    v-if="thread.isOutdated && thread.isResolved"
-                                                >
-                                                    <TooltipTrigger as-child>
-                                                        <Badge
-                                                            variant="outline"
-                                                            data-slot="thread-outdated"
-                                                            aria-label="Outdated"
-                                                            class="size-[22px] border-moire-changes-edge bg-moire-changes px-0 text-moire-changes-fg"
-                                                        >
-                                                            <History />
-                                                        </Badge>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>Outdated</TooltipContent>
-                                                </Tooltip>
-                                                <Badge
-                                                    v-else-if="thread.isOutdated"
-                                                    variant="outline"
-                                                    data-slot="thread-outdated"
-                                                    class="h-[22px] border-moire-changes-edge bg-moire-changes text-[11px] text-moire-changes-fg"
-                                                >
-                                                    <History />
-                                                    Outdated
-                                                </Badge>
-                                                <Badge
-                                                    v-if="thread.isResolved"
-                                                    variant="outline"
-                                                    data-slot="thread-resolved"
-                                                    class="h-[22px] border-moire-viewed-edge bg-moire-viewed text-[11px] text-moire-viewed-fg"
-                                                >
-                                                    <CircleCheck />
-                                                    Resolved
-                                                </Badge>
+                                                    <!-- Fold this line comment down to its file
+                                                         name, as GitHub does. -->
+                                                    <button
+                                                        type="button"
+                                                        data-slot="thread-toggle"
+                                                        class="-ml-1 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-moire-faint transition-colors hover:bg-moire-hover hover:text-moire-fg"
+                                                        :aria-expanded="!isThreadCollapsed(thread)"
+                                                        :aria-label="
+                                                            isThreadCollapsed(thread)
+                                                                ? 'Expand line comment'
+                                                                : 'Collapse line comment'
+                                                        "
+                                                        @click="toggleThreadCollapsed(thread)"
+                                                    >
+                                                        <ChevronRight
+                                                            v-if="isThreadCollapsed(thread)"
+                                                            :size="14"
+                                                        />
+                                                        <ChevronDown v-else :size="14" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        data-slot="thread-file"
+                                                        class="min-w-0 cursor-pointer truncate font-mono text-moire-accent hover:underline"
+                                                        :title="`Open ${thread.path} in the diff`"
+                                                        @click="openThreadFile(thread.path)"
+                                                    >
+                                                        {{ thread.path }}
+                                                    </button>
+                                                    <!-- Tinted badges, so the thread's state reads at a
+                                                         glance even when it is folded: amber for code
+                                                         that moved on, green for a settled thread. Once
+                                                         resolved, being outdated matters less, so it
+                                                         shrinks to its icon (named by a tooltip). -->
+                                                    <Tooltip
+                                                        v-if="
+                                                            thread.isOutdated && thread.isResolved
+                                                        "
+                                                    >
+                                                        <TooltipTrigger as-child>
+                                                            <Badge
+                                                                variant="outline"
+                                                                data-slot="thread-outdated"
+                                                                aria-label="Outdated"
+                                                                class="size-[22px] border-moire-changes-edge bg-moire-changes px-0 text-moire-changes-fg"
+                                                            >
+                                                                <History />
+                                                            </Badge>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>Outdated</TooltipContent>
+                                                    </Tooltip>
+                                                    <Badge
+                                                        v-else-if="thread.isOutdated"
+                                                        variant="outline"
+                                                        data-slot="thread-outdated"
+                                                        class="h-[22px] border-moire-changes-edge bg-moire-changes text-[11px] text-moire-changes-fg"
+                                                    >
+                                                        <History />
+                                                        Outdated
+                                                    </Badge>
+                                                    <Badge
+                                                        v-if="thread.isResolved"
+                                                        variant="outline"
+                                                        data-slot="thread-resolved"
+                                                        class="h-[22px] border-moire-viewed-edge bg-moire-viewed text-[11px] text-moire-viewed-fg"
+                                                    >
+                                                        <CircleCheck />
+                                                        Resolved
+                                                    </Badge>
+                                                </div>
                                             </div>
                                             <div
                                                 v-if="
