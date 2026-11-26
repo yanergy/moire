@@ -22,7 +22,6 @@ import { reviewProgress, reviewSummary } from '@/lib/review-progress';
 import type { ReviewActivity, ReviewActivityTarget } from '@/lib/review-activity';
 import { timeSince } from '@/lib/status-bar';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 
 const props = withDefaults(
@@ -171,19 +170,19 @@ function relative(iso: string): string {
             :data-state="reviewer.state"
             class="border-b border-moire-border"
         >
-            <!-- The re-request button sits beside the row, not inside it, since the row
-                 is a button itself when it folds. -->
-            <div class="flex items-center gap-1">
+            <!-- The row: the fold toggle fills it, and the re-request button sits at its
+                 end. They are siblings (a button cannot hold a button), so the hover
+                 tint is on this wrapper to keep it one row visually. -->
+            <div
+                class="group/row flex items-center gap-2 rounded pr-1"
+                :class="itemsFor(reviewer).length ? 'hover:bg-moire-hover' : ''"
+            >
                 <component
                     :is="itemsFor(reviewer).length ? 'button' : 'div'"
                     :type="itemsFor(reviewer).length ? 'button' : undefined"
                     data-slot="reviewer-row"
                     class="flex min-w-0 flex-1 items-center gap-2.5 py-[11px] text-left"
-                    :class="
-                        itemsFor(reviewer).length
-                            ? 'cursor-pointer rounded hover:bg-moire-hover'
-                            : ''
-                    "
+                    :class="itemsFor(reviewer).length ? 'cursor-pointer' : ''"
                     :aria-expanded="
                         itemsFor(reviewer).length ? expanded.has(keyOf(reviewer)) : undefined
                     "
@@ -236,27 +235,24 @@ function relative(iso: string): string {
                         </span>
                     </span>
                 </component>
-                <Tooltip v-if="canRerequest(reviewer)">
-                    <TooltipTrigger as-child>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            data-slot="rerequest-review"
-                            class="size-7 shrink-0 text-moire-muted hover:text-moire-fg"
-                            :aria-label="`Re-request review from ${reviewer.login}`"
-                            :disabled="requesting !== null"
-                            @click="emit('request', reviewer.login)"
-                        >
-                            <LoaderCircle
-                                v-if="requesting === reviewer.login"
-                                :size="16"
-                                class="animate-spin"
-                            />
-                            <RefreshCw v-else :size="16" />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Re-request review</TooltipContent>
-                </Tooltip>
+                <Button
+                    v-if="canRerequest(reviewer)"
+                    variant="outline"
+                    size="sm"
+                    data-slot="rerequest-review"
+                    class="h-7 shrink-0 gap-1.5 border-moire-border bg-moire-app px-2.5 text-[12px] text-moire-fg group-hover/row:border-moire-ring hover:bg-moire-hover"
+                    :aria-label="`Re-request review from ${reviewer.login}`"
+                    :disabled="requesting !== null"
+                    @click="emit('request', reviewer.login)"
+                >
+                    <LoaderCircle
+                        v-if="requesting === reviewer.login"
+                        :size="14"
+                        class="animate-spin"
+                    />
+                    <RefreshCw v-else :size="14" />
+                    {{ requesting === reviewer.login ? 'Re-requesting...' : 'Re-request review' }}
+                </Button>
             </div>
             <p
                 v-if="requestError?.login === reviewer.login"
