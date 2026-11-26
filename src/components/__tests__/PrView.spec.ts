@@ -756,7 +756,7 @@ describe('PrView', () => {
             expect(readyButton(mountWith({ ...PR, viewerCanUpdate: true }))).toBeUndefined();
         });
 
-        it('keeps the button on a draft with changes requested', () => {
+        it('shows the button only in the draft box, not the changes-requested box', () => {
             const wrapper = mountWith({
                 ...PR,
                 isDraft: true,
@@ -765,7 +765,20 @@ describe('PrView', () => {
             });
 
             expect(wrapper.text()).toContain('Changes requested');
-            expect(readyButton(wrapper)).toBeDefined();
+            expect(readyButton(wrapper)).toBeUndefined();
+        });
+
+        it('hides the button when the conflict box takes the status spot', () => {
+            const wrapper = mountWith({
+                ...PR,
+                isDraft: true,
+                mergeable: 'CONFLICTING',
+                reviewDecision: 'CHANGES_REQUESTED',
+                viewerCanUpdate: true,
+            });
+
+            expect(wrapper.text()).toContain('This branch has conflicts');
+            expect(readyButton(wrapper)).toBeUndefined();
         });
 
         it('marks the PR ready through the store, showing a pending state', async () => {

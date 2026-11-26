@@ -85,6 +85,8 @@ interface StatusBox {
     title: string;
     detail: string;
     cls: string;
+    // Set on the draft box only, which carries the "Ready for review" button.
+    draft?: boolean;
 }
 
 const comparison = useComparisonStore();
@@ -682,13 +684,10 @@ async function submitComment() {
     postError.value = result.message ?? 'Could not post the comment.';
 }
 
-// The draft box's "Ready for review" button is shown to the author or someone with
-// write access (GitHub's viewerCanUpdate). A closed or merged PR is never a draft
-// to promote, so only an open draft gets it.
-const canMarkReady = computed(() => {
-    const p = pr.value;
-    return !!p && p.isDraft && p.state === 'OPEN' && !!p.viewerCanUpdate;
-});
+// The "Ready for review" button shows only in the draft box (not when a conflict or
+// a changes request takes the status spot), to the author or someone with write
+// access (GitHub's viewerCanUpdate). Only an open draft gets the draft box.
+const canMarkReady = computed(() => !!mergeStatus.value?.draft && !!pr.value?.viewerCanUpdate);
 
 async function markReady() {
     if (markingReady.value) {
@@ -929,6 +928,7 @@ const mergeStatus = computed<StatusBox | null>(() => {
             detail: 'Mark it ready for review to merge.',
             // Dashed outline with the same border tone as the draft PR toggle.
             cls: 'border-dashed border-input bg-moire-chrome',
+            draft: true,
         };
     }
     if (p.mergeable === 'CONFLICTING') {
