@@ -526,6 +526,40 @@ describe('PrView', () => {
         expect(header().classes()).not.toContain('sticky');
     });
 
+    it('sticks the description and comment headers, keeping the card round them', () => {
+        const wrapper = mountWith({
+            ...PR,
+            comments: [comment({ author: 'bob', body: 'Nice work.', createdAt: '' })],
+        });
+        // The description's header and the comment's header both pin. The sticky layer is
+        // square and opaque, so nothing shows through round the rounded header inside it.
+        const layers = wrapper
+            .findAll('.sticky')
+            .filter((layer) => layer.element.firstElementChild?.classList.contains('rounded-t-lg'));
+        expect(layers).toHaveLength(2);
+        layers.forEach((layer) => {
+            expect(layer.attributes('style')).toContain('top: 0px');
+            expect(layer.classes()).toContain('bg-moire-app');
+            expect(layer.classes()).not.toContain('rounded-t-lg');
+        });
+    });
+
+    it('sticks a review thread header and not its card, so the card clips without blocking it', () => {
+        useComparisonStore().reviewThreads = [thread()];
+        const wrapper = mountWith({
+            ...PR,
+            comments: [
+                comment({ kind: 'review', state: 'COMMENTED', body: 'Test 5', reviewId: 'PRR_1' }),
+            ],
+        });
+        const shown = wrapper.get('[data-slot="review-thread"]');
+        expect(shown.classes()).toContain('overflow-clip');
+        expect(shown.classes()).not.toContain('overflow-hidden');
+        const header = shown.element.firstElementChild as HTMLElement;
+        expect(header.classList).toContain('sticky');
+        expect(header.style.top).toBe('0px');
+    });
+
     it('shows up to two author initials in the avatar', () => {
         expect(mountWith(PR).text()).toContain('ST'); // s.trivedi -> ST
     });
