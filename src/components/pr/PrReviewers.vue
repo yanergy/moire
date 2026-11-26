@@ -226,7 +226,7 @@ function relative(iso: string): string {
                     variant="outline"
                     size="sm"
                     data-slot="rerequest-review"
-                    class="h-7 shrink-0 gap-1.5 border-input bg-transparent px-2.5 text-moire-muted shadow-xs hover:bg-moire-hover hover:text-moire-fg dark:border-input dark:bg-transparent dark:hover:bg-moire-hover"
+                    class="mr-2 h-7 shrink-0 gap-1.5 border-input bg-transparent px-2.5 text-moire-muted shadow-xs hover:bg-moire-hover hover:text-moire-fg dark:border-input dark:bg-transparent dark:hover:bg-moire-hover"
                     :aria-label="`Re-request review from ${reviewer.login}`"
                     :disabled="requesting !== null"
                     @click="emit('request', reviewer.login)"
