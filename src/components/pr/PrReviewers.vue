@@ -223,20 +223,20 @@ function relative(iso: string): string {
                 </component>
                 <Button
                     v-if="canRerequest(reviewer)"
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     data-slot="rerequest-review"
-                    class="h-7 shrink-0 gap-1.5 px-2 text-[12px] font-normal text-moire-muted hover:bg-moire-fg/10 hover:text-moire-fg"
+                    class="h-7 shrink-0 gap-1.5 border-input bg-transparent px-2.5 text-moire-muted shadow-xs hover:bg-moire-hover hover:text-moire-fg dark:border-input dark:bg-transparent dark:hover:bg-moire-hover"
                     :aria-label="`Re-request review from ${reviewer.login}`"
                     :disabled="requesting !== null"
                     @click="emit('request', reviewer.login)"
                 >
                     <LoaderCircle
                         v-if="requesting === reviewer.login"
-                        :size="14"
+                        :size="16"
                         class="animate-spin"
                     />
-                    <RefreshCw v-else :size="14" />
+                    <RefreshCw v-else :size="16" />
                     {{ requesting === reviewer.login ? 'Re-requesting...' : 'Re-request review' }}
                 </Button>
                 <!-- Outside the fold toggle so the re-request button can sit before it;
