@@ -14,14 +14,15 @@ const entry = (over: Partial<PrStackEntry>): PrStackEntry => ({
     state: 'OPEN',
     isDraft: false,
     reviewDecision: '',
-    depth: 0,
+    position: 1,
     isCurrent: false,
-    needsRetarget: false,
     ...over,
 });
 
 const stack: PrStack = {
-    trunk: 'main',
+    number: 1,
+    size: 3,
+    baseRefName: 'main',
     entries: [
         entry({ reviewDecision: 'APPROVED' }),
         entry({
@@ -29,7 +30,7 @@ const stack: PrStack = {
             title: 'Middle',
             headRefName: 'b',
             baseRefName: 'a',
-            depth: 1,
+            position: 2,
             isCurrent: true,
         }),
         entry({
@@ -37,7 +38,7 @@ const stack: PrStack = {
             title: 'Top',
             headRefName: 'c',
             baseRefName: 'b',
-            depth: 2,
+            position: 3,
             isDraft: true,
             needsRebase: true,
         }),
@@ -94,24 +95,19 @@ describe('PrStackList', () => {
         expect(wrapper.get('[data-slot="stack-error"]').text()).toContain('Fetch b and c');
     });
 
-    it('flags a PR that needs retargeting after its base PR merged', () => {
+    it('shows a merged PR as merged and not as needing an action', () => {
         const wrapper = mount(PrStackList, {
             props: {
                 stack: {
-                    trunk: 'main',
-                    entries: [
-                        entry({ state: 'MERGED' }),
-                        entry({
-                            number: 2,
-                            headRefName: 'b',
-                            baseRefName: 'a',
-                            depth: 1,
-                            needsRetarget: true,
-                        }),
-                    ],
+                    number: 1,
+                    size: 2,
+                    baseRefName: 'main',
+                    entries: [entry({ state: 'MERGED' }), entry({ number: 2, position: 2 })],
                 },
             },
         });
-        expect(wrapper.get('[data-slot="stack-retarget"]').text()).toContain('retarget onto main');
+        const rows = wrapper.findAll('[data-slot="stack-entry"]');
+        expect(rows[0]!.text()).toContain('Merged');
+        expect(rows[0]!.find('[data-slot="stack-rebase"]').exists()).toBe(false);
     });
 });

@@ -10,7 +10,15 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { PrReviewer, PrReviewerState, PrStack, PrStackEntry } from '../../src/shared/types';
+import type {
+    PrReviewer,
+    PrReviewerState,
+    PrStack,
+    PrStackEntry,
+    StackAction,
+    StackActionEntry,
+    StackMutationResult,
+} from '../../src/shared/types';
 
 const execFileAsync = promisify(execFile);
 
@@ -702,146 +710,313 @@ async function applyPermissions(repoPath: string, pr: PullRequest, run: GhRunner
 
 // --- Stacked PRs ---
 //
-// A stack is a chain of PRs where each one's base branch is the head branch of the
-// PR below it, down to a trunk branch that is no PR's head. It is found from the
-// repository's open PRs alone, so it works however the stack was built (plain
-// branches, Graphite, ghstack): only the base/head pairing is trusted. Merged PRs
-// are fetched too, to spot a PR whose base PR has merged and that should now be
-// retargeted.
+// A stack is one GitHub makes from PRs (with `gh stack` or the GitHub UI), and the
+// PR view reads it from GitHub's own stack data. A PR based on another PR's head
+// branch is not stacked unless GitHub says so, so branch names are never read here.
 
-interface GhStackPr {
+const STACK_QUERY =
+    'query($id:ID!){node(id:$id){... on PullRequest{stackEntry{position}' +
+    ' stack{number size baseRefName entries(first:100){nodes{position pullRequest{' +
+    'number title url headRefName baseRefName state isDraft reviewDecision}}}}}}}';
+
+interface GhStackPullRequest {
     number: number;
     title: string;
     url: string;
     headRefName: string;
     baseRefName: string;
-    isDraft?: boolean;
+    state: string;
+    isDraft?: boolean | null;
     reviewDecision?: string | null;
 }
 
-const STACK_FIELDS = 'number,title,url,headRefName,baseRefName,isDraft,reviewDecision';
+// The PullRequest node STACK_QUERY returns; `stack` is null for a PR in no stack.
+export interface GhStackNode {
+    stackEntry?: { position?: number | null } | null;
+    stack?: {
+        number: number;
+        size: number;
+        baseRefName: string;
+        entries?: {
+            nodes?: ({ position: number; pullRequest?: GhStackPullRequest | null } | null)[] | null;
+        } | null;
+    } | null;
+}
 
-// Build the stack around the PR whose head is `head` from the open and recently
-// merged PRs. Walks base branches down while they are open PRs' heads (a merged
-// PR's head ends the walk, as the base the bottom PR must be retargeted from),
-// then head branches up through every dependent PR, depth first. Null when the PR
-// is not in a stack (no PR below or above it). Pure, for testing.
-// Branch names that are trunks rather than a stacked PR's branch. A merged PR from
-// one of these (a "development into master" release PR, say) is not a base PR the
-// stack sits on, so it never joins the stack.
-const LONG_LIVED_BRANCHES = [
-    'main',
-    'master',
-    'develop',
-    'development',
-    'dev',
-    'staging',
-    'production',
-    'release',
-];
-
-// `longLived` adds the repo's own trunk names (its main and development branch from
-// the Settings page) to LONG_LIVED_BRANCHES.
-export function buildStack(
-    head: string,
-    open: GhStackPr[],
-    merged: GhStackPr[],
-    longLived: string[] = []
-): PrStack | null {
-    const current = open.find((pr) => pr.headRefName === head);
-    if (!current) {
+// The stack a PullRequest node belongs to, with its entries in stack order (bottom
+// first). Null when GitHub has the PR in no stack. Pure, for testing.
+export function toPrStack(node: GhStackNode | null | undefined): PrStack | null {
+    const stack = node?.stack;
+    if (!stack) {
         return null;
     }
 
-    const openByHead = new Map(open.map((pr) => [pr.headRefName, pr]));
-    const trunks = new Set([...LONG_LIVED_BRANCHES, ...longLived]);
-    const mergedByHead = new Map(
-        merged.filter((pr) => !trunks.has(pr.headRefName)).map((pr) => [pr.headRefName, pr])
-    );
-    const entry = (pr: GhStackPr, state: PrStackEntry['state']): PrStackEntry => ({
+    const current = node?.stackEntry?.position;
+    const entries: PrStackEntry[] = [];
+    for (const item of stack.entries?.nodes ?? []) {
+        const pr = item?.pullRequest;
+        if (!item || !pr) {
+            continue;
+        }
+
+        entries.push({
+            number: pr.number,
+            title: pr.title,
+            url: pr.url,
+            headRefName: pr.headRefName,
+            baseRefName: pr.baseRefName,
+            state: pr.state as PrStackEntry['state'],
+            isDraft: pr.isDraft ?? false,
+            reviewDecision: pr.reviewDecision ?? '',
+            position: item.position,
+            isCurrent: item.position === current,
+        });
+    }
+    entries.sort((a, b) => a.position - b.position);
+
+    return { number: stack.number, size: stack.size, baseRefName: stack.baseRefName, entries };
+}
+
+// The GitHub stack the PR with this node id is in. Any gh failure reads as no stack:
+// the Stack tab is supplementary and simply does not show.
+export async function getPrStack(
+    repoPath: string,
+    pullRequestId: string,
+    run: GhRunner = defaultRunner
+): Promise<PrStack | null> {
+    if (!repoPath || !pullRequestId) {
+        return null;
+    }
+
+    try {
+        const { stdout } = await run(
+            ['api', 'graphql', '-f', `query=${STACK_QUERY}`, '-f', `id=${pullRequestId}`],
+            repoPath
+        );
+        const parsed = JSON.parse(stdout) as { data?: { node?: GhStackNode | null } };
+        return toPrStack(parsed.data?.node);
+    } catch {
+        return null;
+    }
+}
+
+// --- Creating and extending stacks (REST) ---
+//
+// GitHub has no GraphQL mutation for stacks (the GraphQL schema only reads them), so the
+// Stacks REST API writes them: POST .../stacks creates one from PR numbers, bottom to top,
+// and POST .../stacks/{number}/add appends PR numbers to its top. Both take a
+// `pull_requests` array of integers, sent as typed `-F pull_requests[]=n` fields. The
+// shapes follow github/gh-stack's REST reference and client, not a live stack.
+
+// An open PR of the repository, with the `stack` GitHub reports on it (null when it is in
+// no stack). `head.repo` is null when the fork was deleted, so a PR whose head repository
+// is not the base repository is a fork.
+interface GhOpenPull {
+    number: number;
+    title: string;
+    html_url: string;
+    draft?: boolean | null;
+    head: { ref: string; repo?: { full_name: string } | null };
+    base: { ref: string; repo?: { full_name: string } | null };
+    stack?: { number: number; size: number; position: number } | null;
+}
+
+export interface OpenPull {
+    number: number;
+    title: string;
+    url: string;
+    headRefName: string;
+    baseRefName: string;
+    isDraft: boolean;
+    sameRepo: boolean;
+    stack: { number: number; size: number; position: number } | null;
+}
+
+function toOpenPull(pr: GhOpenPull): OpenPull {
+    const headRepo = pr.head.repo?.full_name;
+    return {
+        number: pr.number,
+        title: pr.title,
+        url: pr.html_url,
+        headRefName: pr.head.ref,
+        baseRefName: pr.base.ref,
+        isDraft: !!pr.draft,
+        sameRepo: !!headRepo && headRepo === pr.base.repo?.full_name,
+        stack: pr.stack ?? null,
+    };
+}
+
+function toStackEntry(pr: OpenPull): StackActionEntry {
+    return {
         number: pr.number,
         title: pr.title,
         url: pr.url,
         headRefName: pr.headRefName,
         baseRefName: pr.baseRefName,
-        state,
-        isDraft: pr.isDraft ?? false,
-        reviewDecision: pr.reviewDecision ?? '',
-        depth: 0,
-        isCurrent: pr === current,
-        needsRetarget: state === 'OPEN' && mergedByHead.has(pr.baseRefName),
-    });
-
-    const below: PrStackEntry[] = [];
-    const seen = new Set<string>([current.headRefName]);
-    let cursor = current;
-    for (;;) {
-        const parent = openByHead.get(cursor.baseRefName);
-        if (parent && !seen.has(parent.headRefName)) {
-            seen.add(parent.headRefName);
-            below.unshift(entry(parent, 'OPEN'));
-            cursor = parent;
-            continue;
-        }
-
-        const mergedParent = mergedByHead.get(cursor.baseRefName);
-        if (mergedParent) {
-            below.unshift(entry(mergedParent, 'MERGED'));
-        }
-        break;
-    }
-
-    const above: PrStackEntry[] = [];
-    const climb = (pr: GhStackPr) => {
-        for (const child of open.filter((c) => c.baseRefName === pr.headRefName)) {
-            if (seen.has(child.headRefName)) {
-                continue;
-            }
-
-            seen.add(child.headRefName);
-            above.push(entry(child, 'OPEN'));
-            climb(child);
-        }
+        isDraft: pr.isDraft,
     };
-    climb(current);
-
-    if (!below.length && !above.length) {
-        return null;
-    }
-
-    const entries = [...below, entry(current, 'OPEN'), ...above];
-    const depthByHead = new Map<string, number>();
-    for (const e of entries) {
-        e.depth = (depthByHead.get(e.baseRefName) ?? -1) + 1;
-        depthByHead.set(e.headRefName, e.depth);
-    }
-
-    return { trunk: entries[0]!.baseRefName, entries };
 }
 
-// The stack the PR with this head branch belongs to. Any gh failure reads as no
-// stack: the Stack tab is supplementary and simply does not show.
-export async function getPrStack(
-    repoPath: string,
-    head: string,
-    run: GhRunner = defaultRunner,
-    longLived: string[] = []
-): Promise<PrStack | null> {
-    if (!repoPath || !head || head === WORKING_TREE) {
+// The stack the current PR could be turned into, from the repository's open PRs. The
+// chain runs down from the PR while each PR's base is another open same-repo PR's head,
+// and up while exactly one open same-repo PR is based on each PR's head. A PR already in
+// a stack stops the walk. Below, it must be the top of its stack (GitHub appends only to
+// the top), which makes the offer "add"; above, it is left out. Pure, for testing.
+export function findStackAction(pulls: OpenPull[], prNumber: number): StackAction | null {
+    const current = pulls.find((p) => p.number === prNumber);
+    if (!current || current.stack || !current.sameRepo) {
         return null;
     }
 
-    const list = async (state: string, limit: number): Promise<GhStackPr[]> => {
-        const args = ['pr', 'list', '--state', state, '--limit', String(limit)];
-        const { stdout } = await run([...args, '--json', STACK_FIELDS], repoPath);
-        return JSON.parse(stdout) as GhStackPr[];
-    };
+    const seen = new Set<number>([current.number]);
+    const below: OpenPull[] = [];
+    let stackBelow: OpenPull | null = null;
+    let child = current;
+    for (;;) {
+        const parent = pulls.find((p) => p.sameRepo && p.headRefName === child.baseRefName);
+        if (!parent || seen.has(parent.number)) {
+            break;
+        }
+
+        seen.add(parent.number);
+        if (parent.stack) {
+            if (parent.stack.position !== parent.stack.size) {
+                return null;
+            }
+
+            stackBelow = parent;
+            break;
+        }
+
+        below.unshift(parent);
+        child = parent;
+    }
+
+    const above: OpenPull[] = [];
+    child = current;
+    for (;;) {
+        const children = pulls.filter((p) => p.sameRepo && p.baseRefName === child.headRefName);
+        const next = children.length === 1 ? children[0] : undefined;
+        if (!next || seen.has(next.number) || next.stack) {
+            break;
+        }
+
+        seen.add(next.number);
+        above.push(next);
+        child = next;
+    }
+
+    const chain = [...below, current, ...above];
+    const entries = chain.map(toStackEntry);
+    if (stackBelow?.stack) {
+        return {
+            kind: 'add',
+            stackNumber: stackBelow.stack.number,
+            top: { number: stackBelow.number, title: stackBelow.title },
+            entries,
+        };
+    }
+
+    if (chain.length < 2) {
+        return null;
+    }
+
+    return { kind: 'create', trunk: below[0]?.baseRefName ?? current.baseRefName, entries };
+}
+
+// The stack action for an open PR, or null when it has none. A gh failure only hides the
+// action; nothing else depends on it.
+export async function getStackAction(
+    repoPath: string,
+    prNumber: number,
+    run: GhRunner = defaultRunner
+): Promise<StackAction | null> {
+    if (!repoPath || !prNumber) {
+        return null;
+    }
 
     try {
-        const [open, merged] = await Promise.all([list('open', 200), list('merged', 50)]);
-        return buildStack(head, open, merged, longLived);
+        const { stdout } = await run(
+            ['api', '--paginate', '--slurp', 'repos/{owner}/{repo}/pulls?state=open&per_page=100'],
+            repoPath
+        );
+        // --slurp wraps each page's array in an outer array; flat() also takes a single page.
+        const pages = JSON.parse(stdout) as (GhOpenPull | GhOpenPull[])[];
+        const pulls = pages.flat().map((pr) => toOpenPull(pr));
+        return findStackAction(pulls, prNumber);
     } catch {
         return null;
+    }
+}
+
+// The `pull_requests` fields of a stacks request, as typed integers.
+function pullRequestFields(prNumbers: number[]): string[] {
+    return prNumbers.flatMap((n) => ['-F', `pull_requests[]=${n}`]);
+}
+
+function isPositiveInteger(value: number): boolean {
+    return Number.isInteger(value) && value > 0;
+}
+
+// Create a stack from PR numbers, bottom to top (at least two, GitHub's minimum). GitHub
+// refuses a chain whose bases do not match, a PR already in a stack, or a repository
+// without stacked PRs; its message comes back to show inline.
+export async function createStack(
+    repoPath: string,
+    prNumbers: number[],
+    run: GhRunner = defaultRunner
+): Promise<StackMutationResult> {
+    if (!repoPath || prNumbers.length < 2 || !prNumbers.every(isPositiveInteger)) {
+        return { ok: false, message: 'A stack needs at least two pull requests.' };
+    }
+
+    try {
+        await run(
+            [
+                'api',
+                '--method',
+                'POST',
+                'repos/{owner}/{repo}/stacks',
+                ...pullRequestFields(prNumbers),
+            ],
+            repoPath
+        );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// Append PR numbers, from the stack's current top upward, to the stack with this number.
+export async function addToStack(
+    repoPath: string,
+    stackNumber: number,
+    prNumbers: number[],
+    run: GhRunner = defaultRunner
+): Promise<StackMutationResult> {
+    if (
+        !repoPath ||
+        !isPositiveInteger(stackNumber) ||
+        prNumbers.length === 0 ||
+        !prNumbers.every(isPositiveInteger)
+    ) {
+        return { ok: false, message: 'Nothing to add to the stack.' };
+    }
+
+    try {
+        await run(
+            [
+                'api',
+                '--method',
+                'POST',
+                `repos/{owner}/{repo}/stacks/${stackNumber}/add`,
+                ...pullRequestFields(prNumbers),
+            ],
+            repoPath
+        );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
     }
 }
 

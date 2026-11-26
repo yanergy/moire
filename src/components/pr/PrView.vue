@@ -59,6 +59,7 @@ import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 import { useRefreshCooldown } from '@/composables/useRefreshCooldown';
 import PrStackList from '@/components/pr/PrStackList.vue';
+import StackActionBanner from '@/components/pr/StackActionBanner.vue';
 import CopyButton from '@/components/controls/CopyButton.vue';
 import CheckboxModeToggle from '@/components/pr/CheckboxModeToggle.vue';
 import PrReviewers from '@/components/pr/PrReviewers.vue';
@@ -165,9 +166,12 @@ const stack = computed(() => comparison.prStack);
 
 // This PR's place in its stack (1 is on the trunk), for the badge before the title.
 const stackPosition = computed(() => {
-    const entries = stack.value?.entries ?? [];
-    const index = entries.findIndex((e) => e.isCurrent);
-    return index === -1 ? null : { index: index + 1, total: entries.length };
+    const current = stack.value?.entries.find((e) => e.isCurrent);
+    if (!stack.value || !current) {
+        return null;
+    }
+
+    return { index: current.position, total: stack.value.size };
 });
 
 // The Stack tab disappears when the PR is not (or no longer) stacked.
@@ -1503,6 +1507,9 @@ function renderComment(comment: PrComment): string {
                             </div>
                         </div>
                     </div>
+
+                    <!-- Offers to stack this PR's chain of open PRs (renders nothing otherwise). -->
+                    <stack-action-banner />
 
                     <!-- Tabs: the description and conversation, or the CI checks. The
                      counts (comments, passed/total checks) sit faint beside the
