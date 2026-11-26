@@ -514,6 +514,33 @@ describe('PrView', () => {
         expect(header().classes()).not.toContain('sticky');
     });
 
+    it('sticks the description and comment headers, keeping the card round them', () => {
+        const wrapper = mountWith({
+            ...PR,
+            comments: [comment({ author: 'bob', body: 'Nice work.', createdAt: '' })],
+        });
+        // The description's header and the comment's header both pin, rounded to the card.
+        const headers = wrapper.findAll('.sticky.rounded-t-lg');
+        expect(headers).toHaveLength(2);
+        headers.forEach((header) => expect(header.attributes('style')).toContain('top: 0px'));
+    });
+
+    it('sticks a review thread header and not its card, so the card clips without blocking it', () => {
+        useComparisonStore().reviewThreads = [thread()];
+        const wrapper = mountWith({
+            ...PR,
+            comments: [
+                comment({ kind: 'review', state: 'COMMENTED', body: 'Test 5', reviewId: 'PRR_1' }),
+            ],
+        });
+        const shown = wrapper.get('[data-slot="review-thread"]');
+        expect(shown.classes()).toContain('overflow-clip');
+        expect(shown.classes()).not.toContain('overflow-hidden');
+        const header = shown.element.firstElementChild as HTMLElement;
+        expect(header.classList).toContain('sticky');
+        expect(header.style.top).toBe('0px');
+    });
+
     it('shows up to two author initials in the avatar', () => {
         expect(mountWith(PR).text()).toContain('ST'); // s.trivedi -> ST
     });

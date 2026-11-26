@@ -57,6 +57,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import ReviewButton from '@/components/headers/ReviewButton.vue';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 import { useRefreshCooldown } from '@/composables/useRefreshCooldown';
+import { useStickyHeaderHeights } from '@/composables/useStickyHeaderHeights';
 import PrStackList from '@/components/pr/PrStackList.vue';
 import CopyButton from '@/components/controls/CopyButton.vue';
 import CheckboxModeToggle from '@/components/pr/CheckboxModeToggle.vue';
@@ -96,6 +97,16 @@ const scrollArea = useTemplateRef<{ $el: HTMLElement }>('scrollArea');
 const scrollViewport = computed(() =>
     scrollArea.value?.$el.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
 );
+
+// Each comment's header sticks just below the sticky PR header (when that setting is
+// on). A review thread's header sits inside its comment's card, so it also sticks
+// below that comment's header, using the comment's id as the parent key.
+const stickyHeights = useStickyHeaderHeights();
+function stickyTop(parentKey?: string): string {
+    const prHeader = ui.stickyPrHeader ? stickyHeights.heightOf('pr-header') : 0;
+    const parent = parentKey ? stickyHeights.heightOf(parentKey) : 0;
+    return `${prHeader + parent}px`;
+}
 
 // The blocks whose task-list checkboxes are tickable ("checkbox mode"), keyed like
 // taskDrafts: 'description' or a comment's node id. Off by default, so a stray
@@ -1304,6 +1315,7 @@ function renderComment(comment: PrComment): string {
                      scrolls when the Sticky PR header setting is on (the default). -->
                 <div
                     data-slot="pr-header"
+                    :ref="stickyHeights.track('pr-header')"
                     :class="ui.stickyPrHeader ? 'sticky top-0 z-20 bg-moire-app' : ''"
                 >
                     <!-- Header -->
@@ -1632,10 +1644,11 @@ function renderComment(comment: PrComment): string {
                             <div class="min-w-0 flex-1 pb-5">
                                 <div class="rounded-lg border border-moire-border bg-moire-app">
                                     <div
-                                        class="flex items-center justify-between gap-1.5 px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                        class="sticky z-10 flex items-center justify-between gap-1.5 rounded-t-lg bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
                                         :class="{
                                             'border-b border-moire-border': !descriptionCollapsed,
                                         }"
+                                        :style="{ top: stickyTop() }"
                                     >
                                         <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                                             <span class="text-[14px] font-medium text-moire-fg">
@@ -1832,10 +1845,12 @@ function renderComment(comment: PrComment): string {
                                     :class="focusedEntry === i ? 'ring-2 ring-moire-accent' : ''"
                                 >
                                     <div
-                                        class="flex items-center justify-between gap-1.5 px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                        :ref="stickyHeights.track(comment.id)"
+                                        class="sticky z-10 flex items-center justify-between gap-1.5 rounded-t-lg bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
                                         :class="{
                                             'border-b border-moire-border': !isCollapsed(i),
                                         }"
+                                        :style="{ top: stickyTop() }"
                                     >
                                         <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                                             <span class="text-[14px] font-medium text-moire-fg">
@@ -2066,12 +2081,15 @@ function renderComment(comment: PrComment): string {
                                         class="flex flex-col gap-4 px-3.5 pb-3.5"
                                         :class="comment.body.trim() ? '' : 'pt-3.5'"
                                     >
+                                        <!-- overflow-clip, not overflow-hidden: it clips to the
+                                             rounded corners but does not make a scroll container,
+                                             which would stop the header below from sticking. -->
                                         <div
                                             v-for="thread in threadsFor(comment)"
                                             :key="thread.id"
                                             data-slot="review-thread"
                                             :data-thread-id="thread.id"
-                                            class="overflow-hidden rounded-md border border-moire-border ring-offset-2 ring-offset-moire-app transition-shadow duration-500"
+                                            class="overflow-clip rounded-md border border-moire-border ring-offset-2 ring-offset-moire-app transition-shadow duration-500"
                                             :class="
                                                 focusedThread === thread.id
                                                     ? 'ring-2 ring-moire-accent'
@@ -2079,11 +2097,12 @@ function renderComment(comment: PrComment): string {
                                             "
                                         >
                                             <div
-                                                class="flex items-center gap-2 bg-moire-chrome px-4 py-2.5 text-[12px]"
+                                                class="sticky z-10 flex items-center gap-2 bg-moire-chrome px-4 py-2.5 text-[12px]"
                                                 :class="{
                                                     'border-b border-moire-border':
                                                         !isThreadCollapsed(thread),
                                                 }"
+                                                :style="{ top: stickyTop(comment.id) }"
                                             >
                                                 <!-- Fold this line comment down to its file
                                                      name, as GitHub does. -->
