@@ -146,6 +146,9 @@ describe('preload bridge', () => {
         await api().discardReview!('PRR_1');
         expect(bridge.invoke).toHaveBeenCalledWith('gh:discard-review', 'PRR_1');
 
+        await api().markReadyForReview!(42);
+        expect(bridge.invoke).toHaveBeenCalledWith('gh:mark-ready-for-review', 42);
+
         await api().resolveCommit!('origin/feature');
         expect(bridge.invoke).toHaveBeenCalledWith('git:resolve-commit', 'origin/feature');
 

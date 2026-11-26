@@ -9,6 +9,7 @@ import {
     editComment,
     deleteComment,
     editDescription,
+    markReadyForReview,
     replyToReviewThread,
     setReviewThreadResolved,
     getReviewState,
@@ -748,9 +749,87 @@ describe('editDescription', () => {
     });
 });
 
+describe('markReadyForReview', () => {
+    it('marks the PR ready via gh pr ready, keyed on the PR number', async () => {
+        const { run, calls } = okRunner('');
+        const result = await markReadyForReview('/repo', 42, run);
+
+        expect(result).toEqual({ ok: true });
+        expect(calls[0]!.cwd).toBe('/repo');
+        expect(calls[0]!.args).toEqual(['pr', 'ready', '42']);
+    });
+
+    it('rejects a missing PR number without calling gh', async () => {
+        const run = vi.fn<GhRunner>();
+        expect((await markReadyForReview('/repo', 0, run)).ok).toBe(false);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('reports GitHub refusing the change as an ok:false message', async () => {
+        const run = failRunner({ stderr: 'GraphQL: Resource not accessible by integration' });
+        const result = await markReadyForReview('/repo', 42, run);
+
+        expect(result.ok).toBe(false);
+        expect(result.message).toContain('Resource not accessible');
+    });
+
+    it('names a missing gh install', async () => {
+        const result = await markReadyForReview('/repo', 42, failRunner({ code: 'ENOENT' }));
+
+        expect(result).toEqual({ ok: false, message: 'The GitHub CLI (gh) was not found.' });
+    });
+});
+
 // The GraphQL shape gh returns for reviewThreads under the PR node.
 const threadsJson = (nodes: unknown[]) =>
     JSON.stringify({ data: { node: { reviewThreads: { nodes } } } });
+
+// A runner answering `gh pr list` with the PR and the permission lookup with the
+// given viewer rights, or rejecting that lookup when `permission` is null.
+function permissionRunner(viewerCanUpdate: boolean, permission: 'ok' | 'fail' = 'ok'): GhRunner {
+    return (args) => {
+        if (args[0] === 'pr') {
+            return Promise.resolve({
+                stdout: JSON.stringify([{ ...ghPr, id: 'PR_1' }]),
+                stderr: '',
+            });
+        }
+        if (permission === 'fail') {
+            return Promise.reject(Object.assign(new Error('gh failed'), { stderr: 'boom' }));
+        }
+        return Promise.resolve({
+            stdout: JSON.stringify({
+                data: { node: { viewerCanUpdate, comments: { nodes: [] } } },
+            }),
+            stderr: '',
+        });
+    };
+}
+
+describe('getPullRequest viewer rights', () => {
+    it('marks the PR changeable when GitHub grants the viewer update rights', async () => {
+        const result = await getPullRequest('/repo', 'main', 'feature', permissionRunner(true));
+
+        expect(result.pr!.viewerCanUpdate).toBe(true);
+    });
+
+    it('marks the PR unchangeable for a viewer without update rights', async () => {
+        const result = await getPullRequest('/repo', 'main', 'feature', permissionRunner(false));
+
+        expect(result.pr!.viewerCanUpdate).toBe(false);
+    });
+
+    it('leaves the right unset when the lookup fails, so the button stays hidden', async () => {
+        const result = await getPullRequest(
+            '/repo',
+            'main',
+            'feature',
+            permissionRunner(true, 'fail')
+        );
+
+        expect(result.pr!.viewerCanUpdate).toBeUndefined();
+    });
+});
 
 describe('getReviewThreads', () => {
     it('queries by node id and maps threads to their file, line, side, and state', async () => {

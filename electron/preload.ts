@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('api', {
     deleteComment: (commentId: string) => ipcRenderer.invoke('gh:delete-comment', commentId),
     editDescription: (prNumber: number, body: string) =>
         ipcRenderer.invoke('gh:edit-description', prNumber, body),
+    markReadyForReview: (prNumber: number) =>
+        ipcRenderer.invoke('gh:mark-ready-for-review', prNumber),
     // Inline review-thread writes from the diff popover: reply into a thread, or
     // resolve/unresolve it, both by the thread's node id.
     replyToReviewThread: (threadId: string, body: string) =>

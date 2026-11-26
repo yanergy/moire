@@ -57,6 +57,9 @@ function clickMenuItem(label: string) {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
+const readyButton = (wrapper: ReturnType<typeof mountWith>) =>
+    wrapper.findAll('button').find((b) => b.text().includes('Ready for review'));
+
 // A minimal check fixture in the given state.
 type CheckState = 'success' | 'failure' | 'pending';
 const check = (state: CheckState) => ({ name: state, state, detail: '', url: '' });
@@ -733,6 +736,71 @@ describe('PrView', () => {
         const text = mountWith({ ...PR, isDraft: true, reviewDecision: '' }).text();
         expect(text).toContain('still a draft');
         expect(text).not.toContain('Changes requested');
+    });
+
+    describe('ready for review', () => {
+        it('offers the button on a draft the viewer can change', () => {
+            const wrapper = mountWith({ ...PR, isDraft: true, viewerCanUpdate: true });
+
+            expect(readyButton(wrapper)).toBeDefined();
+        });
+
+        it('hides the button when the viewer cannot change the PR, or it is unknown', () => {
+            expect(
+                readyButton(mountWith({ ...PR, isDraft: true, viewerCanUpdate: false }))
+            ).toBeUndefined();
+            expect(readyButton(mountWith({ ...PR, isDraft: true }))).toBeUndefined();
+        });
+
+        it('hides the button on a PR that is not a draft', () => {
+            expect(readyButton(mountWith({ ...PR, viewerCanUpdate: true }))).toBeUndefined();
+        });
+
+        it('keeps the button on a draft with changes requested', () => {
+            const wrapper = mountWith({
+                ...PR,
+                isDraft: true,
+                reviewDecision: 'CHANGES_REQUESTED',
+                viewerCanUpdate: true,
+            });
+
+            expect(wrapper.text()).toContain('Changes requested');
+            expect(readyButton(wrapper)).toBeDefined();
+        });
+
+        it('marks the PR ready through the store, showing a pending state', async () => {
+            const store = useComparisonStore();
+            let finish!: (value: { ok: boolean }) => void;
+            const mark = vi
+                .spyOn(store, 'markReadyForReview')
+                .mockReturnValue(new Promise((resolve) => (finish = resolve)));
+            const wrapper = mountWith({ ...PR, isDraft: true, viewerCanUpdate: true });
+
+            await readyButton(wrapper)!.trigger('click');
+            await nextTick();
+            expect(mark).toHaveBeenCalledTimes(1);
+            expect(wrapper.text()).toContain('Marking ready...');
+
+            finish({ ok: true });
+            await flushPromises();
+            expect(wrapper.text()).not.toContain('Marking ready...');
+        });
+
+        it('shows GitHub refusal inline in the status box', async () => {
+            const store = useComparisonStore();
+            vi.spyOn(store, 'markReadyForReview').mockResolvedValue({
+                ok: false,
+                message: 'GraphQL: Resource not accessible by integration',
+            });
+            const wrapper = mountWith({ ...PR, isDraft: true, viewerCanUpdate: true });
+
+            await readyButton(wrapper)!.trigger('click');
+            await flushPromises();
+
+            expect(wrapper.find('[data-slot="pr-tab-status"]').text()).toContain(
+                'Resource not accessible'
+            );
+        });
     });
 
     it('opens on the Conversation tab and switches to Checks', async () => {

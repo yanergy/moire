@@ -56,6 +56,7 @@ const state = vi.hoisted(() => ({
         vi.fn<
             (repoPath: string, reviewId: string, event: string, body: string) => Promise<unknown>
         >(),
+    markReadyForReview: vi.fn<(repoPath: string, prNumber: number) => Promise<unknown>>(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
     openPath: vi.fn<(p: string) => Promise<string>>(),
     getEditorPreference: vi.fn<() => Promise<string>>(),
@@ -121,6 +122,7 @@ vi.mock('../electron/github/gh', () => ({
     getPrStack: state.getPrStack,
     addReviewComment: state.addReviewComment,
     submitReview: state.submitReview,
+    markReadyForReview: state.markReadyForReview,
 }));
 vi.mock('../electron/watcher/RepoWatcher', () => ({ watchRepo: state.watchRepo }));
 vi.mock('../electron/settings', () => ({
@@ -212,6 +214,7 @@ describe('registerIpcHandlers', () => {
             'gh:pull-request',
             'gh:add-review-comment',
             'gh:submit-review',
+            'gh:mark-ready-for-review',
             'git:resolve-commit',
             'shell:open-external',
             'shell:open-path',
@@ -317,6 +320,14 @@ describe('registerIpcHandlers', () => {
 
         expect(state.getPullRequest).toHaveBeenCalledWith('/repos/moire', 'main', 'feature');
         expect(result).toBe(prResult);
+    });
+
+    it('marks a PR ready for review in the open repo', async () => {
+        await invoke('repo:open', '/repos/moire');
+        state.markReadyForReview.mockResolvedValue({ ok: true });
+
+        expect(await invoke('gh:mark-ready-for-review', 42)).toEqual({ ok: true });
+        expect(state.markReadyForReview).toHaveBeenCalledWith('/repos/moire', 42);
     });
 
     describe('review writes', () => {

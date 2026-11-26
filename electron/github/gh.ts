@@ -113,6 +113,9 @@ export interface PullRequest {
     checks: PrCheck[];
     // The reviewers and where each stands, for the Reviewers tab.
     reviewers?: PrReviewer[];
+    // Whether the signed-in account may change the PR (GitHub's viewerCanUpdate: the
+    // author, or someone with write access). Gates the "Ready for review" button.
+    viewerCanUpdate?: boolean;
 }
 
 export interface PullRequestResult {
@@ -640,16 +643,18 @@ export async function getPullRequest(
     }
 
     const pr = toPullRequest(raw);
-    await applyCommentPermissions(repoPath, pr, run);
+    await applyPermissions(repoPath, pr, run);
     return { status: 'ok', pr };
 }
 
 // `gh pr list --json comments` only says whether the viewer wrote a comment, not
 // whether they may edit or delete it (a maintainer may, on anyone's). Those come
-// from GraphQL by the PR's node id. Best effort: on any failure, or for a comment
-// past the first 100, the viewerDidAuthor fallback stays.
-const COMMENT_PERMISSIONS_QUERY =
-    'query($id:ID!){node(id:$id){... on PullRequest{comments(first:100){nodes{' +
+// from GraphQL by the PR's node id, together with the viewer's rights on the PR
+// itself (for the "Ready for review" button). Best effort: on any failure, or for
+// a comment past the first 100, the viewerDidAuthor fallback stays and the PR
+// right stays unset, which hides the button.
+const PERMISSIONS_QUERY =
+    'query($id:ID!){node(id:$id){... on PullRequest{viewerCanUpdate comments(first:100){nodes{' +
     'id viewerCanUpdate viewerCanDelete}}}}}';
 
 interface GhCommentPermission {
@@ -658,29 +663,31 @@ interface GhCommentPermission {
     viewerCanDelete?: boolean | null;
 }
 
-async function applyCommentPermissions(
-    repoPath: string,
-    pr: PullRequest,
-    run: GhRunner
-): Promise<void> {
-    if (!pr.id || !pr.comments.some((c) => c.kind === 'comment')) {
+interface GhPermissionNode {
+    viewerCanUpdate?: boolean | null;
+    comments?: { nodes?: GhCommentPermission[] | null } | null;
+}
+
+async function applyPermissions(repoPath: string, pr: PullRequest, run: GhRunner): Promise<void> {
+    if (!pr.id) {
         return;
     }
 
-    let nodes: GhCommentPermission[];
+    let node: GhPermissionNode | null | undefined;
     try {
         const { stdout } = await run(
-            ['api', 'graphql', '-f', `query=${COMMENT_PERMISSIONS_QUERY}`, '-f', `id=${pr.id}`],
+            ['api', 'graphql', '-f', `query=${PERMISSIONS_QUERY}`, '-f', `id=${pr.id}`],
             repoPath
         );
-        const parsed = JSON.parse(stdout) as {
-            data?: { node?: { comments?: { nodes?: GhCommentPermission[] | null } | null } };
-        };
-        nodes = parsed.data?.node?.comments?.nodes ?? [];
+        const parsed = JSON.parse(stdout) as { data?: { node?: GhPermissionNode | null } };
+        node = parsed.data?.node;
     } catch {
         return;
     }
 
+    pr.viewerCanUpdate = !!node?.viewerCanUpdate;
+
+    const nodes = node?.comments?.nodes ?? [];
     const byId = new Map(nodes.filter((n) => n.id).map((n) => [n.id!, n]));
     for (const comment of pr.comments) {
         const permission = byId.get(comment.id);
@@ -1157,6 +1164,26 @@ export async function editDescription(
 
     try {
         await run(['pr', 'edit', String(prNumber), '--body', body], repoPath);
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, message: mutationError(error) };
+    }
+}
+
+// Take a draft PR out of draft state via `gh pr ready`, addressed by its number. An
+// account without write access is refused by GitHub, and that refusal comes back as
+// the message.
+export async function markReadyForReview(
+    repoPath: string,
+    prNumber: number,
+    run: GhRunner = defaultRunner
+): Promise<CommentMutationResult> {
+    if (!repoPath || !prNumber) {
+        return { ok: false, message: 'Nothing to mark ready.' };
+    }
+
+    try {
+        await run(['pr', 'ready', String(prNumber)], repoPath);
         return { ok: true };
     } catch (error) {
         return { ok: false, message: mutationError(error) };
