@@ -170,8 +170,8 @@ function relative(iso: string): string {
             :data-state="reviewer.state"
             class="border-b border-moire-border"
         >
-            <!-- The row: the fold toggle fills it, and the re-request button sits at its
-                 end. They are siblings (a button cannot hold a button), so the hover
+            <!-- The row: the fold toggle fills it, then the re-request button and the
+                 reviewer's state. They are siblings (a button cannot hold a button), so the hover
                  tint is on this wrapper to keep it one row visually. -->
             <div
                 class="group/row flex items-center gap-2 rounded pr-1"
@@ -220,20 +220,6 @@ function relative(iso: string): string {
                             {{ itemsFor(reviewer).length === 1 ? 'comment' : 'comments' }}
                         </span>
                     </span>
-                    <span
-                        class="flex shrink-0 items-center gap-1.5 pr-1 text-[12px]"
-                        :class="STATE[reviewer.state].cls"
-                    >
-                        <component :is="STATE[reviewer.state].icon" :size="14" />
-                        {{ STATE[reviewer.state].text }}
-                        <span
-                            v-if="reviewer.previousState"
-                            data-slot="previous-state"
-                            class="text-moire-faint"
-                        >
-                            · previously {{ PREVIOUS[reviewer.previousState] }}
-                        </span>
-                    </span>
                 </component>
                 <Button
                     v-if="canRerequest(reviewer)"
@@ -253,6 +239,27 @@ function relative(iso: string): string {
                     <RefreshCw v-else :size="14" />
                     {{ requesting === reviewer.login ? 'Re-requesting...' : 'Re-request review' }}
                 </Button>
+                <!-- Outside the fold toggle so the re-request button can sit before it;
+                     clicking it still folds the row, like the rest of the row. -->
+                <span
+                    data-slot="reviewer-state"
+                    class="flex shrink-0 items-center gap-1.5 py-[11px] pr-1 text-[12px]"
+                    :class="[
+                        STATE[reviewer.state].cls,
+                        itemsFor(reviewer).length ? 'cursor-pointer' : '',
+                    ]"
+                    @click="itemsFor(reviewer).length && toggle(reviewer)"
+                >
+                    <component :is="STATE[reviewer.state].icon" :size="14" />
+                    {{ STATE[reviewer.state].text }}
+                    <span
+                        v-if="reviewer.previousState"
+                        data-slot="previous-state"
+                        class="text-moire-faint"
+                    >
+                        · previously {{ PREVIOUS[reviewer.previousState] }}
+                    </span>
+                </span>
             </div>
             <p
                 v-if="requestError?.login === reviewer.login"
