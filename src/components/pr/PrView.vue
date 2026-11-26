@@ -1723,8 +1723,11 @@ function renderComment(comment: PrComment): string {
                             </div>
                             <div class="min-w-0 flex-1 pb-5">
                                 <div class="rounded-lg border border-moire-border bg-moire-app">
+                                    <!-- The header draws its own top and side border over the
+                                         card's (-mx-px -mt-px), so when it sticks it keeps the
+                                         card's top edge and rounded corners. -->
                                     <div
-                                        class="sticky z-10 flex items-center justify-between gap-1.5 rounded-t-lg bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                        class="sticky z-10 -mx-px -mt-px flex items-center justify-between gap-1.5 rounded-t-lg border-x border-t border-moire-border bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
                                         :class="{
                                             'border-b border-moire-border': !descriptionCollapsed,
                                         }"
@@ -1926,7 +1929,7 @@ function renderComment(comment: PrComment): string {
                                 >
                                     <div
                                         :ref="stickyHeights.track(comment.id)"
-                                        class="sticky z-10 flex items-center justify-between gap-1.5 rounded-t-lg bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
+                                        class="sticky z-10 -mx-px -mt-px flex items-center justify-between gap-1.5 rounded-t-lg border-x border-t border-moire-border bg-moire-app px-3.5 py-2.5 text-[13px] text-moire-faint"
                                         :class="{
                                             'border-b border-moire-border': !isCollapsed(i),
                                         }"
@@ -2163,13 +2166,15 @@ function renderComment(comment: PrComment): string {
                                     >
                                         <!-- overflow-clip, not overflow-hidden: it clips to the
                                              rounded corners but does not make a scroll container,
-                                             which would stop the header below from sticking. -->
+                                             which would stop the header below from sticking. The
+                                             1px clip margin lets the header's own border lie over
+                                             the card's, so a stuck header keeps its top edge. -->
                                         <div
                                             v-for="thread in threadsFor(comment)"
                                             :key="thread.id"
                                             data-slot="review-thread"
                                             :data-thread-id="thread.id"
-                                            class="overflow-clip rounded-md border border-moire-border ring-offset-2 ring-offset-moire-app transition-shadow duration-500"
+                                            class="overflow-clip rounded-md border border-moire-border ring-offset-2 [overflow-clip-margin:1px] ring-offset-moire-app transition-shadow duration-500"
                                             :class="
                                                 focusedThread === thread.id
                                                     ? 'ring-2 ring-moire-accent'
@@ -2177,7 +2182,7 @@ function renderComment(comment: PrComment): string {
                                             "
                                         >
                                             <div
-                                                class="sticky z-10 flex items-center gap-2 bg-moire-chrome px-4 py-2.5 text-[12px]"
+                                                class="sticky z-10 -mx-px -mt-px flex items-center gap-2 rounded-t-md border-x border-t border-moire-border bg-moire-chrome px-4 py-2.5 text-[12px]"
                                                 :class="{
                                                     'border-b border-moire-border':
                                                         !isThreadCollapsed(thread),
