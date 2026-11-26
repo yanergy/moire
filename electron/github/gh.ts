@@ -810,14 +810,15 @@ export async function getPrStack(
 
 // An open PR of the repository, with the `stack` GitHub reports on it (null when it is in
 // no stack). `head.repo` is null when the fork was deleted, so a PR whose head repository
-// is not the base repository is a fork.
+// is not the base repository is a fork. `base.repo.default_branch` marks a PR from the
+// default branch (a release PR such as `development` into `master`).
 interface GhOpenPull {
     number: number;
     title: string;
     html_url: string;
     draft?: boolean | null;
     head: { ref: string; repo?: { full_name: string } | null };
-    base: { ref: string; repo?: { full_name: string } | null };
+    base: { ref: string; repo?: { full_name: string; default_branch?: string } | null };
     stack?: { number: number; size: number; position: number } | null;
 }
 
@@ -829,6 +830,7 @@ export interface OpenPull {
     baseRefName: string;
     isDraft: boolean;
     sameRepo: boolean;
+    fromDefaultBranch: boolean;
     stack: { number: number; size: number; position: number } | null;
 }
 
@@ -842,8 +844,14 @@ function toOpenPull(pr: GhOpenPull): OpenPull {
         baseRefName: pr.base.ref,
         isDraft: !!pr.draft,
         sameRepo: !!headRepo && headRepo === pr.base.repo?.full_name,
+        fromDefaultBranch: pr.head.ref === pr.base.repo?.default_branch,
         stack: pr.stack ?? null,
     };
+}
+
+// Whether a PR can be part of a stack chain: a same-repo PR not from the default branch.
+function canChain(pr: OpenPull): boolean {
+    return pr.sameRepo && !pr.fromDefaultBranch;
 }
 
 function toStackEntry(pr: OpenPull): StackActionEntry {
@@ -858,23 +866,28 @@ function toStackEntry(pr: OpenPull): StackActionEntry {
 }
 
 // The stack the current PR could be turned into, from the repository's open PRs. The
-// chain runs down from the PR while each PR's base is another open same-repo PR's head,
-// and up while exactly one open same-repo PR is based on each PR's head. A PR already in
-// a stack stops the walk. Below, it must be the top of its stack (GitHub appends only to
+// chain runs down from the PR while its base is the head of another open same-repo PR
+// that only this PR builds on, and up while exactly one open same-repo PR is based on
+// each PR's head. A PR from the default branch never takes part, and a branch that more
+// than one open PR is based on ends the chain on either side, so a release PR (for
+// example `development` into `master`) is never offered as the bottom of a feature's
+// chain. A PR already in a stack stops the walk. Below, it must be the top of its stack (GitHub appends only to
 // the top), which makes the offer "add"; above, it is left out. Pure, for testing.
 export function findStackAction(pulls: OpenPull[], prNumber: number): StackAction | null {
     const current = pulls.find((p) => p.number === prNumber);
-    if (!current || current.stack || !current.sameRepo) {
+    if (!current || current.stack || !canChain(current)) {
         return null;
     }
+
+    const basedOn = (branch: string) => pulls.filter((p) => p.baseRefName === branch);
 
     const seen = new Set<number>([current.number]);
     const below: OpenPull[] = [];
     let stackBelow: OpenPull | null = null;
     let child = current;
     for (;;) {
-        const parent = pulls.find((p) => p.sameRepo && p.headRefName === child.baseRefName);
-        if (!parent || seen.has(parent.number)) {
+        const parent = pulls.find((p) => canChain(p) && p.headRefName === child.baseRefName);
+        if (!parent || seen.has(parent.number) || basedOn(parent.headRefName).length !== 1) {
             break;
         }
 
@@ -895,9 +908,9 @@ export function findStackAction(pulls: OpenPull[], prNumber: number): StackActio
     const above: OpenPull[] = [];
     child = current;
     for (;;) {
-        const children = pulls.filter((p) => p.sameRepo && p.baseRefName === child.headRefName);
+        const children = basedOn(child.headRefName);
         const next = children.length === 1 ? children[0] : undefined;
-        if (!next || seen.has(next.number) || next.stack) {
+        if (!next || !canChain(next) || seen.has(next.number) || next.stack) {
             break;
         }
 
