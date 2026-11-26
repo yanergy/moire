@@ -1,10 +1,9 @@
 <script setup lang="ts">
-// The PR view's Stack tab: the PRs stacked with this one as a plain numbered list,
+// The PR view's Stack tab: the PRs of this PR's GitHub stack as a plain numbered list,
 // in stack order from the trunk up (1 is the PR on the trunk), with the current PR
-// highlighted. Each row shows the PR's state and any action the stack needs (a
-// rebase onto its parent, or retargeting after its base PR merged). Clicking
-// another PR compares its own base and head, so its diff is against its parent
-// rather than the trunk.
+// highlighted. Each row shows the PR's state and whether it needs a rebase onto its
+// parent. Clicking another open PR compares its own base and head, so its diff is
+// against its parent rather than the trunk.
 import { computed, ref } from 'vue';
 import { CircleAlert, GitMerge, GitPullRequest } from '@lucide/vue';
 import type { PrStack, PrStackEntry } from '@/shared/types';
@@ -16,8 +15,6 @@ const props = defineProps<{
 
 const comparison = useComparisonStore();
 
-// The entries come in stack order (trunk side first, dependents depth first), so a
-// branching stack still reads as one sequence.
 const rows = computed(() => props.stack.entries);
 
 // Only another open PR can be opened from here.
@@ -53,7 +50,7 @@ function open(entry: PrStackEntry) {
     <div>
         <p class="pb-3 text-[12.5px] text-moire-muted">
             Stacked on
-            <span class="font-mono text-moire-fg">{{ stack.trunk }}</span>
+            <span class="font-mono text-moire-fg">{{ stack.baseRefName }}</span>
         </p>
         <p
             v-if="error"
@@ -85,7 +82,7 @@ function open(entry: PrStackEntry) {
                                 : 'border-moire-border text-moire-muted'
                         "
                     >
-                        {{ index + 1 }}
+                        {{ entry.position }}
                     </span>
                 </div>
                 <div class="min-w-0 flex-1">
@@ -107,9 +104,7 @@ function open(entry: PrStackEntry) {
                             :size="14"
                             class="mt-0.5 shrink-0"
                             :class="
-                                entry.state === 'MERGED'
-                                    ? 'text-moire-faint'
-                                    : 'text-moire-status-a'
+                                entry.state === 'OPEN' ? 'text-moire-status-a' : 'text-moire-faint'
                             "
                         />
                         <span class="flex min-w-0 flex-1 flex-col gap-1">
@@ -132,6 +127,9 @@ function open(entry: PrStackEntry) {
                                 <span v-if="entry.state === 'MERGED'" class="text-moire-faint">
                                     Merged
                                 </span>
+                                <span v-else-if="entry.state === 'CLOSED'" class="text-moire-faint">
+                                    Closed
+                                </span>
                                 <span v-else-if="entry.isDraft" class="text-moire-faint">
                                     Draft
                                 </span>
@@ -139,15 +137,7 @@ function open(entry: PrStackEntry) {
                                     {{ reviewLabel(entry)!.text }}
                                 </span>
                                 <span
-                                    v-if="entry.needsRetarget"
-                                    data-slot="stack-retarget"
-                                    class="flex items-center gap-1 text-moire-status-d"
-                                >
-                                    <CircleAlert :size="12" />
-                                    Base PR merged: retarget onto {{ stack.trunk }}
-                                </span>
-                                <span
-                                    v-else-if="entry.needsRebase"
+                                    v-if="entry.needsRebase"
                                     data-slot="stack-rebase"
                                     class="flex items-center gap-1 text-moire-status-d"
                                 >

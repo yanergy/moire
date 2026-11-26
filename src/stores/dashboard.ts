@@ -3,7 +3,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 import { useComparisonStore } from '@/stores/comparison';
 import { useUiStore } from '@/stores/ui';
 import { activityId } from '@/lib/dashboard';
-import { stackPositions } from '@/lib/pr-stacks';
+import { gitHubStackPositions } from '@/lib/pr-stacks';
 import type {
     ActivityEntry,
     AuthorFilter,
@@ -398,7 +398,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return byNumber;
     });
     const prStackPositions = computed(() => {
-        return stackPositions([...openPrsByNumber.value.values()]);
+        return gitHubStackPositions([...openPrsByNumber.value.values()]);
     });
 
     // The open PRs the cards count, by the author filter. The viewer's own come from

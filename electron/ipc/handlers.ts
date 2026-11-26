@@ -9,12 +9,16 @@ import { GitService, type CompareMode } from '../git/GitService';
 import {
     getPullRequest,
     getPrStack,
+    getStackAction,
+    createStack,
+    addToStack,
     getReviewThreads,
     getCheckAnnotations,
     postComment,
     editComment,
     deleteComment,
     editDescription,
+    markReadyForReview,
     replyToReviewThread,
     setReviewThreadResolved,
     getReviewState,
@@ -266,6 +270,10 @@ function reviewEvent(value: unknown): ReviewEvent {
     return value === 'APPROVE' || value === 'REQUEST_CHANGES' ? value : 'COMMENT';
 }
 
+function isNumberList(value: unknown): value is number[] {
+    return Array.isArray(value) && value.every((n) => typeof n === 'number');
+}
+
 function registerIpcHandlers({
     onRecentsChanged,
     onRepoOpened,
@@ -458,16 +466,13 @@ function registerIpcHandlers({
         getPullRequest(requireRepo().repoPath, base, head)
     );
 
-    // The stack the PR with this head branch belongs to (see getPrStack), with each
-    // PR checked against its parent: when the parent's head is no longer in its
+    // The GitHub stack the PR with this node id is in (see getPrStack), with each PR
+    // in it checked against its parent: when the parent's head is no longer in its
     // history, it needs a rebase. Read from the remote tracking branches, which is
     // what the PRs show, falling back to local ones.
-    handle('gh:pr-stack', async (head: string) => {
+    handle('gh:pr-stack', async (pullRequestId: string) => {
         const repo = requireRepo();
-        // The repo's own main and development branch are trunks, not stacked PRs.
-        const { main, development } = await getRepoBranches(repo.repoPath);
-        const longLived = [main, development].filter((b): b is string => !!b);
-        const stack = await getPrStack(repo.repoPath, head, undefined, longLived);
+        const stack = await getPrStack(repo.repoPath, pullRequestId);
         if (!stack) {
             return null;
         }
@@ -504,6 +509,30 @@ function registerIpcHandlers({
         return stack;
     });
 
+    // Turning a chain of open PRs into a stack (see getStackAction). The action is read
+    // from the open PRs; the writes name the PR numbers (bottom to top) or the stack.
+    handle('gh:stack-action', (prNumber: unknown) => {
+        if (typeof prNumber !== 'number') {
+            throw new TypeError('gh:stack-action expects a PR number');
+        }
+
+        return getStackAction(requireRepo().repoPath, prNumber);
+    });
+    handle('gh:create-stack', (prNumbers: unknown) => {
+        if (!isNumberList(prNumbers)) {
+            throw new TypeError('gh:create-stack expects PR numbers');
+        }
+
+        return createStack(requireRepo().repoPath, prNumbers);
+    });
+    handle('gh:add-to-stack', (stackNumber: unknown, prNumbers: unknown) => {
+        if (typeof stackNumber !== 'number' || !isNumberList(prNumbers)) {
+            throw new TypeError('gh:add-to-stack expects a stack number and PR numbers');
+        }
+
+        return addToStack(requireRepo().repoPath, stackNumber, prNumbers);
+    });
+
     // The PR's inline review threads (line-anchored comments), by node id, for the
     // diff viewer's in-code markers. Returns an empty list on any failure.
     handle('gh:review-threads', (prId: string) => getReviewThreads(requireRepo().repoPath, prId));
@@ -532,6 +561,10 @@ function registerIpcHandlers({
 
     handle('gh:edit-description', (prNumber: number, body: string) =>
         editDescription(requireRepo().repoPath, prNumber, body)
+    );
+
+    handle('gh:mark-ready-for-review', (prNumber: number) =>
+        markReadyForReview(requireRepo().repoPath, prNumber)
     );
 
     // Inline review-thread writes from the diff popover: reply into a thread, or
