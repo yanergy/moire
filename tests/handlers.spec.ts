@@ -56,6 +56,8 @@ const state = vi.hoisted(() => ({
         vi.fn<
             (repoPath: string, reviewId: string, event: string, body: string) => Promise<unknown>
         >(),
+    requestReview: vi.fn<(repoPath: string, prId: string, login: string) => Promise<unknown>>(),
+    markReadyForReview: vi.fn<(repoPath: string, prNumber: number) => Promise<unknown>>(),
     openExternal: vi.fn<(url: string) => Promise<void>>(),
     openPath: vi.fn<(p: string) => Promise<string>>(),
     getEditorPreference: vi.fn<() => Promise<string>>(),
@@ -63,6 +65,9 @@ const state = vi.hoisted(() => ({
         vi.fn<() => Promise<{ id: string; label: string; kind: string; target: string }[]>>(),
     openWithEditor: vi.fn<(editor: unknown, p: string) => Promise<string>>(),
     getPrStack: vi.fn<(repoPath: string, head: string) => Promise<unknown>>(),
+    getStackAction: vi.fn<(repoPath: string, prNumber: number) => Promise<unknown>>(),
+    createStack: vi.fn<(repoPath: string, prNumbers: number[]) => Promise<unknown>>(),
+    addToStack: vi.fn<(repoPath: string, stack: number, prNumbers: number[]) => Promise<unknown>>(),
     branches: [] as { name: string; kind: string }[],
     isAncestor: vi.fn<(a: string, b: string) => Promise<boolean | null>>(),
     getDiffDisplay: vi.fn<() => Promise<unknown>>(),
@@ -119,8 +124,13 @@ vi.mock('../electron/git/GitService', () => ({
 vi.mock('../electron/github/gh', () => ({
     getPullRequest: state.getPullRequest,
     getPrStack: state.getPrStack,
+    getStackAction: state.getStackAction,
+    createStack: state.createStack,
+    addToStack: state.addToStack,
     addReviewComment: state.addReviewComment,
     submitReview: state.submitReview,
+    requestReview: state.requestReview,
+    markReadyForReview: state.markReadyForReview,
 }));
 vi.mock('../electron/watcher/RepoWatcher', () => ({ watchRepo: state.watchRepo }));
 vi.mock('../electron/settings', () => ({
@@ -212,6 +222,7 @@ describe('registerIpcHandlers', () => {
             'gh:pull-request',
             'gh:add-review-comment',
             'gh:submit-review',
+            'gh:mark-ready-for-review',
             'git:resolve-commit',
             'shell:open-external',
             'shell:open-path',
@@ -319,6 +330,14 @@ describe('registerIpcHandlers', () => {
         expect(result).toBe(prResult);
     });
 
+    it('marks a PR ready for review in the open repo', async () => {
+        await invoke('repo:open', '/repos/moire');
+        state.markReadyForReview.mockResolvedValue({ ok: true });
+
+        expect(await invoke('gh:mark-ready-for-review', 42)).toEqual({ ok: true });
+        expect(state.markReadyForReview).toHaveBeenCalledWith('/repos/moire', 42);
+    });
+
     describe('review writes', () => {
         beforeEach(async () => {
             await invoke('repo:open', '/repos/moire');
@@ -354,6 +373,13 @@ describe('registerIpcHandlers', () => {
 
             expect(result).toEqual({ ok: false, message: 'Nothing to add.' });
             expect(state.addReviewComment).not.toHaveBeenCalled();
+        });
+
+        it('re-requests a reviewer by the PR id and login', async () => {
+            state.requestReview.mockResolvedValue({ ok: true });
+
+            expect(await invoke('gh:request-review', 'PR_1', 'ann')).toEqual({ ok: true });
+            expect(state.requestReview).toHaveBeenCalledWith('/repos/moire', 'PR_1', 'ann');
         });
 
         it('submits an unknown verdict as a comment', async () => {
@@ -546,25 +572,24 @@ describe('registerIpcHandlers', () => {
     });
 
     describe('gh:pr-stack', () => {
-        beforeEach(() => {
-            state.getRepoBranches.mockResolvedValue({ main: 'master', development: 'development' });
-        });
-
-        it("passes the repo's main and development branch as trunks", async () => {
-            await invoke('repo:open', '/repos/moire');
-            state.getPrStack.mockResolvedValue(null);
-            await invoke('gh:pr-stack', 'b');
-            expect(state.getPrStack).toHaveBeenCalledWith('/repos/moire', 'b', undefined, [
-                'master',
-                'development',
-            ]);
-        });
-
-        const entry = (number: number, head: string, base: string, state = 'OPEN') => ({
+        const entry = (position: number, number: number, head: string, base: string) => ({
+            position,
             number,
+            title: '',
+            url: '',
             headRefName: head,
             baseRefName: base,
-            state,
+            state: 'OPEN',
+            isDraft: false,
+            reviewDecision: '',
+            isCurrent: false,
+        });
+
+        it('looks the stack up by the PR node id', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.getPrStack.mockResolvedValue(null);
+            await invoke('gh:pr-stack', 'PR_1');
+            expect(state.getPrStack).toHaveBeenCalledWith('/repos/moire', 'PR_1');
         });
 
         it('marks a PR whose parent moved on as needing a rebase', async () => {
@@ -575,12 +600,14 @@ describe('registerIpcHandlers', () => {
                 { name: 'c', kind: 'local' },
             ];
             state.getPrStack.mockResolvedValue({
-                trunk: 'main',
-                entries: [entry(1, 'a', 'main'), entry(2, 'b', 'a'), entry(3, 'c', 'b')],
+                number: 580,
+                size: 3,
+                baseRefName: 'main',
+                entries: [entry(1, 1, 'a', 'main'), entry(2, 2, 'b', 'a'), entry(3, 3, 'c', 'b')],
             });
             state.isAncestor.mockImplementation((parent) => Promise.resolve(parent === 'origin/a'));
 
-            const stack = (await invoke('gh:pr-stack', 'b')) as {
+            const stack = (await invoke('gh:pr-stack', 'PR_2')) as {
                 entries: { needsRebase?: boolean }[];
             };
 
@@ -592,7 +619,42 @@ describe('registerIpcHandlers', () => {
         it('passes on no stack', async () => {
             await invoke('repo:open', '/repos/moire');
             state.getPrStack.mockResolvedValue(null);
-            expect(await invoke('gh:pr-stack', 'b')).toBeNull();
+            expect(await invoke('gh:pr-stack', 'PR_1')).toBeNull();
+        });
+    });
+
+    describe('stack writes', () => {
+        it('reads the stack action for a PR number in the open repository', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.getStackAction.mockResolvedValue(null);
+            await invoke('gh:stack-action', 42);
+            expect(state.getStackAction).toHaveBeenCalledWith('/repos/moire', 42);
+        });
+
+        it('creates a stack from PR numbers, bottom to top', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.createStack.mockResolvedValue({ ok: true });
+            expect(await invoke('gh:create-stack', [41, 42])).toEqual({ ok: true });
+            expect(state.createStack).toHaveBeenCalledWith('/repos/moire', [41, 42]);
+        });
+
+        it('adds PR numbers to the top of a stack by its number', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.addToStack.mockResolvedValue({ ok: false, message: 'Validation Failed' });
+            expect(await invoke('gh:add-to-stack', 7, [43])).toEqual({
+                ok: false,
+                message: 'Validation Failed',
+            });
+            expect(state.addToStack).toHaveBeenCalledWith('/repos/moire', 7, [43]);
+        });
+
+        it('rejects malformed arguments before reaching gh', async () => {
+            await invoke('repo:open', '/repos/moire');
+            await expect(invoke('gh:stack-action', '42')).rejects.toThrow(TypeError);
+            await expect(invoke('gh:create-stack', [41, '42'])).rejects.toThrow(TypeError);
+            await expect(invoke('gh:add-to-stack', '7', [43])).rejects.toThrow(TypeError);
+            expect(state.createStack).not.toHaveBeenCalled();
+            expect(state.addToStack).not.toHaveBeenCalled();
         });
     });
 

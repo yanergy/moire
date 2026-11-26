@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('api', {
     deleteComment: (commentId: string) => ipcRenderer.invoke('gh:delete-comment', commentId),
     editDescription: (prNumber: number, body: string) =>
         ipcRenderer.invoke('gh:edit-description', prNumber, body),
+    markReadyForReview: (prNumber: number) =>
+        ipcRenderer.invoke('gh:mark-ready-for-review', prNumber),
     // Inline review-thread writes from the diff popover: reply into a thread, or
     // resolve/unresolve it, both by the thread's node id.
     replyToReviewThread: (threadId: string, body: string) =>
@@ -61,6 +63,9 @@ contextBridge.exposeInMainWorld('api', {
     submitReview: (reviewId: string, event: string, body: string) =>
         ipcRenderer.invoke('gh:submit-review', reviewId, event, body),
     discardReview: (reviewId: string) => ipcRenderer.invoke('gh:discard-review', reviewId),
+    // Re-request review from a reviewer who requested changes, by the PR's node id and login.
+    requestReview: (prId: string, login: string) =>
+        ipcRenderer.invoke('gh:request-review', prId, login),
     // The commit a ref points at (null when it does not resolve).
     resolveCommit: (ref: string) => ipcRenderer.invoke('git:resolve-commit', ref),
     // Open a PR link in the default browser (main restricts it to http(s)).
@@ -68,7 +73,14 @@ contextBridge.exposeInMainWorld('api', {
     getStagedPaths: () => ipcRenderer.invoke('git:staged-paths'),
     stagePaths: (paths: string[]) => ipcRenderer.invoke('git:stage', paths),
     unstagePaths: (paths: string[]) => ipcRenderer.invoke('git:unstage', paths),
-    getPrStack: (headBranch: string) => ipcRenderer.invoke('gh:pr-stack', headBranch),
+    getPrStack: (pullRequestId: string) => ipcRenderer.invoke('gh:pr-stack', pullRequestId),
+    // The stack the open PR could become (a chain to create, or one to add to the top of
+    // an existing stack), and the two writes that make it, by PR number and stack number.
+    // The writes resolve an ok/message result, so GitHub's refusal shows inline.
+    getStackAction: (prNumber: number) => ipcRenderer.invoke('gh:stack-action', prNumber),
+    createStack: (prNumbers: number[]) => ipcRenderer.invoke('gh:create-stack', prNumbers),
+    addToStack: (stackNumber: number, prNumbers: number[]) =>
+        ipcRenderer.invoke('gh:add-to-stack', stackNumber, prNumbers),
     copyText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text),
     showBranchPickerMenu: (ref?: string) => ipcRenderer.invoke('menu:branch-picker', ref),
     openFile: (filePath: string) => ipcRenderer.invoke('shell:open-path', filePath),

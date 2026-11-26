@@ -11,14 +11,17 @@ import {
     CircleCheck,
     CircleDot,
     FileDiff,
+    LoaderCircle,
     MessageSquare,
     MessageSquareCode,
+    RefreshCw,
     Users,
 } from '@lucide/vue';
 import type { PrReviewer, PrReviewerState } from '@/shared/types';
 import { reviewProgress, reviewSummary } from '@/lib/review-progress';
 import type { ReviewActivity, ReviewActivityTarget } from '@/lib/review-activity';
 import { timeSince } from '@/lib/status-bar';
+import { Button } from '@/components/ui/button';
 import UserAvatar from '@/components/pr/UserAvatar.vue';
 
 const props = withDefaults(
@@ -26,11 +29,17 @@ const props = withDefaults(
         reviewers: PrReviewer[];
         // Each reviewer's reviews and line comments, by login (see lib/review-activity).
         activity?: Map<string, ReviewActivity[]>;
+        // Whether the viewer may request reviewers, which offers the re-request button
+        // on each reviewer who requested changes.
+        canRequest?: boolean;
+        // The login whose re-request is running, and the last refusal to show on its row.
+        requesting?: string | null;
+        requestError?: { login: string; message: string } | null;
     }>(),
-    { activity: () => new Map() }
+    { activity: () => new Map(), canRequest: false, requesting: null, requestError: null }
 );
 
-const emit = defineEmits<{ jump: [target: ReviewActivityTarget] }>();
+const emit = defineEmits<{ jump: [target: ReviewActivityTarget]; request: [login: string] }>();
 
 const progress = computed(() => reviewProgress(props.reviewers));
 const summary = computed(() => reviewSummary(progress.value));
@@ -50,6 +59,11 @@ const PREVIOUS: Record<Exclude<PrReviewerState, 'PENDING'>, string> = {
     CHANGES_REQUESTED: 'requested changes',
     COMMENTED: 'commented',
 };
+
+// Only a user who requested changes can be re-requested: a team's verdict is not tracked.
+function canRerequest(reviewer: PrReviewer): boolean {
+    return props.canRequest && reviewer.kind === 'user' && reviewer.state === 'CHANGES_REQUESTED';
+}
 
 // A team has no activity of its own (its members review as users).
 function itemsFor(reviewer: PrReviewer): ReviewActivity[] {
@@ -109,48 +123,85 @@ function relative(iso: string): string {
             :data-state="reviewer.state"
             class="border-b border-moire-border"
         >
-            <component
-                :is="itemsFor(reviewer).length ? 'button' : 'div'"
-                :type="itemsFor(reviewer).length ? 'button' : undefined"
-                data-slot="reviewer-row"
-                class="flex w-full items-center gap-2.5 py-[11px] text-left"
-                :class="
-                    itemsFor(reviewer).length ? 'cursor-pointer rounded hover:bg-moire-hover' : ''
-                "
-                :aria-expanded="
-                    itemsFor(reviewer).length ? expanded.has(keyOf(reviewer)) : undefined
-                "
-                @click="itemsFor(reviewer).length && toggle(reviewer)"
+            <!-- The row: the fold toggle fills it, then the re-request button and the
+                 reviewer's state. They are siblings (a button cannot hold a button), so the hover
+                 tint is on this wrapper to keep it one row visually. -->
+            <div
+                class="group/row flex items-center gap-2 rounded pr-1"
+                :class="itemsFor(reviewer).length ? 'hover:bg-moire-hover' : ''"
             >
-                <!-- The fold chevron, or a spacer so every row's avatar lines up. -->
-                <span class="flex size-4 shrink-0 items-center justify-center text-moire-faint">
-                    <template v-if="itemsFor(reviewer).length">
-                        <ChevronDown v-if="expanded.has(keyOf(reviewer))" :size="14" />
-                        <ChevronRight v-else :size="14" />
-                    </template>
-                </span>
-                <user-avatar v-if="reviewer.kind === 'user'" :login="reviewer.login" :size="20" />
-                <span
-                    v-else
-                    class="flex size-5 shrink-0 items-center justify-center rounded-full bg-moire-hover text-moire-muted"
+                <component
+                    :is="itemsFor(reviewer).length ? 'button' : 'div'"
+                    :type="itemsFor(reviewer).length ? 'button' : undefined"
+                    data-slot="reviewer-row"
+                    class="flex min-w-0 flex-1 items-center gap-2.5 py-[11px] text-left"
+                    :class="itemsFor(reviewer).length ? 'cursor-pointer' : ''"
+                    :aria-expanded="
+                        itemsFor(reviewer).length ? expanded.has(keyOf(reviewer)) : undefined
+                    "
+                    @click="itemsFor(reviewer).length && toggle(reviewer)"
                 >
-                    <Users :size="12" />
-                </span>
-                <span class="min-w-0 flex-1 truncate text-[12.5px] text-moire-fg">
-                    {{ reviewer.login }}
-                    <span v-if="reviewer.kind === 'team'" class="pl-1 text-moire-faint">team</span>
-                    <span
-                        v-if="itemsFor(reviewer).length"
-                        data-slot="activity-count"
-                        class="pl-1 text-moire-faint"
-                    >
-                        {{ itemsFor(reviewer).length }}
-                        {{ itemsFor(reviewer).length === 1 ? 'comment' : 'comments' }}
+                    <!-- The fold chevron, or a spacer so every row's avatar lines up. -->
+                    <span class="flex size-4 shrink-0 items-center justify-center text-moire-faint">
+                        <template v-if="itemsFor(reviewer).length">
+                            <ChevronDown v-if="expanded.has(keyOf(reviewer))" :size="14" />
+                            <ChevronRight v-else :size="14" />
+                        </template>
                     </span>
-                </span>
+                    <user-avatar
+                        v-if="reviewer.kind === 'user'"
+                        :login="reviewer.login"
+                        :size="20"
+                    />
+                    <span
+                        v-else
+                        class="flex size-5 shrink-0 items-center justify-center rounded-full bg-moire-hover text-moire-muted"
+                    >
+                        <Users :size="12" />
+                    </span>
+                    <span class="min-w-0 flex-1 truncate text-[12.5px] text-moire-fg">
+                        {{ reviewer.login }}
+                        <span v-if="reviewer.kind === 'team'" class="pl-1 text-moire-faint"
+                            >team</span
+                        >
+                        <span
+                            v-if="itemsFor(reviewer).length"
+                            data-slot="activity-count"
+                            class="pl-1 text-moire-faint"
+                        >
+                            {{ itemsFor(reviewer).length }}
+                            {{ itemsFor(reviewer).length === 1 ? 'comment' : 'comments' }}
+                        </span>
+                    </span>
+                </component>
+                <Button
+                    v-if="canRerequest(reviewer)"
+                    variant="outline"
+                    size="sm"
+                    data-slot="rerequest-review"
+                    class="mr-2 h-7 shrink-0 gap-1.5 border-input bg-transparent px-2.5 text-moire-muted shadow-xs hover:bg-moire-hover hover:text-moire-fg dark:border-input dark:bg-transparent dark:hover:bg-moire-hover"
+                    :aria-label="`Re-request review from ${reviewer.login}`"
+                    :disabled="requesting !== null"
+                    @click="emit('request', reviewer.login)"
+                >
+                    <LoaderCircle
+                        v-if="requesting === reviewer.login"
+                        :size="16"
+                        class="animate-spin"
+                    />
+                    <RefreshCw v-else :size="16" />
+                    {{ requesting === reviewer.login ? 'Re-requesting...' : 'Re-request review' }}
+                </Button>
+                <!-- Outside the fold toggle so the re-request button can sit before it;
+                     clicking it still folds the row, like the rest of the row. -->
                 <span
-                    class="flex shrink-0 items-center gap-1.5 pr-1 text-[12px]"
-                    :class="STATE[reviewer.state].cls"
+                    data-slot="reviewer-state"
+                    class="flex shrink-0 items-center gap-1.5 py-[11px] pr-1 text-[12px]"
+                    :class="[
+                        STATE[reviewer.state].cls,
+                        itemsFor(reviewer).length ? 'cursor-pointer' : '',
+                    ]"
+                    @click="itemsFor(reviewer).length && toggle(reviewer)"
                 >
                     <component :is="STATE[reviewer.state].icon" :size="14" />
                     {{ STATE[reviewer.state].text }}
@@ -162,7 +213,14 @@ function relative(iso: string): string {
                         · previously {{ PREVIOUS[reviewer.previousState] }}
                     </span>
                 </span>
-            </component>
+            </div>
+            <p
+                v-if="requestError?.login === reviewer.login"
+                data-slot="request-error"
+                class="pb-2 pl-[48px] text-[12px] text-moire-status-d"
+            >
+                {{ requestError.message }}
+            </p>
 
             <!-- The reviewer's items, one short line each: what it is (a verdict or
                  the file), a one-line preview, its age, and a jump to it. -->

@@ -4,7 +4,8 @@ import type { Component } from 'vue';
 // A tinted status box (icon + title + optional detail) shown at the top of a PR
 // tab: the PR's merge state on the Conversation tab, the CI checks' state on the
 // Checks tab. `null` renders nothing. The trailing padding sits below the box, as
-// the box leads its tab's content.
+// the box leads its tab's content. The default slot sits at the box's right edge,
+// for an action on the status (the draft's "Ready for review" button).
 defineProps<{
     status: {
         icon: Component;
@@ -26,6 +27,7 @@ defineProps<{
                     {{ status.detail }}
                 </div>
             </div>
+            <slot />
         </div>
     </div>
 </template>

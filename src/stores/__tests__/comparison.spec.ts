@@ -1164,6 +1164,7 @@ describe('comparison store', () => {
 
     describe('pull-request detection', () => {
         const PR = {
+            id: 'PR_7',
             number: 7,
             title: 'Add PR viewer',
             body: 'A description.',
@@ -1202,6 +1203,46 @@ describe('comparison store', () => {
             await store.loadPullRequest();
 
             expect(getPullRequest).toHaveBeenLastCalledWith('main', 'origin/x');
+        });
+
+        describe('markReadyForReview', () => {
+            const DRAFT = { ...PR, isDraft: true };
+
+            it('marks the PR ready by number, then re-reads it', async () => {
+                const { store, getPullRequest } = prStore({ status: 'ok', pr: DRAFT });
+                const markReady = vi
+                    .fn<(prNumber: number) => Promise<unknown>>()
+                    .mockResolvedValue({ ok: true });
+                window.api = {
+                    ...window.api,
+                    markReadyForReview: markReady,
+                } as unknown as Window['api'];
+                await store.loadPullRequest();
+                getPullRequest.mockClear();
+
+                expect(await store.markReadyForReview()).toEqual({ ok: true });
+                expect(markReady).toHaveBeenCalledWith(7);
+                expect(getPullRequest).toHaveBeenCalledTimes(1);
+            });
+
+            it("returns GitHub's refusal without re-reading the PR", async () => {
+                const { store, getPullRequest } = prStore({ status: 'ok', pr: DRAFT });
+                const markReady = vi
+                    .fn<(prNumber: number) => Promise<unknown>>()
+                    .mockResolvedValue({ ok: false, message: 'no write access' });
+                window.api = {
+                    ...window.api,
+                    markReadyForReview: markReady,
+                } as unknown as Window['api'];
+                await store.loadPullRequest();
+                getPullRequest.mockClear();
+
+                expect(await store.markReadyForReview()).toEqual({
+                    ok: false,
+                    message: 'no write access',
+                });
+                expect(getPullRequest).not.toHaveBeenCalled();
+            });
         });
 
         describe('selectPullRequestRange', () => {
@@ -1269,20 +1310,59 @@ describe('comparison store', () => {
             expect(store.hasPullRequest).toBe(true);
         });
 
-        it("loads the PR's stack by its head branch, and clears it without a PR", async () => {
+        it("loads the PR's GitHub stack by its node id, and clears it without a PR", async () => {
             const { store } = prStore({ status: 'ok', pr: PR });
-            const stack = { trunk: 'main', entries: [] };
-            const getPrStack = vi.fn<(head: string) => Promise<unknown>>().mockResolvedValue(stack);
+            const stack = { number: 7, size: 0, baseRefName: 'main', entries: [] };
+            const getPrStack = vi.fn<(id: string) => Promise<unknown>>().mockResolvedValue(stack);
             Object.assign(window.api!, { getPrStack });
 
             await store.loadPullRequest();
             await flushPromises();
-            expect(getPrStack).toHaveBeenCalledWith(PR.headRefName);
+            expect(getPrStack).toHaveBeenCalledWith(PR.id);
             expect(store.prStack).toEqual(stack);
 
             store.head = 'WORKING TREE';
             await store.loadPullRequest();
             expect(store.prStack).toBeNull();
+        });
+
+        it('looks up a stack action only for an open PR in no stack, and writes it through gh', async () => {
+            const { store } = prStore({ status: 'ok', pr: { ...PR, state: 'OPEN' } });
+            const action = {
+                kind: 'create',
+                trunk: 'main',
+                entries: [{ number: 1 }, { number: 2 }],
+            } as unknown as Parameters<typeof store.applyStackAction>[0];
+            const getStackAction = vi
+                .fn<(n: number) => Promise<unknown>>()
+                .mockResolvedValue(action);
+            const createStack = vi.fn<(n: number[]) => Promise<unknown>>().mockResolvedValue({
+                ok: true,
+            });
+            Object.assign(window.api!, {
+                getPrStack: vi.fn<(id: string) => Promise<unknown>>().mockResolvedValue(null),
+                getStackAction,
+                createStack,
+            });
+
+            await store.loadPullRequest();
+            await flushPromises();
+            expect(getStackAction).toHaveBeenCalledWith(PR.number);
+            expect(store.prStackAction).toEqual(action);
+
+            expect(await store.applyStackAction(action)).toEqual({ ok: true });
+            expect(createStack).toHaveBeenCalledWith([1, 2]);
+
+            Object.assign(window.api!, {
+                getPrStack: vi
+                    .fn<(id: string) => Promise<unknown>>()
+                    .mockResolvedValue({ number: 7, size: 1, entries: [] }),
+            });
+            getStackAction.mockClear();
+            await store.loadPullRequest();
+            await flushPromises();
+            expect(getStackAction).not.toHaveBeenCalled();
+            expect(store.prStackAction).toBeNull();
         });
 
         it('loads the PR review threads by node id and narrows them per file', async () => {
@@ -1740,6 +1820,9 @@ describe('comparison store', () => {
                     discardReview: vi
                         .fn<(reviewId: string) => Promise<unknown>>()
                         .mockResolvedValue({ ok: true }),
+                    requestReview: vi
+                        .fn<(prId: string, login: string) => Promise<unknown>>()
+                        .mockResolvedValue({ ok: true }),
                 };
                 window.api = api as unknown as Window['api'];
                 const store = useComparisonStore();
@@ -1820,6 +1903,37 @@ describe('comparison store', () => {
 
                 expect(await store.discardReview()).toEqual({ ok: true });
                 expect(api.discardReview).toHaveBeenCalledWith('PRR_1');
+            });
+
+            it('re-requests a reviewer and re-reads the pull request', async () => {
+                const { store, api } = reviewStore();
+                await store.loadPullRequest();
+                await flushPromises();
+                api.getPullRequest.mockClear();
+
+                expect(await store.requestReview('ann')).toEqual({ ok: true });
+                await flushPromises();
+                expect(api.requestReview).toHaveBeenCalledWith('PR_7', 'ann');
+                expect(api.getPullRequest).toHaveBeenCalledTimes(1);
+                expect(store.requestingReviewer).toBe(null);
+                expect(store.reviewerRequestError).toBe(null);
+            });
+
+            it('keeps GitHub refusing a re-request for the row to show', async () => {
+                const { store, api } = reviewStore();
+                api.requestReview.mockResolvedValue({ ok: false, message: 'Not allowed.' });
+                await store.loadPullRequest();
+                await flushPromises();
+
+                expect(await store.requestReview('ann')).toEqual({
+                    ok: false,
+                    message: 'Not allowed.',
+                });
+                expect(store.reviewerRequestError).toEqual({
+                    login: 'ann',
+                    message: 'Not allowed.',
+                });
+                expect(store.requestingReviewer).toBe(null);
             });
 
             it('reports a failed write without throwing', async () => {

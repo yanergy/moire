@@ -258,6 +258,9 @@ export interface PullRequest {
     // Everyone asked to review or who reviewed, with where each stands, for the
     // Reviewers tab. Optional because older fetches and test fixtures may omit it.
     reviewers?: PrReviewer[];
+    // Whether the signed-in account may change the PR (author or write access).
+    // Gates the "Ready for review" button on a draft. Unset when the lookup failed.
+    viewerCanUpdate?: boolean;
 }
 
 // One reviewer of a PR. A user or team with a pending request is PENDING, a
@@ -274,32 +277,73 @@ export interface PrReviewer {
     previousState: Exclude<PrReviewerState, 'PENDING'> | null;
 }
 
-// One PR in a stack (a PR whose base is another PR's head branch), for the PR
-// view's Stack tab. `depth` counts up from the PR nearest the trunk (0). A merged
-// PR shows up only as the base a stacked PR still points at, which then needs
-// retargeting. `needsRebase` is set when the parent PR's head is not in this PR's
-// history any more (the parent moved on), and left undefined when that could not
-// be checked (a branch not fetched).
+// One PR in a GitHub stack (a stack made with `gh stack` or the GitHub UI), for the PR
+// view's Stack tab. `position` counts from the trunk up (1 is the PR on the trunk). A
+// merged PR stays listed while it is in the stack. `needsRebase` is set when the parent
+// PR's head is no longer in this PR's history (the parent moved on), and left undefined
+// when that could not be checked (a branch not fetched).
 export interface PrStackEntry {
     number: number;
     title: string;
     url: string;
     headRefName: string;
     baseRefName: string;
-    state: 'OPEN' | 'MERGED';
+    state: 'OPEN' | 'CLOSED' | 'MERGED';
     isDraft: boolean;
     reviewDecision: string;
-    depth: number;
+    position: number;
     isCurrent: boolean;
-    needsRetarget: boolean;
     needsRebase?: boolean;
 }
 
-// A PR's stack, bottom (nearest the trunk) first, and the trunk branch it sits on.
+// The GitHub stack a PR is in, bottom (nearest the trunk) first. `number` is GitHub's
+// stack number, shared by every PR in it, and `baseRefName` the trunk branch its bottom
+// PR targets. `size` is GitHub's count of the stack's PRs.
 export interface PrStack {
-    trunk: string;
+    number: number;
+    size: number;
+    baseRefName: string;
     entries: PrStackEntry[];
 }
+
+// A PR's place in its GitHub stack, as the dashboard's search returns it (the same
+// fields as PrStack, for the PR itself).
+export interface PrStackMembership {
+    number: number;
+    size: number;
+    baseRefName: string;
+    position: number;
+}
+
+// One PR in a chain that could become a stack (see StackAction).
+export interface StackActionEntry {
+    number: number;
+    title: string;
+    url: string;
+    headRefName: string;
+    baseRefName: string;
+    isDraft: boolean;
+}
+
+// A stack the current PR can be turned into, offered when it sits in a chain of open,
+// unstacked PRs in the same repository. `create` makes a new stack from `entries` (bottom
+// to top, at least two) targeting `trunk`. `add` appends `entries` to the top of the
+// existing stack `stackNumber`, whose top PR is `top`. Fork PRs never take part.
+export type StackAction =
+    | {
+          kind: 'create';
+          trunk: string;
+          entries: StackActionEntry[];
+      }
+    | {
+          kind: 'add';
+          stackNumber: number;
+          top: { number: number; title: string };
+          entries: StackActionEntry[];
+      };
+
+// The result of a stack write: GitHub's message is shown inline when it refuses.
+export type StackMutationResult = CommentMutationResult;
 
 // Why a PR lookup produced no PR, so the renderer can show the right hint:
 // 'no-pr' (none for this branch, or the head is the working tree), 'not-installed'
@@ -403,6 +447,9 @@ export interface DashboardPr {
     labels?: PrLabel[];
     // The recent comments, fetched on the viewer's open PRs only.
     comments?: { id: string; author: string }[];
+    // The GitHub stack the PR is in and its place there, or null when it is not stacked.
+    // Left out in snapshots saved before stacks were fetched.
+    stack?: PrStackMembership | null;
 }
 
 export interface DashboardSnapshot {
@@ -531,6 +578,9 @@ export interface MoireApi {
     deleteComment(commentId: string): Promise<CommentMutationResult>;
     // `editDescription` rewrites the PR's own body (Markdown), addressed by number.
     editDescription(prNumber: number, body: string): Promise<CommentMutationResult>;
+    // `markReadyForReview` takes a draft PR out of draft state (addressed by number).
+    // GitHub refuses it for an account without write access; that comes back as the message.
+    markReadyForReview(prNumber: number): Promise<CommentMutationResult>;
     // Inline review-thread writes, from the diff viewer's popover. `replyToReviewThread`
     // posts a reply into a thread by its node id; `setReviewThreadResolved` resolves or
     // unresolves one (write access to the repo suffices). Both resolve an ok/message
@@ -552,6 +602,9 @@ export interface MoireApi {
         body: string
     ): Promise<CommentMutationResult>;
     discardReview(reviewId: string): Promise<CommentMutationResult>;
+    // Re-request review from a user who requested changes, by the PR's node id and
+    // their login. Other pending reviewers stay requested. Resolves an ok/message result.
+    requestReview(prId: string, login: string): Promise<CommentMutationResult>;
     // The commit a ref points at, or null when it does not resolve. Used to check
     // the compared head is at the PR's head commit before offering line comments.
     resolveCommit(ref: string): Promise<string | null>;
@@ -563,9 +616,16 @@ export interface MoireApi {
     getStagedPaths(): Promise<string[]>;
     stagePaths(paths: string[]): Promise<void>;
     unstagePaths(paths: string[]): Promise<void>;
-    // The stack the PR with this head branch belongs to, or null when it is not
-    // stacked (or gh fails).
-    getPrStack(headBranch: string): Promise<PrStack | null>;
+    // The GitHub stack the PR with this node id is in, or null when it is not stacked
+    // (or gh fails).
+    getPrStack(pullRequestId: string): Promise<PrStack | null>;
+    // The stack this open PR could be turned into, or null (see StackAction). Only the
+    // PR's number is needed; the chain is worked out from the repository's open PRs.
+    getStackAction(prNumber: number): Promise<StackAction | null>;
+    // Create a stack from PR numbers (bottom to top), or append PR numbers to the top
+    // of an existing stack by its stack number. GitHub's refusal comes back as a message.
+    createStack(prNumbers: number[]): Promise<StackMutationResult>;
+    addToStack(stackNumber: number, prNumbers: number[]): Promise<StackMutationResult>;
     // Write text to the system clipboard.
     copyText(text: string): Promise<void>;
     // Pop up a toolbar branch picker's native context menu at the cursor, for the
