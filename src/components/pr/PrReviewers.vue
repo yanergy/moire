@@ -223,10 +223,10 @@ function relative(iso: string): string {
                 </component>
                 <Button
                     v-if="canRerequest(reviewer)"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     data-slot="rerequest-review"
-                    class="h-7 shrink-0 gap-1.5 border-moire-border bg-moire-app px-2.5 text-[12px] text-moire-fg group-hover/row:border-moire-ring hover:bg-moire-hover"
+                    class="h-7 shrink-0 gap-1.5 px-2 text-[12px] font-normal text-moire-muted hover:bg-moire-fg/10 hover:text-moire-fg"
                     :aria-label="`Re-request review from ${reviewer.login}`"
                     :disabled="requesting !== null"
                     @click="emit('request', reviewer.login)"
