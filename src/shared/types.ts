@@ -312,6 +312,36 @@ export interface PrStackMembership {
     position: number;
 }
 
+// One PR in a chain that could become a stack (see StackAction).
+export interface StackActionEntry {
+    number: number;
+    title: string;
+    url: string;
+    headRefName: string;
+    baseRefName: string;
+    isDraft: boolean;
+}
+
+// A stack the current PR can be turned into, offered when it sits in a chain of open,
+// unstacked PRs in the same repository. `create` makes a new stack from `entries` (bottom
+// to top, at least two) targeting `trunk`. `add` appends `entries` to the top of the
+// existing stack `stackNumber`, whose top PR is `top`. Fork PRs never take part.
+export type StackAction =
+    | {
+          kind: 'create';
+          trunk: string;
+          entries: StackActionEntry[];
+      }
+    | {
+          kind: 'add';
+          stackNumber: number;
+          top: { number: number; title: string };
+          entries: StackActionEntry[];
+      };
+
+// The result of a stack write: GitHub's message is shown inline when it refuses.
+export type StackMutationResult = CommentMutationResult;
+
 // Why a PR lookup produced no PR, so the renderer can show the right hint:
 // 'no-pr' (none for this branch, or the head is the working tree), 'not-installed'
 // (no `gh` on PATH), 'not-authenticated' (`gh auth login` needed),
@@ -580,6 +610,13 @@ export interface MoireApi {
     // The GitHub stack the PR with this node id is in, or null when it is not stacked
     // (or gh fails).
     getPrStack(pullRequestId: string): Promise<PrStack | null>;
+    // The stack this open PR could be turned into, or null (see StackAction). Only the
+    // PR's number is needed; the chain is worked out from the repository's open PRs.
+    getStackAction(prNumber: number): Promise<StackAction | null>;
+    // Create a stack from PR numbers (bottom to top), or append PR numbers to the top
+    // of an existing stack by its stack number. GitHub's refusal comes back as a message.
+    createStack(prNumbers: number[]): Promise<StackMutationResult>;
+    addToStack(stackNumber: number, prNumbers: number[]): Promise<StackMutationResult>;
     // Write text to the system clipboard.
     copyText(text: string): Promise<void>;
     // Pop up a toolbar branch picker's native context menu at the cursor, for the

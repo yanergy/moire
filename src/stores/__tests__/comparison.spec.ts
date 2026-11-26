@@ -1286,6 +1286,45 @@ describe('comparison store', () => {
             expect(store.prStack).toBeNull();
         });
 
+        it('looks up a stack action only for an open PR in no stack, and writes it through gh', async () => {
+            const { store } = prStore({ status: 'ok', pr: { ...PR, state: 'OPEN' } });
+            const action = {
+                kind: 'create',
+                trunk: 'main',
+                entries: [{ number: 1 }, { number: 2 }],
+            } as unknown as Parameters<typeof store.applyStackAction>[0];
+            const getStackAction = vi
+                .fn<(n: number) => Promise<unknown>>()
+                .mockResolvedValue(action);
+            const createStack = vi.fn<(n: number[]) => Promise<unknown>>().mockResolvedValue({
+                ok: true,
+            });
+            Object.assign(window.api!, {
+                getPrStack: vi.fn<(id: string) => Promise<unknown>>().mockResolvedValue(null),
+                getStackAction,
+                createStack,
+            });
+
+            await store.loadPullRequest();
+            await flushPromises();
+            expect(getStackAction).toHaveBeenCalledWith(PR.number);
+            expect(store.prStackAction).toEqual(action);
+
+            expect(await store.applyStackAction(action)).toEqual({ ok: true });
+            expect(createStack).toHaveBeenCalledWith([1, 2]);
+
+            Object.assign(window.api!, {
+                getPrStack: vi
+                    .fn<(id: string) => Promise<unknown>>()
+                    .mockResolvedValue({ number: 7, size: 1, entries: [] }),
+            });
+            getStackAction.mockClear();
+            await store.loadPullRequest();
+            await flushPromises();
+            expect(getStackAction).not.toHaveBeenCalled();
+            expect(store.prStackAction).toBeNull();
+        });
+
         it('loads the PR review threads by node id and narrows them per file', async () => {
             const threads = [
                 {
