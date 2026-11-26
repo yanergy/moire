@@ -411,7 +411,9 @@ Track bugs and limitations here.
   the `github/gh-stack` extension, but Moiré has not yet created a stack on a real repository to
   confirm it. A refusal shows GitHub's own message in the dialog.
 - **The "Create stack" offer leaves out fork PRs and ambiguous chains.** A chain stops at a fork,
-  at a branch that more than one open PR is based on, and at a PR already in a stack. A PR whose
+  at a branch that more than one open PR is based on, and at a PR already in a stack. A PR from the
+  repository's default branch (a release PR such as `development` into `master`) never takes part,
+  even when only one open PR is based on that branch. A PR whose
   upper neighbour is already in a stack is not offered as an add, because GitHub appends only to
   the top of a stack.
 

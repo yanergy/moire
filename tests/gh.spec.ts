@@ -1481,6 +1481,7 @@ const pull = (number: number, head: string, base: string, over: Partial<OpenPull
         baseRefName: base,
         isDraft: false,
         sameRepo: true,
+        fromDefaultBranch: false,
         stack: null,
         ...over,
     }) satisfies OpenPull;
@@ -1492,7 +1493,7 @@ const restPull = (number: number, head: string, base: string, stack: unknown = n
     html_url: `https://github.com/o/r/pull/${number}`,
     draft: false,
     head: { ref: head, repo: { full_name: 'o/r' } },
-    base: { ref: base, repo: { full_name: 'o/r' } },
+    base: { ref: base, repo: { full_name: 'o/r', default_branch: 'development' } },
     stack,
 });
 
@@ -1563,9 +1564,30 @@ describe('stack actions', () => {
     it('stops at an ambiguous fork of PRs and at a cycle', () => {
         const forked = [pull(1, 'a', 'main'), pull(2, 'b', 'a'), pull(3, 'c', 'a')];
         expect(findStackAction(forked, 1)).toBeNull();
+        expect(findStackAction(forked, 2)).toBeNull();
+        expect(findStackAction(forked, 3)).toBeNull();
 
         const cycle = [pull(1, 'x', 'y'), pull(2, 'y', 'x')];
         expect(findStackAction(cycle, 1)).toMatchObject({ kind: 'create' });
+    });
+
+    it('never chains onto a release PR from the default branch', () => {
+        const release = pull(1, 'development', 'master', { fromDefaultBranch: true });
+        const feature = pull(2, 'feature', 'development');
+
+        expect(findStackAction([release, feature], 2)).toBeNull();
+        expect(findStackAction([release, feature], 1)).toBeNull();
+        // A real chain on the default branch still gets offered, with it as the trunk.
+        expect(findStackAction([release, feature, pull(3, 'next', 'feature')], 3)).toMatchObject({
+            kind: 'create',
+            trunk: 'development',
+            entries: [2, 3].map((n) => expect.objectContaining({ number: n })),
+        });
+    });
+
+    it('does not chain down onto a branch that several open PRs are based on', () => {
+        const pulls = [pull(1, 'shared', 'main'), pull(2, 'b', 'shared'), pull(3, 'c', 'shared')];
+        expect(findStackAction(pulls, 2)).toBeNull();
     });
 
     it('reads the open PRs from the repository, with their stacks, through gh', async () => {
