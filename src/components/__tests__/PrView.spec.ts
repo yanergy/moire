@@ -154,7 +154,9 @@ describe('PrView', () => {
         expect(wrapper.find('[data-slot="stack-badge"]').exists()).toBe(false);
 
         useComparisonStore().prStack = {
-            trunk: 'main',
+            number: 7,
+            size: 2,
+            baseRefName: 'main',
             entries: [
                 {
                     number: 41,
@@ -165,9 +167,8 @@ describe('PrView', () => {
                     state: 'OPEN',
                     isDraft: false,
                     reviewDecision: '',
-                    depth: 0,
+                    position: 1,
                     isCurrent: false,
-                    needsRetarget: false,
                 },
                 {
                     number: 42,
@@ -178,9 +179,8 @@ describe('PrView', () => {
                     state: 'OPEN',
                     isDraft: false,
                     reviewDecision: '',
-                    depth: 1,
+                    position: 2,
                     isCurrent: true,
-                    needsRetarget: false,
                 },
             ],
         };

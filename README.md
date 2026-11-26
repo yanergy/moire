@@ -232,14 +232,13 @@ last branch range are remembered per repository.
 - Code blocks in the description, comments and review comments get a **Copy** button in their top
   right corner (shown on hover), which copies the block's text and briefly shows **Copied**.
 - Copy buttons next to the base and head branch names in the PR view's header.
-- A **Stack** tab for stacked PRs (a PR whose base is another PR's head branch), and a badge before
-  the title with the PR's place in the stack (such as 1/3) that opens it. On the Dashboard, a card's
-  stacked PRs are grouped under a foldable header (named after the stack's first PR, with its
-  trunk and PR count), numbered in stack order. The tab shows the chain
-  from the trunk up through every dependent PR, with each PR's draft and review state and the
-  current one marked. Clicking a PR compares its own base and head, so its diff is against its
-  parent. A PR whose parent moved on is flagged as needing a rebase, and one whose base PR has
-  merged as needing a retarget.
+- A **Stack** tab for PRs that GitHub has in a stack (made with `gh stack` or the GitHub UI), and a
+  badge before the title with the PR's place in the stack (such as 1/3) that opens it. A PR based on
+  another PR's branch is not stacked unless GitHub says so. On the Dashboard, a card's stacked PRs
+  are grouped under a foldable header (named after the stack's first PR, with its trunk and PR
+  count), numbered in stack order. The tab shows every PR in the stack from the trunk up, with each
+  PR's draft and review state and the current one marked. Clicking a PR compares its own base and
+  head, so its diff is against its parent. A PR whose parent moved on is flagged as needing a rebase.
 - **Back to top** and **Jump to bottom** buttons next to a long conversation, at the bottom of the
   PR view. Each is enabled while its end is more than a screen away.
 - The PR view's whole header (title, Review button, author, labels, tabs and the
@@ -399,6 +398,9 @@ Track bugs and limitations here.
   "Changed files" label, the count badge, the Filter button, the collapse button, and the "viewed"
   counter no longer fit, so the viewed counter runs past the sidebar edge and overlaps the diff
   header.
+- **The Stack tab and the dashboard's stack groups show at most 100 PRs of a GitHub stack.** The
+  stack is read with one GraphQL page of 100 entries, so a longer stack is cut short without a
+  notice.
 
 ## Planned features
 

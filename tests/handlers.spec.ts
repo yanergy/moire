@@ -546,25 +546,24 @@ describe('registerIpcHandlers', () => {
     });
 
     describe('gh:pr-stack', () => {
-        beforeEach(() => {
-            state.getRepoBranches.mockResolvedValue({ main: 'master', development: 'development' });
-        });
-
-        it("passes the repo's main and development branch as trunks", async () => {
-            await invoke('repo:open', '/repos/moire');
-            state.getPrStack.mockResolvedValue(null);
-            await invoke('gh:pr-stack', 'b');
-            expect(state.getPrStack).toHaveBeenCalledWith('/repos/moire', 'b', undefined, [
-                'master',
-                'development',
-            ]);
-        });
-
-        const entry = (number: number, head: string, base: string, state = 'OPEN') => ({
+        const entry = (position: number, number: number, head: string, base: string) => ({
+            position,
             number,
+            title: '',
+            url: '',
             headRefName: head,
             baseRefName: base,
-            state,
+            state: 'OPEN',
+            isDraft: false,
+            reviewDecision: '',
+            isCurrent: false,
+        });
+
+        it('looks the stack up by the PR node id', async () => {
+            await invoke('repo:open', '/repos/moire');
+            state.getPrStack.mockResolvedValue(null);
+            await invoke('gh:pr-stack', 'PR_1');
+            expect(state.getPrStack).toHaveBeenCalledWith('/repos/moire', 'PR_1');
         });
 
         it('marks a PR whose parent moved on as needing a rebase', async () => {
@@ -575,12 +574,14 @@ describe('registerIpcHandlers', () => {
                 { name: 'c', kind: 'local' },
             ];
             state.getPrStack.mockResolvedValue({
-                trunk: 'main',
-                entries: [entry(1, 'a', 'main'), entry(2, 'b', 'a'), entry(3, 'c', 'b')],
+                number: 580,
+                size: 3,
+                baseRefName: 'main',
+                entries: [entry(1, 1, 'a', 'main'), entry(2, 2, 'b', 'a'), entry(3, 3, 'c', 'b')],
             });
             state.isAncestor.mockImplementation((parent) => Promise.resolve(parent === 'origin/a'));
 
-            const stack = (await invoke('gh:pr-stack', 'b')) as {
+            const stack = (await invoke('gh:pr-stack', 'PR_2')) as {
                 entries: { needsRebase?: boolean }[];
             };
 
@@ -592,7 +593,7 @@ describe('registerIpcHandlers', () => {
         it('passes on no stack', async () => {
             await invoke('repo:open', '/repos/moire');
             state.getPrStack.mockResolvedValue(null);
-            expect(await invoke('gh:pr-stack', 'b')).toBeNull();
+            expect(await invoke('gh:pr-stack', 'PR_1')).toBeNull();
         });
     });
 

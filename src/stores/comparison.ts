@@ -640,7 +640,7 @@ export const useComparisonStore = defineStore('comparison', () => {
             void loadReviewState(result.pr?.id, token);
             void loadHeadCommit(head.value, token);
             void loadCheckAnnotations(result.pr?.headRefOid, token);
-            void loadPrStack(result.pr?.headRefName, token);
+            void loadPrStack(result.pr?.id, token);
         } catch {
             if (token === prRequest) {
                 pullRequest.value = null;
@@ -656,15 +656,15 @@ export const useComparisonStore = defineStore('comparison', () => {
         }
     }
 
-    // Fetch the stack the PR belongs to, for the PR view's Stack tab, guarded by the
+    // Fetch the GitHub stack the PR is in, for the PR view's Stack tab, guarded by the
     // same request token as the PR load. Supplementary: no PR, or any failure, just
     // clears it.
-    async function loadPrStack(headBranch: string | undefined, token: number) {
+    async function loadPrStack(pullRequestId: string | undefined, token: number) {
         const api = window.api;
         let stack: PrStack | null = null;
-        if (api?.getPrStack && headBranch) {
+        if (api?.getPrStack && pullRequestId) {
             try {
-                stack = await api.getPrStack(headBranch);
+                stack = await api.getPrStack(pullRequestId);
             } catch {
                 stack = null;
             }
