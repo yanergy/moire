@@ -371,10 +371,6 @@ Track bugs and limitations here.
   one loads). They are not flushed when the app quits within that window, so a tick made in the
   last couple of seconds before quitting can still be dropped. Handling that needs the main
   process to hold quitting until the pending write lands, which is not wired up yet.
-- **"Ready for review" is hidden on a draft that also has merge conflicts and changes requested.**
-  The status box shows the conflict state there (it outranks the changes-requested box), and the
-  button lives in that box, so it is not shown. Mark the PR ready on GitHub in that case, or resolve
-  the conflicts first.
 - **The Git menu's account list refreshes only when the menu is rebuilt** (on launch, when a repo
   opens, when the repo's refs change, and right after switching accounts). Signing in or out with
   `gh auth login` / `gh auth logout` while the app is running is not picked up until one of those
