@@ -14,25 +14,6 @@ const reviewers: PrReviewer[] = [
 ];
 
 describe('PrReviewers', () => {
-    it('draws a ring with one arc per state, sized by its share', () => {
-        const wrapper = mount(PrReviewers, { props: { reviewers } });
-
-        const arcs = wrapper.findAll('[data-slot="review-ring"] circle');
-        expect(arcs.map((a) => a.attributes('data-state'))).toEqual([
-            'APPROVED',
-            'CHANGES_REQUESTED',
-            'PENDING',
-        ]);
-        // Each a third, laid end to end, with a small gap after each.
-        const offsets = arcs.map((a) => Number(a.attributes('stroke-dashoffset')));
-        expect(offsets[0]).toBe(0);
-        expect(offsets[1]).toBeCloseTo(-100 / 3);
-        expect(offsets[2]).toBeCloseTo(-200 / 3);
-        expect(Number(arcs[0]!.attributes('stroke-dasharray')!.split(' ')[0])).toBeCloseTo(
-            100 / 3 - 2
-        );
-    });
-
     it('unfolds a reviewer to their comments, each with a jump to it', async () => {
         const items: ReviewActivity[] = [
             {

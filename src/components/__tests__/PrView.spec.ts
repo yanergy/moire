@@ -224,6 +224,13 @@ describe('PrView', () => {
         expect(wrapper.find('[data-slot="finish-review"]').text()).toContain('Finish review');
     });
 
+    it('shows no ring or label on the Reviewers tab without reviewers', () => {
+        const wrapper = mountWith({ ...PR, reviewers: [] });
+        const tab = wrapper.get('[data-slot="reviewers-tab"]');
+        expect(tab.find('[data-slot="review-ring"]').exists()).toBe(false);
+        expect(tab.attributes('aria-label')).toBeUndefined();
+    });
+
     it('lists the reviewers under the Reviewers tab, with approvals in the tab label', async () => {
         const wrapper = mountWith({
             ...PR,
@@ -234,6 +241,8 @@ describe('PrView', () => {
         });
         const tab = wrapper.get('[data-slot="reviewers-tab"]');
         expect(tab.text()).toContain('1/2');
+        expect(tab.find('[data-slot="review-ring"]').exists()).toBe(true);
+        expect(tab.attributes('aria-label')).toBe('Reviewers: 1/2 approved · 1 pending');
 
         await tab.trigger('click');
         expect(wrapper.findAll('[data-slot="reviewer"]')).toHaveLength(2);
