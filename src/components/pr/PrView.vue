@@ -36,6 +36,7 @@ import {
     Trash2,
 } from '@lucide/vue';
 import { useComparisonStore } from '@/stores/comparison';
+import { useDashboardStore } from '@/stores/dashboard';
 import { useUiStore } from '@/stores/ui';
 import { hasTaskList, renderMarkdown, toggleTask } from '@/lib/markdown';
 import { timeSince } from '@/lib/status-bar';
@@ -59,11 +60,13 @@ import UserAvatar from '@/components/pr/UserAvatar.vue';
 import { useRefreshCooldown } from '@/composables/useRefreshCooldown';
 import { useStickyHeaderHeights } from '@/composables/useStickyHeaderHeights';
 import PrStackList from '@/components/pr/PrStackList.vue';
+import StackActionBanner from '@/components/pr/StackActionBanner.vue';
 import CopyButton from '@/components/controls/CopyButton.vue';
 import CheckboxModeToggle from '@/components/pr/CheckboxModeToggle.vue';
 import PrReviewers from '@/components/pr/PrReviewers.vue';
-import { reviewProgress } from '@/lib/review-progress';
+import { reviewProgress, reviewSummary } from '@/lib/review-progress';
 import { reviewActivityByLogin, type ReviewActivityTarget } from '@/lib/review-activity';
+import ReviewRing from '@/components/pr/ReviewRing.vue';
 import ReviewThreadActions from '@/components/pr/ReviewThreadActions.vue';
 import PrStatusBox from '@/components/pr/PrStatusBox.vue';
 import ScrollJumpButtons from '@/components/pr/ScrollJumpButtons.vue';
@@ -84,9 +87,12 @@ interface StatusBox {
     title: string;
     detail: string;
     cls: string;
+    // Set on the draft box only, which carries the "Ready for review" button.
+    draft?: boolean;
 }
 
 const comparison = useComparisonStore();
+const dashboard = useDashboardStore();
 const ui = useUiStore();
 
 const pr = computed(() => comparison.pullRequest);
@@ -163,6 +169,8 @@ async function refreshPr() {
 const activeTab = ref<'conversation' | 'checks' | 'reviewers' | 'stack'>('conversation');
 
 const reviewers = computed(() => pr.value?.reviewers ?? []);
+// Requesting reviewers takes the same right as changing the PR (GitHub's viewerCanUpdate).
+const canRequestReviewers = computed(() => pr.value?.viewerCanUpdate ?? false);
 
 // The Reviewers tab label shows approvals over reviewers, like the Checks tab.
 const reviewersSummary = computed(() => {
@@ -170,13 +178,25 @@ const reviewersSummary = computed(() => {
     return `${approved}/${total}`;
 });
 
+// The ring is aria-hidden, so the tab's accessible name carries the text summary
+// the ring stands for (and the same text shows on hover).
+const reviewersLabel = computed(() => {
+    if (!reviewers.value.length) {
+        return '';
+    }
+    return `Reviewers: ${reviewSummary(reviewProgress(reviewers.value))}`;
+});
+
 const stack = computed(() => comparison.prStack);
 
 // This PR's place in its stack (1 is on the trunk), for the badge before the title.
 const stackPosition = computed(() => {
-    const entries = stack.value?.entries ?? [];
-    const index = entries.findIndex((e) => e.isCurrent);
-    return index === -1 ? null : { index: index + 1, total: entries.length };
+    const current = stack.value?.entries.find((e) => e.isCurrent);
+    if (!stack.value || !current) {
+        return null;
+    }
+
+    return { index: current.position, total: stack.value.size };
 });
 
 // The Stack tab disappears when the PR is not (or no longer) stacked.
@@ -565,6 +585,8 @@ function toggleAll() {
 const draft = ref('');
 const posting = ref(false);
 const postError = ref('');
+const markingReady = ref(false);
+const readyError = ref('');
 const composerCollapsed = ref(false);
 const composerInput = ref<InstanceType<typeof Textarea> | null>(null);
 function clearComposer() {
@@ -683,6 +705,28 @@ async function submitComment() {
     }
 
     postError.value = result.message ?? 'Could not post the comment.';
+}
+
+// The "Ready for review" button shows only in the draft box (not when a conflict or
+// a changes request takes the status spot), to the author or someone with write
+// access (GitHub's viewerCanUpdate). Only an open draft gets the draft box.
+const canMarkReady = computed(() => !!mergeStatus.value?.draft && !!pr.value?.viewerCanUpdate);
+
+async function markReady() {
+    if (markingReady.value) {
+        return;
+    }
+
+    markingReady.value = true;
+    readyError.value = '';
+    const result = await comparison.markReadyForReview();
+    markingReady.value = false;
+    if (result.ok) {
+        void dashboard.refresh();
+        return;
+    }
+
+    readyError.value = result.message ?? 'Could not mark the pull request ready for review.';
 }
 
 // Reveal a folded comment (index i) so an inline editor or delete prompt shows.
@@ -907,6 +951,7 @@ const mergeStatus = computed<StatusBox | null>(() => {
             detail: 'Mark it ready for review to merge.',
             // Dashed outline with the same border tone as the draft PR toggle.
             cls: 'border-dashed border-input bg-moire-chrome',
+            draft: true,
         };
     }
     if (p.mergeable === 'CONFLICTING') {
@@ -1487,6 +1532,9 @@ function renderComment(comment: PrComment): string {
                         </div>
                     </div>
 
+                    <!-- Offers to stack this PR's chain of open PRs (renders nothing otherwise). -->
+                    <stack-action-banner />
+
                     <!-- Tabs: the description and conversation, or the CI checks. The
                      counts (comments, passed/total checks) sit faint beside the
                      label, as in the design. -->
@@ -1540,8 +1588,15 @@ function renderComment(comment: PrComment): string {
                                         ? 'bg-moire-hover text-moire-fg'
                                         : 'text-moire-muted hover:text-moire-fg'
                                 "
+                                :aria-label="reviewersLabel || undefined"
+                                :title="reviewersLabel || undefined"
                                 @click="activeTab = 'reviewers'"
                             >
+                                <review-ring
+                                    v-if="reviewers.length"
+                                    :reviewers="reviewers"
+                                    :size="13"
+                                />
                                 Reviewers
                                 <span v-if="reviewers.length" class="text-moire-faint">
                                     {{ reviewersSummary }}
@@ -1598,7 +1653,32 @@ function renderComment(comment: PrComment): string {
                     <!-- The active tab's status box (the merge state, or the CI
                          checks' state), part of the header so it stays in view with it. -->
                     <div v-if="tabStatus" data-slot="pr-tab-status" class="px-4 pt-4">
-                        <pr-status-box :status="tabStatus" />
+                        <pr-status-box :status="tabStatus">
+                            <div
+                                v-if="activeTab === 'conversation' && canMarkReady"
+                                class="ml-auto flex shrink-0 flex-col items-end gap-1"
+                            >
+                                <Button
+                                    size="sm"
+                                    class="h-7 gap-1.5 bg-moire-submit text-white hover:bg-moire-submit-hover"
+                                    :disabled="markingReady"
+                                    @click="markReady"
+                                >
+                                    <LoaderCircle
+                                        v-if="markingReady"
+                                        :size="14"
+                                        class="animate-spin"
+                                    />
+                                    {{ markingReady ? 'Marking ready...' : 'Ready for review' }}
+                                </Button>
+                                <p
+                                    v-if="readyError"
+                                    class="max-w-xs text-right text-[12px] text-moire-status-d"
+                                >
+                                    {{ readyError }}
+                                </p>
+                            </div>
+                        </pr-status-box>
                     </div>
                 </div>
                 <div :class="tabStatus ? 'px-4 pb-4' : 'p-4'">
@@ -2560,7 +2640,11 @@ function renderComment(comment: PrComment): string {
                         v-else-if="activeTab === 'reviewers'"
                         :reviewers="reviewers"
                         :activity="reviewerActivity"
+                        :can-request="canRequestReviewers"
+                        :requesting="comparison.requestingReviewer"
+                        :request-error="comparison.reviewerRequestError"
                         @jump="jumpToActivity"
+                        @request="comparison.requestReview"
                     />
                     <pr-stack-list v-else-if="activeTab === 'stack' && stack" :stack="stack" />
                     <div v-else-if="activeTab === 'checks'">

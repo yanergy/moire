@@ -14,25 +14,6 @@ const reviewers: PrReviewer[] = [
 ];
 
 describe('PrReviewers', () => {
-    it('draws a ring with one arc per state, sized by its share', () => {
-        const wrapper = mount(PrReviewers, { props: { reviewers } });
-
-        const arcs = wrapper.findAll('[data-slot="review-ring"] circle');
-        expect(arcs.map((a) => a.attributes('data-state'))).toEqual([
-            'APPROVED',
-            'CHANGES_REQUESTED',
-            'PENDING',
-        ]);
-        // Each a third, laid end to end, with a small gap after each.
-        const offsets = arcs.map((a) => Number(a.attributes('stroke-dashoffset')));
-        expect(offsets[0]).toBe(0);
-        expect(offsets[1]).toBeCloseTo(-100 / 3);
-        expect(offsets[2]).toBeCloseTo(-200 / 3);
-        expect(Number(arcs[0]!.attributes('stroke-dasharray')!.split(' ')[0])).toBeCloseTo(
-            100 / 3 - 2
-        );
-    });
-
     it('unfolds a reviewer to their comments, each with a jump to it', async () => {
         const items: ReviewActivity[] = [
             {
@@ -117,6 +98,67 @@ describe('PrReviewers', () => {
         expect(rows[2]!.text()).toContain('core');
         expect(rows[2]!.text()).toContain('team');
         expect(rows[2]!.text()).toContain('Awaiting review');
+    });
+
+    it('offers a re-request button only on a user who requested changes, when allowed', async () => {
+        const wrapper = mount(PrReviewers, { props: { reviewers, canRequest: true } });
+
+        const buttons = wrapper.findAll('[data-slot="rerequest-review"]');
+        expect(buttons).toHaveLength(1);
+        expect(buttons[0]!.attributes('aria-label')).toBe('Re-request review from bob');
+
+        await buttons[0]!.trigger('click');
+        expect(wrapper.emitted('request')).toEqual([['bob']]);
+    });
+
+    it('hides the re-request button when the viewer cannot request reviewers', () => {
+        const wrapper = mount(PrReviewers, { props: { reviewers, canRequest: false } });
+
+        expect(wrapper.find('[data-slot="rerequest-review"]').exists()).toBe(false);
+    });
+
+    it('hides the button once the request is pending again', () => {
+        const wrapper = mount(PrReviewers, {
+            props: {
+                reviewers: [
+                    {
+                        login: 'bob',
+                        kind: 'user',
+                        state: 'PENDING',
+                        previousState: 'CHANGES_REQUESTED',
+                    },
+                ],
+                canRequest: true,
+            },
+        });
+
+        expect(wrapper.find('[data-slot="rerequest-review"]').exists()).toBe(false);
+    });
+
+    it('shows a pending state on the button and blocks a second request while one runs', () => {
+        const wrapper = mount(PrReviewers, {
+            props: { reviewers, canRequest: true, requesting: 'bob' },
+        });
+
+        const button = wrapper.get('[data-slot="rerequest-review"]');
+        expect(button.attributes('disabled')).toBeDefined();
+        expect(button.find('.animate-spin').exists()).toBe(true);
+    });
+
+    it('shows GitHub refusing the request on the reviewer row', () => {
+        const wrapper = mount(PrReviewers, {
+            props: {
+                reviewers,
+                canRequest: true,
+                requestError: { login: 'bob', message: 'Could not request review.' },
+            },
+        });
+
+        const error = wrapper.get('[data-slot="request-error"]');
+        expect(error.text()).toBe('Could not request review.');
+        expect(wrapper.findAll('[data-slot="reviewer"]')[1]!.text()).toContain(
+            'Could not request review.'
+        );
     });
 
     it('shows an empty state without reviewers', () => {

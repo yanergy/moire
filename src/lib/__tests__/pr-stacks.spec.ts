@@ -1,88 +1,72 @@
 import { describe, it, expect } from 'vitest';
-import { groupByStack, stackPositions } from '@/lib/pr-stacks';
+import { gitHubStackPositions, groupByStack } from '@/lib/pr-stacks';
 
-const pr = (number: number, head: string, base: string, isCrossRepository = false) => ({
+// A PR in GitHub stack 1 at `position`, of `size`, targeting `main`; no stack when
+// `position` is omitted.
+const pr = (number: number, position?: number, size = 3, title = `PR ${number}`) => ({
     number,
-    headRefName: head,
-    baseRefName: base,
-    isCrossRepository,
+    title,
+    stack: position === undefined ? null : { number: 1, size, baseRefName: 'main', position },
 });
 
-describe('stackPositions', () => {
-    it('numbers a stack from the trunk up, and leaves unstacked PRs out', () => {
-        const positions = stackPositions([
-            pr(3, 'c', 'b'),
-            pr(1, 'a', 'development'),
-            pr(2, 'b', 'a'),
-            pr(9, 'x', 'development'),
+describe('gitHubStackPositions', () => {
+    it('numbers a stack by GitHub position, and leaves PRs outside a stack out', () => {
+        const positions = gitHubStackPositions([
+            pr(3, 3),
+            pr(1, 1, 3, 'Add the base'),
+            pr(2, 2),
+            pr(9),
         ]);
 
         expect(positions.get(1)).toEqual({
             index: 1,
             total: 3,
             stackId: 1,
-            stackTitle: '',
-            trunk: 'development',
+            stackTitle: 'Add the base',
+            trunk: 'main',
         });
         expect(positions.get(2)).toMatchObject({ index: 2, total: 3, stackId: 1 });
         expect(positions.get(3)).toMatchObject({ index: 3, total: 3, stackId: 1 });
         expect(positions.has(9)).toBe(false);
     });
 
-    it('lists a branching stack as one sequence', () => {
-        const positions = stackPositions([pr(1, 'a', 'main'), pr(2, 'b', 'a'), pr(3, 'c', 'a')]);
-        expect([1, 2, 3].map((n) => positions.get(n)?.index)).toEqual([1, 2, 3]);
-        expect([1, 2, 3].map((n) => positions.get(n))).toMatchObject([
-            { index: 1, total: 3 },
-            { index: 2, total: 3 },
-            { index: 3, total: 3 },
-        ]);
-    });
-
-    it('does not stack PRs on an open PR from a trunk branch', () => {
-        // An open "development into master" release PR: PRs on development are not
-        // stacked on it.
-        const positions = stackPositions([
-            pr(10, 'development', 'master'),
-            pr(11, 'feat', 'development'),
+    it('does not infer a stack from branch names', () => {
+        // Two PRs whose branches chain, but which GitHub has in no stack.
+        const positions = gitHubStackPositions([
+            { number: 1, title: 'a', stack: null },
+            { number: 2, title: 'b', stack: null },
         ]);
         expect(positions.size).toBe(0);
     });
 
-    it("ignores a fork's PR, whose branch is not on this repository", () => {
-        expect(stackPositions([pr(1, 'a', 'main', true), pr(2, 'b', 'a')]).size).toBe(0);
+    it('leaves the stack title empty when its bottom PR is not among the given PRs', () => {
+        const positions = gitHubStackPositions([pr(2, 2)]);
+        expect(positions.get(2)?.stackTitle).toBe('');
     });
 });
 
 describe('groupByStack', () => {
     it('gathers each stack in stack order where its first PR was, leaving the rest as is', () => {
-        const list = [
-            pr(5, 'solo', 'main'),
-            pr(3, 'c', 'b'),
-            pr(20, 'y', 'x'),
-            pr(1, 'a', 'main'),
-            pr(19, 'x', 'main'),
-            pr(2, 'b', 'a'),
-        ];
-        const items = groupByStack(list, stackPositions(list));
+        const list = [pr(5), pr(3, 3), pr(20), pr(1, 1), pr(19), pr(2, 2)];
+        const items = groupByStack(list, gitHubStackPositions(list));
 
         expect(
             items.map((item) =>
                 item.kind === 'pr' ? item.pr.number : item.members.map((m) => m.pr.number)
             )
-        ).toEqual([5, [1, 2, 3], [19, 20]]);
+        ).toEqual([5, [1, 2, 3], 20, 19]);
         expect(items[1]).toMatchObject({ kind: 'stack', stackId: 1, trunk: 'main', total: 3 });
     });
 
     it('fills in the PRs of a stack the list leaves out, marked as not in it', () => {
-        const all = [pr(1, 'a', 'main'), pr(2, 'b', 'a'), pr(3, 'c', 'b')];
+        const all = [pr(1, 1), pr(2, 2), pr(3, 3)];
         const byNumber = new Map(all.map((p) => [p.number, p]));
-        const items = groupByStack([all[2]!, all[0]!], stackPositions(all), byNumber);
+        const items = groupByStack([all[2]!, all[0]!], gitHubStackPositions(all), byNumber);
         expect(items).toEqual([
             {
                 kind: 'stack',
                 stackId: 1,
-                title: '',
+                title: 'PR 1',
                 trunk: 'main',
                 total: 3,
                 members: [
@@ -95,12 +79,9 @@ describe('groupByStack', () => {
     });
 
     it('names a group after the first PR of its stack', () => {
-        const all = [
-            { number: 1, title: 'Add the base', headRefName: 'a', baseRefName: 'main' },
-            { number: 2, title: 'Build on it', headRefName: 'b', baseRefName: 'a' },
-        ];
+        const all = [pr(1, 1, 2, 'Add the base'), pr(2, 2, 2, 'Build on it')];
         // Even when the list holds only a later PR of the stack.
-        const items = groupByStack([all[1]!], stackPositions(all));
+        const items = groupByStack([all[1]!], gitHubStackPositions(all));
         expect(items[0]).toMatchObject({ kind: 'stack', title: 'Add the base' });
     });
 });

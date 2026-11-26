@@ -57,6 +57,9 @@ function clickMenuItem(label: string) {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
+const readyButton = (wrapper: ReturnType<typeof mountWith>) =>
+    wrapper.findAll('button').find((b) => b.text().includes('Ready for review'));
+
 // A minimal check fixture in the given state.
 type CheckState = 'success' | 'failure' | 'pending';
 const check = (state: CheckState) => ({ name: state, state, detail: '', url: '' });
@@ -154,7 +157,9 @@ describe('PrView', () => {
         expect(wrapper.find('[data-slot="stack-badge"]').exists()).toBe(false);
 
         useComparisonStore().prStack = {
-            trunk: 'main',
+            number: 7,
+            size: 2,
+            baseRefName: 'main',
             entries: [
                 {
                     number: 41,
@@ -165,9 +170,8 @@ describe('PrView', () => {
                     state: 'OPEN',
                     isDraft: false,
                     reviewDecision: '',
-                    depth: 0,
+                    position: 1,
                     isCurrent: false,
-                    needsRetarget: false,
                 },
                 {
                     number: 42,
@@ -178,9 +182,8 @@ describe('PrView', () => {
                     state: 'OPEN',
                     isDraft: false,
                     reviewDecision: '',
-                    depth: 1,
+                    position: 2,
                     isCurrent: true,
-                    needsRetarget: false,
                 },
             ],
         };
@@ -221,6 +224,13 @@ describe('PrView', () => {
         expect(wrapper.find('[data-slot="finish-review"]').text()).toContain('Finish review');
     });
 
+    it('shows no ring or label on the Reviewers tab without reviewers', () => {
+        const wrapper = mountWith({ ...PR, reviewers: [] });
+        const tab = wrapper.get('[data-slot="reviewers-tab"]');
+        expect(tab.find('[data-slot="review-ring"]').exists()).toBe(false);
+        expect(tab.attributes('aria-label')).toBeUndefined();
+    });
+
     it('lists the reviewers under the Reviewers tab, with approvals in the tab label', async () => {
         const wrapper = mountWith({
             ...PR,
@@ -231,6 +241,8 @@ describe('PrView', () => {
         });
         const tab = wrapper.get('[data-slot="reviewers-tab"]');
         expect(tab.text()).toContain('1/2');
+        expect(tab.find('[data-slot="review-ring"]').exists()).toBe(true);
+        expect(tab.attributes('aria-label')).toBe('Reviewers: 1/2 approved · 1 pending');
 
         await tab.trigger('click');
         expect(wrapper.findAll('[data-slot="reviewer"]')).toHaveLength(2);
@@ -760,6 +772,84 @@ describe('PrView', () => {
         const text = mountWith({ ...PR, isDraft: true, reviewDecision: '' }).text();
         expect(text).toContain('still a draft');
         expect(text).not.toContain('Changes requested');
+    });
+
+    describe('ready for review', () => {
+        it('offers the button on a draft the viewer can change', () => {
+            const wrapper = mountWith({ ...PR, isDraft: true, viewerCanUpdate: true });
+
+            expect(readyButton(wrapper)).toBeDefined();
+        });
+
+        it('hides the button when the viewer cannot change the PR, or it is unknown', () => {
+            expect(
+                readyButton(mountWith({ ...PR, isDraft: true, viewerCanUpdate: false }))
+            ).toBeUndefined();
+            expect(readyButton(mountWith({ ...PR, isDraft: true }))).toBeUndefined();
+        });
+
+        it('hides the button on a PR that is not a draft', () => {
+            expect(readyButton(mountWith({ ...PR, viewerCanUpdate: true }))).toBeUndefined();
+        });
+
+        it('shows the button only in the draft box, not the changes-requested box', () => {
+            const wrapper = mountWith({
+                ...PR,
+                isDraft: true,
+                reviewDecision: 'CHANGES_REQUESTED',
+                viewerCanUpdate: true,
+            });
+
+            expect(wrapper.text()).toContain('Changes requested');
+            expect(readyButton(wrapper)).toBeUndefined();
+        });
+
+        it('hides the button when the conflict box takes the status spot', () => {
+            const wrapper = mountWith({
+                ...PR,
+                isDraft: true,
+                mergeable: 'CONFLICTING',
+                reviewDecision: 'CHANGES_REQUESTED',
+                viewerCanUpdate: true,
+            });
+
+            expect(wrapper.text()).toContain('This branch has conflicts');
+            expect(readyButton(wrapper)).toBeUndefined();
+        });
+
+        it('marks the PR ready through the store, showing a pending state', async () => {
+            const store = useComparisonStore();
+            let finish!: (value: { ok: boolean }) => void;
+            const mark = vi
+                .spyOn(store, 'markReadyForReview')
+                .mockReturnValue(new Promise((resolve) => (finish = resolve)));
+            const wrapper = mountWith({ ...PR, isDraft: true, viewerCanUpdate: true });
+
+            await readyButton(wrapper)!.trigger('click');
+            await nextTick();
+            expect(mark).toHaveBeenCalledTimes(1);
+            expect(wrapper.text()).toContain('Marking ready...');
+
+            finish({ ok: true });
+            await flushPromises();
+            expect(wrapper.text()).not.toContain('Marking ready...');
+        });
+
+        it('shows GitHub refusal inline in the status box', async () => {
+            const store = useComparisonStore();
+            vi.spyOn(store, 'markReadyForReview').mockResolvedValue({
+                ok: false,
+                message: 'GraphQL: Resource not accessible by integration',
+            });
+            const wrapper = mountWith({ ...PR, isDraft: true, viewerCanUpdate: true });
+
+            await readyButton(wrapper)!.trigger('click');
+            await flushPromises();
+
+            expect(wrapper.find('[data-slot="pr-tab-status"]').text()).toContain(
+                'Resource not accessible'
+            );
+        });
     });
 
     it('opens on the Conversation tab and switches to Checks', async () => {

@@ -663,9 +663,23 @@ describe('prStackPositions', () => {
         store.applyState(
             state({
                 snapshot: snapshot({
-                    mine: [pr({ id: 'A', number: 1, headRefName: 'a', baseRefName: 'main' })],
+                    mine: [
+                        pr({
+                            id: 'A',
+                            number: 1,
+                            headRefName: 'a',
+                            baseRefName: 'main',
+                            stack: { number: 1, size: 2, baseRefName: 'main', position: 1 },
+                        }),
+                    ],
                     open: [
-                        pr({ id: 'B', number: 2, headRefName: 'b', baseRefName: 'a' }),
+                        pr({
+                            id: 'B',
+                            number: 2,
+                            headRefName: 'b',
+                            baseRefName: 'a',
+                            stack: { number: 1, size: 2, baseRefName: 'main', position: 2 },
+                        }),
                         pr({ id: 'X', number: 9, headRefName: 'x', baseRefName: 'main' }),
                     ],
                 }),
