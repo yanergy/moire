@@ -26,8 +26,10 @@ export default defineConfig({
     },
     test: {
         environment: 'jsdom',
-        // Polyfills for the browser APIs reka-ui touches under jsdom.
-        setupFiles: ['./src/components/__tests__/vitest.setup.ts'],
+        // git-env: drops the GIT_* variables a git hook sets, so tests that spawn git
+        // stay on their own temp repos. vitest.setup: polyfills for the browser APIs
+        // reka-ui touches under jsdom.
+        setupFiles: ['./tests/git-env.setup.ts', './src/components/__tests__/vitest.setup.ts'],
         root: fileURLToPath(new URL('./', import.meta.url)),
     },
 });
